@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/profile_gift.dart';
@@ -64,12 +66,12 @@ class _GiftCard3DState extends State<GiftCard3D>
   void _onPanUpdate(DragUpdateDetails details) {
     if (MotionPrefs.shouldReduceMotion) return;
     _resetController.stop();
+    final targetDx = ((details.localPosition.dx / widget.width - 0.5) * 2.0).clamp(-1.0, 1.0);
+    final targetDy = ((details.localPosition.dy / widget.height - 0.5) * 2.0).clamp(-1.0, 1.0);
     setState(() {
-      final dx = (details.localPosition.dx / widget.width - 0.5) * 2.0;
-      final dy = (details.localPosition.dy / widget.height - 0.5) * 2.0;
       _tilt = Offset(
-        dx.clamp(-1.0, 1.0),
-        dy.clamp(-1.0, 1.0),
+        _tilt.dx + (targetDx - _tilt.dx) * 0.45,
+        _tilt.dy + (targetDy - _tilt.dy) * 0.45,
       );
     });
   }
@@ -129,24 +131,26 @@ class _GiftCard3DState extends State<GiftCard3D>
             ..rotateX(tiltX)
             ..rotateY(tiltY);
 
-          return GestureDetector(
-            onTap: () => _openDetails(context),
-            onPanUpdate: _onPanUpdate,
-            onPanEnd: _onPanEnd,
-            onPanCancel: () => _onPanEnd(DragEndDetails()),
-            child: Transform(
-              transform: transform,
-              alignment: FractionalOffset.center,
-              child: PressScale(
-                pressedScale: 0.94,
-                duration: const Duration(milliseconds: 160),
-                releaseDuration: const Duration(milliseconds: 260),
+          return PressScale(
+            pressedScale: 0.94,
+            duration: const Duration(milliseconds: 140),
+            releaseDuration: const Duration(milliseconds: 220),
+            child: GestureDetector(
+              onTap: () => _openDetails(context),
+              onPanUpdate: _onPanUpdate,
+              onPanEnd: _onPanEnd,
+              onPanCancel: () => _onPanEnd(DragEndDetails()),
+              child: Transform(
+                transform: transform,
+                alignment: FractionalOffset.center,
                 child: child!,
               ),
             ),
           );
         },
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeInOutCubic,
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
@@ -265,6 +269,7 @@ class _GiftCard3DState extends State<GiftCard3D>
                       // Центральная иконка артефакта с аурой
                       Center(
                         child: _ArtifactEmblem(
+                          giftId: widget.gift.id,
                           icon: widget.gift.icon,
                           color: rarity.color,
                           isFavorite: widget.gift.isFavorite,
@@ -308,14 +313,16 @@ class _GiftCard3DState extends State<GiftCard3D>
   }
 }
 
-/// Роскошная многослойная 3D-эмблема NFT артефакта с драгоценным сиянием и кристаллом
+/// Роскошная многослойная 3D-эмблема NFT артефакта с драгоценным сиянием и острым векторным кристаллом
 class _ArtifactEmblem extends StatelessWidget {
+  final String giftId;
   final IconData icon;
   final Color color;
   final bool isFavorite;
   final double size;
 
   const _ArtifactEmblem({
+    this.giftId = '',
     required this.icon,
     required this.color,
     required this.isFavorite,
@@ -325,7 +332,6 @@ class _ArtifactEmblem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activeColor = isFavorite ? BrandColors.red : color;
-    final iconSize = size * 0.58;
 
     return SizedBox(
       width: size,
@@ -341,8 +347,8 @@ class _ArtifactEmblem extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  activeColor.withValues(alpha: 0.42),
-                  activeColor.withValues(alpha: 0.12),
+                  activeColor.withValues(alpha: 0.38),
+                  activeColor.withValues(alpha: 0.10),
                   Colors.transparent,
                 ],
                 stops: const [0.0, 0.55, 1.0],
@@ -351,17 +357,17 @@ class _ArtifactEmblem extends StatelessWidget {
           ),
           // Фасетная кристаллическая подложка с многослойным градиентом
           Container(
-            width: size * 0.82,
-            height: size * 0.82,
+            width: size * 0.86,
+            height: size * 0.86,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.white.withValues(alpha: 0.28),
-                  activeColor.withValues(alpha: 0.22),
-                  Colors.black.withValues(alpha: 0.45),
+                  Colors.white.withValues(alpha: 0.24),
+                  activeColor.withValues(alpha: 0.18),
+                  Colors.black.withValues(alpha: 0.55),
                 ],
               ),
               border: Border.all(
@@ -377,27 +383,24 @@ class _ArtifactEmblem extends StatelessWidget {
               ],
             ),
           ),
-          // Тень иконки для объёма
-          Transform.translate(
-            offset: const Offset(0, 2),
-            child: Icon(
-              icon,
-              size: iconSize,
-              color: Colors.black.withValues(alpha: 0.45),
+          // Острый геометрический векторный артефакт
+          SizedBox(
+            width: size * 0.65,
+            height: size * 0.65,
+            child: CustomPaint(
+              painter: _SharpArtifactPainter(
+                giftId: giftId,
+                color: activeColor,
+                isFavorite: isFavorite,
+              ),
             ),
-          ),
-          // Основной 3D-глиф
-          Icon(
-            icon,
-            size: iconSize,
-            color: activeColor,
           ),
           // Спекулярный световой блик по верхней дуге
           Positioned(
-            top: size * 0.12,
+            top: size * 0.10,
             child: Container(
-              width: size * 0.42,
-              height: size * 0.16,
+              width: size * 0.40,
+              height: size * 0.14,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(size),
                 gradient: LinearGradient(
@@ -414,6 +417,341 @@ class _ArtifactEmblem extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Острые, высокодетализированные геометрические векторные значки NFT артефактов
+class _SharpArtifactPainter extends CustomPainter {
+  final String giftId;
+  final Color color;
+  final bool isFavorite;
+
+  const _SharpArtifactPainter({
+    required this.giftId,
+    required this.color,
+    required this.isFavorite,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final cx = w / 2;
+    final cy = h / 2;
+    final r = math.min(w, h) / 2;
+
+    final fill = Paint()..style = PaintingStyle.fill;
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.miter;
+
+    switch (giftId) {
+      case 'chrono_crystal':
+        _drawChronoCrystal(canvas, cx, cy, r, fill, stroke);
+        break;
+      case 'cyber_sakura':
+        _drawCyberSakura(canvas, cx, cy, r, fill, stroke);
+        break;
+      case 'neon_lotus':
+        _drawNeonLotus(canvas, cx, cy, r, fill, stroke);
+        break;
+      case 'golden_bell':
+        _drawGoldenBell(canvas, cx, cy, r, fill, stroke);
+        break;
+      case 'ada_neural_shard':
+        _drawAdaNeuralShard(canvas, cx, cy, r, fill, stroke);
+        break;
+      case 'samurai_visor':
+        _drawSamuraiVisor(canvas, cx, cy, r, fill, stroke);
+        break;
+      default:
+        _drawDefaultSharpCrystal(canvas, cx, cy, r, fill, stroke);
+        break;
+    }
+  }
+
+  void _drawChronoCrystal(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    final top = Offset(cx, cy - r * 0.90);
+    final bot = Offset(cx, cy + r * 0.92);
+    final left = Offset(cx - r * 0.72, cy - r * 0.22);
+    final right = Offset(cx + r * 0.72, cy - r * 0.22);
+    final tLeft = Offset(cx - r * 0.38, cy - r * 0.50);
+    final tRight = Offset(cx + r * 0.38, cy - r * 0.50);
+    final mLeft = Offset(cx - r * 0.32, cy + r * 0.22);
+    final mRight = Offset(cx + r * 0.32, cy + r * 0.22);
+
+    final tablePath = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(top.dx, top.dy)..close();
+    fill.color = color.withValues(alpha: 0.85);
+    canvas.drawPath(tablePath, fill);
+
+    final fLt = Path()..moveTo(top.dx, top.dy)..lineTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..close();
+    fill.color = color.withValues(alpha: 0.60);
+    canvas.drawPath(fLt, fill);
+
+    final fRt = Path()..moveTo(top.dx, top.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..close();
+    fill.color = color.withValues(alpha: 0.75);
+    canvas.drawPath(fRt, fill);
+
+    final fCenter = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
+    fill.color = Colors.white.withValues(alpha: 0.35);
+    canvas.drawPath(fCenter, fill);
+
+    final fCl = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
+    fill.color = color.withValues(alpha: 0.45);
+    canvas.drawPath(fCl, fill);
+
+    final fCr = Path()..moveTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..close();
+    fill.color = color.withValues(alpha: 0.55);
+    canvas.drawPath(fCr, fill);
+
+    final fBc = Path()..moveTo(mLeft.dx, mLeft.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
+    fill.color = color.withValues(alpha: 0.90);
+    canvas.drawPath(fBc, fill);
+
+    final fBl = Path()..moveTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..lineTo(bot.dx, bot.dy)..close();
+    fill.color = color.withValues(alpha: 0.50);
+    canvas.drawPath(fBl, fill);
+
+    final fBr = Path()..moveTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
+    fill.color = color.withValues(alpha: 0.65);
+    canvas.drawPath(fBr, fill);
+
+    stroke.color = Colors.white.withValues(alpha: 0.85);
+    stroke.strokeWidth = 1.3;
+    final outline = Path()
+      ..moveTo(top.dx, top.dy)
+      ..lineTo(right.dx, right.dy)
+      ..lineTo(bot.dx, bot.dy)
+      ..lineTo(left.dx, left.dy)
+      ..close();
+    canvas.drawPath(outline, stroke);
+
+    stroke.color = Colors.white.withValues(alpha: 0.50);
+    stroke.strokeWidth = 0.9;
+    canvas.drawLine(tLeft, tRight, stroke);
+    canvas.drawLine(mLeft, mRight, stroke);
+    canvas.drawLine(tLeft, mLeft, stroke);
+    canvas.drawLine(tRight, mRight, stroke);
+    canvas.drawLine(tLeft, left, stroke);
+    canvas.drawLine(tRight, right, stroke);
+    canvas.drawLine(mLeft, bot, stroke);
+    canvas.drawLine(mRight, bot, stroke);
+  }
+
+  void _drawCyberSakura(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    const n = 5;
+    for (int i = 0; i < n; i++) {
+      final angle = -math.pi / 2 + i * (2 * math.pi / n);
+      final tip = Offset(cx + math.cos(angle) * r * 0.92, cy + math.sin(angle) * r * 0.92);
+      final wLeft = Offset(cx + math.cos(angle - 0.32) * r * 0.48, cy + math.sin(angle - 0.32) * r * 0.48);
+      final wRight = Offset(cx + math.cos(angle + 0.32) * r * 0.48, cy + math.sin(angle + 0.32) * r * 0.48);
+      final base = Offset(cx + math.cos(angle) * r * 0.16, cy + math.sin(angle) * r * 0.16);
+
+      final petal = Path()..moveTo(base.dx, base.dy)..lineTo(wLeft.dx, wLeft.dy)..lineTo(tip.dx, tip.dy)..lineTo(wRight.dx, wRight.dy)..close();
+      fill.color = color.withValues(alpha: 0.65 + 0.25 * math.sin(i * 1.5));
+      canvas.drawPath(petal, fill);
+
+      stroke.color = Colors.white.withValues(alpha: 0.75);
+      stroke.strokeWidth = 1.2;
+      canvas.drawPath(petal, stroke);
+
+      stroke.color = Colors.white.withValues(alpha: 0.90);
+      stroke.strokeWidth = 0.9;
+      canvas.drawLine(base, tip, stroke);
+    }
+    final centerPath = Path();
+    for (int i = 0; i < n; i++) {
+      final angle = -math.pi / 2 + i * (2 * math.pi / n);
+      final p = Offset(cx + math.cos(angle) * r * 0.22, cy + math.sin(angle) * r * 0.22);
+      if (i == 0) {
+        centerPath.moveTo(p.dx, p.dy);
+      } else {
+        centerPath.lineTo(p.dx, p.dy);
+      }
+    }
+    centerPath.close();
+    fill.color = Colors.white;
+    canvas.drawPath(centerPath, fill);
+  }
+
+  void _drawNeonLotus(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    final spire = Path()
+      ..moveTo(cx, cy - r * 0.95)
+      ..lineTo(cx + r * 0.24, cy - r * 0.20)
+      ..lineTo(cx + r * 0.14, cy + r * 0.40)
+      ..lineTo(cx - r * 0.14, cy + r * 0.40)
+      ..lineTo(cx - r * 0.24, cy - r * 0.20)
+      ..close();
+    fill.color = color.withValues(alpha: 0.88);
+    canvas.drawPath(spire, fill);
+    stroke.color = Colors.white.withValues(alpha: 0.85);
+    stroke.strokeWidth = 1.2;
+    canvas.drawPath(spire, stroke);
+
+    final pL = Path()
+      ..moveTo(cx - r * 0.78, cy - r * 0.35)
+      ..lineTo(cx - r * 0.26, cy - r * 0.10)
+      ..lineTo(cx - r * 0.15, cy + r * 0.45)
+      ..lineTo(cx - r * 0.55, cy + r * 0.20)
+      ..close();
+    fill.color = color.withValues(alpha: 0.60);
+    canvas.drawPath(pL, fill);
+    canvas.drawPath(pL, stroke);
+
+    final pR = Path()
+      ..moveTo(cx + r * 0.78, cy - r * 0.35)
+      ..lineTo(cx + r * 0.26, cy - r * 0.10)
+      ..lineTo(cx + r * 0.15, cy + r * 0.45)
+      ..lineTo(cx + r * 0.55, cy + r * 0.20)
+      ..close();
+    fill.color = color.withValues(alpha: 0.60);
+    canvas.drawPath(pR, fill);
+    canvas.drawPath(pR, stroke);
+
+    final base = Path()
+      ..moveTo(cx - r * 0.60, cy + r * 0.52)
+      ..lineTo(cx + r * 0.60, cy + r * 0.52)
+      ..lineTo(cx + r * 0.38, cy + r * 0.82)
+      ..lineTo(cx - r * 0.38, cy + r * 0.82)
+      ..close();
+    fill.color = Colors.white.withValues(alpha: 0.30);
+    canvas.drawPath(base, fill);
+    canvas.drawPath(base, stroke);
+  }
+
+  void _drawGoldenBell(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    final bell = Path()
+      ..moveTo(cx - r * 0.28, cy - r * 0.70)
+      ..lineTo(cx + r * 0.28, cy - r * 0.70)
+      ..lineTo(cx + r * 0.68, cy + r * 0.28)
+      ..lineTo(cx + r * 0.78, cy + r * 0.48)
+      ..lineTo(cx - r * 0.78, cy + r * 0.48)
+      ..lineTo(cx - r * 0.68, cy + r * 0.28)
+      ..close();
+    fill.color = color.withValues(alpha: 0.75);
+    canvas.drawPath(bell, fill);
+    stroke.color = Colors.white.withValues(alpha: 0.85);
+    stroke.strokeWidth = 1.3;
+    canvas.drawPath(bell, stroke);
+
+    final crown = Path()
+      ..moveTo(cx - r * 0.18, cy - r * 0.70)
+      ..lineTo(cx, cy - r * 0.95)
+      ..lineTo(cx + r * 0.18, cy - r * 0.70)
+      ..close();
+    fill.color = Colors.white.withValues(alpha: 0.90);
+    canvas.drawPath(crown, fill);
+    canvas.drawPath(crown, stroke);
+
+    final clapper = Path()
+      ..moveTo(cx - r * 0.18, cy + r * 0.52)
+      ..lineTo(cx + r * 0.18, cy + r * 0.52)
+      ..lineTo(cx, cy + r * 0.85)
+      ..close();
+    fill.color = Colors.white;
+    canvas.drawPath(clapper, fill);
+
+    stroke.color = color.withValues(alpha: 0.90);
+    stroke.strokeWidth = 1.8;
+    final arcL = Path()..moveTo(cx - r * 0.88, cy - r * 0.15)..lineTo(cx - r * 0.98, cy + r * 0.15)..lineTo(cx - r * 0.88, cy + r * 0.45);
+    final arcR = Path()..moveTo(cx + r * 0.88, cy - r * 0.15)..lineTo(cx + r * 0.98, cy + r * 0.15)..lineTo(cx + r * 0.88, cy + r * 0.45);
+    canvas.drawPath(arcL, stroke);
+    canvas.drawPath(arcR, stroke);
+  }
+
+  void _drawAdaNeuralShard(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    final hex = Path();
+    const n = 6;
+    final pts = <Offset>[];
+    for (int i = 0; i < n; i++) {
+      final angle = i * math.pi / 3;
+      final p = Offset(cx + math.cos(angle) * r * 0.85, cy + math.sin(angle) * r * 0.85);
+      pts.add(p);
+      if (i == 0) {
+        hex.moveTo(p.dx, p.dy);
+      } else {
+        hex.lineTo(p.dx, p.dy);
+      }
+    }
+    hex.close();
+    fill.color = color.withValues(alpha: 0.40);
+    canvas.drawPath(hex, fill);
+
+    stroke.color = Colors.white.withValues(alpha: 0.85);
+    stroke.strokeWidth = 1.4;
+    canvas.drawPath(hex, stroke);
+
+    stroke.color = Colors.white.withValues(alpha: 0.50);
+    stroke.strokeWidth = 1.0;
+    for (final p in pts) {
+      canvas.drawLine(Offset(cx, cy), p, stroke);
+    }
+
+    final core = Path()
+      ..moveTo(cx, cy - r * 0.35)
+      ..lineTo(cx + r * 0.35, cy)
+      ..lineTo(cx, cy + r * 0.35)
+      ..lineTo(cx - r * 0.35, cy)
+      ..close();
+    fill.color = isFavorite ? BrandColors.red : color;
+    canvas.drawPath(core, fill);
+    stroke.color = Colors.white;
+    stroke.strokeWidth = 1.5;
+    canvas.drawPath(core, stroke);
+  }
+
+  void _drawSamuraiVisor(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    final horns = Path()
+      ..moveTo(cx, cy - r * 0.30)
+      ..lineTo(cx - r * 0.75, cy - r * 0.95)
+      ..lineTo(cx - r * 0.52, cy - r * 0.95)
+      ..lineTo(cx, cy - r * 0.48)
+      ..lineTo(cx + r * 0.52, cy - r * 0.95)
+      ..lineTo(cx + r * 0.75, cy - r * 0.95)
+      ..close();
+    fill.color = Colors.white.withValues(alpha: 0.88);
+    canvas.drawPath(horns, fill);
+
+    final mask = Path()
+      ..moveTo(cx - r * 0.65, cy - r * 0.25)
+      ..lineTo(cx + r * 0.65, cy - r * 0.25)
+      ..lineTo(cx + r * 0.55, cy + r * 0.35)
+      ..lineTo(cx, cy + r * 0.92)
+      ..lineTo(cx - r * 0.55, cy + r * 0.35)
+      ..close();
+    fill.color = color.withValues(alpha: 0.55);
+    canvas.drawPath(mask, fill);
+    stroke.color = Colors.white.withValues(alpha: 0.85);
+    stroke.strokeWidth = 1.3;
+    canvas.drawPath(mask, stroke);
+
+    fill.color = isFavorite ? BrandColors.red : const Color(0xFF00E5FF);
+    final eyeL = Path()..moveTo(cx - r * 0.50, cy)..lineTo(cx - r * 0.12, cy + r * 0.08)..lineTo(cx - r * 0.12, cy + r * 0.16)..lineTo(cx - r * 0.50, cy + r * 0.08)..close();
+    final eyeR = Path()..moveTo(cx + r * 0.50, cy)..lineTo(cx + r * 0.12, cy + r * 0.08)..lineTo(cx + r * 0.12, cy + r * 0.16)..lineTo(cx + r * 0.50, cy + r * 0.08)..close();
+    canvas.drawPath(eyeL, fill);
+    canvas.drawPath(eyeR, fill);
+  }
+
+  void _drawDefaultSharpCrystal(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    final p = Path()
+      ..moveTo(cx, cy - r * 0.90)
+      ..lineTo(cx + r * 0.80, cy)
+      ..lineTo(cx, cy + r * 0.90)
+      ..lineTo(cx - r * 0.80, cy)
+      ..close();
+    fill.color = color.withValues(alpha: 0.70);
+    canvas.drawPath(p, fill);
+    stroke.color = Colors.white;
+    stroke.strokeWidth = 1.5;
+    canvas.drawPath(p, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SharpArtifactPainter oldDelegate) {
+    return oldDelegate.giftId != giftId ||
+        oldDelegate.color != color ||
+        oldDelegate.isFavorite != isFavorite;
   }
 }
 
@@ -439,9 +777,9 @@ class _HoloFoilPainter extends CustomPainter {
       ),
       radius: 0.95,
       colors: [
-        Colors.white.withValues(alpha: 0.22),
-        rarityColor.withValues(alpha: 0.16),
-        BrandColors.red.withValues(alpha: 0.10),
+        Colors.white.withValues(alpha: 0.16),
+        rarityColor.withValues(alpha: 0.12),
+        BrandColors.red.withValues(alpha: 0.08),
         Colors.transparent,
       ],
       stops: const [0.0, 0.35, 0.65, 1.0],
@@ -462,9 +800,9 @@ class _HoloFoilPainter extends CustomPainter {
       colors: [
         Colors.transparent,
         rarityColor.withValues(alpha: 0.08),
-        Colors.white.withValues(alpha: 0.24),
-        BrandColors.red.withValues(alpha: 0.15),
-        rarityColor.withValues(alpha: 0.12),
+        Colors.white.withValues(alpha: 0.06),
+        BrandColors.red.withValues(alpha: 0.10),
+        rarityColor.withValues(alpha: 0.08),
         Colors.transparent,
       ],
       stops: const [0.0, 0.25, 0.50, 0.68, 0.85, 1.0],
@@ -510,7 +848,9 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
     final dark = theme.brightness == Brightness.dark;
     final rarity = widget.gift.rarity;
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeInOutCubic,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       decoration: BoxDecoration(
         color: dark ? const Color(0xFF12121C) : Colors.white,
@@ -541,6 +881,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
             const SizedBox(height: 20),
             // Огромная иконка артефакта с неоновой аурой
             _ArtifactEmblem(
+              giftId: widget.gift.id,
               icon: widget.gift.icon,
               color: rarity.color,
               isFavorite: _fav,
@@ -558,13 +899,14 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: rarity.color.withValues(alpha: 0.18),
+                    color: (_fav ? BrandColors.red : rarity.color).withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: rarity.color.withValues(alpha: 0.5),
+                      color: (_fav ? BrandColors.red : rarity.color).withValues(alpha: 0.5),
                     ),
                   ),
                   child: Text(
@@ -572,25 +914,31 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: rarity.color,
+                      color: _fav ? BrandColors.red : rarity.color,
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'Артефакт #${widget.gift.serialNumber.toString().padLeft(4, '0')}',
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOutCubic,
                   style: TextStyle(
                     fontSize: 12,
                     fontFamily: 'monospace',
                     fontWeight: FontWeight.w700,
                     color: _fav ? BrandColors.red : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
+                  child: Text(
+                    'Артефакт #${widget.gift.serialNumber.toString().padLeft(4, '0')}',
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
             // Описание / лор
-            Container(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -614,19 +962,25 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(
-                        Icons.bolt_rounded,
-                        size: 16,
-                        color: _fav ? BrandColors.red : theme.colorScheme.primary,
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: Icon(
+                          Icons.bolt_rounded,
+                          key: ValueKey(_fav),
+                          size: 16,
+                          color: _fav ? BrandColors.red : theme.colorScheme.primary,
+                        ),
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        widget.gift.buffText,
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOutCubic,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: _fav ? BrandColors.red : theme.colorScheme.primary,
                         ),
+                        child: Text(widget.gift.buffText),
                       ),
                     ],
                   ),

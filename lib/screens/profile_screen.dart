@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
@@ -411,6 +412,147 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  /// Открыть диалог поиска и поштучного добавления отборных хардтек-треков
+  Future<void> _showHardtekkSearchSheet() async {
+    Haptics.light();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      sheetAnimationStyle: _sheetStyle(),
+      builder: (ctx) => _HardtekkSearchSheet(
+        onAddTrack: _addHardtekkTrack,
+        existingTitles: _service.tracks.map((t) => t.title).toSet(),
+      ),
+    );
+  }
+
+  /// Добавить выбранный хардтек-бэнгер в персональную музыку
+  Future<bool> _addHardtekkTrack(_HardtekkItem item) async {
+    if (!_service.canAddTrack) {
+      _toast(
+        Translations.t('profileMusicFull', context, 'Уже 99 треков'),
+        icon: Icons.info_outline,
+      );
+      return false;
+    }
+    if (_service.tracks.any((t) => t.title == item.title)) {
+      _toast('Этот трек уже в твоей музыке!', icon: Icons.check_circle_outline);
+      return false;
+    }
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final soundsDir = Directory('${dir.path}/sounds');
+      await soundsDir.create(recursive: true);
+      final wavBytes = _synthesizeHardtekkWav(bpm: item.bpm, seed: item.seed);
+      final fingerprint = _fingerprintOf(wavBytes);
+      final filePath = '${soundsDir.path}/hardtekk_${item.id}.wav';
+      final file = File(filePath);
+      await file.writeAsBytes(wavBytes);
+
+      final added = await _service.addTrack(
+        path: filePath,
+        title: item.title,
+        fingerprint: fingerprint,
+      );
+      if (!added) {
+        if (!mounted) return false;
+        _toast(Translations.t('profileMusicFull', context, 'Уже 99 треков'));
+        return false;
+      }
+      final fresh = _service.tracks.where((t) => t.path == filePath).firstOrNull;
+      if (fresh != null) {
+        _newTrackIds.add(fresh.id);
+        Future.delayed(const Duration(milliseconds: 760), () {
+          if (mounted) setState(() => _newTrackIds.remove(fresh.id));
+        });
+      }
+      Haptics.heavy();
+      _toast('«${item.title}» добавлен в профиль! 🔥', icon: Icons.music_note_rounded);
+      return true;
+    } catch (_) {
+      _toast('Не удалось сохранить трек', icon: Icons.error_outline);
+      return false;
+    }
+  }
+
+  /// Синтезирует настоящий 16-битный 44.1 кГц PCM WAV хардтек-луп с овердрайв бочкой и саб-басом
+  static List<int> _synthesizeHardtekkWav({required double bpm, required int seed}) {
+    const sampleRate = 44100;
+    final totalSamples = ((sampleRate * 60 / bpm) * 16).round();
+    final spb = (sampleRate * 60 / bpm).round();
+
+    final pcmBytes = ByteData(totalSamples * 2);
+
+    for (int i = 0; i < totalSamples; i++) {
+      final t = i / sampleRate;
+      final beatProgress = (i % spb) / spb;
+      final beatIndex = (i ~/ spb) % 16;
+
+      // 1. Овердрайв бочка хардтека: свип 165 Гц → 42 Гц с сатурацией
+      final kickFreq = 42.0 + 125.0 * math.exp(-beatProgress * 22.0);
+      final kickPhase = 2 * math.pi * kickFreq * (beatProgress * (spb / sampleRate));
+      final kickEnvelope = math.exp(-beatProgress * 6.5);
+      final rawKick = math.sin(kickPhase) * kickEnvelope * 2.2;
+      final saturatedKick = rawKick / (1.0 + rawKick.abs() * 0.75);
+
+      // 2. Роллинг саб-бас (офф-бит кач на 48 Гц)
+      final subFreq = 48.0 + (beatIndex % 4 == 3 ? 6.0 : 0.0);
+      final subEnv = math.sin(beatProgress * math.pi).clamp(0.0, 1.0) * (beatProgress > 0.15 ? 1.0 : 0.0);
+      final rawSub = math.sin(2 * math.pi * subFreq * t) * subEnv * 0.7;
+      final saturatedSub = rawSub / (1.0 + rawSub.abs() * 0.5);
+
+      // 3. Текк клэп/хэт на оффбите
+      double noise = 0.0;
+      if (beatProgress > 0.48 && beatProgress < 0.65) {
+        final hatEnv = math.exp(-(beatProgress - 0.48) * 45.0);
+        final pseudoRandom = ((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0;
+        noise = pseudoRandom * hatEnv * 0.35;
+      }
+
+      // 4. Эйсид пила на 16-х долях
+      final sixteenth = (beatProgress * 4.0) % 1.0;
+      final synthEnv = math.exp(-sixteenth * 12.0) * 0.25;
+      final synthFreq = 110.0 + (beatIndex * 15 % 70);
+      final synthSaw = ((t * synthFreq) % 1.0) * 2.0 - 1.0;
+      final synth = synthSaw * synthEnv;
+
+      final mix = (saturatedKick * 0.85 + saturatedSub * 0.65 + noise * 0.50 + synth * 0.35).clamp(-1.0, 1.0);
+      final sampleInt16 = (mix * 32760.0).round().clamp(-32768, 32767);
+      pcmBytes.setInt16(i * 2, sampleInt16, Endian.little);
+    }
+
+    final dataSize = totalSamples * 2;
+    final fileSize = 36 + dataSize;
+    final wav = BytesBuilder();
+
+    // RIFF chunk
+    wav.add([0x52, 0x49, 0x46, 0x46]); // "RIFF"
+    final fSizeBytes = ByteData(4)..setUint32(0, fileSize, Endian.little);
+    wav.add(fSizeBytes.buffer.asUint8List());
+    wav.add([0x57, 0x41, 0x56, 0x45]); // "WAVE"
+
+    // fmt sub-chunk
+    wav.add([0x66, 0x6d, 0x74, 0x20]); // "fmt "
+    wav.add([16, 0, 0, 0]);
+    wav.add([1, 0]); // PCM
+    wav.add([1, 0]); // Mono
+    final sRateBytes = ByteData(4)..setUint32(0, sampleRate, Endian.little);
+    wav.add(sRateBytes.buffer.asUint8List());
+    final bRateBytes = ByteData(4)..setUint32(0, sampleRate * 2, Endian.little);
+    wav.add(bRateBytes.buffer.asUint8List());
+    wav.add([2, 0]); // blockAlign
+    wav.add([16, 0]); // 16 bits
+
+    // data sub-chunk
+    wav.add([0x64, 0x61, 0x74, 0x61]); // "data"
+    final dSizeBytes = ByteData(4)..setUint32(0, dataSize, Endian.little);
+    wav.add(dSizeBytes.buffer.asUint8List());
+    wav.add(pcmBytes.buffer.asUint8List());
+
+    return wav.toBytes();
+  }
+
   /// SHA-256 содержимого файла — «отпечаток» трека для защиты от дублей.
   static String _fingerprintOf(List<int> bytes) {
     final hash = sha256.convert(bytes);
@@ -763,17 +905,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                     duration: const Duration(milliseconds: 280),
                     curve: Curves.easeInOutCubic,
                     alignment: Alignment.centerLeft,
-                    child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: BrandColors.red.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(Radii.pill),
-                        border: Border.all(
-                          color: BrandColors.red.withValues(alpha: 0.42),
-                          width: 0.9,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(Radii.pill),
+                      clipBehavior: Clip.antiAlias,
+                      child: Container(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: BrandColors.red.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(Radii.pill),
+                          border: Border.all(
+                            color: BrandColors.red.withValues(alpha: 0.42),
+                            width: 0.9,
+                          ),
                         ),
-                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -822,6 +967,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                 ),
               ),
+            ),
             ],
           ),
         );
@@ -1209,25 +1355,37 @@ class _ProfileScreenState extends State<ProfileScreen>
           const SizedBox(height: Spacing.xs),
           Align(
             alignment: Alignment.centerLeft,
-            child: PressScale(
-              pressedScale: 0.94,
-              child: FilledButton.tonalIcon(
-                // Кнопка всегда «Добавить»: это подборка, а не одиночный
-                // трек. На пределе гаснет — понятно, что дальше добавлять
-                // некуда.
-                onPressed: _service.canAddTrack ? _addMusic : null,
-                style: _roundButtonStyle(),
-                icon: const Icon(Icons.library_music_outlined),
-                label: Text(
-                  _service.canAddTrack
-                      ? Translations.t('profileMusicAdd', context, 'Добавить')
-                      : Translations.t(
-                          'profileMusicFull',
-                          context,
-                          'Уже 99 треков',
-                        ),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                PressScale(
+                  pressedScale: 0.94,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _service.canAddTrack ? _addMusic : null,
+                    style: _roundButtonStyle(),
+                    icon: const Icon(Icons.library_music_outlined),
+                    label: Text(
+                      _service.canAddTrack
+                          ? Translations.t('profileMusicAdd', context, 'Добавить')
+                          : Translations.t(
+                              'profileMusicFull',
+                              context,
+                              'Уже 99 треков',
+                            ),
+                    ),
+                  ),
                 ),
-              ),
+                PressScale(
+                  pressedScale: 0.94,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _service.canAddTrack ? _showHardtekkSearchSheet : null,
+                    style: _roundButtonStyle(),
+                    icon: const Icon(Icons.search_rounded),
+                    label: const Text('Поиск'),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -3132,4 +3290,418 @@ class _TalismanBackgroundPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _TalismanBackgroundPainter old) =>
       old.color != color || old.accent != accent;
+}
+
+class _HardtekkItem {
+  final String id;
+  final String title;
+  final String artist;
+  final String tags;
+  final double bpm;
+  final int seed;
+
+  const _HardtekkItem({
+    required this.id,
+    required this.title,
+    required this.artist,
+    required this.tags,
+    required this.bpm,
+    required this.seed,
+  });
+}
+
+/// Модальный экран поиска и поштучного добавления отборных хардтек-треков
+class _HardtekkSearchSheet extends StatefulWidget {
+  final Future<bool> Function(_HardtekkItem item) onAddTrack;
+  final Set<String> existingTitles;
+
+  const _HardtekkSearchSheet({
+    required this.onAddTrack,
+    required this.existingTitles,
+  });
+
+  @override
+  State<_HardtekkSearchSheet> createState() => _HardtekkSearchSheetState();
+}
+
+class _HardtekkSearchSheetState extends State<_HardtekkSearchSheet> {
+  final TextEditingController _queryCtrl = TextEditingController();
+  String _query = '';
+  final Set<String> _addedTitles = {};
+  String? _busyId;
+
+  static const List<_HardtekkItem> _catalog = [
+    _HardtekkItem(
+      id: 'zahni_kraftstoff',
+      title: 'Zahni - Kraftstoff (180 BPM)',
+      artist: 'Zahni',
+      tags: 'Acid Tekk • 180 BPM • Overdrive Kick',
+      bpm: 180.0,
+      seed: 101,
+    ),
+    _HardtekkItem(
+      id: 'gebrueder_brett_osten',
+      title: 'Die Gebrüder Brett - Der Osten Feiert Besser',
+      artist: 'Die Gebrüder Brett',
+      tags: 'Ostdeutsch Tekk • 182 BPM • Pure Pressure',
+      bpm: 182.0,
+      seed: 102,
+    ),
+    _HardtekkItem(
+      id: 'creeds_push_up_tekk',
+      title: 'Creeds - Push Up (Tekk Edit)',
+      artist: 'Creeds',
+      tags: 'French Tekk Style • 175 BPM • Heavy Sub',
+      bpm: 175.0,
+      seed: 103,
+    ),
+    _HardtekkItem(
+      id: 'klangkuenstler_die_hoelle',
+      title: 'Klangkuenstler - Die Hölle glüht (Tekk Cut)',
+      artist: 'Klangkuenstler',
+      tags: 'Hard Industrial Tekk • 178 BPM • Distortion',
+      bpm: 178.0,
+      seed: 104,
+    ),
+    _HardtekkItem(
+      id: 'nogge_8000_watt',
+      title: 'Nogge - 8000 Watt (Underground Tekk)',
+      artist: 'Nogge',
+      tags: 'Subground Punch • 185 BPM • Peak Energy',
+      bpm: 185.0,
+      seed: 105,
+    ),
+    _HardtekkItem(
+      id: 'minupren_berlin_tekkno',
+      title: 'Minupren - Berlin Tekkno City',
+      artist: 'Minupren',
+      tags: 'Raw Underground • 180 BPM • Acid Line',
+      bpm: 180.0,
+      seed: 106,
+    ),
+    _HardtekkItem(
+      id: 'komacasper_rhythmus',
+      title: 'Komacasper - Rhythmusstörung',
+      artist: 'Komacasper',
+      tags: 'High-Speed Tekk • 182 BPM • Rolling Bass',
+      bpm: 182.0,
+      seed: 107,
+    ),
+    _HardtekkItem(
+      id: 'borderline_tanz_oder_stirb',
+      title: 'Borderline - Tanz или Stirb',
+      artist: 'Borderline',
+      tags: 'Hard Bassline • 180 BPM • Brutal Drop',
+      bpm: 180.0,
+      seed: 108,
+    ),
+    _HardtekkItem(
+      id: 'ill_patron_ostblock',
+      title: 'Ill Patron - Ostblock Sound',
+      artist: 'Ill Patron',
+      tags: 'Leipzig Tekk • 184 BPM • Rave Distortion',
+      bpm: 184.0,
+      seed: 109,
+    ),
+    _HardtekkItem(
+      id: 'bmg_tekk_dimension',
+      title: 'BMG - Tekk Dimension',
+      artist: 'Brachiale Musikgestalter',
+      tags: 'Hardcore Tekk • 178 BPM • Heavy Synth',
+      bpm: 178.0,
+      seed: 110,
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _addedTitles.addAll(widget.existingTitles);
+    _queryCtrl.addListener(() {
+      setState(() => _query = _queryCtrl.text.trim().toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _queryCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTrackAdd(_HardtekkItem item) async {
+    setState(() => _busyId = item.id);
+    final ok = await widget.onAddTrack(item);
+    if (mounted) {
+      setState(() {
+        _busyId = null;
+        if (ok) _addedTitles.add(item.title);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+
+    final filtered = _catalog.where((item) {
+      if (_query.isEmpty) return true;
+      return item.title.toLowerCase().contains(_query) ||
+          item.artist.toLowerCase().contains(_query) ||
+          item.tags.toLowerCase().contains(_query);
+    }).toList();
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF13131E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border.all(
+          color: BrandColors.red.withValues(alpha: dark ? 0.35 : 0.22),
+          width: 1.0,
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: BrandColors.red.withValues(alpha: 0.16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.speed_rounded,
+                    color: BrandColors.red,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Поиск хардтек-бэнгеров',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Отборный 175-185 BPM Tekk • Добавляй по одному',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _queryCtrl,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () => _queryCtrl.clear(),
+                      )
+                    : null,
+                hintText: 'Поиск по артисту или треку (Zahni, Creeds...)',
+                isDense: true,
+                filled: true,
+                fillColor: dark
+                    ? const Color(0xFF1E1E2C)
+                    : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        child: Text(
+                          'Ничего не найдено',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final item = filtered[index];
+                        final isAdded = _addedTitles.contains(item.title);
+                        final isBusy = _busyId == item.id;
+
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: dark
+                                ? const Color(0xFF1B1B26)
+                                : theme.colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isAdded
+                                  ? BrandColors.red.withValues(alpha: 0.40)
+                                  : theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
+                              width: 0.9,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: isAdded
+                                        ? [BrandColors.red, const Color(0xFF8B0000)]
+                                        : [
+                                            theme.colorScheme.primary,
+                                            theme.colorScheme.tertiary,
+                                          ],
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.graphic_eq_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      item.tags,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: isAdded
+                                            ? BrandColors.red
+                                            : theme.colorScheme.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (isBusy)
+                                const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else if (isAdded)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: BrandColors.red.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.check_rounded,
+                                        size: 14,
+                                        color: BrandColors.red,
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'В музыке',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: BrandColors.red,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                PressScale(
+                                  pressedScale: 0.94,
+                                  child: FilledButton.tonal(
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    onPressed: () => _handleTrackAdd(item),
+                                    child: const Text(
+                                      'Добавить',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

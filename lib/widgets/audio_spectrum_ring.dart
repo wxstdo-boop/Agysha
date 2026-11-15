@@ -158,7 +158,7 @@ class _DelicateSpectrumPainter extends CustomPainter {
 
     // Мягкая фоновая неоновая аура (плавно нарастает при playFactor)
     if (playFactor > 0.01) {
-      final pulse = math.sin(phase * 1.5) * 1.5;
+      final pulse = math.sin(phase * 2.0) * 1.5;
       final auraRadius = baseRadius + 1.5 + pulse;
       _auraPaint.color = primaryColor.withValues(alpha: 0.15 * playFactor);
       canvas.drawCircle(center, auraRadius, _auraPaint);
@@ -167,9 +167,11 @@ class _DelicateSpectrumPainter extends CustomPainter {
     for (var i = 0; i < _barCount; i++) {
       final angle = (i / _barCount) * _tau - math.pi / 2;
 
-      // Плавная органическая интерполяция волн без резких производных
+      // Плавная органическая интерполяция волн: частоты — строгие целые
+      // множители (2.0), что гарантирует 100% математическую непрерывность f(0) == f(1)
+      // без резких рывков при смене циклов
       final w1 = (math.sin(phase * 2.0 + i * 0.45) + 1.0) * 0.5;
-      final w2 = (math.cos(phase * 1.5 - i * 0.32) + 1.0) * 0.5;
+      final w2 = (math.cos(phase * 2.0 - i * 0.35) + 1.0) * 0.5;
       final wave = w1 * 0.62 + w2 * 0.38;
 
       // Деликатный размер: в покое 1.0 px, на максимуме до 6.2 px
@@ -185,8 +187,8 @@ class _DelicateSpectrumPainter extends CustomPainter {
       final p1 = Offset(center.dx + rInner * cosA, center.dy + rInner * sinA);
       final p2 = Offset(center.dx + rOuter * cosA, center.dy + rOuter * sinA);
 
-      // Плавный градиент по кругу
-      final colorFraction = (i / _barCount + progress * 0.25) % 1.0;
+      // Непрерывный замкнутый цветовой цикл
+      final colorFraction = (i / _barCount + progress * 1.0) % 1.0;
       final barColor = Color.lerp(
         primaryColor,
         secondaryColor,

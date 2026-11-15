@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/haptics.dart';
 import '../l10n/translations.dart';
+import 'press_scale.dart';
 import 'rolling_number.dart';
 
 /// Открывает плавный диалог выбора времени (ЧЧ:ММ) — полностью БЕЗ
@@ -138,19 +139,25 @@ class _ManualTimeDialogState extends State<_ManualTimeDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(Translations.cancelOf(context)),
+                PressScale(
+                  pressedScale: 0.94,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(Translations.cancelOf(context)),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                PressScale(
+                  pressedScale: 0.94,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
+                    onPressed: _submit,
+                    child: Text(Translations.okOf(context)),
                   ),
-                  onPressed: _submit,
-                  child: Text(Translations.okOf(context)),
                 ),
               ],
             ),

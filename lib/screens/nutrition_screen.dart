@@ -509,9 +509,11 @@ class _NutritionScreenState extends State<NutritionScreen>
     final norm = _service.norm;
     final macros = _service.todayMacros;
     final over = today > norm;
-    return _ringed(
-      accent: cs.primary,
-      child: Card(
+    return PressScale(
+      pressedScale: 0.96,
+      child: _ringed(
+        accent: cs.primary,
+        child: Card(
         margin: EdgeInsets.zero,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -650,8 +652,9 @@ class _NutritionScreenState extends State<NutritionScreen>
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   /// Строка «подпись — число — единица». Невидимый «самый широкий» текст
   /// держит ширину, поэтому счётчик не толкает соседей при смене значения.
@@ -1030,18 +1033,21 @@ class _NutritionScreenState extends State<NutritionScreen>
   /// Карточка трендов. Значение сегодняшнего столбика приходит уже
   /// «докрученным», чтобы не плодить тикеров на каждый день графика.
   Widget _trendsCard(ThemeData theme) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: _service.todayCalories.toDouble()),
-      duration: const Duration(milliseconds: 620),
-      curve: Curves.easeOutCubic,
-      builder: (context, shown, _) => _ringed(
-        accent: theme.colorScheme.secondary,
-        child: NutritionTrends(
-          days: _service.days,
-          norm: _service.norm,
-          todayCalories: shown,
-          elevation: 0,
-          radius: _ringInner,
+    return PressScale(
+      pressedScale: 0.96,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: _service.todayCalories.toDouble()),
+        duration: const Duration(milliseconds: 620),
+        curve: Curves.easeOutCubic,
+        builder: (context, shown, _) => _ringed(
+          accent: theme.colorScheme.secondary,
+          child: NutritionTrends(
+            days: _service.days,
+            norm: _service.norm,
+            todayCalories: shown,
+            elevation: 0,
+            radius: _ringInner,
+          ),
         ),
       ),
     );
@@ -1347,8 +1353,10 @@ class _NutritionScreenState extends State<NutritionScreen>
                         icon: willPin ? Icons.push_pin : Icons.push_pin_outlined,
                       );
                     },
-                    child: Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    child: PressScale(
+                      pressedScale: 0.96,
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
                     shape: RoundedRectangleBorder(
                       // Радиус 20 — как у карточек привычек и задач: с 16
                       // карточка выбивалась из общего языка скруглений, а
@@ -1452,6 +1460,7 @@ class _NutritionScreenState extends State<NutritionScreen>
                       ),
                     ),
                     ),
+                  ),
                   ),
                 ),
               ),

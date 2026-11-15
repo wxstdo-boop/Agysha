@@ -111,27 +111,31 @@ class _SquirrelWheelState extends State<SquirrelWheel>
                     ),
                   ),
                 ),
-                // 2. Бегущий хомяк внутри колеса (аккуратный естественный бег без вращения самого хомяка)
+                // 2. Бегущий хомяк внутри колеса (аккуратный естественный бег, полупрозрачный силуэт)
                 RepaintBoundary(
                   child: AnimatedBuilder(
                     animation: _spin,
                     builder: (context, _) {
+                      // Монотонный, размеренный бег в гармонии со ступеньками колеса
                       final scamper = reduceMotion
                           ? 0.0
-                          : math.sin(_spin.value * 6 * math.pi);
-                      final bobY = scamper * (widget.size * 0.02);
-                      return Transform.translate(
-                        offset: Offset(0, bobY),
-                        child: RepaintBoundary(
-                          child: CustomPaint(
-                            size: Size(widget.size, widget.size),
-                            isComplex: true,
-                            willChange: false,
-                            painter: _HamsterPainter(
-                              furColor: furColor,
-                              bellyColor: bellyColor,
-                              earColor: earColor,
-                              stepPhase: reduceMotion ? 0.0 : _spin.value,
+                          : math.sin(_spin.value * 4 * math.pi);
+                      final bobY = scamper * (widget.size * 0.015);
+                      return Opacity(
+                        opacity: 0.82,
+                        child: Transform.translate(
+                          offset: Offset(0, bobY),
+                          child: RepaintBoundary(
+                            child: CustomPaint(
+                              size: Size(widget.size, widget.size),
+                              isComplex: true,
+                              willChange: false,
+                              painter: _HamsterPainter(
+                                furColor: furColor,
+                                bellyColor: bellyColor,
+                                earColor: earColor,
+                                stepPhase: reduceMotion ? 0.0 : _spin.value,
+                              ),
                             ),
                           ),
                         ),

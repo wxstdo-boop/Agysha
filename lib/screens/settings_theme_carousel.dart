@@ -20,13 +20,12 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
       _ThemeEntry('dark', Translations.darkOf(context), Icons.dark_mode),
       _ThemeEntry(
         'oled',
-        Translations.t('themeOled', context, 'Cyberpunk 2077'),
-        Icons.brightness_2_outlined,
-      ),
-      _ThemeEntry(
-        'cyberpunkLight',
-        Translations.t('themeCyberpunkLight', context, 'Cyberpunk 2077 Light'),
-        Icons.wb_sunny_outlined,
+        appState.themeKey == 'cyberpunkLight'
+            ? '${Translations.t('themeOled', context, 'Cyberpunk 2077')} (Light)'
+            : Translations.t('themeOled', context, 'Cyberpunk 2077'),
+        appState.themeKey == 'cyberpunkLight'
+            ? Icons.wb_sunny_outlined
+            : Icons.brightness_2_outlined,
       ),
       _ThemeEntry(
         'system',
@@ -51,7 +50,9 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
       if (NewYearEventService().prizeGranted)
         _ThemeEntry('metel', Translations.t('metel', context), Icons.snowing),
     ];
-    final currentIndex = entries.indexWhere((e) => e.key == appState.themeKey);
+    final resolvedKey =
+        appState.themeKey == 'cyberpunkLight' ? 'oled' : appState.themeKey;
+    final currentIndex = entries.indexWhere((e) => e.key == resolvedKey);
     _themePageCtrl ??= PageController(
       viewportFraction: 0.55,
       initialPage: currentIndex < 0 ? 0 : currentIndex,
@@ -63,6 +64,11 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
         itemCount: entries.length,
         onPageChanged: (i) {
           final key = entries[i].key;
+          if (key == 'oled' &&
+              (appState.themeKey == 'oled' ||
+                  appState.themeKey == 'cyberpunkLight')) {
+            return;
+          }
           if (key != appState.themeKey) appState.setThemeMode(key);
         },
         itemBuilder: (context, i) {
@@ -101,7 +107,8 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
     VoidCallback? extraOnSelected,
   }) {
     final appState = AgyshaApp.of(context);
-    final isSelected = appState.themeKey == key;
+    final isSelected = appState.themeKey == key ||
+        (key == 'oled' && appState.themeKey == 'cyberpunkLight');
     // Для MUTILATED — зажатие 10 секунд показывает плашную «Вы элегант?»
     // с переводами. Плавно появляется, держится 3 секунды, плавно уходит.
     // ТОНКАЯ обводка (1px) с НАСТОЯЩЕЙ анимацией: begin всегда 0,
@@ -146,7 +153,13 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
           showCheckmark: false,
           onSelected: (selected) {
             Haptics.select();
-            if (key == 'peach' && appState.themeKey == 'peach') {
+            if (key == 'oled' &&
+                (appState.themeKey == 'oled' ||
+                    appState.themeKey == 'cyberpunkLight')) {
+              final next =
+                  appState.themeKey == 'oled' ? 'cyberpunkLight' : 'oled';
+              appState.setThemeMode(next);
+            } else if (key == 'peach' && appState.themeKey == 'peach') {
               appState.togglePeachDark();
             } else {
               appState.setThemeMode(key);

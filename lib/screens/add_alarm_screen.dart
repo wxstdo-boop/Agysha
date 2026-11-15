@@ -363,12 +363,17 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(Translations.cancelOf(context)),
+          PressScale(
+            pressedScale: 0.94,
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(Translations.cancelOf(context)),
+            ),
           ),
-          TextButton(
-            onPressed: () async {
+          PressScale(
+            pressedScale: 0.94,
+            child: TextButton(
+              onPressed: () async {
               final raw = ctrl.text.trim();
               // Разрешаем вводить только имя: любое расширение, которое
               // пользователь напишет, отбрасываем, чтобы формат файла
@@ -427,7 +432,8 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
             },
             child: Text(Translations.saveOf(context)),
           ),
-        ],
+        ),
+      ],
       ),
     );
   }
@@ -508,15 +514,20 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                 index: 0,
                 child: PressScale(
                   // Плитка времени — плавная отдача-«вдавливание» всей карточки целиком.
-                  pressedScale: 0.98,
-                  duration: const Duration(milliseconds: 160),
+                  pressedScale: 0.94,
+                  duration: const Duration(milliseconds: 140),
                   releaseDuration: const Duration(milliseconds: 220),
                   child: Card(
                     clipBehavior: Clip.antiAlias,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: ListTile(
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                      ),
+                      child: ListTile(
                       leading: const Icon(Icons.access_time),
                       title: ClipRect(
                         // Выбранное время в окне правки плавно «проезжает»
@@ -545,6 +556,7 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                       ),
                       subtitle: Text(Translations.tapToChangeOf(context)),
                       onTap: _pickTime,
+                    ),
                     ),
                   ),
                 ),
@@ -742,22 +754,28 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                 index: 4,
                 child: PressScale(
                   // Строка «Вибрация» — плавная отдача-«вдавливание» всей карточки целиком.
-                  pressedScale: 0.98,
-                  duration: const Duration(milliseconds: 160),
+                  pressedScale: 0.94,
+                  duration: const Duration(milliseconds: 140),
                   releaseDuration: const Duration(milliseconds: 220),
                   child: Card(
                     clipBehavior: Clip.antiAlias,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: ListTile(
-                      title: Text(Translations.vibrateOf(context)),
-                      leading: const Icon(Icons.vibration),
-                      onTap: () => setState(() => _vibrate = !_vibrate),
-                      trailing: VolumetricSwitch(
-                        value: _vibrate,
-                        onChanged: (v) => setState(() => _vibrate = v),
-                        activeColor: Theme.of(context).colorScheme.primary,
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                      ),
+                      child: ListTile(
+                        title: Text(Translations.vibrateOf(context)),
+                        leading: const Icon(Icons.vibration),
+                        onTap: () => setState(() => _vibrate = !_vibrate),
+                        trailing: VolumetricSwitch(
+                          value: _vibrate,
+                          onChanged: (v) => setState(() => _vibrate = v),
+                          activeColor: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
                   ),
