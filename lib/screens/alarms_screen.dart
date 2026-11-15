@@ -532,36 +532,33 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           pressedScale: 0.96,
           duration: const Duration(milliseconds: 140),
           releaseDuration: const Duration(milliseconds: 220),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            clipBehavior: Clip.antiAlias,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeInOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: pillBg,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: borderColor,
+                width: 0.9,
+              ),
+              boxShadow: [
+                if (hasActive)
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                    blurRadius: 16,
+                    spreadRadius: -4,
+                    offset: const Offset(0, 3),
+                  ),
+              ],
+            ),
             child: AnimatedSize(
-              duration: const Duration(milliseconds: 360),
+              duration: const Duration(milliseconds: 320),
               curve: Curves.easeInOutCubic,
               alignment: Alignment.center,
-              clipBehavior: Clip.antiAlias,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 360),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: pillBg,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: borderColor,
-                    width: 0.9,
-                  ),
-                  boxShadow: [
-                    if (hasActive)
-                      BoxShadow(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                        blurRadius: 16,
-                        spreadRadius: -4,
-                        offset: const Offset(0, 3),
-                      ),
-                  ],
-                ),
-                child: AnimatedSwitcher(
+              clipBehavior: Clip.none,
+              child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 280),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
@@ -610,8 +607,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
         ),
       ),
     ),
-  ),
-);
+  );
 }
 
   Widget _buildAlarmList(

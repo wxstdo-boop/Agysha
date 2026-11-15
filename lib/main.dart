@@ -1663,31 +1663,32 @@ class AgyshaAppState extends State<AgyshaApp>
                   );
                 }
                 if (_themeKey == 'cyberpunkLight') {
-                  // Cyberpunk 2077 Light — светлый футуризм: неон-кримсон,
-                  // электрический кибер-жёлтый (#FCEE0A), неоновый циан и чистый фон.
+                  // Cyberpunk 2077 Light — хай-тек киберпанк (стиль Arasaka/Trauma Team):
+                  // платиновый кибер-белый фон, неон-кримсон (#FF003C), ночной кибер-жёлтый (#FCEE0A)
+                  // и неоновый электрик-циан (#00F0FF) на ультра-чётких контрастных контейнерах.
                   return const ColorScheme.light(
-                    primary: Color(0xFFFF0055),
+                    primary: Color(0xFFFF003C),
                     onPrimary: Colors.white,
-                    primaryContainer: Color(0xFFFFE0EB),
-                    onPrimaryContainer: Color(0xFF900028),
-                    secondary: Color(0xFFFACC15),
+                    primaryContainer: Color(0xFFFFE5EC),
+                    onPrimaryContainer: Color(0xFF80001E),
+                    secondary: Color(0xFFFCEE0A),
                     onSecondary: Colors.black,
-                    secondaryContainer: Color(0xFFFEF08A),
+                    secondaryContainer: Color(0xFFFEF9C3),
                     onSecondaryContainer: Color(0xFF713F12),
-                    tertiary: Color(0xFF00E5FF),
+                    tertiary: Color(0xFF00F0FF),
                     onTertiary: Colors.black,
                     tertiaryContainer: Color(0xFFCFFAFE),
-                    onTertiaryContainer: Color(0xFF164E63),
-                    surface: Color(0xFFFAF9F6),
-                    onSurface: Color(0xFF0F172A),
+                    onTertiaryContainer: Color(0xFF0E7490),
+                    surface: Color(0xFFF6F8FC),
+                    onSurface: Color(0xFF0D1117),
                     onSurfaceVariant: Color(0xFF334155),
-                    outline: Color(0xFFFF0055),
-                    outlineVariant: Color(0xFFFDE047),
+                    outline: Color(0xFFFF003C),
+                    outlineVariant: Color(0xFFCBD5E1),
                     surfaceContainerLowest: Colors.white,
-                    surfaceContainerLow: Color(0xFFFFFBEB),
-                    surfaceContainer: Color(0xFFFEF9C3),
-                    surfaceContainerHigh: Color(0xFFFEF08A),
-                    surfaceContainerHighest: Color(0xFFFDE047),
+                    surfaceContainerLow: Color(0xFFF1F5F9),
+                    surfaceContainer: Color(0xFFE8EEF5),
+                    surfaceContainerHigh: Color(0xFFDFE7F2),
+                    surfaceContainerHighest: Color(0xFFD4E0EE),
                   );
                 }
                 // Обычная СВЕТЛАЯ — светло-сиреневая: фиолетовый акцент и

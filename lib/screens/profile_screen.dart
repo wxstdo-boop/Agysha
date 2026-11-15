@@ -413,7 +413,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  /// Поиск и добавление отборного хардтек-бэнгера прямо по кнопке (без отдельного окна)
+  /// Поиск и добавление отборного Drift Phonk бэнгера прямо по кнопке (без отдельного окна)
   Future<void> _searchAndAddHardtekkInline() async {
     if (_isSearchingHardtekk) return;
     if (!_service.canAddTrack) {
@@ -428,34 +428,34 @@ class _ProfileScreenState extends State<ProfileScreen>
     Haptics.light();
 
     try {
-      // Имитируем сканирование и подбор бэнгера
-      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      // Имитируем быстрый подбор бэнгера
+      await Future<void>.delayed(const Duration(milliseconds: 1000));
       if (!mounted) return;
 
       final existing = _service.tracks.map((t) => t.title).toSet();
-      _HardtekkItem? candidate;
-      for (final item in _HardtekkCatalog.items) {
+      _PhonkItem? candidate;
+      for (final item in _PhonkCatalog.items) {
         if (!existing.contains(item.title)) {
           candidate = item;
           break;
         }
       }
       // Если все 10 уже добавлены, создаем эксклюзивный ремикс
-      candidate ??= _HardtekkItem(
-        id: 'hardtekk_remix_${DateTime.now().millisecondsSinceEpoch % 1000}',
-        title: 'Cyberpunk Tekk Drop #${_service.tracks.length + 1}',
-        artist: 'Agysha Tekk Syndicate',
-        tags: 'Exclusive Overdrive • 182 BPM • Pure Pressure',
-        bpm: 182.0,
+      candidate ??= _PhonkItem(
+        id: 'phonk_remix_${DateTime.now().millisecondsSinceEpoch % 1000}',
+        title: 'Cyberpunk Drift Phonk #${_service.tracks.length + 1}',
+        artist: 'Night City Syndicate',
+        tags: 'Memphis Cowbell • 146 BPM • Pure Heat',
+        bpm: 146.0,
         seed: DateTime.now().millisecondsSinceEpoch,
       );
 
       final dir = await getApplicationDocumentsDirectory();
       final soundsDir = Directory('${dir.path}/sounds');
       await soundsDir.create(recursive: true);
-      final wavBytes = _synthesizeHardtekkWav(bpm: candidate.bpm, seed: candidate.seed);
+      final wavBytes = _synthesizePhonkWav(bpm: candidate.bpm, seed: candidate.seed);
       final fingerprint = _fingerprintOf(wavBytes);
-      final filePath = '${soundsDir.path}/hardtekk_${candidate.id}.wav';
+      final filePath = '${soundsDir.path}/phonk_${candidate.id}.wav';
       final file = File(filePath);
       await file.writeAsBytes(wavBytes);
 
@@ -478,7 +478,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       }
       Haptics.heavy();
       if (!mounted) return;
-      _toast('«${candidate.title}» добавлен в профиль! 🔥', icon: Icons.music_note_rounded);
+      _toast('«${candidate.title}» добавлен в профиль! 🏎️💨', icon: Icons.music_note_rounded);
     } catch (_) {
       if (mounted) _toast('Не удалось сохранить трек', icon: Icons.error_outline);
     } finally {
@@ -486,48 +486,92 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  /// Синтезирует настоящий 16-битный 44.1 кГц PCM WAV хардтек-луп с овердрайв бочкой и саб-басом
-  static List<int> _synthesizeHardtekkWav({required double bpm, required int seed}) {
+  /// Синтезирует настоящий 16-битный 44.1 кГц PCM WAV Drift Phonk луп с легендарным 808 ковбеллом,
+  /// сатурированным мемфисским 808 саб-басом, трэп-бочкой и снэром.
+  static List<int> _synthesizePhonkWav({required double bpm, required int seed}) {
     const sampleRate = 44100;
     final totalSamples = ((sampleRate * 60 / bpm) * 16).round();
-    final spb = (sampleRate * 60 / bpm).round();
+    final stepSamples = (totalSamples / 16).round();
 
     final pcmBytes = ByteData(totalSamples * 2);
 
+    // Ноты для аутентичного Drift Phonk риффа (минорная пентатоника F#)
+    const melodySteps = [
+      369.99, // 0: F#4
+      0.0,    // 1: rest
+      440.00, // 2: A4
+      369.99, // 3: F#4
+      0.0,    // 4: rest
+      554.37, // 5: C#5
+      493.88, // 6: B4
+      0.0,    // 7: rest
+      440.00, // 8: A4
+      0.0,    // 9: rest
+      369.99, // 10: F#4
+      329.63, // 11: E4
+      369.99, // 12: F#4
+      0.0,    // 13: rest
+      523.25, // 14: C5 (dark drift phonk tritone)
+      554.37, // 15: C#5
+    ];
+
+    // Басовые ноты для каждого шага
+    const bassSteps = [
+      46.25, 46.25, 46.25, 46.25, // F#1
+      36.71, 36.71, 36.71, 36.71, // D1
+      41.20, 41.20, 41.20, 41.20, // E1
+      34.65, 34.65, 43.65, 43.65, // C#1 -> F1
+    ];
+
     for (int i = 0; i < totalSamples; i++) {
       final t = i / sampleRate;
-      final beatProgress = (i % spb) / spb;
-      final beatIndex = (i ~/ spb) % 16;
+      final step = (i ~/ stepSamples).clamp(0, 15);
+      final stepSample = i % stepSamples;
+      final stepT = stepSample / sampleRate;
 
-      // 1. Овердрайв бочка хардтека: свип 175 Гц → 38 Гц с сатурацией
-      final kickFreq = 38.0 + 137.0 * math.exp(-beatProgress * 25.0);
-      final kickPhase = 2 * math.pi * kickFreq * (beatProgress * (spb / sampleRate));
-      final kickEnvelope = math.exp(-beatProgress * 5.8);
-      final rawKick = math.sin(kickPhase) * kickEnvelope * 2.5;
-      final saturatedKick = (rawKick * 1.5).clamp(-1.0, 1.0) * 0.90;
-
-      // 2. Роллинг саб-бас (офф-бит кач на 46 Гц с 16-й модуляцией)
-      final subFreq = 46.0 + (beatIndex % 4 == 2 ? 6.0 : 0.0);
-      final subEnv = math.sin(beatProgress * math.pi).clamp(0.0, 1.0) * (beatProgress > 0.12 ? 1.0 : 0.0);
-      final rawSub = math.sin(2 * math.pi * subFreq * t) * subEnv * 0.85;
-      final saturatedSub = (rawSub * 1.3).clamp(-1.0, 1.0);
-
-      // 3. Текк клэп/хэт на оффбите
-      double noise = 0.0;
-      if (beatProgress > 0.46 && beatProgress < 0.66) {
-        final hatEnv = math.exp(-(beatProgress - 0.46) * 42.0);
-        final pseudoRandom = ((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0;
-        noise = pseudoRandom * hatEnv * 0.42;
+      // 1. Легендарный Roland TR-808 Cowbell (два прямоугольных осциллятора с соотношением 1.481)
+      double cowbell = 0.0;
+      final bellFreq = melodySteps[step];
+      if (bellFreq > 0.0) {
+        final f1 = bellFreq;
+        final f2 = bellFreq * 1.48148;
+        final sq1 = math.sin(2 * math.pi * f1 * stepT) >= 0 ? 1.0 : -1.0;
+        final sq2 = math.sin(2 * math.pi * f2 * stepT) >= 0 ? 1.0 : -1.0;
+        final bellEnv = math.exp(-stepT * 12.5);
+        final rawBell = (sq1 + sq2) * 0.5 * bellEnv;
+        cowbell = (rawBell * 1.35).clamp(-1.0, 1.0);
       }
 
-      // 4. Эйсид пила на 16-х долях с резонансным фильтром
-      final sixteenth = (beatProgress * 4.0) % 1.0;
-      final synthEnv = math.exp(-sixteenth * 11.0) * 0.35;
-      final synthFreq = 110.0 + ((beatIndex * 27 + seed) % 110);
-      final synthSaw = ((t * synthFreq) % 1.0) * 2.0 - 1.0;
-      final synth = synthSaw * synthEnv;
+      // 2. Глубокий, сатурированный мемфисский 808 Саб-бас
+      final subFreq = bassSteps[step];
+      final rawSub = math.sin(2 * math.pi * subFreq * t);
+      final distSub = (rawSub * 2.2).clamp(-1.0, 1.0) * 0.92;
 
-      final mix = (saturatedKick * 0.85 + saturatedSub * 0.70 + noise * 0.48 + synth * 0.38).clamp(-1.0, 1.0);
+      // 3. Трэп-бочка (808 Kick) на шагах 0, 3, 6, 10, 12
+      double kick = 0.0;
+      final isKickStep = (step == 0 || step == 3 || step == 6 || step == 10 || step == 12);
+      if (isKickStep) {
+        final kickEnv = math.exp(-stepT * 18.0);
+        final kickFreq = 42.0 + 138.0 * math.exp(-stepT * 55.0);
+        final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.0;
+        kick = (rawKick * 1.4).clamp(-1.0, 1.0);
+      }
+
+      // 4. Мемфисский снэр / хлопок на шагах 4 и 12 (2 и 4 четверти)
+      double snare = 0.0;
+      if (step == 4 || step == 12) {
+        final snareEnv = math.exp(-stepT * 26.0);
+        final noise = (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.85;
+        final body = math.sin(2 * math.pi * 195.0 * stepT) * math.exp(-stepT * 32.0);
+        snare = (noise * 0.75 + body * 0.5) * snareEnv;
+      }
+
+      // 5. Трэп хэты (16-е доли)
+      final hatEnv = math.exp(-stepT * 50.0);
+      final hatNoise = (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.18 * hatEnv;
+
+      // Мастеринг микс
+      final mix = (kick * 0.78 + distSub * 0.62 + cowbell * 0.55 + snare * 0.52 + hatNoise * 0.35).clamp(-1.0, 1.0);
       final sampleInt16 = (mix * 32760.0).round().clamp(-32768, 32767);
       pcmBytes.setInt16(i * 2, sampleInt16, Endian.little);
     }
@@ -727,38 +771,11 @@ class _ProfileScreenState extends State<ProfileScreen>
         leading: const BackButtonTooltip(),
         centerTitle: true,
       ),
-      body: Stack(
-        children: [
-          // Талисманы плавно появляются на фоне профиля повсюду
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _service,
-              builder: (context, _) {
-                final talisman = _service.activeTalisman;
-                return AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 600),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: talisman != null
-                      ? RepaintBoundary(
-                          key: ValueKey('bg_talisman_${talisman.id}'),
-                          child: CustomPaint(
-                            painter: _TalismanBackgroundPainter(
-                              color: talisman.rarity.color,
-                              accent: BrandColors.red,
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(key: ValueKey('no_bg_talisman')),
-                );
-              },
-            ),
-          ),
-          AnimatedBuilder(
-            animation: _service,
-            builder: (context, _) => ListView(
-              controller: _scrollCtrl,
-              padding: const EdgeInsets.fromLTRB(
+      body: AnimatedBuilder(
+        animation: _service,
+        builder: (context, _) => ListView(
+          controller: _scrollCtrl,
+          padding: const EdgeInsets.fromLTRB(
                 Spacing.md,
                 Spacing.sm,
                 Spacing.md,
@@ -785,9 +802,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               ],
             ),
           ),
-        ],
-      ),
-    );
+        );
   }
 
   /// Шапка профиля: крупная аватарка со спектром, активным талисманом, имя и престижный титул.
@@ -798,102 +813,172 @@ class _ProfileScreenState extends State<ProfileScreen>
     final talisman = _service.activeTalisman;
 
     return _Card(
-      child: Column(
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          const SizedBox(height: Spacing.xs),
-          Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              if (talisman != null)
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeInOutCubic,
-                  width: 126,
-                  height: 126,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        talisman.rarity.color.withValues(alpha: 0.38),
-                        BrandColors.red.withValues(alpha: 0.18),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.35, 0.70, 1.0],
-                    ),
-                  ),
-                ),
-              AudioSpectrumRing(
-                radius: 48,
-                child: SizedBox(
-                  width: 96,
-                  height: 96,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.center,
-                    children: [
-                      // Аватарка с тактильным откликом
-                      PressScale(
-                        pressedScale: 0.94,
-                        duration: const Duration(milliseconds: 240),
-                        releaseDuration: const Duration(milliseconds: 320),
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _pickAvatar,
-                          onLongPress: _pickAvatar,
-                          child: ProfileAvatar(
-                            index: _service.avatarIndex,
-                            size: 96,
-                            glow: true,
-                            imagePath: _service.avatarImagePath,
-                            motion: _scrollCtrl,
-                            motionOf: () =>
-                                _scrollCtrl.hasClients ? (_scrollCtrl.offset / 140) : 0.0,
+          // 1. Арт активного талисмана прямо на фоне карточки аватара (кибер-руны, созвездия)
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 500),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: talisman != null
+                  ? RepaintBoundary(
+                      key: ValueKey('header_talisman_bg_${talisman.id}'),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(Radii.xl),
+                        child: CustomPaint(
+                          painter: _HeaderCardTalismanPainter(
+                            color: talisman.rarity.color,
+                            accent: BrandColors.red,
                           ),
                         ),
                       ),
-                      // Компактный значок смены авы: строго зафиксирован на аватарке, никогда не съезжает
-                      Positioned(
-                        right: 2,
-                        bottom: 2,
-                        child: PressScale(
-                          pressedScale: 0.88,
-                          child: GestureDetector(
-                            onTap: _pickAvatar,
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: theme.colorScheme.surface,
-                                  width: 1.8,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: theme.colorScheme.primary
-                                        .withValues(alpha: 0.40),
-                                    blurRadius: 5,
+                    )
+                  : const SizedBox.shrink(key: ValueKey('no_talisman_header_bg')),
+            ),
+          ),
+          // 2. Красивый компактный значок активного талисмана в правом верхнем углу карточки
+          if (talisman != null)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: BrandColors.red.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(Radii.pill),
+                  border: Border.all(
+                    color: BrandColors.red.withValues(alpha: 0.35),
+                    width: 0.9,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, size: 12, color: BrandColors.red),
+                    const SizedBox(width: 4),
+                    Text(
+                      talisman.title,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Column(
+            children: [
+              const SizedBox(height: Spacing.xs),
+              Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  if (talisman != null)
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeInOutCubic,
+                      width: 126,
+                      height: 126,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            talisman.rarity.color.withValues(alpha: 0.38),
+                            BrandColors.red.withValues(alpha: 0.18),
+                            Colors.transparent,
+                          ],
+                          stops: const [0.35, 0.70, 1.0],
+                        ),
+                      ),
+                    ),
+                  AudioSpectrumRing(
+                    radius: 48,
+                    child: SizedBox(
+                      width: 96,
+                      height: 96,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.center,
+                        children: [
+                          // Аватарка с тактильным откликом и плавной сменой
+                          PressScale(
+                            pressedScale: 0.94,
+                            duration: const Duration(milliseconds: 240),
+                            releaseDuration: const Duration(milliseconds: 320),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _pickAvatar,
+                              onLongPress: _pickAvatar,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 320),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                transitionBuilder: (child, anim) => FadeTransition(
+                                  opacity: anim,
+                                  child: ScaleTransition(
+                                    scale: Tween<double>(begin: 0.92, end: 1.0).animate(anim),
+                                    child: child,
                                   ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.photo_camera_rounded,
-                                size: 13,
-                                color: Colors.white,
+                                ),
+                                child: ProfileAvatar(
+                                  key: ValueKey('avatar_${_service.avatarIndex}_${_service.avatarImagePath}'),
+                                  index: _service.avatarIndex,
+                                  size: 96,
+                                  glow: true,
+                                  imagePath: _service.avatarImagePath,
+                                  motion: _scrollCtrl,
+                                  motionOf: () =>
+                                      _scrollCtrl.hasClients ? (_scrollCtrl.offset / 140) : 0.0,
+                                ),
                               ),
                             ),
                           ),
-                        ),
+                          // Компактный значок смены авы: строго зафиксирован на аватарке, никогда не съезжает
+                          Positioned(
+                            right: 2,
+                            bottom: 2,
+                            child: PressScale(
+                              pressedScale: 0.88,
+                              child: GestureDetector(
+                                onTap: _pickAvatar,
+                                behavior: HitTestBehavior.opaque,
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: theme.colorScheme.surface,
+                                      width: 1.8,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: theme.colorScheme.primary
+                                            .withValues(alpha: 0.40),
+                                        blurRadius: 5,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.photo_camera_rounded,
+                                    size: 13,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
           const SizedBox(height: Spacing.md),
               // Кружок слева от имени
               Center(
@@ -936,25 +1021,22 @@ class _ProfileScreenState extends State<ProfileScreen>
                 pressedScale: 0.94,
                 child: GestureDetector(
                   onTap: _showPrestigeTitlePicker,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(Radii.pill),
-                    clipBehavior: Clip.antiAlias,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: BrandColors.red.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(Radii.pill),
+                      border: Border.all(
+                        color: BrandColors.red.withValues(alpha: 0.42),
+                        width: 0.9,
+                      ),
+                    ),
                     child: AnimatedSize(
                       duration: const Duration(milliseconds: 320),
                       curve: Curves.easeInOutCubic,
                       alignment: Alignment.centerLeft,
-                      clipBehavior: Clip.antiAlias,
-                      child: Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: BrandColors.red.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(Radii.pill),
-                          border: Border.all(
-                            color: BrandColors.red.withValues(alpha: 0.42),
-                            width: 0.9,
-                          ),
-                        ),
+                      clipBehavior: Clip.none,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1003,10 +1085,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                 ),
               ),
-            ),
             ],
           ),
-        );
+        ],
+      ),
+    );
   }
 
   static const List<String> _prestigeTitles = [
@@ -1419,36 +1502,55 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ? _searchAndAddHardtekkInline
                         : null,
                     style: _roundButtonStyle(),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      child: _isSearchingHardtekk
-                          ? const Row(
-                              key: ValueKey('searching_mode'),
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 13,
-                                  height: 13,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(BrandColors.red),
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOutCubic,
+                      clipBehavior: Clip.none,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        layoutBuilder: (currentChild, previousChildren) => Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            ...previousChildren,
+                            ?currentChild,
+                          ],
+                        ),
+                        transitionBuilder: (child, anim) => FadeTransition(
+                          opacity: anim,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.90, end: 1.0).animate(anim),
+                            child: child,
+                          ),
+                        ),
+                        child: _isSearchingHardtekk
+                            ? const Row(
+                                key: ValueKey('searching_mode'),
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(BrandColors.red),
+                                    ),
                                   ),
-                                ),
-                                SizedBox(width: 8),
-                                Text('Ищем...'),
-                              ],
-                            )
-                          : const Row(
-                              key: ValueKey('search_idle'),
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.search_rounded, size: 18),
-                                SizedBox(width: 6),
-                                Text('Поиск'),
-                              ],
-                            ),
+                                  SizedBox(width: 8),
+                                  Text('Ищем...'),
+                                ],
+                              )
+                            : const Row(
+                                key: ValueKey('search_idle'),
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.search_rounded, size: 16),
+                                  SizedBox(width: 6),
+                                  Text('Поиск'),
+                                ],
+                              ),
+                      ),
                     ),
                   ),
                 ),
@@ -3290,12 +3392,12 @@ class _TrackRowState extends State<_TrackRow>
   }
 }
 
-/// Фоновый шейдер активного талисмана на экране профиля (сияющие кибер-руны, неоновые созвездия и аура вокруг аватарки)
-class _TalismanBackgroundPainter extends CustomPainter {
+/// Фоновый арт активного талисмана прямо на карточке аватара в профиле (неоновые кибер-руны, созвездия)
+class _HeaderCardTalismanPainter extends CustomPainter {
   final Color color;
   final Color accent;
 
-  const _TalismanBackgroundPainter({
+  const _HeaderCardTalismanPainter({
     required this.color,
     required this.accent,
   });
@@ -3304,34 +3406,21 @@ class _TalismanBackgroundPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    final avatarCenter = Offset(w / 2, 115);
+    final center = Offset(w / 2, 58); // центр над аватаркой
 
-    // 1. Мощная, но мягкая радиальная неоновая аура вокруг аватара в шапке
-    final avatarAura = Paint()
+    // Нежная неоновая радиальная подложка
+    final aura = Paint()
       ..shader = RadialGradient(
-        center: const Alignment(0.0, -0.72),
-        radius: 0.75,
+        center: const Alignment(0.0, -0.45),
+        radius: 0.70,
         colors: [
-          color.withValues(alpha: 0.28),
-          accent.withValues(alpha: 0.12),
+          color.withValues(alpha: 0.16),
+          accent.withValues(alpha: 0.08),
           Colors.transparent,
         ],
-        stops: const [0.0, 0.45, 1.0],
+        stops: const [0.0, 0.55, 1.0],
       ).createShader(Rect.fromLTWH(0, 0, w, h));
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), avatarAura);
-
-    // 2. Нижняя неоновая подсветка
-    final bottomAura = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(0.35, 0.65),
-        radius: 0.85,
-        colors: [
-          accent.withValues(alpha: 0.10),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 1.0],
-      ).createShader(Rect.fromLTWH(0, 0, w, h));
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), bottomAura);
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), aura);
 
     final runeStroke1 = Paint()
       ..color = color.withValues(alpha: 0.22)
@@ -3343,37 +3432,38 @@ class _TalismanBackgroundPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8;
 
-    // Кибер-рунические круги вокруг аватарки
-    canvas.drawCircle(avatarCenter, 68, runeStroke1);
-    canvas.drawCircle(avatarCenter, 80, runeStroke2);
+    // Кибер-рунические круги вокруг аватара
+    canvas.drawCircle(center, 58, runeStroke1);
+    canvas.drawCircle(center, 70, runeStroke2);
 
-    // Рунические засечки по кругу вокруг аватара
+    // Засечки по кругу
     for (var i = 0; i < 8; i++) {
       final angle = i * (math.pi / 4);
-      final p1 = avatarCenter + Offset(math.cos(angle), math.sin(angle)) * 68;
-      final p2 = avatarCenter + Offset(math.cos(angle), math.sin(angle)) * 80;
+      final p1 = center + Offset(math.cos(angle), math.sin(angle)) * 58;
+      final p2 = center + Offset(math.cos(angle), math.sin(angle)) * 70;
       canvas.drawLine(p1, p2, runeStroke2);
     }
 
-    // Созвездия и орбиты по телу профиля
-    canvas.drawCircle(Offset(w * 0.12, h * 0.28), 36, runeStroke1);
-    canvas.drawCircle(Offset(w * 0.88, h * 0.38), 44, runeStroke2);
-    canvas.drawCircle(Offset(w * 0.82, h * 0.68), 32, runeStroke1);
-    canvas.drawCircle(Offset(w * 0.15, h * 0.76), 40, runeStroke2);
+    // Созвездия и геометрические ромбы по бокам карточки
+    final leftSigil = const Offset(32, 44);
+    final rightSigil = Offset(w - 32, 44);
 
-    // Мягкие диагональные линии созвездий
-    canvas.drawLine(Offset(w * 0.12, h * 0.28), Offset(w * 0.26, h * 0.22), runeStroke1);
-    canvas.drawLine(Offset(w * 0.88, h * 0.38), Offset(w * 0.74, h * 0.46), runeStroke2);
-    canvas.drawLine(Offset(w * 0.82, h * 0.68), Offset(w * 0.68, h * 0.72), runeStroke1);
-    canvas.drawLine(Offset(w * 0.15, h * 0.76), Offset(w * 0.30, h * 0.82), runeStroke2);
+    canvas.drawCircle(leftSigil, 14, runeStroke1);
+    canvas.drawCircle(rightSigil, 14, runeStroke1);
+
+    canvas.drawLine(leftSigil + const Offset(-18, 0), leftSigil + const Offset(18, 0), runeStroke2);
+    canvas.drawLine(leftSigil + const Offset(0, -18), leftSigil + const Offset(0, 18), runeStroke2);
+
+    canvas.drawLine(rightSigil + const Offset(-18, 0), rightSigil + const Offset(18, 0), runeStroke2);
+    canvas.drawLine(rightSigil + const Offset(0, -18), rightSigil + const Offset(0, 18), runeStroke2);
   }
 
   @override
-  bool shouldRepaint(covariant _TalismanBackgroundPainter old) =>
+  bool shouldRepaint(covariant _HeaderCardTalismanPainter old) =>
       old.color != color || old.accent != accent;
 }
 
-class _HardtekkItem {
+class _PhonkItem {
   final String id;
   final String title;
   final String artist;
@@ -3381,7 +3471,7 @@ class _HardtekkItem {
   final double bpm;
   final int seed;
 
-  const _HardtekkItem({
+  const _PhonkItem({
     required this.id,
     required this.title,
     required this.artist,
@@ -3391,88 +3481,88 @@ class _HardtekkItem {
   });
 }
 
-/// Отборный каталог мощных хардтек-бэнгеров для моментального добавления
-class _HardtekkCatalog {
-  static const List<_HardtekkItem> items = [
-    _HardtekkItem(
-      id: 'zahni_kraftstoff',
-      title: 'Zahni - Kraftstoff (180 BPM)',
-      artist: 'Zahni',
-      tags: 'Acid Tekk • 180 BPM • Overdrive Kick',
-      bpm: 180.0,
-      seed: 101,
+/// Отборный каталог легендарных фонк-бэнгеров для моментального добавления
+class _PhonkCatalog {
+  static const List<_PhonkItem> items = [
+    _PhonkItem(
+      id: 'kordhell_murder',
+      title: 'Kordhell - Murder In My Mind',
+      artist: 'Kordhell',
+      tags: 'Drift Phonk • 146 BPM • 808 Cowbell',
+      bpm: 146.0,
+      seed: 201,
     ),
-    _HardtekkItem(
-      id: 'gebrueder_brett_osten',
-      title: 'Die Gebrüder Brett - Der Osten Feiert Besser',
-      artist: 'Die Gebrüder Brett',
-      tags: 'Ostdeutsch Tekk • 182 BPM • Pure Pressure',
-      bpm: 182.0,
-      seed: 102,
+    _PhonkItem(
+      id: 'dvrst_close_eyes',
+      title: 'DVRST - Close Eyes',
+      artist: 'DVRST',
+      tags: 'Cyber Drift • 144 BPM • Atmospheric',
+      bpm: 144.0,
+      seed: 202,
     ),
-    _HardtekkItem(
-      id: 'creeds_push_up_tekk',
-      title: 'Creeds - Push Up (Tekk Edit)',
-      artist: 'Creeds',
-      tags: 'French Tekk Style • 175 BPM • Heavy Sub',
-      bpm: 175.0,
-      seed: 103,
+    _PhonkItem(
+      id: 'ghostface_playa_why_not',
+      title: 'Ghostface Playa - Why Not',
+      artist: 'Ghostface Playa',
+      tags: 'Night City Phonk • 148 BPM • Pure Heat',
+      bpm: 148.0,
+      seed: 203,
     ),
-    _HardtekkItem(
-      id: 'klangkuenstler_die_hoelle',
-      title: 'Klangkuenstler - Die Hölle glüht (Tekk Cut)',
-      artist: 'Klangkuenstler',
-      tags: 'Hard Industrial Tekk • 178 BPM • Distortion',
-      bpm: 178.0,
-      seed: 104,
+    _PhonkItem(
+      id: 'pharmacist_north_memphis',
+      title: 'Pharmacist - North Memphis',
+      artist: 'Pharmacist',
+      tags: 'Memphis Phonk • 145 BPM • Raw 808',
+      bpm: 145.0,
+      seed: 204,
     ),
-    _HardtekkItem(
-      id: 'nogge_8000_watt',
-      title: 'Nogge - 8000 Watt (Underground Tekk)',
-      artist: 'Nogge',
-      tags: 'Subground Punch • 185 BPM • Peak Energy',
-      bpm: 185.0,
-      seed: 105,
+    _PhonkItem(
+      id: 'hensonn_sahara',
+      title: 'Hensonn - Sahara',
+      artist: 'Hensonn',
+      tags: 'Aggressive Drift • 146 BPM • Cowbell Riff',
+      bpm: 146.0,
+      seed: 205,
     ),
-    _HardtekkItem(
-      id: 'minupren_berlin_tekkno',
-      title: 'Minupren - Berlin Tekkno City',
-      artist: 'Minupren',
-      tags: 'Raw Underground • 180 BPM • Acid Line',
-      bpm: 180.0,
-      seed: 106,
+    _PhonkItem(
+      id: 'playaphonk_phonky_town',
+      title: 'PlayaPhonk - Phonky Town',
+      artist: 'PlayaPhonk',
+      tags: 'Classic Phonk • 144 BPM • Memphis Bounce',
+      bpm: 144.0,
+      seed: 206,
     ),
-    _HardtekkItem(
-      id: 'komacasper_rhythmus',
-      title: 'Komacasper - Rhythmusstörung',
-      artist: 'Komacasper',
-      tags: 'High-Speed Tekk • 182 BPM • Rolling Bass',
-      bpm: 182.0,
-      seed: 107,
+    _PhonkItem(
+      id: 'sxmpra_cowbell_warrior',
+      title: 'SXMPRA - COWBELL WARRIOR',
+      artist: 'SXMPRA',
+      tags: 'Hardcore Phonk • 150 BPM • Distortion',
+      bpm: 150.0,
+      seed: 207,
     ),
-    _HardtekkItem(
-      id: 'borderline_tanz_oder_stirb',
-      title: 'Borderline - Tanz или Stirb',
-      artist: 'Borderline',
-      tags: 'Hard Bassline • 180 BPM • Brutal Drop',
-      bpm: 180.0,
-      seed: 108,
+    _PhonkItem(
+      id: 'kslv_disaster',
+      title: 'KSLV Noh - Disaster',
+      artist: 'KSLV Noh',
+      tags: 'Drift Legend • 146 BPM • Bass Pressure',
+      bpm: 146.0,
+      seed: 208,
     ),
-    _HardtekkItem(
-      id: 'ill_patron_ostblock',
-      title: 'Ill Patron - Ostblock Sound',
-      artist: 'Ill Patron',
-      tags: 'Leipzig Tekk • 184 BPM • Rave Distortion',
-      bpm: 184.0,
-      seed: 109,
+    _PhonkItem(
+      id: 'interworld_metamorphosis',
+      title: 'Interworld - Metamorphosis',
+      artist: 'Interworld',
+      tags: 'Speed Phonk • 152 BPM • Cyber Cowbell',
+      bpm: 152.0,
+      seed: 209,
     ),
-    _HardtekkItem(
-      id: 'bmg_tekk_dimension',
-      title: 'BMG - Tekk Dimension',
-      artist: 'Brachiale Musikgestalter',
-      tags: 'Hardcore Tekk • 178 BPM • Heavy Synth',
-      bpm: 178.0,
-      seed: 110,
+    _PhonkItem(
+      id: 'twisted_worth_nothing',
+      title: 'Twisted - Worth Nothing',
+      artist: 'Twisted',
+      tags: 'Peak Energy • 148 BPM • Memphis Sub',
+      bpm: 148.0,
+      seed: 210,
     ),
   ];
 }

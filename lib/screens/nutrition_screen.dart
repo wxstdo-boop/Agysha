@@ -58,8 +58,8 @@ class _NutritionScreenState extends State<NutritionScreen>
   /// истории идут РОВНО этой длительностью и кривой. Разные значения означали
   /// две анимации высоты, тянущие один слот вразнобой — на стыке строка
   /// коротко вспыхивала («мигает при удалении»).
-  static const Duration _mealCollapse = Duration(milliseconds: 320);
-  static const Curve _mealCollapseCurve = Curves.easeOutCubic;
+  static const Duration _mealCollapse = Duration(milliseconds: 360);
+  static const Curve _mealCollapseCurve = Curves.easeInOutCubic;
 
   /// Группы дней, которые УЖЕ ушли из модели, но ещё доигрывают уход:
   /// заголовок дня («Сегодня») и его карточки тают и схлопываются, пока
