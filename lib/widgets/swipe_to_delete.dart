@@ -110,6 +110,7 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
                           context,
                           borderRadius: widget.borderRadius,
                           opacity: opacity,
+                          alignment: Alignment.centerLeft,
                         ),
                       ),
                     ),

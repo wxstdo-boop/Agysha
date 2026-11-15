@@ -97,7 +97,6 @@ class _HomeScreenState extends State<HomeScreen>
     stiffness: 420,
     dampingRatio: 1.05,
   );
-  double _dragTargetPage = 0;
 
   /// Сколько сейчас разделов (нужно пружине, чтобы не уехать за край).
   int _pagesCount = 4;
@@ -189,9 +188,7 @@ class _HomeScreenState extends State<HomeScreen>
   void _onSectionDragPage() {
     final page = sectionDragPage.value;
     if (page == null || !page.isFinite) {
-      // Палец отпустил (или тяга отменена) — догоняем ближайший раздел.
-      // Пружина тапа идёт от ЖИВОЙ позиции карусели и стартует с нулевой
-      // скорости, поэтому экран мягко дотягивается до раздела, а не прыгает.
+      // Палец отпустил (или тяга отменена) — мягко доводим до ближайшего раздела.
       _dragSpring.stop();
       _pageSpring.to(
         sectionCurrentIndex.value.toDouble(),
@@ -203,17 +200,7 @@ class _HomeScreenState extends State<HomeScreen>
         !_pageController.position.hasContentDimensions) {
       return;
     }
-    // Пружину тапа обязательно останавливаем: иначе она каждый кадр тянула
-    // бы карусель к старой цели и спорила с пальцем (камень «дрожал»).
     _pageSpring.stop();
-    // ЭПСИЛОН: пока палец «держится» на месте, сопротивление таблетки
-    // докатывает хвост крохотными долями и каждый кадр пишет sectionDragPage.
-    // Без фильтра тут каждый такой кадр перезапускал бы пружину и экран
-    // «дышал» на месте. Ведём пружину только когда цель сдвинулась заметно.
-    if ((page - _dragTargetPage).abs() < 0.002) return;
-    _dragTargetPage = page;
-    // Пружина следования ведёт карусель к доле пальца: экран едет ПОД
-    // пальцем плавно (с лёгким запаздыванием), без жёсткого 1:1-скачка.
     _dragSpring.to(page, maxPage: (_pagesCount - 1).toDouble());
   }
 
@@ -413,7 +400,9 @@ class _HomeScreenState extends State<HomeScreen>
     final value = a + (b - a) * t;
     if ((sectionScrollOffset.value - value).abs() > 0.05) {
       sectionScrollOffset.value = value;
-      sectionPillVisible.value = value <= 8;
+      // ВАЖНО: не дергаем sectionPillVisible.value во время дробного листания карусели,
+      // чтобы таблетка не пряталась и не дергалась на стыке разделов.
+      // Фиксация видимости происходит на settled странице в _onPageScrollEnd.
     }
   }
 
