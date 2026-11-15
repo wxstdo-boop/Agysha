@@ -186,7 +186,13 @@ extension _SettingsLinks on _SettingsScreenState {
   }
 
   Future<void> _openGitLab() async {
-    await _openLink('https://gitlab.com/wxstdo/keramika');
+    // Было: https://gitlab.com/wxstdo/keramika — это ДРУГОЕ приложение. Кнопка
+    // «GitLab» в настройках Agysha уводила пользователя в репозиторий Keramika.
+    // Зеркала Agysha на GitLab нет: https://gitlab.com/wxstdo/agysha отдаёт
+    // редирект на /users/sign_in (403), то есть публичного проекта нет.
+    // Поэтому ссылка ведёт на профиль, а не на чужой продукт. Если появится
+    // зеркало agysha — поменять на него.
+    await _openLink('https://gitlab.com/wxstdo');
   }
 
   Future<void> _clearCache() async {

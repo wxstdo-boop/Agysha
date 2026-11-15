@@ -23,3 +23,60 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: flutter analyze
       - run: flutter test --concurrency=1
+
+  lint-workflows:
+    # Синтаксис и семантика workflow-файлов. Ловит то, что YAML-парсер не
+    # видит: `needs.x.outputs.y` без объявленного `outputs:` у job (именно так
+    # релиз по тегу собирался с версией «+»), неверные `uses:`, пропущенные
+    # `secrets`, невалидные if-выражения. Всё это GitHub раскрывает только в
+    # момент запуска прогона, то есть уже на реальном релизе.
+    #
+    # Версия пинится: раньше бинарь actionlint лежал в коммите (5.1 МБ ELF в
+    # корне репозитория). Для F-Droid это минус («репозиторий должен
+    # собираться из исходников») и плюс к размеру клона, поэтому теперь его
+    # скачиваем по точному релизному tarball.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Скачать actionlint
+        env:
+          ACTIONLINT_VERSION: '1.7.12'
+        run: |
+          set -euo pipefail
+          VER="$ACTIONLINT_VERSION"
+          BASE="https://github.com/rhysd/actionlint/releases/download/v${VER}"
+          FILE="actionlint_${VER}_linux_amd64.tar.gz"
+          # Суммы у actionlint лежат ОДНИМ файлом на релиз
+          # (actionlint_<ver>_checksums.txt), а не рядом с каждым tarball как
+          # <file>.sha256 — последнего на GitHub 404. Без сверки CDN мог бы
+          # отдать любой ответ под видом валидера.
+          curl -sSLf -o "/tmp/$FILE" "$BASE/$FILE"
+          curl -sSLf -o /tmp/checksums.txt "$BASE/actionlint_${VER}_checksums.txt"
+          (cd /tmp && grep "  ${FILE}\$" checksums.txt | sha256sum -c -)
+          tar -xzf "/tmp/$FILE" -C /tmp actionlint
+          echo "/tmp/actionlint" >> "$GITHUB_PATH"
+
+      - name: Проверить workflow-файлы
+        run: actionlint
+
+  dependency-review:
+    # Только для PR: diff двух lockfiles даёт список новых пакетов и их
+    # известные уязвимости (GitHub Advisory Database). На push в main смысла
+    # нет — там diff пустой.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/dependency-review-action@v4
+        with:
+          # Пока только комментируем, не блокируем: у проекта транзитивные
+          # зависимости от Flutter-пакетов, и hard-fail на первом же
+          # нерелевантном advisory заблокировал бы любой PR.
+          fail-on-severity: critical
+          comment-summary-in-pr: always

@@ -75,10 +75,22 @@ jobs:
     # переписи истории). Повисший после force-push настоящий бамп не теряется:
     # release-watchdog.yml сравнивает версию из pubspec с releases/latest и
     # зовёт release.yml сам.
+    # Маркер «[skip ship]» в сообщении коммита НЕ выпускает релиз. Нужен для
+    # промежуточных пушей («polish», WIP, правки документации в lib/), которых
+    # за сутки набиралось до 18 — каждый давал релиз, 3 APK и уведомление всем
+    # следящим за репозиторием.
+    #
+    # Работает без правок в release-watchdog.yml, и вот почему: маркер гасит
+    # весь job bump, то есть pubspec.yaml НЕ бампится и тег не создаётся.
+    # Значит версия main остаётся равней уже опубликованной, и watchdog на
+    # своём условии «LTAG = TAG → всё на месте» догонять нечего. Когда после
+    # серии пропущенных пушей приходит обычный коммит, bump выпускает ОДИН
+    # релиз со всем накопленным — это и есть release train.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (!startsWith(github.event.head_commit.message, 'release:') &&
-      github.event.forced != true)
+      github.event.forced != true &&
+      !contains(github.event.head_commit.message, '[skip ship]'))
     runs-on: ubuntu-latest
     outputs:
       name: ${{ steps.ver.outputs.name }}
