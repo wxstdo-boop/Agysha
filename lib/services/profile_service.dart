@@ -164,7 +164,11 @@ class ProfileService extends ChangeNotifier {
   String get prestigeTitle =>
       _prestigeTitle.trim().isEmpty ? 'Cyberpunk 2077 Legend' : _prestigeTitle;
   int get zenKarma => _zenKarma;
+  /// Предел избранных артефактов-талисманов (до 5 штук, парящих вокруг карточки).
+  static const int maxFavoriteGifts = 5;
+
   List<ProfileGift> get gifts => List.unmodifiable(_gifts);
+  List<ProfileGift> get favoriteGifts => _gifts.where((g) => g.isFavorite).toList();
   ProfileGift? get activeTalisman {
     try {
       return _gifts.firstWhere((g) => g.isFavorite);
@@ -332,17 +336,23 @@ class ProfileService extends ChangeNotifier {
     return _zenKarma;
   }
 
-  /// Переключить статус избранного (главного талисмана) для артефакта.
+  /// Переключить статус избранного талисмана (до 5 избранных артефактов).
   Future<void> toggleGiftFavorite(String giftId) async {
     final idx = _gifts.indexWhere((g) => g.id == giftId);
     if (idx >= 0) {
-      final willBeFav = !_gifts[idx].isFavorite;
-      for (var i = 0; i < _gifts.length; i++) {
-        if (_gifts[i].isFavorite) {
-          _gifts[i] = _gifts[i].copyWith(isFavorite: false);
+      final isCurrentlyFav = _gifts[idx].isFavorite;
+      if (isCurrentlyFav) {
+        _gifts[idx] = _gifts[idx].copyWith(isFavorite: false);
+      } else {
+        final currentFavs = _gifts.where((g) => g.isFavorite).toList();
+        if (currentFavs.length >= maxFavoriteGifts) {
+          // Если уже 5 выбрано — убираем первый/самый старый, освобождая слот
+          final oldestId = currentFavs.first.id;
+          final oldIdx = _gifts.indexWhere((g) => g.id == oldestId);
+          if (oldIdx >= 0) {
+            _gifts[oldIdx] = _gifts[oldIdx].copyWith(isFavorite: false);
+          }
         }
-      }
-      if (willBeFav) {
         _gifts[idx] = _gifts[idx].copyWith(isFavorite: true);
       }
       notifyListeners();

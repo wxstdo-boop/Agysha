@@ -68,12 +68,10 @@ class _GiftCard3DState extends State<GiftCard3D>
     _resetController.stop();
     final targetDx = ((localPosition.dx / widget.width - 0.5) * 2.0).clamp(-1.0, 1.0);
     final targetDy = ((localPosition.dy / widget.height - 0.5) * 2.0).clamp(-1.0, 1.0);
-    setState(() {
-      _tilt = Offset(
-        _tilt.dx + (targetDx - _tilt.dx) * 0.45,
-        _tilt.dy + (targetDy - _tilt.dy) * 0.45,
-      );
-    });
+    final next = Offset(targetDx, targetDy);
+    if ((next - _tilt).distance > 0.001) {
+      setState(() => _tilt = next);
+    }
   }
 
   void _resetTilt() {
@@ -111,7 +109,7 @@ class _GiftCard3DState extends State<GiftCard3D>
           behavior: HitTestBehavior.opaque,
           onTap: () => _openDetails(context),
           child: PressScale(
-            pressedScale: 0.94,
+            pressedScale: 0.95,
             duration: const Duration(milliseconds: 140),
             releaseDuration: const Duration(milliseconds: 220),
             child: AnimatedBuilder(
@@ -121,8 +119,8 @@ class _GiftCard3DState extends State<GiftCard3D>
                     ? _tiltAnimation.value
                     : _tilt;
 
-                final tiltX = -currentTilt.dy * 0.30;
-                final tiltY = currentTilt.dx * 0.30;
+                final tiltX = -currentTilt.dy * 0.28;
+                final tiltY = currentTilt.dx * 0.28;
 
                 final transform = Matrix4.identity()
                   ..setEntry(3, 2, 0.0016)
@@ -132,9 +130,7 @@ class _GiftCard3DState extends State<GiftCard3D>
                 return Transform(
                   transform: transform,
                   alignment: FractionalOffset.center,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 320),
-                    curve: Curves.easeInOutCubic,
+                  child: Container(
                     width: widget.width,
                     height: widget.height,
                     decoration: BoxDecoration(
@@ -154,14 +150,14 @@ class _GiftCard3DState extends State<GiftCard3D>
                       ),
                       border: Border.all(
                         color: widget.gift.isFavorite
-                            ? BrandColors.red.withValues(alpha: 0.70)
+                            ? BrandColors.red.withValues(alpha: 0.85)
                             : rarity.color.withValues(alpha: dark ? 0.60 : 0.45),
                         width: widget.gift.isFavorite ? 1.8 : 1.3,
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: widget.gift.isFavorite
-                              ? BrandColors.red.withValues(alpha: dark ? 0.35 : 0.22)
+                              ? BrandColors.red.withValues(alpha: dark ? 0.40 : 0.26)
                               : rarity.color.withValues(alpha: dark ? 0.25 : 0.16),
                           blurRadius: widget.gift.isFavorite ? 14 : 10,
                           offset: const Offset(0, 4),
@@ -445,75 +441,76 @@ class SharpArtifactPainter extends CustomPainter {
   }
 
   void _drawChronoCrystal(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
-    // Внешняя кристаллическая аура
+    // Внешняя кроваво-кристаллическая аура
+    final glowColor = isFavorite ? BrandColors.red : color;
     final glow = Paint()
-      ..color = color.withValues(alpha: 0.25)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawCircle(Offset(cx, cy), r * 0.75, glow);
+      ..color = glowColor.withValues(alpha: 0.35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+    canvas.drawCircle(Offset(cx, cy), r * 0.80, glow);
 
-    final top = Offset(cx, cy - r * 0.94);
-    final bot = Offset(cx, cy + r * 0.94);
-    final left = Offset(cx - r * 0.78, cy - r * 0.20);
-    final right = Offset(cx + r * 0.78, cy - r * 0.20);
-    final tLeft = Offset(cx - r * 0.40, cy - r * 0.52);
-    final tRight = Offset(cx + r * 0.40, cy - r * 0.52);
-    final mLeft = Offset(cx - r * 0.34, cy + r * 0.24);
-    final mRight = Offset(cx + r * 0.34, cy + r * 0.24);
+    final top = Offset(cx, cy - r * 0.98);
+    final bot = Offset(cx, cy + r * 0.98);
+    final left = Offset(cx - r * 0.82, cy - r * 0.20);
+    final right = Offset(cx + r * 0.82, cy - r * 0.20);
+    final tLeft = Offset(cx - r * 0.44, cy - r * 0.55);
+    final tRight = Offset(cx + r * 0.44, cy - r * 0.55);
+    final mLeft = Offset(cx - r * 0.36, cy + r * 0.24);
+    final mRight = Offset(cx + r * 0.36, cy + r * 0.24);
 
-    // Верхние фасеты
+    // Верхние фасеты (глубокий обсидиан + кровавый неон)
     final tablePath = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(top.dx, top.dy)..close();
-    fill.color = color.withValues(alpha: 0.90);
+    fill.color = glowColor.withValues(alpha: 0.95);
     canvas.drawPath(tablePath, fill);
 
     final fLt = Path()..moveTo(top.dx, top.dy)..lineTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..close();
-    fill.color = color.withValues(alpha: 0.65);
+    fill.color = const Color(0xFF160A14);
     canvas.drawPath(fLt, fill);
 
     final fRt = Path()..moveTo(top.dx, top.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..close();
-    fill.color = color.withValues(alpha: 0.80);
+    fill.color = glowColor.withValues(alpha: 0.85);
     canvas.drawPath(fRt, fill);
 
-    // Центральное плато
+    // Центральное плато с кровавым отблеском
     final fCenter = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
-    fill.color = Colors.white.withValues(alpha: 0.40);
+    fill.color = Colors.white.withValues(alpha: 0.55);
     canvas.drawPath(fCenter, fill);
 
     // Боковые фасеты
     final fCl = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
-    fill.color = color.withValues(alpha: 0.50);
+    fill.color = const Color(0xFF1E0E1B);
     canvas.drawPath(fCl, fill);
 
     final fCr = Path()..moveTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..close();
-    fill.color = color.withValues(alpha: 0.60);
+    fill.color = glowColor.withValues(alpha: 0.70);
     canvas.drawPath(fCr, fill);
 
     // Нижние кинжальные грани
     final fBc = Path()..moveTo(mLeft.dx, mLeft.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
-    fill.color = color.withValues(alpha: 0.95);
+    fill.color = glowColor;
     canvas.drawPath(fBc, fill);
 
     final fBl = Path()..moveTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..lineTo(bot.dx, bot.dy)..close();
-    fill.color = color.withValues(alpha: 0.55);
+    fill.color = const Color(0xFF120710);
     canvas.drawPath(fBl, fill);
 
     final fBr = Path()..moveTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
-    fill.color = color.withValues(alpha: 0.70);
+    fill.color = glowColor.withValues(alpha: 0.80);
     canvas.drawPath(fBr, fill);
 
-    // Брутальная центральная темпоральная трещина (квантовый разлом)
+    // Брутальная центральная темпоральная трещина (кровавый лазерный разлом)
     final rift = Path()
-      ..moveTo(cx, cy - r * 0.70)
-      ..lineTo(cx + r * 0.10, cy - r * 0.25)
-      ..lineTo(cx - r * 0.08, cy + r * 0.15)
-      ..lineTo(cx + r * 0.05, cy + r * 0.55)
-      ..lineTo(cx, cy + r * 0.85);
+      ..moveTo(cx, cy - r * 0.75)
+      ..lineTo(cx + r * 0.12, cy - r * 0.28)
+      ..lineTo(cx - r * 0.10, cy + r * 0.15)
+      ..lineTo(cx + r * 0.08, cy + r * 0.55)
+      ..lineTo(cx, cy + r * 0.90);
     stroke.color = Colors.white;
-    stroke.strokeWidth = 1.6;
+    stroke.strokeWidth = 1.8;
     canvas.drawPath(rift, stroke);
 
     // Острый контур и кристаллическая сетка
-    stroke.color = Colors.white.withValues(alpha: 0.90);
-    stroke.strokeWidth = 1.4;
+    stroke.color = Colors.white.withValues(alpha: 0.95);
+    stroke.strokeWidth = 1.5;
     final outline = Path()
       ..moveTo(top.dx, top.dy)
       ..lineTo(right.dx, right.dy)
@@ -522,8 +519,8 @@ class SharpArtifactPainter extends CustomPainter {
       ..close();
     canvas.drawPath(outline, stroke);
 
-    stroke.color = Colors.white.withValues(alpha: 0.55);
-    stroke.strokeWidth = 1.0;
+    stroke.color = glowColor.withValues(alpha: 0.85);
+    stroke.strokeWidth = 1.2;
     canvas.drawLine(tLeft, tRight, stroke);
     canvas.drawLine(mLeft, mRight, stroke);
     canvas.drawLine(tLeft, mLeft, stroke);
@@ -729,44 +726,64 @@ class SharpArtifactPainter extends CustomPainter {
   }
 
   void _drawSamuraiVisor(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
-    // Скрещенные кибер-катаны за шлемом
-    stroke.color = Colors.white.withValues(alpha: 0.65);
-    stroke.strokeWidth = 1.8;
-    canvas.drawLine(Offset(cx - r * 0.85, cy - r * 0.85), Offset(cx + r * 0.85, cy + r * 0.85), stroke);
-    canvas.drawLine(Offset(cx + r * 0.85, cy - r * 0.85), Offset(cx - r * 0.85, cy + r * 0.85), stroke);
+    final activeColor = isFavorite ? BrandColors.red : color;
+    // Окровавленные скрещенные кибер-катаны за шлемом
+    stroke.color = activeColor.withValues(alpha: 0.85);
+    stroke.strokeWidth = 2.4;
+    canvas.drawLine(Offset(cx - r * 0.90, cy - r * 0.90), Offset(cx + r * 0.90, cy + r * 0.90), stroke);
+    canvas.drawLine(Offset(cx + r * 0.90, cy - r * 0.90), Offset(cx - r * 0.90, cy + r * 0.90), stroke);
 
-    // Рога Кабуто (грозный полумесяц Они)
+    // Белые острые лезвия катан по центру
+    stroke.color = Colors.white;
+    stroke.strokeWidth = 1.2;
+    canvas.drawLine(Offset(cx - r * 0.86, cy - r * 0.86), Offset(cx + r * 0.86, cy + r * 0.86), stroke);
+    canvas.drawLine(Offset(cx + r * 0.86, cy - r * 0.86), Offset(cx - r * 0.86, cy + r * 0.86), stroke);
+
+    // Рога Кабуто (демонический кровавый полумесяц Они)
     final horns = Path()
       ..moveTo(cx, cy - r * 0.32)
-      ..lineTo(cx - r * 0.82, cy - r * 0.98)
-      ..lineTo(cx - r * 0.58, cy - r * 0.98)
+      ..lineTo(cx - r * 0.86, cy - r * 1.02)
+      ..lineTo(cx - r * 0.60, cy - r * 1.02)
       ..lineTo(cx, cy - r * 0.52)
-      ..lineTo(cx + r * 0.58, cy - r * 0.98)
-      ..lineTo(cx + r * 0.82, cy - r * 0.98)
+      ..lineTo(cx + r * 0.60, cy - r * 1.02)
+      ..lineTo(cx + r * 0.86, cy - r * 1.02)
       ..close();
-    fill.color = Colors.white;
+    fill.color = const Color(0xFF140810);
     canvas.drawPath(horns, fill);
+    stroke.color = BrandColors.red;
+    stroke.strokeWidth = 1.6;
+    canvas.drawPath(horns, stroke);
 
-    // Броня Мэмпо (черепная маска самурая)
+    // Броня Мэмпо (обсидиановая черепная маска демона-самурая)
     final mask = Path()
-      ..moveTo(cx - r * 0.70, cy - r * 0.28)
-      ..lineTo(cx + r * 0.70, cy - r * 0.28)
-      ..lineTo(cx + r * 0.60, cy + r * 0.38)
-      ..lineTo(cx, cy + r * 0.96)
-      ..lineTo(cx - r * 0.60, cy + r * 0.38)
+      ..moveTo(cx - r * 0.72, cy - r * 0.28)
+      ..lineTo(cx + r * 0.72, cy - r * 0.28)
+      ..lineTo(cx + r * 0.62, cy + r * 0.40)
+      ..lineTo(cx, cy + r * 1.00)
+      ..lineTo(cx - r * 0.62, cy + r * 0.40)
       ..close();
-    fill.color = color.withValues(alpha: 0.60);
+    fill.color = const Color(0xFF0F060D);
     canvas.drawPath(mask, fill);
-    stroke.color = Colors.white;
-    stroke.strokeWidth = 1.5;
+    stroke.color = Colors.white.withValues(alpha: 0.90);
+    stroke.strokeWidth = 1.6;
     canvas.drawPath(mask, stroke);
 
+    // Кровавые боевые полосы на броне щек
+    stroke.color = BrandColors.red;
+    stroke.strokeWidth = 2.0;
+    canvas.drawLine(Offset(cx - r * 0.50, cy + r * 0.10), Offset(cx - r * 0.25, cy + r * 0.48), stroke);
+    canvas.drawLine(Offset(cx + r * 0.50, cy + r * 0.10), Offset(cx + r * 0.25, cy + r * 0.48), stroke);
+
     // Угрожающий лазерный оптический разрез глаз
-    fill.color = isFavorite ? BrandColors.red : const Color(0xFF00E5FF);
-    final eyeL = Path()..moveTo(cx - r * 0.54, cy - r * 0.02)..lineTo(cx - r * 0.14, cy + r * 0.08)..lineTo(cx - r * 0.14, cy + r * 0.18)..lineTo(cx - r * 0.54, cy + r * 0.08)..close();
-    final eyeR = Path()..moveTo(cx + r * 0.54, cy - r * 0.02)..lineTo(cx + r * 0.14, cy + r * 0.08)..lineTo(cx + r * 0.14, cy + r * 0.18)..lineTo(cx + r * 0.54, cy + r * 0.08)..close();
+    fill.color = BrandColors.red;
+    final eyeL = Path()..moveTo(cx - r * 0.56, cy - r * 0.04)..lineTo(cx - r * 0.12, cy + r * 0.08)..lineTo(cx - r * 0.12, cy + r * 0.18)..lineTo(cx - r * 0.56, cy + r * 0.08)..close();
+    final eyeR = Path()..moveTo(cx + r * 0.56, cy - r * 0.04)..lineTo(cx + r * 0.12, cy + r * 0.08)..lineTo(cx + r * 0.12, cy + r * 0.18)..lineTo(cx + r * 0.56, cy + r * 0.08)..close();
     canvas.drawPath(eyeL, fill);
     canvas.drawPath(eyeR, fill);
+
+    final eyeCenter = Paint()..color = Colors.white;
+    canvas.drawCircle(Offset(cx - r * 0.34, cy + r * 0.06), r * 0.04, eyeCenter);
+    canvas.drawCircle(Offset(cx + r * 0.34, cy + r * 0.06), r * 0.04, eyeCenter);
   }
 
   void _drawDefaultSharpCrystal(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
@@ -1070,7 +1087,8 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                         await Haptics.select();
                         await ProfileService().toggleGiftFavorite(widget.gift.id);
                         if (mounted) {
-                          setState(() => _fav = !_fav);
+                          final cur = ProfileService().gifts.where((g) => g.id == widget.gift.id).firstOrNull;
+                          setState(() => _fav = cur?.isFavorite ?? !_fav);
                         }
                         widget.onFavoriteToggled?.call();
                       },
@@ -1106,7 +1124,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                               ),
                               const SizedBox(width: 8),
                               SizedBox(
-                                width: 160,
+                                width: 175,
                                 child: Center(
                                   child: AnimatedSwitcher(
                                     duration: const Duration(milliseconds: 260),
@@ -1120,7 +1138,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                                       ),
                                     ),
                                     child: Text(
-                                      _fav ? 'Главный талисман' : 'Выбрать талисманом',
+                                      _fav ? 'В избранном (до 5)' : 'В избранное (до 5)',
                                       key: ValueKey(_fav),
                                       style: const TextStyle(
                                         color: Colors.white,

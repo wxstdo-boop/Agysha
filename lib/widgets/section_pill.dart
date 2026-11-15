@@ -237,14 +237,11 @@ class _SectionPillState extends State<SectionPill>
   late final AnimationController _edgeSettle;
 
   /// Плавный довод камня на отпускании (landing): устраняет любой скачок
-  /// между позицией пальца (_dragSmooth) и текущей позицией карусели (sectionRailPage).
+  /// Плавный довод камня на отпускании (landing).
   late final AnimationController _landingCtrl;
-  double _landingFrom = 0.0;
 
   /// Куда палец увёл камень (дробная страница).
   double _dragPage = 0;
-  // Последнее записанное положение камня (для снапшота волны на отпускании).
-  double _dragSmooth = 0;
   double _dragGrabOffset = 0;
 
   /// Последняя «принятая» X-координата пальца (px по дорожке). Дедзона:
@@ -334,7 +331,6 @@ class _SectionPillState extends State<SectionPill>
         .clamp(0.0, (count - 1).toDouble())
         .toDouble();
     // Камень стартует ровно с позиции пальца — без рывка на захват.
-    _dragSmooth = _dragPage;
     // Камень занимает 1/count дорожки и стоит НЕ по центру слота, а с
     // отступами по краям: его центр при page=0 равен halfStone, при
     // page=last — trackWidth-halfStone. Формула
@@ -408,7 +404,6 @@ class _SectionPillState extends State<SectionPill>
     // пальца и в конце «догонял» скачком. Экран, запертый к этому каналу
     // 1:1, едет РОВНО под пальцем без лага.
     _dragPage = (frac * (count - 1)).clamp(0.0, (count - 1).toDouble());
-    _dragSmooth = _dragPage;
     sectionDragPage.value = _dragPage;
     // Направление «резинки» НЕПРЕРЫВНОЕ (см. stretchDir в
     // _buildStoneRow): знак _edgePull — под пальцем, знак _releasePull
@@ -437,8 +432,7 @@ class _SectionPillState extends State<SectionPill>
     // растянутое положение. Гасим только захваченную тягу за край.
     _startEdgeSettle();
     final target = _dragNearest.clamp(0, count - 1);
-    // Фиксируем исходную точку отпускания и запускаем мягкий довод
-    _landingFrom = _dragSmooth;
+    // Запускаем мягкий довод
     _landingCtrl.forward(from: 0.0);
     // Сначала фиксируем целевой раздел, чтобы подписчики sectionDragPage.value = null
     // мягко довели карусель пружиной Home.
@@ -456,7 +450,6 @@ class _SectionPillState extends State<SectionPill>
       final target = sectionRailPage.value.round().clamp(0, count - 1);
       sectionCurrentIndex.value = target;
     }
-    _landingFrom = _dragSmooth;
     _landingCtrl.forward(from: 0.0);
     sectionDragPage.value = null;
   }
@@ -545,10 +538,6 @@ class _SectionPillState extends State<SectionPill>
                       double rawPage;
                       if (_dragging && dragPage != null) {
                         rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
-                      } else if (_landingCtrl.isAnimating) {
-                        final t = Curves.easeOutCubic.transform(_landingCtrl.value);
-                        final target = current.toDouble();
-                        rawPage = _landingFrom + (target - _landingFrom) * t;
                       } else {
                         rawPage = page.isFinite ? page : current.toDouble();
                       }
@@ -657,7 +646,6 @@ class _SectionPillState extends State<SectionPill>
         // Визуальная растяжка: симметричная, широкая и непрерывная во всем диапазоне
         final visualStretch = math.min(1.0, edgeStretch * 1.35 + 0.85 * wave);
         final capRadius = 22.0 + 6.0 * visualStretch;
-        final edgeOffset = stretch * 14.0;
 
         return Stack(
           clipBehavior: Clip.none,
@@ -669,25 +657,21 @@ class _SectionPillState extends State<SectionPill>
             // «мигает в стороны».
             Align(
               alignment: Alignment(indicatorAlignment, 0),
-              child: Transform.translate(
-                // Плавный сдвиг при упоре в край без скачков на пограничных секциях
-                offset: Offset(edgeOffset, 0),
-                child: Transform.scale(
-                  alignment: Alignment.center,
-                  scaleX: 1.0 + 0.44 * visualStretch,
-                  scaleY: 1.0 - 0.05 * visualStretch,
-                  // Layout-ширина — КОНСТАНТА (слот/карантин, не зависит от
-                  // breath). Дышащий масштаб идёт через Transform — иначе
-                  // каждый кадр пересобирался layout, камень «дёргался».
-                  child: FractionallySizedBox(
-                    widthFactor: 1.0 / count,
-                    heightFactor: 1,
-                    child: RepaintBoundary(
-                      child: _GlassStone(
-                        capRadius: capRadius,
-                        primary: cs.primary,
-                        dark: dark,
-                      ),
+              child: Transform.scale(
+                alignment: Alignment.center,
+                scaleX: 1.0 + 0.44 * visualStretch,
+                scaleY: 1.0 - 0.05 * visualStretch,
+                // Layout-ширина — КОНСТАНТА (слот/карантин, не зависит от
+                // breath). Дышащий масштаб идёт через Transform — иначе
+                // каждый кадр пересобирался layout, камень «дёргался».
+                child: FractionallySizedBox(
+                  widthFactor: 1.0 / count,
+                  heightFactor: 1,
+                  child: RepaintBoundary(
+                    child: _GlassStone(
+                      capRadius: capRadius,
+                      primary: cs.primary,
+                      dark: dark,
                     ),
                   ),
                 ),
