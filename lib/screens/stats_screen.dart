@@ -390,80 +390,82 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
     required Color accent,
   }) {
     final pct = total > 0 ? (done / total).clamp(0.0, 1.0) : 0.0;
-    return PressScale(
-      pressedScale: 0.975,
-      duration: const Duration(milliseconds: 220),
-      releaseDuration: const Duration(milliseconds: 320),
-      child: _ringedCard(
-        theme: theme,
-        accent: accent,
-        child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18.7),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(icon, size: 24, color: accent),
-                    const SizedBox(width: 12),
-                    // Заголовок под защитой: длинная подпись («Проверки
-                    // реальности») не выпирает за карточку — ужимается
-                    // многоточием, а счётчик справа остаётся целым.
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+    return RepaintBoundary(
+      child: PressScale(
+        pressedScale: 0.975,
+        duration: const Duration(milliseconds: 220),
+        releaseDuration: const Duration(milliseconds: 320),
+        child: _ringedCard(
+          theme: theme,
+          accent: accent,
+          child: Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18.7),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(icon, size: 24, color: accent),
+                      const SizedBox(width: 12),
+                      // Заголовок под защитой: длинная подпись («Проверки
+                      // реальности») не выпирает за карточку — ужимается
+                      // многоточием, а счётчик справа остаётся целым.
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Счётчик «сделано / всего» — тоже чистым текстом: тот же
+                      // кроссфейд-«иероглиф» из двух наложенных чисел.
+                      _StatNumber(
+                        '$done / $total',
                         style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Счётчик «сделано / всего» — тоже чистым текстом: тот же
-                    // кроссфейд-«иероглиф» из двух наложенных чисел.
-                    _StatNumber(
-                      '$done / $total',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.bold,
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Полоса-прогресс РОВНАЯ и монотонная: один тон акцента, без
+                  // градиента и световых «швов». Прежняя заливка с тёмным краем
+                  // читалась как грязное пятно, а «шов» справа — как блик на
+                  // пластике; плоский тон читается спокойно и чисто.
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      height: 10,
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: theme.brightness == Brightness.dark ? 0.16 : 0.09,
+                      ),
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        widthFactor: pct.clamp(0.0, 1.0),
+                        heightFactor: 1,
+                        child: Container(color: accent),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // Полоса-прогресс РОВНАЯ и монотонная: один тон акцента, без
-                // градиента и световых «швов». Прежняя заливка с тёмным краем
-                // читалась как грязное пятно, а «шов» справа — как блик на
-                // пластике; плоский тон читается спокойно и чисто.
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    height: 10,
-                    color: theme.colorScheme.onSurface.withValues(
-                      alpha: theme.brightness == Brightness.dark ? 0.16 : 0.09,
-                    ),
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: pct.clamp(0.0, 1.0),
-                      heightFactor: 1,
-                      child: Container(color: accent),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(pct * 100).toInt()}% ${Translations.t('completed', context)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${(pct * 100).toInt()}% ${Translations.t('completed', context)}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

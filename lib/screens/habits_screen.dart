@@ -1705,14 +1705,17 @@ class _HabitsScreenState extends State<HabitsScreen>
     bool cornerRipple = false,
   }) {
     final cs = Theme.of(context).colorScheme;
-    // Иконка + плавный поворот — общая для обеих кнопок.
+    // Иконка + плавный поворот и плавная смена цвета — общая для обеих кнопок.
     final rotatingIcon = AnimatedRotation(
       turns: rotation / 3.14159 / 2,
-      // Медленнее (было 240 мс): стрелка переворачивается так же плавно, как
-      // раскрывается заметка, — без «щелчка» в конце.
       duration: const Duration(milliseconds: 460),
       curve: Curves.easeInOutCubic,
-      child: Icon(icon, size: 18, color: color),
+      child: TweenAnimationBuilder<Color?>(
+        tween: ColorTween(end: color),
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeInOutCubic,
+        builder: (context, c, _) => Icon(icon, size: 18, color: c),
+      ),
     );
 
     // Компактная кнопка (карандаш и подобные): без ink-«пятен» — при

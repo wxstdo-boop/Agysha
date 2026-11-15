@@ -40,7 +40,7 @@ class _AnimatedBlurTitleState extends State<AnimatedBlurTitle>
     super.initState();
     _hidden = globalPrefs.getBool('title_blurred') ?? false;
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 450),
+      duration: const Duration(milliseconds: 650),
       vsync: this,
       value: _hidden ? 0.0 : 1.0,
     );
@@ -72,9 +72,9 @@ class _AnimatedBlurTitleState extends State<AnimatedBlurTitle>
       letterSpacing: -0.8,
     );
     return PressScale(
-      pressedScale: 0.94,
-      duration: const Duration(milliseconds: 140),
-      releaseDuration: const Duration(milliseconds: 220),
+      pressedScale: 0.95,
+      duration: const Duration(milliseconds: 320),
+      releaseDuration: const Duration(milliseconds: 440),
       child: GestureDetector(
         onTap: _toggle,
         behavior: HitTestBehavior.opaque,
@@ -153,10 +153,10 @@ class _CyberGlitchEffect extends StatelessWidget {
     }
 
     final encryptedBadge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+      padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 2.0),
       decoration: BoxDecoration(
         color: dark ? const Color(0xFF0F0B10) : const Color(0xFFF3EBEF),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(
           color: const Color(0xFFE50914).withValues(alpha: 0.50),
           width: 0.8,
@@ -164,7 +164,7 @@ class _CyberGlitchEffect extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: const Color(0xFFE50914).withValues(alpha: 0.16),
-            blurRadius: 6,
+            blurRadius: 5,
           ),
         ],
       ),
@@ -172,20 +172,20 @@ class _CyberGlitchEffect extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 4.5,
-            height: 4.5,
+            width: 3.5,
+            height: 3.5,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
               color: Color(0xFFE50914),
             ),
           ),
-          const SizedBox(width: 5),
+          const SizedBox(width: 4),
           Text(
             '// CLASSIFIED',
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 8.5,
               fontWeight: FontWeight.w800,
-              letterSpacing: 1.4,
+              letterSpacing: 1.1,
               fontFamily: 'monospace',
               color: dark ? const Color(0xFFFCA5A5) : const Color(0xFFB91C1C),
             ),

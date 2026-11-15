@@ -35,29 +35,21 @@ class _AudioSpectrumRingState extends State<AudioSpectrumRing>
   @override
   void initState() {
     super.initState();
-    // Непрерывный вечный гармонический цикл без резких срывов
+    // Вечный гармонический фазовый цикл без резких срывов и скачков
     _phaseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 4800),
+      duration: const Duration(milliseconds: 5600),
     );
 
     _playTransition = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 650),
+      duration: const Duration(milliseconds: 700),
       value: _music.playing ? 1.0 : 0.0,
     );
 
     if (_music.playing && !MotionPrefs.shouldReduceMotion) {
       _phaseController.repeat();
     }
-
-    _playTransition.addStatusListener((status) {
-      if (status == AnimationStatus.dismissed && !_music.playing) {
-        if (_phaseController.isAnimating) {
-          _phaseController.stop();
-        }
-      }
-    });
 
     _music.addListener(_onMusicChanged);
   }
@@ -70,7 +62,11 @@ class _AudioSpectrumRingState extends State<AudioSpectrumRing>
       }
       _playTransition.forward();
     } else {
-      _playTransition.reverse();
+      _playTransition.reverse().then((_) {
+        if (mounted && !_music.playing && _phaseController.isAnimating) {
+          _phaseController.stop();
+        }
+      });
     }
   }
 
@@ -174,9 +170,9 @@ class _DelicateSpectrumPainter extends CustomPainter {
       final w2 = (math.cos(phase * 2.0 - i * 0.35) + 1.0) * 0.5;
       final wave = w1 * 0.62 + w2 * 0.38;
 
-      // Деликатный размер: в покое 1.0 px, на максимуме до 6.2 px
-      final dynamicHeight = wave * 5.2 * playFactor;
-      final height = 1.0 + dynamicHeight;
+      // Деликатный размер: плавный вход и схлопывание в 0
+      final dynamicHeight = wave * 4.4 * playFactor;
+      final height = 0.6 * playFactor + dynamicHeight;
 
       final rInner = baseRadius;
       final rOuter = baseRadius + height;
@@ -195,7 +191,7 @@ class _DelicateSpectrumPainter extends CustomPainter {
         (math.sin(colorFraction * _tau) + 1.0) * 0.5,
       )!;
 
-      final alpha = 0.22 + 0.68 * playFactor * (0.4 + wave * 0.6);
+      final alpha = (0.22 + 0.78 * (0.35 + wave * 0.65)) * playFactor;
       _barPaint.color = barColor.withValues(alpha: alpha.clamp(0.0, 1.0));
 
       if (playFactor > 0.25 && dynamicHeight > 2.0) {

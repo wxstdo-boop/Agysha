@@ -95,14 +95,11 @@ class _MetelAuroraState extends State<MetelAurora>
       return _Flake(
         dx: rng.nextDouble(),
         dy: rng.nextDouble(),
-        r: 1.3 + rng.nextDouble() * 1.5,
+        r: 0.70 + rng.nextDouble() * 0.85,
         alpha: 0.16 + rng.nextDouble() * 0.20,
         seed: rng.nextDouble() * pi * 2,
-        // Снег идёт вниз и его сносит ветром: каждая снежинка — со своей
-        // скоростью и своим сносом, иначе «метель» выглядит вихрем из одной
-        // точки. Скорость в долях экрана за цикл (12 с).
-        speed: 0.022 + rng.nextDouble() * 0.055,
-        wind: 0.10 + rng.nextDouble() * 0.30,
+        speed: 0.045 + rng.nextDouble() * 0.065,
+        wind: 0.10 + rng.nextDouble() * 0.25,
       );
     });
     _cache.bands = _bands;
@@ -403,14 +400,14 @@ class _AuroraPainter extends CustomPainter {
     final core = _corePaint;
     final halo = _haloPaint;
     for (final f in flakes) {
-      final fall = (f.dy + t * f.speed) % 1.0;
-      final gust = sin(animationPhase * 0.5 + f.seed) * 0.014;
-      final sway = sin(animationPhase + f.seed) * 0.004;
-      final x = ((f.dx + fall * f.wind * 0.25 + gust + sway) % 1.0) * w;
+      final fall = (f.dy + t * f.speed * 2.2) % 1.0;
+      final gust = sin(animationPhase * 0.5 + f.seed) * 0.012;
+      final sway = sin(animationPhase + f.seed) * 0.003;
+      final x = ((f.dx + fall * f.wind * 0.20 + gust + sway) % 1.0) * w;
       final y = fall * h;
       final c = Offset(x, y);
-      halo.color = const Color(0xFFFFFFFF).withValues(alpha: f.alpha * 0.45);
-      canvas.drawCircle(c, f.r * 1.9, halo);
+      halo.color = const Color(0xFFFFFFFF).withValues(alpha: f.alpha * 0.30);
+      canvas.drawCircle(c, f.r * 1.4, halo);
       core.color = const Color(0xFFF4FBFF).withValues(alpha: f.alpha);
       canvas.drawCircle(c, f.r, core);
     }

@@ -63,15 +63,15 @@ class _GiftCard3DState extends State<GiftCard3D>
     super.dispose();
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
+  void _updateTiltFromPos(Offset localPosition) {
     if (MotionPrefs.shouldReduceMotion) return;
     _resetController.stop();
-    final targetDx = ((details.localPosition.dx / widget.width - 0.5) * 2.0).clamp(-1.0, 1.0);
-    final targetDy = ((details.localPosition.dy / widget.height - 0.5) * 2.0).clamp(-1.0, 1.0);
+    final targetDx = ((localPosition.dx / widget.width - 0.5) * 2.0).clamp(-1.0, 1.0);
+    final targetDy = ((localPosition.dy / widget.height - 0.5) * 2.0).clamp(-1.0, 1.0);
     setState(() {
       _tilt = Offset(
-        _tilt.dx + (targetDx - _tilt.dx) * 0.45,
-        _tilt.dy + (targetDy - _tilt.dy) * 0.45,
+        _tilt.dx + (targetDx - _tilt.dx) * 0.35,
+        _tilt.dy + (targetDy - _tilt.dy) * 0.35,
       );
     });
   }
@@ -83,7 +83,7 @@ class _GiftCard3DState extends State<GiftCard3D>
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _resetController,
-      curve: Curves.easeOutBack,
+      curve: Curves.easeOutCubic,
     ));
     _resetController.forward(from: 0).then((_) {
       if (mounted) setState(() => _tilt = Offset.zero);
@@ -136,8 +136,11 @@ class _GiftCard3DState extends State<GiftCard3D>
             duration: const Duration(milliseconds: 140),
             releaseDuration: const Duration(milliseconds: 220),
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () => _openDetails(context),
-              onPanUpdate: _onPanUpdate,
+              onPanDown: (d) => _updateTiltFromPos(d.localPosition),
+              onPanStart: (d) => _updateTiltFromPos(d.localPosition),
+              onPanUpdate: (d) => _updateTiltFromPos(d.localPosition),
               onPanEnd: _onPanEnd,
               onPanCancel: () => _onPanEnd(DragEndDetails()),
               child: Transform(
@@ -395,21 +398,26 @@ class _ArtifactEmblem extends StatelessWidget {
               ),
             ),
           ),
-          // Спекулярный световой блик по верхней дуге
-          Positioned(
-            top: size * 0.10,
-            child: Container(
-              width: size * 0.40,
-              height: size * 0.14,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(size),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.45),
-                    Colors.transparent,
-                  ],
+          // Спекулярный световой блик по верхней дуге: вписан строго по круглому контуру фасета
+          ClipOval(
+            child: SizedBox(
+              width: size * 0.86,
+              height: size * 0.86,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Container(
+                  width: size * 0.70,
+                  height: size * 0.32,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withValues(alpha: 0.38),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -792,17 +800,17 @@ class _HoloFoilPainter extends CustomPainter {
 
     canvas.drawRect(rect, paint);
 
-    // Диагональные голографические полосы перелива фольги (specular sheen stripes)
-    final stripeOffset = (tilt.dx + tilt.dy) * 0.4;
+    // Диагональные голографические полосы перелива фольги (мягкий specular sheen)
+    final stripeOffset = (tilt.dx + tilt.dy) * 0.25;
     final stripeGradient = LinearGradient(
-      begin: Alignment(-1.2 + stripeOffset, -1.2 + stripeOffset),
-      end: Alignment(1.2 + stripeOffset, 1.2 + stripeOffset),
+      begin: Alignment(-1.1 + stripeOffset, -1.1 + stripeOffset),
+      end: Alignment(1.1 + stripeOffset, 1.1 + stripeOffset),
       colors: [
         Colors.transparent,
-        rarityColor.withValues(alpha: 0.08),
-        Colors.white.withValues(alpha: 0.06),
-        BrandColors.red.withValues(alpha: 0.10),
-        rarityColor.withValues(alpha: 0.08),
+        rarityColor.withValues(alpha: 0.06),
+        Colors.white.withValues(alpha: 0.05),
+        BrandColors.red.withValues(alpha: 0.07),
+        rarityColor.withValues(alpha: 0.06),
         Colors.transparent,
       ],
       stops: const [0.0, 0.25, 0.50, 0.68, 0.85, 1.0],

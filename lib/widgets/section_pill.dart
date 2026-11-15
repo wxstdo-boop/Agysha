@@ -629,13 +629,10 @@ class _SectionPillState extends State<SectionPill>
         // заметно вытягивается и округляется в сторону следующего раздела.
         // Коэффициент волны 0.72 (был 0.55 — растяжение «проскальзывало»)
         // держит эффект отчётливым, а `math.min(0.98, …)` не даёт раздуться.
-final visualStretch = math.min(0.98, edgeStretch + 0.90 * wave);
-        // Радиус угла 10.0: растянутая таблетка округляется заметно.
-        final capRadius = 22.0 + 10.0 * visualStretch;
-
-        final signedPull = edgeStretch > 0.01
-            ? (stretch > 0 ? 1.0 : -1.0) * edgeStretch.clamp(0.0, 1.0)
-            : (p - selectedIndex).clamp(-1.0, 1.0);
+        // Визуальная растяжка: симметричная и непрерывная во всем диапазоне
+        final visualStretch = math.min(0.95, edgeStretch + 0.75 * wave);
+        final capRadius = 22.0 + 8.0 * visualStretch;
+        final edgeOffset = stretch * 10.0;
 
         return Stack(
           clipBehavior: Clip.none,
@@ -647,17 +644,13 @@ final visualStretch = math.min(0.98, edgeStretch + 0.90 * wave);
             // «мигает в стороны».
             Align(
               alignment: Alignment(indicatorAlignment, 0),
-              // Эффект ГЛУБИНЫ: в полёте камень слегка «отоходит» назад и
-              // плавно возвращается — ощущение, что таблетка «опускается» в экран.
-              // Под пальцем (dragging) эффект выключен: только чистая растяжка.
               child: Transform.translate(
-                // Стабильное положение по вертикали (без дёрганья по оси Y) и
-                // направленный сдвиг в сторону движения пальца
-                offset: Offset(signedPull * 6.0 * visualStretch, 0),
+                // Плавный сдвиг при упоре в край без скачков на пограничных секциях
+                offset: Offset(edgeOffset, 0),
                 child: Transform.scale(
-                  alignment: Alignment(-signedPull * 0.75, 0),
-                  scaleX: 1.0 + 0.35 * visualStretch,
-                  scaleY: 1.0 - 0.06 * visualStretch,
+                  alignment: Alignment.center,
+                  scaleX: 1.0 + 0.28 * visualStretch,
+                  scaleY: 1.0 - 0.05 * visualStretch,
                   // Layout-ширина — КОНСТАНТА (слот/карантин, не зависит от
                   // breath). Дышащий масштаб идёт через Transform — иначе
                   // каждый кадр пересобирался layout, камень «дёргался».
