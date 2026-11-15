@@ -392,20 +392,20 @@ class _NutritionScreenState extends State<NutritionScreen>
               7,
               // Высоту блока истории ведёт ОДИН AnimatedSize: добавление
               // приёма пищи, удаление и переход «пусто ↔ история» идут одной
-              // плавной волной. Подсказка «Приёмов пищи пока нет» живёт ВНУТРИ
-              // этого блока и сама тянется по высоте — раньше она была
-              // отдельным состоянием AnimatedSwitcher и появлялась/исчезала
-              // рывком.
+              // плавной волной. Подсказка «Приёмов пищи пока нет» и история
+              // расположены в Stack, поэтому при добавлении первой записи их
+              // высоты не складываются (высота не подскакивает до 226px),
+              // карточка трендов не дергается вниз/вверх, а переход плавный.
               AnimatedSize(
                 duration: _mealCollapse,
                 curve: _mealCollapseCurve,
                 alignment: Alignment.topCenter,
                 clipBehavior: Clip.hardEdge,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: Stack(
+                  alignment: Alignment.topCenter,
                   children: [
-                    _emptyMealsHint(visible: _loaded && meals.isEmpty),
                     if (_loaded) _buildHistory(context, theme, meals),
+                    _emptyMealsHint(visible: _loaded && meals.isEmpty),
                   ],
                 ),
               ),
@@ -441,20 +441,23 @@ class _NutritionScreenState extends State<NutritionScreen>
   Widget _emptyMealsHint({required bool visible}) {
     final reduce = MotionPrefs.shouldReduceMotion;
     final dur = reduce ? Duration.zero : _mealCollapse;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: visible ? 1.0 : 0.0),
-      duration: dur,
-      curve: _mealCollapseCurve,
-      builder: (context, v, child) => ClipRect(
-        child: Align(
-          alignment: Alignment.topCenter,
-          heightFactor: v.clamp(0.0, 1.0),
-          child: Opacity(opacity: v.clamp(0.0, 1.0), child: child),
+    return SizedBox(
+      width: double.infinity,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: visible ? 1.0 : 0.0),
+        duration: dur,
+        curve: _mealCollapseCurve,
+        builder: (context, v, child) => ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: v.clamp(0.0, 1.0),
+            child: Opacity(opacity: v.clamp(0.0, 1.0), child: child),
+          ),
         ),
-      ),
-      child: const KeyedSubtree(
-        key: ValueKey('meals_empty'),
-        child: _EmptyMeals(),
+        child: const KeyedSubtree(
+          key: ValueKey('meals_empty'),
+          child: _EmptyMeals(),
+        ),
       ),
     );
   }

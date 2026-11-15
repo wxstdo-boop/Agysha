@@ -520,15 +520,34 @@ class _ProfileScreenState extends State<ProfileScreen>
           title = 'Тебе нравится этот ночной бэнгер?';
         }
 
-        final bpmList = [144.0, 146.0, 148.0, 150.0, 152.0, 154.0, 156.0];
-        final chosenBpm = bpmList[uniqueCounter % bpmList.length];
+        final mode = uniqueCounter % 4;
+        final double chosenBpm;
+        final String modeTags;
+        switch (mode) {
+          case 0:
+            chosenBpm = 156.0;
+            modeTags = 'Memphis Drift • 156 BPM • 808 Slide';
+            break;
+          case 1:
+            chosenBpm = 142.0;
+            modeTags = 'Doom Phonk • 142 BPM • Reese 808';
+            break;
+          case 2:
+            chosenBpm = 148.0;
+            modeTags = 'Night City Wave • 148 BPM • Cyber Drift';
+            break;
+          default:
+            chosenBpm = 158.0;
+            modeTags = 'Brazilian Hardtekk • 158 BPM • 4x4 Kick';
+            break;
+        }
         candidate = _PhonkItem(
           id: 'phonk_procedural_${DateTime.now().millisecondsSinceEpoch}_$uniqueCounter',
           title: title,
           artist: 'Night City Syndicate',
-          tags: 'Memphis Cowbell • ${chosenBpm.toInt()} BPM • VIP Heat',
+          tags: modeTags,
           bpm: chosenBpm,
-          seed: 1000 + uniqueCounter * 73 + DateTime.now().millisecond,
+          seed: 1000 + uniqueCounter * 73 + mode * 137 + DateTime.now().millisecond,
         );
       }
 
@@ -648,8 +667,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   /// Синтезирует мощный, сатурированный 16-битный 44.1 кГц PCM WAV Drift Phonk луп (32 шага / 2 такта)
-  /// с аутентичным Roland TR-808 ковбеллом, мемфисским 808 слайд-басом с ламповой сатурацией,
-  /// пробивной бочкой и трэп-снэром.
+  /// в одном из 4 уникальных поджанров:
+  /// 0: Агрессивный Мемфис-дрифт с 808 слайдами и TR-808 ковбеллом
+  /// 1: Тяжелый Doom Phonk с разрушительным Reese-басом и гигантским снейром
+  /// 2: Ночной Tokyo / Night City дрифт с синкопированным качающим грувом
+  /// 3: Бразильский Hardtekk Phonk с прямой бочкой 4x4 и перегруженными стабами
   static List<int> _synthesizePhonkWav({required double bpm, required int seed}) {
     const sampleRate = 44100;
     // 32 шага (2 полных такта 4/4)
@@ -657,9 +679,23 @@ class _ProfileScreenState extends State<ProfileScreen>
     final stepSamples = (totalSamples / 32).round();
 
     final pcmBytes = ByteData(totalSamples * 2);
-    final melodySteps = _getMelodyPattern(seed);
+    final rawMelody = _getMelodyPattern(seed);
 
-    final bassMode = (seed.abs()) % 8;
+    final genreMode = (seed.abs()) % 4;
+    final List<double> melodySteps;
+    switch (genreMode) {
+      case 1: // Doom Phonk: зловещая октава вниз
+        melodySteps = rawMelody.map((f) => f * 0.5).toList();
+        break;
+      case 3: // Brazilian Hardtekk: пронзительная верхняя тесситура
+        melodySteps = rawMelody.map((f) => f * 1.3348).toList();
+        break;
+      default:
+        melodySteps = rawMelody;
+        break;
+    }
+
+    final bassMode = (seed.abs() ~/ 4) % 8;
     final List<double> bassSteps;
     switch (bassMode) {
       case 0: // F#1 -> D1 -> E1 -> C#1
@@ -728,30 +764,30 @@ class _ProfileScreenState extends State<ProfileScreen>
         break;
     }
 
-    final kickMode = (seed.abs() ~/ 3) % 4;
     final Set<int> kickSteps;
-    switch (kickMode) {
-      case 0:
+    switch (genreMode) {
+      case 0: // Memphis Drift: двойная плотная бочка
         kickSteps = const {0, 3, 6, 10, 14, 16, 19, 22, 26, 30};
         break;
-      case 1:
-        kickSteps = const {0, 4, 8, 12, 14, 16, 20, 24, 28, 30};
+      case 1: // Doom Phonk: монументальный халф-тайм
+        kickSteps = const {0, 8, 16, 24};
         break;
-      case 2:
-        kickSteps = const {0, 10, 16, 26, 28};
+      case 2: // Night City Wave: синкопированный оффбит
+        kickSteps = const {0, 6, 10, 16, 22, 26, 28};
         break;
-      default:
-        kickSteps = const {0, 3, 8, 11, 14, 16, 19, 24, 27, 30};
+      default: // Brazilian Hardtekk: прямая бочка 4x4 на каждый бит
+        kickSteps = const {0, 4, 8, 12, 16, 20, 24, 28};
         break;
     }
 
     double subPhase = 0.0;
+    double reesePhase = 0.0;
     for (int i = 0; i < totalSamples; i++) {
       final step = (i ~/ stepSamples).clamp(0, 31);
       final stepSample = i % stepSamples;
       final stepT = stepSample / sampleRate;
 
-      // 1. Аутентичный Roland TR-808 Cowbell: двойной прямоугольный осциллятор + металлический фильтр и щелчок
+      // 1. Мелодический лид: ковбелл / синты по жанрам
       double cowbell = 0.0;
       final bellFreq = melodySteps[step];
       if (bellFreq > 0.0) {
@@ -761,48 +797,133 @@ class _ProfileScreenState extends State<ProfileScreen>
         final sq2 = math.sin(2 * math.pi * f2 * stepT) >= 0 ? 1.0 : -1.0;
         final sine1 = math.sin(2 * math.pi * f1 * stepT);
         final sine2 = math.sin(2 * math.pi * f2 * stepT);
-        final bellBody = (sine1 + 0.65 * sine2) * 0.60 + (sq1 + sq2) * 0.35;
-        final bellEnv = math.exp(-stepT * 14.0);
-        final click = math.exp(-stepT * 90.0) * math.sin(2 * math.pi * 1920.0 * stepT) * 0.45;
-        cowbell = (bellBody * bellEnv + click) * 1.45;
+
+        if (genreMode == 1) {
+          // Doom Phonk: мрачный, темный колокол с медленным затуханием
+          final bellEnv = math.exp(-stepT * 6.5);
+          cowbell = (sine1 * 0.80 + sq1 * 0.20 + sine2 * 0.35) * bellEnv * 1.55;
+        } else if (genreMode == 3) {
+          // Hardtekk: острый скрежещущий FM-звук
+          final bellEnv = math.exp(-stepT * 22.0);
+          final fmMod = math.sin(2 * math.pi * f2 * 2.0 * stepT) * 1.8;
+          final scream = math.sin(2 * math.pi * (f1 + fmMod * 320.0) * stepT);
+          cowbell = (scream * 0.65 + sq1 * 0.35) * bellEnv * 1.60;
+        } else if (genreMode == 2) {
+          // Night City: хорус-ковбелл с мягким аналоговым телом
+          final bellEnv = math.exp(-stepT * 12.0);
+          final chorus = math.sin(2 * math.pi * (f1 + 1.2) * stepT);
+          cowbell = ((sine1 + chorus) * 0.45 + sq1 * 0.25) * bellEnv * 1.50;
+        } else {
+          // Memphis Drift: классический TR-808
+          final bellBody = (sine1 + 0.65 * sine2) * 0.60 + (sq1 + sq2) * 0.35;
+          final bellEnv = math.exp(-stepT * 14.0);
+          final click = math.exp(-stepT * 90.0) * math.sin(2 * math.pi * 1920.0 * stepT) * 0.45;
+          cowbell = (bellBody * bellEnv + click) * 1.45;
+        }
       }
 
-      // 2. Глубокий, сатурированный мемфисский 808 Саб-бас со слайдом и ламповым овердрайвом
+      // 2. Бас-партия: 808 слайд, Reese-гул или Hardtekk оффбит
       final baseSubFreq = bassSteps[step];
-      final isSlideStep = (step == 7 || step == 15 || step == 23 || step == 31);
-      final slideFactor = isSlideStep ? (1.0 + 0.45 * (stepSample / stepSamples)) : 1.0;
-      final subFreq = baseSubFreq * slideFactor;
-      subPhase += 2 * math.pi * subFreq / sampleRate;
-      final rawSub = math.sin(subPhase);
-      final saturatedSub = rawSub + 0.22 * math.sin(subPhase * 2.0);
-      final distSub = (saturatedSub * 2.9) / (1.0 + (saturatedSub * 1.3).abs());
+      final double subFreq;
+      if (genreMode == 0) {
+        // Memphis: слайды на стыках тактов
+        final isSlide = (step == 7 || step == 15 || step == 23 || step == 31);
+        subFreq = isSlide ? baseSubFreq * (1.0 + 0.50 * (stepSample / stepSamples)) : baseSubFreq;
+      } else if (genreMode == 2) {
+        // Night City: скачки на октаву
+        final isOctave = (step % 4 == 2);
+        subFreq = isOctave ? baseSubFreq * 2.0 : baseSubFreq;
+      } else {
+        subFreq = baseSubFreq;
+      }
 
-      // 3. Пробивная трэп-бочка (808 Kick) со спадом высоты 185 -> 44 Гц
+      subPhase += 2 * math.pi * subFreq / sampleRate;
+      reesePhase += 2 * math.pi * (subFreq * 1.015) / sampleRate;
+
+      double distSub = 0.0;
+      if (genreMode == 1) {
+        // Doom Phonk: тяжелый перегруженный Reese саб
+        final reese = math.sin(subPhase) * 0.60 + math.sin(reesePhase) * 0.50 + 0.25 * math.sin(subPhase * 2.0);
+        distSub = (reese * 3.4) / (1.0 + (reese * 1.5).abs());
+      } else if (genreMode == 3) {
+        // Hardtekk: жесткие оффбит-стабы
+        final isOffbeat = (step % 2 == 1);
+        if (isOffbeat) {
+          final stabEnv = math.exp(-stepT * 18.0);
+          final raw = math.sin(subPhase) + 0.40 * (math.sin(subPhase) >= 0 ? 1.0 : -1.0);
+          distSub = (raw * 3.2 * stabEnv) / (1.0 + (raw * 1.4).abs());
+        }
+      } else {
+        // Классический ламповый 808
+        final rawSub = math.sin(subPhase);
+        final saturatedSub = rawSub + 0.22 * math.sin(subPhase * 2.0);
+        distSub = (saturatedSub * 2.9) / (1.0 + (saturatedSub * 1.3).abs());
+      }
+
+      // 3. Пробивная бочка (Kick)
       double kick = 0.0;
       if (kickSteps.contains(step)) {
-        final kickEnv = math.exp(-stepT * 17.0);
-        final kickFreq = 44.0 + 142.0 * math.exp(-stepT * 48.0);
-        final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.2;
-        kick = (rawKick * 1.6) / (1.0 + (rawKick * 0.85).abs());
+        if (genreMode == 3) {
+          // Hardtekk: жесткий панч 4x4
+          final kickEnv = math.exp(-stepT * 22.0);
+          final kickFreq = 52.0 + 190.0 * math.exp(-stepT * 60.0);
+          final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.6;
+          kick = (rawKick * 1.8) / (1.0 + (rawKick * 0.95).abs());
+        } else if (genreMode == 1) {
+          // Doom: глубокий низкий удар
+          final kickEnv = math.exp(-stepT * 12.0);
+          final kickFreq = 38.0 + 120.0 * math.exp(-stepT * 40.0);
+          final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.4;
+          kick = (rawKick * 1.5) / (1.0 + (rawKick * 0.80).abs());
+        } else {
+          // 808 Trap Kick
+          final kickEnv = math.exp(-stepT * 17.0);
+          final kickFreq = 44.0 + 142.0 * math.exp(-stepT * 48.0);
+          final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.2;
+          kick = (rawKick * 1.6) / (1.0 + (rawKick * 0.85).abs());
+        }
       }
 
-      // 4. Мемфисский трэп-снэр / хлопок на 4, 12, 20, 28 четвертях
+      // 4. Снэр / хлопок
       double snare = 0.0;
-      if (step == 4 || step == 12 || step == 20 || step == 28) {
-        final snareEnv = math.exp(-stepT * 24.0);
-        final noise = (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.80;
-        final body = math.sin(2 * math.pi * 215.0 * stepT) * math.exp(-stepT * 30.0);
-        snare = (noise * 0.75 + body * 0.55) * snareEnv;
+      final bool isSnareStep;
+      if (genreMode == 1) {
+        // Doom: мощный выстрел на 8 и 24 с долгим эхо
+        isSnareStep = (step == 8 || step == 24);
+        if (isSnareStep) {
+          final snareEnv = math.exp(-stepT * 9.0);
+          final noise = (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.90;
+          final body = math.sin(2 * math.pi * 175.0 * stepT) * math.exp(-stepT * 15.0);
+          snare = (noise * 0.85 + body * 0.60) * snareEnv * 1.4;
+        }
+      } else {
+        isSnareStep = (step == 4 || step == 12 || step == 20 || step == 28);
+        if (isSnareStep) {
+          final snareEnv = math.exp(-stepT * 24.0);
+          final noise = (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.80;
+          final body = math.sin(2 * math.pi * 215.0 * stepT) * math.exp(-stepT * 30.0);
+          snare = (noise * 0.75 + body * 0.55) * snareEnv;
+        }
       }
 
-      // 5. Трэп хэты (16-е доли + 32-е роллы на шагах 14, 15, 30, 31)
-      final isRoll = (step == 14 || step == 15 || step == 30 || step == 31);
-      final hatRate = isRoll ? 4.0 : 2.0;
-      final hatEnv = math.exp(-((stepT * hatRate) % 1.0) * 45.0);
-      final hatNoise = (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.22 * hatEnv;
+      // 5. Хэты
+      double hatNoise = 0.0;
+      if (genreMode == 1) {
+        // Doom: темный редкий оффбит-хэт
+        if (step % 4 == 2) {
+          final hatEnv = math.exp(-stepT * 28.0);
+          hatNoise = (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.35 * hatEnv;
+        }
+      } else {
+        final isRoll = (step == 14 || step == 15 || step == 30 || step == 31);
+        final hatRate = isRoll ? 4.0 : 2.0;
+        final hatEnv = math.exp(-((stepT * hatRate) % 1.0) * 45.0);
+        hatNoise = (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.22 * hatEnv;
+      }
 
-      // Мастеринг: аналоговый компрессор-лимитер с плотным саундом
-      final sum = kick * 0.85 + distSub * 0.75 + cowbell * 0.62 + snare * 0.56 + hatNoise * 0.28;
+      // Мастеринг: сайдчейн бочки против саб-баса и лимитер
+      final sidechain = kick.abs() > 0.3 ? 0.45 : 1.0;
+      final sum = kick * 0.88 + distSub * 0.76 * sidechain + cowbell * 0.64 + snare * 0.58 + hatNoise * 0.26;
       final mix = (sum * 1.40) / (1.0 + (sum * 0.55).abs());
       final sampleInt16 = (mix * 32760.0).round().clamp(-32768, 32767);
       pcmBytes.setInt16(i * 2, sampleInt16, Endian.little);
@@ -1045,11 +1166,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     final talisman = _service.activeTalisman;
     final favGifts = _service.favoriteGifts;
     const spots = [
-      _TalismanSpot(top: -12, left: 16),
-      _TalismanSpot(top: -12, right: 16),
-      _TalismanSpot(top: 80, left: -14),
-      _TalismanSpot(top: 80, right: -14),
-      _TalismanSpot(bottom: -12, right: 32),
+      _TalismanSpot(top: 8, left: 20),
+      _TalismanSpot(top: 14, right: 26),
+      _TalismanSpot(top: 56, left: 12),
+      _TalismanSpot(top: 82, right: 16),
+      _TalismanSpot(top: 112, left: 36),
     ];
 
     return _Card(
@@ -1086,16 +1207,20 @@ class _ProfileScreenState extends State<ProfileScreen>
             final gift = idx < favGifts.length ? favGifts[idx] : null;
             return Positioned(
               top: spot.top,
-              bottom: spot.bottom,
               left: spot.left,
               right: spot.right,
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 360),
-                switchInCurve: Curves.easeOutBack,
+                duration: const Duration(milliseconds: 480),
+                switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 transitionBuilder: (child, anim) => FadeTransition(
                   opacity: anim,
-                  child: ScaleTransition(scale: anim, child: child),
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.70, end: 1.0).animate(
+                      CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+                    ),
+                    child: child,
+                  ),
                 ),
                 child: gift != null
                     ? KeyedSubtree(
@@ -1113,27 +1238,27 @@ class _ProfileScreenState extends State<ProfileScreen>
                               });
                             },
                             child: Container(
-                              width: 36,
-                              height: 36,
+                              width: 25,
+                              height: 25,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: const Color(0xFF141422),
+                                color: const Color(0xFF0C0E1A),
                                 border: Border.all(
                                   color: gift.rarity.color,
-                                  width: 1.6,
+                                  width: 1.1,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: gift.rarity.color.withValues(alpha: 0.55),
-                                    blurRadius: 10,
-                                    spreadRadius: 1,
+                                    color: gift.rarity.color.withValues(alpha: 0.40),
+                                    blurRadius: 6,
+                                    spreadRadius: 0,
                                   ),
                                 ],
                               ),
                               child: Center(
                                 child: SizedBox(
-                                  width: 22,
-                                  height: 22,
+                                  width: 14,
+                                  height: 14,
                                   child: CustomPaint(
                                     painter: SharpArtifactPainter(
                                       giftId: gift.id,
@@ -1328,72 +1453,52 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                       ),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(Radii.pill),
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 360),
-                        curve: Curves.easeInOutCubic,
-                        alignment: Alignment.centerLeft,
-                        clipBehavior: Clip.none,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
-                              const SizedBox(width: 4),
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 320),
-                                switchInCurve: Curves.easeInOutCubic,
-                                switchOutCurve: Curves.easeInOutCubic,
-                                layoutBuilder: (currentChild, previousChildren) => Stack(
-                                  alignment: Alignment.centerLeft,
-                                  clipBehavior: Clip.hardEdge,
-                                  children: [
-                                    ...previousChildren.map((w) => Positioned.fill(
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: SingleChildScrollView(
-                                          scrollDirection: Axis.horizontal,
-                                          physics: const NeverScrollableScrollPhysics(),
-                                          child: w,
-                                        ),
-                                      ),
-                                    )),
-                                    ?currentChild,
-                                  ],
-                                ),
-                                transitionBuilder: (child, anim) => FadeTransition(
-                                  opacity: anim,
-                                  child: child,
-                                ),
-                                child: Text(
-                                  _service.prestigeTitle,
-                                  key: ValueKey(_service.prestigeTitle),
-                                  maxLines: 1,
-                                  softWrap: false,
-                                  overflow: TextOverflow.clip,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: theme.colorScheme.onSurface,
-                                  ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
+                          const SizedBox(width: 4),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeInOutCubic,
+                            alignment: Alignment.centerLeft,
+                            clipBehavior: Clip.none,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 260),
+                              switchInCurve: Curves.easeInOutCubic,
+                              switchOutCurve: Curves.easeInOutCubic,
+                              transitionBuilder: (child, anim) => FadeTransition(
+                                opacity: anim,
+                                child: child,
+                              ),
+                              child: Text(
+                                _service.prestigeTitle,
+                                key: ValueKey(_service.prestigeTitle),
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.visible,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.colorScheme.onSurface,
                                 ),
                               ),
-                              const SizedBox(width: 3),
-                              AnimatedRotation(
-                                turns: _isPrestigePickerOpen ? 0.5 : 0.0,
-                                duration: const Duration(milliseconds: 320),
-                                curve: Curves.easeInOutCubic,
-                                child: Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  size: 16,
-                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 4),
+                          AnimatedRotation(
+                            turns: _isPrestigePickerOpen ? 0.5 : 0.0,
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeInOutCubic,
+                            child: Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 16,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -3611,10 +3716,9 @@ class _TrackRowState extends State<_TrackRow>
 
 class _TalismanSpot {
   final double? top;
-  final double? bottom;
   final double? left;
   final double? right;
-  const _TalismanSpot({this.top, this.bottom, this.left, this.right});
+  const _TalismanSpot({this.top, this.left, this.right});
 }
 
 /// Фоновый арт активного талисмана прямо на карточке аватара в профиле (неоновые кибер-руны, созвездия)
@@ -3718,49 +3822,49 @@ class _PhonkCatalog {
       id: 'phonk_murder',
       title: 'Тебе нравится этот фонк?',
       artist: 'Kordhell',
-      tags: 'Drift Phonk • 148 BPM • 808 Cowbell',
-      bpm: 148.0,
-      seed: 201,
+      tags: 'Memphis Drift • 156 BPM • 808 Cowbell',
+      bpm: 156.0,
+      seed: 200,
     ),
     _PhonkItem(
       id: 'phonk_close_eyes',
       title: 'Чувствуешь этот мемфисский бас?',
       artist: 'DVRST',
-      tags: 'Cyber Drift • 146 BPM • Atmospheric',
-      bpm: 146.0,
-      seed: 202,
+      tags: 'Doom Phonk • 142 BPM • Reese 808',
+      bpm: 142.0,
+      seed: 201,
     ),
     _PhonkItem(
       id: 'phonk_why_not',
       title: 'Качает этот ночной дрифт?',
       artist: 'Ghostface Playa',
-      tags: 'Night City Phonk • 150 BPM • Pure Heat',
-      bpm: 150.0,
-      seed: 203,
+      tags: 'Night City Phonk • 148 BPM • Pure Heat',
+      bpm: 148.0,
+      seed: 202,
     ),
     _PhonkItem(
       id: 'phonk_north_memphis',
       title: 'Слышишь этот 808 ковбелл?',
       artist: 'Pharmacist',
-      tags: 'Memphis Phonk • 145 BPM • Raw 808',
-      bpm: 145.0,
-      seed: 204,
+      tags: 'Hardtekk Phonk • 158 BPM • 4x4 Kick',
+      bpm: 158.0,
+      seed: 203,
     ),
     _PhonkItem(
       id: 'phonk_sahara',
       title: 'Готов к разгону по Найт-Сити?',
       artist: 'Hensonn',
-      tags: 'Aggressive Drift • 148 BPM • Cowbell Riff',
-      bpm: 148.0,
-      seed: 205,
+      tags: 'Aggressive Drift • 154 BPM • Cowbell Riff',
+      bpm: 154.0,
+      seed: 204,
     ),
     _PhonkItem(
       id: 'phonk_phonky_town',
       title: 'Тебе заходит этот хардтек?',
       artist: 'PlayaPhonk',
-      tags: 'Classic Phonk • 146 BPM • Memphis Bounce',
-      bpm: 146.0,
-      seed: 206,
+      tags: 'Hardtekk Drift • 160 BPM • Hard Bass',
+      bpm: 160.0,
+      seed: 207,
     ),
     _PhonkItem(
       id: 'phonk_cowbell_warrior',

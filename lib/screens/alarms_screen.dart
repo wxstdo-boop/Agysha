@@ -554,67 +554,48 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                   ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 360),
-                curve: Curves.easeInOutCubic,
-                alignment: Alignment.center,
-                clipBehavior: Clip.none,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: AnimatedSwitcher(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    hasActive ? Icons.alarm_on_rounded : Icons.alarm_off_rounded,
+                    size: 16,
+                    color: hasActive
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedSize(
                     duration: const Duration(milliseconds: 320),
-                    switchInCurve: Curves.easeInOutCubic,
-                    switchOutCurve: Curves.easeInOutCubic,
-                    layoutBuilder: (currentChild, previousChildren) => Stack(
-                      alignment: Alignment.center,
-                      clipBehavior: Clip.hardEdge,
-                      children: [
-                        ...previousChildren.map((w) => Positioned.fill(
-                          child: Center(
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              physics: const NeverScrollableScrollPhysics(),
-                              child: w,
-                            ),
-                          ),
-                        )),
-                        ?currentChild,
-                      ],
-                    ),
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: child,
-                    ),
-                    child: Row(
-                      key: ValueKey('pill_content_${hasActive}_$text'),
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          hasActive ? Icons.alarm_on_rounded : Icons.alarm_off_rounded,
-                          size: 16,
+                    curve: Curves.easeInOutCubic,
+                    alignment: Alignment.centerLeft,
+                    clipBehavior: Clip.none,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeInOutCubic,
+                      switchOutCurve: Curves.easeInOutCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                      child: Text(
+                        text,
+                        key: ValueKey(text),
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.visible,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
                           color: hasActive
-                              ? theme.colorScheme.primary
+                              ? theme.colorScheme.onSurface
                               : theme.colorScheme.onSurfaceVariant,
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          text,
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.clip,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: hasActive
-                                ? theme.colorScheme.onSurface
-                                : theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
