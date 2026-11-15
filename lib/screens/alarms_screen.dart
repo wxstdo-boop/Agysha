@@ -823,7 +823,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                               child: IconButton(
                                                 onPressed: () => _testAlarm(alarm),
                                                 icon: Icon(
-                                                  Icons.notifications_active_rounded,
+                                                  Icons.notifications_active_outlined,
                                                   size: 17,
                                                   color: theme.colorScheme.primary,
                                                 ),
