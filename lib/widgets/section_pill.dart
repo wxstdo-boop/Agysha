@@ -241,7 +241,6 @@ class _SectionPillState extends State<SectionPill>
   // Последнее записанное положение камня (для снапшота волны на отпускании).
   double _dragSmooth = 0;
   double _dragGrabOffset = 0;
-  double _motionDir = 0.0;
 
   /// Последняя «принятая» X-координата пальца (px по дорожке). Дедзона:
   /// микросдвиги меньше [_dragDeadzone] игнорируются, поэтому дрожание руки
@@ -342,17 +341,12 @@ class _SectionPillState extends State<SectionPill>
     // Стартовая точка дедзоны — фактический палец (с учётом захвата).
     _dragFingerX = details.localPosition.dx + _dragGrabOffset;
     _dragNearest = _dragPage.round();
-    _motionDir = 0.0;
     sectionDragPage.value = _dragPage;
   }
 
   void _dragUpdate(DragUpdateDetails details, int count) {
     if (!_dragging) return;
     if (count < 2) return;
-    final deltaX = details.delta.dx;
-    if (deltaX.abs() > 0.4) {
-      _motionDir = deltaX > 0 ? 1.0 : -1.0;
-    }
     // ПОЗИЦИОННЫЙ скраббер, как выбор приоритета: палец задаёт ЦЕНТР
     // камня, а не долю «от края до края». Камень едет ровно под пальцем.
     //
@@ -396,9 +390,6 @@ class _SectionPillState extends State<SectionPill>
     // «Объём до конца»: тяга наливается весь ход пальца за край, поэтому
     // камень дышит на всю длину жеста. Нормированная доля (-0.9..0.9).
     _edgePull = (over / 90.0).clamp(-0.9, 0.9);
-    if (_edgePull.abs() > 0.02) {
-      _motionDir = _edgePull > 0 ? 1.0 : -1.0;
-    }
     // У края страница уже на пределе — sectionDragPage не меняется, и без
     // этого уведомления камень не перестроился бы (растяжка «замирала»).
     _edgePullNotifier.value = _edgePull;
@@ -424,7 +415,6 @@ class _SectionPillState extends State<SectionPill>
   void _dragEnd(int count) {
     if (!_dragging) return;
     _dragging = false;
-    _motionDir = 0.0;
     // Волна НЕ фиксируется: она и так считается из живой позиции карусели,
     // поэтому при отпускании камень продолжает форму плавно, без рывка в
     // растянутое положение. Гасим только захваченную тягу за край.
@@ -440,7 +430,6 @@ class _SectionPillState extends State<SectionPill>
   void _dragCancel() {
     if (!_dragging) return;
     _dragging = false;
-    _motionDir = 0.0;
     // Отмена (палец ушёл не по сценарию): то же гашение захваченной тяги.
     _startEdgeSettle();
     final count = sectionIconsFor(context).length;
@@ -644,6 +633,10 @@ final visualStretch = math.min(0.98, edgeStretch + 0.90 * wave);
         // Радиус угла 10.0: растянутая таблетка округляется заметно.
         final capRadius = 22.0 + 10.0 * visualStretch;
 
+        final signedPull = edgeStretch > 0.01
+            ? (stretch > 0 ? 1.0 : -1.0) * edgeStretch.clamp(0.0, 1.0)
+            : (p - selectedIndex).clamp(-1.0, 1.0);
+
         return Stack(
           clipBehavior: Clip.none,
           fit: StackFit.expand,
@@ -660,9 +653,9 @@ final visualStretch = math.min(0.98, edgeStretch + 0.90 * wave);
               child: Transform.translate(
                 // Стабильное положение по вертикали (без дёрганья по оси Y) и
                 // направленный сдвиг в сторону движения пальца
-                offset: Offset(_motionDir * 8.0 * visualStretch, 0),
+                offset: Offset(signedPull * 6.0 * visualStretch, 0),
                 child: Transform.scale(
-                  alignment: Alignment(-_motionDir * 0.85, 0),
+                  alignment: Alignment(-signedPull * 0.75, 0),
                   scaleX: 1.0 + 0.35 * visualStretch,
                   scaleY: 1.0 - 0.06 * visualStretch,
                   // Layout-ширина — КОНСТАНТА (слот/карантин, не зависит от

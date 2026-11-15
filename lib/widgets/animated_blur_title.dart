@@ -6,6 +6,7 @@ import '../services/haptics.dart';
 import '../services/prefs.dart';
 import '../services/profile_service.dart';
 import 'online_dot.dart';
+import 'press_scale.dart';
 
 /// Заголовок шапки главного экрана: «Agysha» или короткое имя юзера.
 ///
@@ -70,50 +71,55 @@ class _AnimatedBlurTitleState extends State<AnimatedBlurTitle>
       fontStyle: FontStyle.italic,
       letterSpacing: -0.8,
     );
-    return GestureDetector(
-      onTap: _toggle,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) {
-          return _CyberGlitchEffect(
-            progress: _controller.value,
-            visibleChild: child!,
-          );
-        },
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: AnimatedBuilder(
-            // Имя юзера в шапке: как только профиль сохраняет короткое имя,
-            // заголовок сам меняется на него — без пересборки всего Home.
-            animation: ProfileService(),
-            builder: (context, _) {
-              // Своё имя вместо «Agysha»: пустое поле оставляем брендом,
-              // чтобы шапка не оставалась пустой у нового пользователя.
-              final name = ProfileService().displayName;
-              final title = name.isNotEmpty ? name : 'Agysha';
-              // Смена имени — плавная: кросс-фейд со лёгким «проявлением»,
-              // а не мгновенная подмена текста. Заметно медленнее обычного —
-              // читается как мягкое перетекание.
-              return AnimatedSwitcher(
-                duration: const Duration(milliseconds: 520),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, anim) => FadeTransition(
-                  opacity: anim,
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 0.94, end: 1).animate(anim),
-                    child: child,
+    return PressScale(
+      pressedScale: 0.94,
+      duration: const Duration(milliseconds: 140),
+      releaseDuration: const Duration(milliseconds: 220),
+      child: GestureDetector(
+        onTap: _toggle,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return _CyberGlitchEffect(
+              progress: _controller.value,
+              visibleChild: child!,
+            );
+          },
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: AnimatedBuilder(
+              // Имя юзера в шапке: как только профиль сохраняет короткое имя,
+              // заголовок сам меняется на него — без пересборки всего Home.
+              animation: ProfileService(),
+              builder: (context, _) {
+                // Своё имя вместо «Agysha»: пустое поле оставляем брендом,
+                // чтобы шапка не оставалась пустой у нового пользователя.
+                final name = ProfileService().displayName;
+                final title = name.isNotEmpty ? name : 'Agysha';
+                // Смена имени — плавная: кросс-фейд со лёгким «проявлением»,
+                // а не мгновенная подмена текста. Заметно медленнее обычного —
+                // читается как мягкое перетекание.
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 520),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.94, end: 1).animate(anim),
+                      child: child,
+                    ),
                   ),
-                ),
-                child: _TitleWithDot(
-                  key: ValueKey(title),
-                  text: title,
-                  style: style,
-                  onDotTap: widget.onOnlineTap ?? () {},
-                ),
-              );
-            },
+                  child: _TitleWithDot(
+                    key: ValueKey(title),
+                    text: title,
+                    style: style,
+                    onDotTap: widget.onOnlineTap ?? () {},
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -260,11 +266,6 @@ class _ScanlineGlitchPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (glitch < 0.05 || size.height <= 0) return;
-    _linePaint.color = const Color(0xFF00E5FF).withValues(alpha: 0.35 * glitch);
-    const step = 4.0;
-    for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), _linePaint);
-    }
     final sweepY = (phase * size.height).clamp(0.0, size.height);
     _linePaint.color = const Color(0xFFFF0055).withValues(alpha: 0.70 * glitch);
     _linePaint.strokeWidth = 1.8;

@@ -1635,19 +1635,18 @@ class AgyshaAppState extends State<AgyshaApp>
                 // додумывает их как `secondary` и `surface`, и карточки
                 // получились бы одного цвета с фоном.
                 if (_themeKey == 'metel') {
-                  // Палитра совпадает с оверлеем «Метели»: мята → лазурь →
-                  // лаванда, как ленты северного сияния. Акценты чуть ярче,
-                  // чем прежние, чтобы тема не читалась бледной серой стеной.
+                  // Палитра совпадает с оверлеем «Метели»: морозный бирюзовый (cyan-teal) →
+                  // кристальная лазурь → аврора-фиолет, как ленты северного сияния.
                   return const ColorScheme.light(
-                    primary: Color(0xFF0E9B82),
+                    primary: Color(0xFF0D9488),
                     onPrimary: Color(0xFFFFFFFF),
                     primaryContainer: Color(0xFFB7ECDF),
                     onPrimaryContainer: Color(0xFF00201A),
-                    secondary: Color(0xFF3E86C8),
+                    secondary: Color(0xFF0284C7),
                     onSecondary: Color(0xFFFFFFFF),
                     secondaryContainer: Color(0xFFCFE6FA),
                     onSecondaryContainer: Color(0xFF001E33),
-                    tertiary: Color(0xFF6B5BC4),
+                    tertiary: Color(0xFF6366F1),
                     onTertiary: Color(0xFFFFFFFF),
                     tertiaryContainer: Color(0xFFE6E0FB),
                     onTertiaryContainer: Color(0xFF150D47),
@@ -2057,16 +2056,21 @@ class _AlarmBootHostState extends State<_AlarmBootHost> {
     return FutureBuilder<Alarm?>(
       future: _alarmFuture,
       builder: (context, snap) {
-        if (!snap.hasData) {
+        if (snap.connectionState != ConnectionState.done) {
           // Данные ещё читаются: показываем нейтральный фон, без сплэша и
           // без мигания (первый кадр будильника должен быть спокойным).
           return const Scaffold(body: SizedBox.expand());
         }
         final alarm = snap.data;
         if (alarm == null) {
-          // Будильник уже удалён — просто уходим в обычный старт.
-          WidgetsBinding.instance.addPostFrameCallback((_) => _finish());
-          return const Scaffold(body: SizedBox.expand());
+          // Будильник не найден по id (или ad-hoc) — всё равно показываем дефолтный WakeTaskScreen,
+          // чтобы полноэкранный экран задачи ОБЯЗАТЕЛЬНО появился, и пользователь мог выключить будильник!
+          return WakeTaskScreen(
+            taskType: WakeUpTask.math,
+            isTest: false,
+            soundName: 'Default',
+            onDismissed: _finish,
+          );
         }
         return WakeTaskScreen(
           taskType: alarm.taskType,

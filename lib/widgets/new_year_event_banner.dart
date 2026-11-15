@@ -1554,8 +1554,8 @@ class _NyMarkButtonState extends State<_NyMarkButton> {
               border: Border.all(
                 color: widget.marked
                     ? BrandColors.red.withValues(alpha: dark ? 0.65 : 0.50)
-                    : Colors.white.withValues(alpha: dark ? 0.55 : 0.45),
-                width: 1.2,
+                    : Colors.white.withValues(alpha: dark ? 0.28 : 0.22),
+                width: 0.9,
               ),
               boxShadow: [
                 BoxShadow(

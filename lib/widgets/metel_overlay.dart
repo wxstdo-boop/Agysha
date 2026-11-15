@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 
 import '../utils/motion_prefs.dart';
@@ -35,7 +34,6 @@ class _MetelAuroraState extends State<MetelAurora>
   late final AnimationController _ctrl;
   late final List<_Band> _bands;
   late final List<_Flake> _flakes;
-  final ValueNotifier<double> _phase = ValueNotifier<double>(0);
   final _ShaderCache _cache = _ShaderCache();
 
   @override
@@ -112,19 +110,13 @@ class _MetelAuroraState extends State<MetelAurora>
       AnimationController(
         vsync: this,
         duration: const Duration(seconds: 12),
-      )..addListener(_syncPhase),
+      ),
     );
-  }
-
-  void _syncPhase() {
-    final phase = (_ctrl.value * 96).roundToDouble() / 96;
-    if (_phase.value != phase) _phase.value = phase;
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
-    _phase.dispose();
     _cache.dispose();
     super.dispose();
   }
@@ -177,14 +169,13 @@ class _MetelAuroraState extends State<MetelAurora>
         Positioned.fill(
           child: IgnorePointer(
             child: RepaintBoundary(
-              // Оставляем исходную фазовую сетку 1/96. Она уведомляет
-              // painter только при смене видимого кадра, без перестроения
-              // AnimatedBuilder на каждом display-vsync.
+              // Непрерывный контроллер без дискретного квантования: 120 FPS
+              // плавное скольжение снежинок и перетекание лент сияния.
               child: CustomPaint(
                 painter: _AuroraPainter(
                   cache: _cache,
                   flakes: _flakes,
-                  phase: _phase,
+                  phase: _ctrl,
                 ),
               ),
             ),
@@ -326,7 +317,11 @@ class _ShaderCache {
 class _AuroraPainter extends CustomPainter {
   final _ShaderCache cache;
   final List<_Flake> flakes;
-  final ValueListenable<double> phase;
+  final Animation<double> phase;
+
+  static final Paint _bandPaint = Paint()..isAntiAlias = true;
+  static final Paint _corePaint = Paint()..isAntiAlias = true;
+  static final Paint _haloPaint = Paint()..isAntiAlias = true;
 
   _AuroraPainter({
     required this.cache,
@@ -340,7 +335,7 @@ class _AuroraPainter extends CustomPainter {
     final bands = cache.bands;
     if (bands == null || size.isEmpty) return;
     final shaders = cache.forSize(size, bands);
-    final paint = Paint()..isAntiAlias = true;
+    final paint = _bandPaint;
     final animationPhase = t * pi * 2;
     final w = size.width;
     final h = size.height;
@@ -405,8 +400,8 @@ class _AuroraPainter extends CustomPainter {
     //
     // Два круга на снежинку: ядро поплотнее и широкий ореол-«пушок» — так
     // точка читается снежинкой, а не пикселем, и стоит ровно два drawCircle.
-    final core = Paint()..isAntiAlias = true;
-    final halo = Paint()..isAntiAlias = true;
+    final core = _corePaint;
+    final halo = _haloPaint;
     for (final f in flakes) {
       final fall = (f.dy + t * f.speed) % 1.0;
       final gust = sin(animationPhase * 0.5 + f.seed) * 0.014;
