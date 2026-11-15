@@ -253,13 +253,17 @@ class ProfileService extends ChangeNotifier {
         // читаем как подборку из одного трека: иначе у тех, кто уже выбрал
         // музыку, она бы «потерялась» после обновления.
         final rawTracks = (map['tracks'] as List?) ?? const [];
-        _tracks
-          ..clear()
-          ..addAll(
-            rawTracks.map(
-              (e) => MusicTrack.fromJson(Map<String, dynamic>.from(e as Map)),
-            ),
-          );
+        _tracks.clear();
+        final seenFp = <String>{};
+        final seenPath = <String>{};
+        for (final item in rawTracks) {
+          final t = MusicTrack.fromJson(Map<String, dynamic>.from(item as Map));
+          if (t.fingerprint.isNotEmpty && seenFp.contains(t.fingerprint)) continue;
+          if (t.path.isNotEmpty && seenPath.contains(t.path)) continue;
+          if (t.fingerprint.isNotEmpty) seenFp.add(t.fingerprint);
+          if (t.path.isNotEmpty) seenPath.add(t.path);
+          _tracks.add(t);
+        }
         if (_tracks.isEmpty) {
           final legacyPath = map['musicPath']?.toString();
           if (legacyPath != null && legacyPath.isNotEmpty) {

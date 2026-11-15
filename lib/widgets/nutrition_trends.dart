@@ -102,42 +102,61 @@ class NutritionTrends extends StatelessWidget {
             SizedBox(
               height: 104,
               width: double.infinity,
-              child: filled.isEmpty
-                  ? Center(
-                      child: Text(
-                        Translations.t('noMeals', context),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 380),
+                switchInCurve: Curves.easeInOutCubic,
+                switchOutCurve: Curves.easeInOutCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: child,
+                ),
+                child: filled.isEmpty
+                    ? Center(
+                        key: const ValueKey('no_meals_chart_text'),
+                        child: Text(
+                          Translations.t('noMeals', context),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    : KeyedSubtree(
+                        key: const ValueKey('has_meals_chart'),
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0, end: 1),
+                          duration: const Duration(milliseconds: 700),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, reveal, _) => CustomPaint(
+                            painter: _TrendsPainter(
+                              days: days,
+                              norm: norm,
+                              todayCalories: todayCalories,
+                              bar: cs.primary,
+                              over: cs.tertiary,
+                              empty: cs.surfaceContainerHighest,
+                              line: cs.outline,
+                              today: today,
+                              reveal: reveal,
+                            ),
+                          ),
                         ),
                       ),
-                    )
-                  : TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0, end: 1),
-                      duration: const Duration(milliseconds: 700),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, reveal, _) => CustomPaint(
-                        painter: _TrendsPainter(
-                          days: days,
-                          norm: norm,
-                          todayCalories: todayCalories,
-                          bar: cs.primary,
-                          over: cs.tertiary,
-                          empty: cs.surfaceContainerHighest,
-                          line: cs.outline,
-                          today: today,
-                          reveal: reveal,
-                        ),
-                      ),
-                    ),
+              ),
             ),
-            if (filled.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              // Подписи стоят по тем же слотам, что и столбики: каждая —
-              // Expanded в общей строке, поэтому центры совпадают. Пишем не
-              // под каждым днём (20 чисел сливаются), а раз в пять дней и
-              // всегда под сегодняшним.
-              _DayLabels(days: days),
-            ],
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 380),
+              firstCurve: Curves.easeInOutCubic,
+              secondCurve: Curves.easeInOutCubic,
+              sizeCurve: Curves.easeInOutCubic,
+              crossFadeState: filled.isNotEmpty
+                  ? CrossFadeState.showFirst
+                  : CrossFadeState.showSecond,
+              firstChild: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: _DayLabels(days: days),
+              ),
+              secondChild: const SizedBox(width: double.infinity, height: 0),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [

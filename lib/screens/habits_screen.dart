@@ -1535,75 +1535,81 @@ class _HabitsScreenState extends State<HabitsScreen>
                         // как раскрывалась.
                         // 760 мс (было 480): вход и выход — одна мягкая волна
                         // (easeInOutCubic), без рывка в конце.
-                        // Раскрытие/закрытие заметки: глубокая, роскошная плавная анимация высоты
-                        // (AnimatedSize) за 760 мс по Curves.easeInOutCubic,
+                        // Раскрытие/закрытие заметки: глубокая, роскошная плавная анимация
+                        // (AnimatedCrossFade) за 760 мс по Curves.easeInOutCubic:
+                        // при закрытии карточка плавно растворяется и сжимается,
                         // в полной гармонии с плавным 760 мс поворотом стрелочки.
                         if (habit.notes.isNotEmpty ||
                             (habit.type == 'good' && habit.status.isNotEmpty))
-                          AnimatedSize(
+                          AnimatedCrossFade(
                             duration: const Duration(milliseconds: 760),
-                            curve: Curves.easeInOutCubic,
-                            alignment: Alignment.topCenter,
-                            clipBehavior: Clip.hardEdge,
-                            child: (_expandedNotes[habit.id] ?? false)
-                                ? Padding(
-                                    padding: const EdgeInsets.only(top: 6, bottom: 4),
-                                    child: Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                            firstCurve: Curves.easeInOutCubic,
+                            secondCurve: Curves.easeInOutCubic,
+                            sizeCurve: Curves.easeInOutCubic,
+                            crossFadeState: (_expandedNotes[habit.id] ?? false)
+                                ? CrossFadeState.showFirst
+                                : CrossFadeState.showSecond,
+                            firstChild: Padding(
+                              padding: const EdgeInsets.only(top: 6, bottom: 4),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (habit.type == 'good' &&
+                                        habit.status.isNotEmpty) ...[
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          if (habit.type == 'good' &&
-                                              habit.status.isNotEmpty) ...[
-                                            Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Icon(
-                                                  Icons.lightbulb,
-                                                  size: 16,
-                                                  color: theme.colorScheme.primary,
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Expanded(
-                                                  child: Text(
-                                                    habit.status,
-                                                    style: theme.textTheme.bodyMedium
-                                                        ?.copyWith(
-                                                          color: theme
-                                                              .colorScheme
-                                                              .onSurface,
-                                                          height: 1.5,
-                                                        ),
-                                                    softWrap: true,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            if (habit.notes.isNotEmpty)
-                                              const SizedBox(height: 8),
-                                          ],
-                                          if (habit.notes.isNotEmpty)
-                                            Text(
-                                              habit.notes,
+                                          Icon(
+                                            Icons.lightbulb,
+                                            size: 16,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              habit.status,
                                               style: theme.textTheme.bodyMedium
                                                   ?.copyWith(
-                                                    color:
-                                                        theme.colorScheme.onSurface,
+                                                    color: theme
+                                                        .colorScheme
+                                                        .onSurface,
                                                     height: 1.5,
                                                   ),
                                               softWrap: true,
                                             ),
+                                          ),
                                         ],
                                       ),
-                                    ),
-                                  )
-                                : const SizedBox.shrink(),
+                                      if (habit.notes.isNotEmpty)
+                                        const SizedBox(height: 8),
+                                    ],
+                                    if (habit.notes.isNotEmpty)
+                                      Text(
+                                        habit.notes,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color:
+                                                  theme.colorScheme.onSurface,
+                                              height: 1.5,
+                                            ),
+                                        softWrap: true,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            secondChild: const SizedBox(
+                              width: double.infinity,
+                              height: 0,
+                            ),
                           ),
                         _daysRow(habit, theme, context),
                       ],

@@ -563,23 +563,20 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                   ],
                 ),
                 child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 280),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                layoutBuilder: (currentChild, previousChildren) => Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    ...previousChildren,
-                    ?currentChild,
-                  ],
-                ),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 0.96, end: 1.0).animate(animation),
+                  duration: const Duration(milliseconds: 320),
+                  switchInCurve: Curves.easeInOutCubic,
+                  switchOutCurve: Curves.easeInOutCubic,
+                  layoutBuilder: (currentChild, previousChildren) => Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      ...previousChildren.map((w) => Positioned.fill(child: w)),
+                      ?currentChild,
+                    ],
+                  ),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
                     child: child,
                   ),
-                ),
                 child: Row(
                 key: ValueKey('pill_content_${hasActive}_$text'),
                 mainAxisSize: MainAxisSize.min,

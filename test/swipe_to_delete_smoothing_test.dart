@@ -94,21 +94,16 @@ void main() {
       tester.getCenter(find.text('card')),
     );
     await tester.pump();
-    // До 20 % пути плашки ещё не видно (порог осознанного жеста).
+    // Плашка видна сразу по ходу жеста и наливается дальше
     await gesture.moveBy(const Offset(-40, 0));
     await tester.pump();
-    expect(redAlpha(tester), lessThan(0.01), reason: 'ранний сдвиг плашку не жжёт');
-
-    // Дальше красный наливается, и к полному свайпу он плотнее.
-    await gesture.moveBy(const Offset(-120, 0));
-    await tester.pump();
     final early = redAlpha(tester);
+    expect(early, greaterThan(0.01), reason: 'плашка идёт сразу за карточкой');
 
     await gesture.moveBy(const Offset(-140, 0));
     await tester.pump();
     final later = redAlpha(tester);
 
-    expect(early, greaterThan(0.01), reason: 'плашка уже проявилась');
     expect(
       later,
       greaterThan(early),

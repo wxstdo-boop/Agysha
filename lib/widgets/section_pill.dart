@@ -286,10 +286,8 @@ class _SectionPillState extends State<SectionPill>
     _edgeSettle =
         AnimationController(
           vsync: this,
-          // 480 мс: возврат растяжки на краях читается как «отпустило и
-          // медленно вернулось», а не «щёлкнуло обратно». Кривая ниже —
-          // симметричная, с нулевой скоростью на обоих концах.
-          duration: const Duration(milliseconds: 480),
+          // 320 мс: гармоничный возврат растяжки на краях, синхронный с доводкой разделов
+          duration: const Duration(milliseconds: 320),
         )..addStatusListener((status) {
           // Сбрасываем захваченную тягу ТОЛЬКО когда «расслабление» реально
           // отыграно (completed) или отменено (dismissed).
@@ -549,8 +547,8 @@ class _SectionPillState extends State<SectionPill>
                         rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
                       } else if (_landingCtrl.isAnimating) {
                         final t = Curves.easeOutCubic.transform(_landingCtrl.value);
-                        final base = page.isFinite ? page : current.toDouble();
-                        rawPage = _landingFrom + (base - _landingFrom) * t;
+                        final target = current.toDouble();
+                        rawPage = _landingFrom + (target - _landingFrom) * t;
                       } else {
                         rawPage = page.isFinite ? page : current.toDouble();
                       }
