@@ -813,25 +813,32 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                             'Тест будильника',
                                           ),
                                           preferredAbove: true,
-                                          child: IconButton(
-                                            onPressed: () => _testAlarm(alarm),
-                                            icon: const Icon(
-                                              Icons.notifications_active_outlined,
-                                              size: 18,
-                                            ),
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(
-                                              minWidth: 32,
-                                              minHeight: 32,
-                                            ),
-                                            style: IconButton.styleFrom(
-                                              tapTargetSize: MaterialTapTargetSize
-                                                  .shrinkWrap,
+                                          child: PressScale(
+                                            pressedScale: 0.88,
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: theme.colorScheme.primary.withValues(alpha: 0.10),
+                                              ),
+                                              child: IconButton(
+                                                onPressed: () => _testAlarm(alarm),
+                                                icon: Icon(
+                                                  Icons.notifications_active_rounded,
+                                                  size: 17,
+                                                  color: theme.colorScheme.primary,
+                                                ),
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(
+                                                  minWidth: 32,
+                                                  minHeight: 32,
+                                                ),
+                                                style: IconButton.styleFrom(
+                                                  tapTargetSize: MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),

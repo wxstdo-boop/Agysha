@@ -498,6 +498,21 @@ class _ProfileScreenState extends State<ProfileScreen>
         'Слышишь, как бьёт этот саб-бас в грудь?',
         'Тебе по душе этот ночной вайб?',
         'Готов втопить в пол до самого упора?',
+        'Заценил эту мемфисскую классику?',
+        'Слышишь эти перегруженные верха?',
+        'Качает этот сырой подземный грув?',
+        'Готов покорить ночную кольцевую?',
+        'Чувствуешь, как затягивает этот ритм?',
+        'Знаешь этот фирменный 808 слайд?',
+        'Слышишь, как звенит ночной металл?',
+        'Поймал эту волну чистого разгона?',
+        'Ощущаешь этот сумасшедший напор?',
+        'Готов оставить всех далеко позади?',
+        'Слышишь этот низкий ревущий дисторшн?',
+        'Нравится, как разносит этот бит?',
+        'Чувствуешь эту скорость в темноте?',
+        'Готов к новому кругу без тормозов?',
+        'Слышишь это холодное эхо ночи?',
       ];
 
       String title = '';
@@ -505,25 +520,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         if (!existingTitles.contains(q.toLowerCase().trim())) {
           title = q;
           break;
-        }
-      }
-      if (title.isEmpty) {
-        final prefixes = [
-          'В темноте: ',
-          'На пределе: ',
-          'После полуночи: ',
-          'В тумане: ',
-          'На мокром асфальте: ',
-        ];
-        for (final prefix in prefixes) {
-          for (final q in atmosphericQuestions) {
-            final candidateTitle = '$prefix$q';
-            if (!existingTitles.contains(candidateTitle.toLowerCase().trim())) {
-              title = candidateTitle;
-              break;
-            }
-          }
-          if (title.isNotEmpty) break;
         }
       }
       if (title.isEmpty) {
@@ -538,13 +534,30 @@ class _ProfileScreenState extends State<ProfileScreen>
       String fileExt = 'wav';
       String trackId = 'phonk_net_${DateTime.now().millisecondsSinceEpoch}';
 
-      // 1. Реальный поиск и загрузка фонка из интернета
+      // 1. Реальный разнообразный поиск и загрузка свежего фонка из интернета
       try {
+        final queries = [
+          'phonk+AND+mediatype:audio',
+          'drift+phonk+AND+mediatype:audio',
+          'brazilian+phonk+AND+mediatype:audio',
+          'aggressive+phonk+AND+mediatype:audio',
+          'hard+phonk+AND+mediatype:audio',
+          'memphis+phonk+AND+mediatype:audio',
+          'phonk+bass+AND+mediatype:audio',
+          'cyber+phonk+AND+mediatype:audio',
+        ];
+        final sorts = [
+          'downloads+desc',
+          'publicdate+desc',
+          'week+desc',
+        ];
+        final q = queries[DateTime.now().millisecond % queries.length];
+        final s = sorts[DateTime.now().second % sorts.length];
         final searchUri = Uri.parse(
-          'https://archive.org/advancedsearch.php?q=phonk+AND+mediatype:audio&fl[]=identifier,title&sort[]=downloads+desc&rows=25&output=json',
+          'https://archive.org/advancedsearch.php?q=$q&fl[]=identifier,title&sort[]=$s&rows=50&output=json',
         );
         final searchRes =
-            await http.get(searchUri).timeout(const Duration(seconds: 4));
+            await http.get(searchUri).timeout(const Duration(seconds: 6));
         if (searchRes.statusCode == 200) {
           final data = json.decode(searchRes.body) as Map<String, dynamic>;
           final docs = (data['response']?['docs'] as List<dynamic>?) ?? [];
@@ -555,11 +568,11 @@ class _ProfileScreenState extends State<ProfileScreen>
           }).toList();
           freshDocs.shuffle();
 
-          for (final doc in freshDocs.take(4)) {
+          for (final doc in freshDocs.take(5)) {
             final id = doc['identifier'].toString();
             final metaUri = Uri.parse('https://archive.org/metadata/$id/files');
             final metaRes =
-                await http.get(metaUri).timeout(const Duration(seconds: 4));
+                await http.get(metaUri).timeout(const Duration(seconds: 5));
             if (metaRes.statusCode == 200) {
               final metaData = json.decode(metaRes.body) as Map<String, dynamic>;
               final files = (metaData['result'] as List<dynamic>?) ??
@@ -1757,20 +1770,16 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       child: SizedBox(
         height: 220,
-        child: RepaintBoundary(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            child: Row(
-              children: [
-                for (var i = 0; i < gifts.length; i++) ...[
-                  if (i > 0) const SizedBox(width: Spacing.sm),
-                  GiftCard3D(
-                    gift: gifts[i],
-                    onFavoriteToggled: () => setState(() {}),
-                  ),
-                ],
-              ],
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          itemCount: gifts.length,
+          separatorBuilder: (_, _) => const SizedBox(width: Spacing.sm),
+          itemBuilder: (context, i) => RepaintBoundary(
+            key: ValueKey('gift_card_${gifts[i].id}'),
+            child: GiftCard3D(
+              gift: gifts[i],
+              onFavoriteToggled: () => setState(() {}),
             ),
           ),
         ),

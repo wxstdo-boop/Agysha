@@ -43,14 +43,14 @@ class PressScale extends StatefulWidget {
   const PressScale({
     super.key,
     required this.child,
-    this.pressedScale = 0.985,
-    this.duration = const Duration(milliseconds: 280),
+    this.pressedScale = 0.975,
+    this.duration = const Duration(milliseconds: 260),
     this.releaseDuration,
     this.curve = Curves.easeOutCubic,
     this.enabled = true,
     this.pressedOpacity = 1.0,
     this.enableTilt = true,
-    this.maxTiltAngle = 0.045,
+    this.maxTiltAngle = 0.15,
   });
 
   @override
@@ -112,10 +112,6 @@ class _PressScaleState extends State<PressScale>
       if (_ctrl.value > 0) _ctrl.reverse();
       return;
     }
-    if (e.delta.dx.abs() > e.delta.dy.abs() + 0.5 && e.delta.dx.abs() > 1.5) {
-      _ctrl.reverse();
-      return;
-    }
     _updateTilt(e.localPosition);
     if (mounted) setState(() {});
   }
@@ -162,7 +158,7 @@ class _PressScaleState extends State<PressScale>
 
           final matrix = Matrix4.identity();
           if (tiltActive) {
-            matrix.setEntry(3, 2, 0.0008);
+            matrix.setEntry(3, 2, 0.0014);
             matrix.rotateX(tiltX);
             matrix.rotateY(tiltY);
           }

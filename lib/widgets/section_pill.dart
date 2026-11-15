@@ -545,7 +545,13 @@ class _SectionPillState extends State<SectionPill>
                         final target = current.toDouble();
                         rawPage = _landingFrom + (target - _landingFrom) * t;
                       } else {
-                        rawPage = page.isFinite ? page : current.toDouble();
+                        // После завершения доводки остаёмся строго на целевом разделе current,
+                        // пока карусель не сдвинута реальным пользовательским жестом
+                        if (page.isFinite && (page - current).abs() > 0.04) {
+                          rawPage = page;
+                        } else {
+                          rawPage = current.toDouble();
+                        }
                       }
                       return _buildStoneRow(
                         context: context,
@@ -649,9 +655,16 @@ class _SectionPillState extends State<SectionPill>
         // заметно вытягивается и округляется в сторону следующего раздела.
         // Коэффициент волны 0.72 (был 0.55 — растяжение «проскальзывало»)
         // держит эффект отчётливым, а `math.min(0.98, …)` не даёт раздуться.
-        // Визуальная растяжка: сочная, широкая и непрерывная во всем диапазоне
-        final visualStretch = math.min(1.0, edgeStretch * 1.55 + 0.95 * wave);
-        final capRadius = 22.0 + 6.0 * visualStretch;
+        // Визуальная растяжка: сочная, широкая и направленная в обе стороны
+        final visualStretch = math.min(1.0, edgeStretch * 1.60 + 0.95 * wave);
+        final capRadius = 22.0 + 8.0 * visualStretch;
+
+        // Направление растяжки в обе стороны: при движении вправо таблетка вытягивается
+        // вправо к цели, при движении влево — вытягивается влево к цели
+        final pullDir = edgeStretch > 0.005
+            ? (stretch > 0 ? 1.0 : -1.0)
+            : ((p - selectedIndex).abs() > 0.01 ? (p > selectedIndex ? 1.0 : -1.0) : 0.0);
+        final anchorX = -pullDir * 0.55 * visualStretch;
 
         return Stack(
           clipBehavior: Clip.none,
@@ -664,8 +677,8 @@ class _SectionPillState extends State<SectionPill>
             Align(
               alignment: Alignment(indicatorAlignment, 0),
               child: Transform.scale(
-                alignment: Alignment.center,
-                scaleX: 1.0 + 0.58 * visualStretch,
+                alignment: Alignment(anchorX, 0),
+                scaleX: 1.0 + 0.55 * visualStretch,
                 scaleY: 1.0 - 0.06 * visualStretch,
                 // Layout-ширина — КОНСТАНТА (слот/карантин, не зависит от
                 // breath). Дышащий масштаб идёт через Transform — иначе

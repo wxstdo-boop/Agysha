@@ -363,75 +363,109 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
                       ),
                       // Плавный вход: карточка мягко всплывает (fade + подъём)
                       // при появлении экрана — раньше появлялась резко.
-                      //
-                      // ClipRRect ОБЯЗАТЕЛЕН: decoration скругляет только фон
-                      // карточки, но не содержимое. Без него ripple от кнопок и
-                      // слои кроссфейда «задача → решено» доезжали до прямых
-                      // углов, и окно на весь экран выглядело квадратным.
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: 1),
-                          duration: const Duration(milliseconds: 420),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, v, child) => Opacity(
-                            opacity: v,
-                            child: Transform.translate(
-                              offset: Offset(0, 26 * (1 - v)),
-                              child: Transform.scale(
-                                scale: 0.96 + 0.04 * v,
-                                child: child,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.isTest)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary.withValues(
+                                    alpha: isDark ? 0.22 : 0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: theme.colorScheme.primary.withValues(
+                                      alpha: 0.38,
+                                    ),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.notifications_active_rounded,
+                                      size: 15,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      Translations.t(
+                                        'testAlarm',
+                                        context,
+                                        'Тестовый будильник',
+                                      ),
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12.5,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0, end: 1),
+                              duration: const Duration(milliseconds: 420),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, v, child) => Opacity(
+                                opacity: v,
+                                child: Transform.translate(
+                                  offset: Offset(0, 26 * (1 - v)),
+                                  child: Transform.scale(
+                                    scale: 0.96 + 0.04 * v,
+                                    child: child,
+                                  ),
+                                ),
+                              ),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: _challengeH ?? 0,
+                                ),
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 380),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                        opacity: animation,
+                                        child: child,
+                                      ),
+                                  child: _solved
+                                      ? KeyedSubtree(
+                                          key: const ValueKey('solved'),
+                                          child: _buildSolved(context, theme),
+                                        )
+                                      : KeyedSubtree(
+                                          key: _slotKey,
+                                          child: Builder(
+                                            builder: (context) {
+                                              WidgetsBinding.instance
+                                                  .addPostFrameCallback(
+                                                    (_) => _measureChallenge(),
+                                                  );
+                                              return _buildChallenge(
+                                                context,
+                                                theme,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                ),
                               ),
                             ),
                           ),
-                          // Габарит карточки на смене «задача → решено» НЕ
-                          // меняется: под слоем задачи зарезервирована его же
-                          // высота (`_challengeH`), поэтому перелистывание — чистый
-                          // кроссфейд БЕЗ движения. Любая анимация высоты — это
-                          // движение, а движение в момент, когда следом за
-                          // клавиатурой уезжает ещё и body, глаз и читал как
-                          // «дёргано сползает вверх». AnimatedSize до этого
-                          // только маскировал рывок: высота в момент перехода
-                          // считалась по САМОМУ высокому из двух слоёв
-                          // (Stack-раскладка AnimatedSwitcher), и карточка
-                          // сначала проседала, потом доезжала до новой.
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minHeight: _challengeH ?? 0,
-                            ),
-                            child: AnimatedSwitcher(
-                              // Смена «задача → решено» тоже плавная.
-                              duration: const Duration(milliseconds: 380),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              transitionBuilder: (child, animation) =>
-                                  FadeTransition(
-                                    opacity: animation,
-                                    child: child,
-                                  ),
-                              child: _solved
-                                  ? KeyedSubtree(
-                                      key: const ValueKey('solved'),
-                                      child: _buildSolved(context, theme),
-                                    )
-                                  : KeyedSubtree(
-                                      key: _slotKey,
-                                      child: Builder(
-                                        builder: (context) {
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback(
-                                                (_) => _measureChallenge(),
-                                              );
-                                          return _buildChallenge(
-                                            context,
-                                            theme,
-                                          );
-                                        },
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
@@ -443,29 +477,40 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
         bottomNavigationBar: widget.isTest
             ? SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                   child: SizedBox(
                     width: double.infinity,
                     child: PressScale(
-                      // Отдача-«вдавливание», как у остальных кнопок окна.
                       pressedScale: 0.97,
                       duration: const Duration(milliseconds: 160),
-                      releaseDuration: const Duration(milliseconds: 220),
+                      releaseDuration: const Duration(milliseconds: 240),
                       child: OutlinedButton.icon(
                         onPressed: _finish,
-                        icon: const Icon(Icons.close, size: 18),
-                        label: Text(Translations.t('wtDismiss', context)),
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        label: Text(
+                          Translations.t('wtDismiss', context),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
                         style: OutlinedButton.styleFrom(
+                          backgroundColor: isDark
+                              ? const Color(0xFF2E1920)
+                              : const Color(0xFFFFECEF),
                           foregroundColor: theme.colorScheme.error,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
                           side: BorderSide(
                             color: theme.colorScheme.error.withValues(
-                              alpha: 0.4,
+                              alpha: isDark ? 0.35 : 0.45,
                             ),
+                            width: 1.2,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
                       ),
                     ),
@@ -1382,13 +1427,13 @@ class _TaskTypeBadgeState extends State<_TaskTypeBadge>
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color.lerp(widget.a, Colors.black, 0.28)!,
-                      Color.lerp(widget.b, Colors.black, 0.38)!,
+                      widget.a,
+                      widget.b,
                     ],
                   ),
                   // Верхний зеркальный блик + светлая нижняя грань.
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.34),
+                    color: Colors.white.withValues(alpha: 0.40),
                     width: 1,
                   ),
                 ),
@@ -1512,21 +1557,17 @@ class _SuccessBadgeState extends State<_SuccessBadge>
                     gradient: RadialGradient(
                       center: const Alignment(-0.35, -0.4),
                       colors: [
-                        Color.lerp(widget.accent, Colors.black, 0.10)!,
-                        Color.lerp(widget.accent, Colors.black, 0.30)!,
+                        widget.accent,
+                        Color.lerp(widget.accent, Colors.white, 0.15)!,
                       ],
                     ),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.52),
+                      color: Colors.white.withValues(alpha: 0.65),
                       width: 1.4,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Color.lerp(
-                          widget.accent,
-                          Colors.black,
-                          0.24,
-                        )!.withValues(alpha: 0.46),
+                        color: widget.accent.withValues(alpha: 0.45),
                         blurRadius: 26,
                         spreadRadius: -2,
                         offset: const Offset(0, 10),
@@ -1598,55 +1639,47 @@ class _CheckButtonState extends State<_CheckButton> {
           // ложной обратной связи.
           onTap: on ? widget.onPressed : null,
           child: AnimatedScale(
-            // Зажатие ещё МЕДЛЕННЕЕ: 380 мс — кнопка заметно тонет под
-            // пальцем и так же мягко возвращается.
-            scale: (_pressed && on) ? 0.94 : 1.0,
-            duration: const Duration(milliseconds: 380),
-            curve: Curves.easeInOutCubic,
+            scale: (_pressed && on) ? 0.95 : 1.0,
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOutCubic,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 520),
-              curve: Curves.easeInOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 13),
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                // Чернее: обе ступени градиента утоплены к тёмному, кнопка
-                // стала глубокой; белая кромка ярче — читается на тёмном.
+                borderRadius: BorderRadius.circular(18),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: on
                       ? [
-                          Color.lerp(cs.primary, Colors.black, 0.30)!,
-                          Color.lerp(cs.tertiary, Colors.black, 0.44)!,
+                          cs.primary,
+                          Color.lerp(cs.primary, cs.tertiary, 0.65)!,
                         ]
                       : [cs.surfaceContainerHighest, cs.surfaceContainerHigh],
                 ),
                 border: Border.all(
                   color: on
-                      ? Colors.white.withValues(alpha: 0.42)
+                      ? Colors.white.withValues(alpha: 0.45)
                       : cs.outlineVariant.withValues(alpha: 0.5),
-                  width: 1,
+                  width: 1.2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Color.lerp(
-                      cs.primary,
-                      Colors.black,
-                      0.28,
-                    )!.withValues(alpha: on ? 0.38 : 0.0),
-                    blurRadius: 16,
-                    spreadRadius: -2,
+                    color: cs.primary.withValues(alpha: on ? 0.38 : 0.0),
+                    blurRadius: 18,
+                    spreadRadius: -1,
                     offset: const Offset(0, 6),
                   ),
                 ],
               ),
               child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 420),
-                curve: Curves.easeInOutCubic,
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
                 style: TextStyle(
-                  fontSize: 15.5,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
+                  letterSpacing: 0.3,
                   color: on
                       ? cs.onPrimary
                       : cs.onSurfaceVariant.withValues(alpha: 0.7),
