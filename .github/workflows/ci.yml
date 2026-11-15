@@ -48,15 +48,20 @@ jobs:
           VER="$ACTIONLINT_VERSION"
           BASE="https://github.com/rhysd/actionlint/releases/download/v${VER}"
           FILE="actionlint_${VER}_linux_amd64.tar.gz"
+          DEST="$RUNNER_TEMP/actionlint-bin"
+          mkdir -p "$DEST"
           # Суммы у actionlint лежат ОДНИМ файлом на релиз
           # (actionlint_<ver>_checksums.txt), а не рядом с каждым tarball как
           # <file>.sha256 — последнего на GitHub 404. Без сверки CDN мог бы
           # отдать любой ответ под видом валидера.
-          curl -sSLf -o "/tmp/$FILE" "$BASE/$FILE"
-          curl -sSLf -o /tmp/checksums.txt "$BASE/actionlint_${VER}_checksums.txt"
-          (cd /tmp && grep "  ${FILE}\$" checksums.txt | sha256sum -c -)
-          tar -xzf "/tmp/$FILE" -C /tmp actionlint
-          echo "/tmp/actionlint" >> "$GITHUB_PATH"
+          curl -sSLf -o "$DEST/$FILE" "$BASE/$FILE"
+          curl -sSLf -o "$DEST/checksums.txt" "$BASE/actionlint_${VER}_checksums.txt"
+          (cd "$DEST" && grep "  ${FILE}\$" checksums.txt | sha256sum -c -)
+          tar -xzf "$DEST/$FILE" -C "$DEST" actionlint
+          # В $GITHUB_PATH кладутся КАТАЛОГИ. Первая версия шага добавляла туда
+          # путь к самому бинарю (/tmp/actionlint), и шаг падал с exit 127
+          # «command not found» — то есть линтер вообще не запускался.
+          echo "$DEST" >> "$GITHUB_PATH"
 
       - name: Проверить workflow-файлы
         run: actionlint
