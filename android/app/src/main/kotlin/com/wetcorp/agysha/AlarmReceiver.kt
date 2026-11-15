@@ -314,7 +314,11 @@ class AlarmReceiver : BroadcastReceiver() {
 
         // Прямой запуск через AlarmManager setAlarmClock исключение (BAL bypass)
         try {
-            ctx.startActivity(i)
+            if (creatorOptions != null) {
+                ctx.startActivity(i, creatorOptions)
+            } else {
+                ctx.startActivity(i)
+            }
             logToFile(ctx, "ACTIVITY START OK id=$id via=direct")
         } catch (e2: Exception) {
             logToFile(
@@ -396,6 +400,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 Intent.FLAG_ACTIVITY_NO_ANIMATION
             putExtra("payload", payload)
             putExtra("alarm_launch", !isRealityCheck)
+            putExtra("alarm_fullscreen", useFullScreen)
         }
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_UPDATE_CURRENT
@@ -497,7 +502,7 @@ class AlarmReceiver : BroadcastReceiver() {
             channelsCleanedUp = true
             // agysha_alarm_ring НЕ трогаем — это канал самого сервиса
             // звонка, удалить его значит снять foreground-уведомление.
-            for (stale in listOf("agysha_alarm_v3", "agysha_alarm_v2", "agysha_alarm_v1")) {
+            for (stale in listOf("agysha_alarm_v4", "agysha_alarm_v3", "agysha_alarm_v2", "agysha_alarm_v1")) {
                 try {
                     if (nm.getNotificationChannel(stale) != null) nm.deleteNotificationChannel(stale)
                 } catch (_: Exception) {}
@@ -732,7 +737,7 @@ class AlarmReceiver : BroadcastReceiver() {
         private const val TAG = "AlarmReceiver"
 
         /** Канал будильников (громкий с вибрацией — гарантирует Heads-Up баннер). */
-        const val ALARM_CHANNEL = "agysha_alarm_v4"
+        const val ALARM_CHANNEL = "agysha_alarm_v5"
         /** Действие отключения будильника прямо из всплывающего уведомления */
         const val ACTION_DISMISS = "com.wetcorp.agysha.action.ALARM_DISMISS"
         /** Канал проверок реальности (системный звук уведомлений). */

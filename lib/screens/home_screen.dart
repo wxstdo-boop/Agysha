@@ -400,6 +400,9 @@ class _HomeScreenState extends State<HomeScreen>
   /// Когда карусель стоит ровно на разделе, интерполяция даёт ровно его
   /// высоту — то же значение, что пишет прокрутка самого раздела.
   void _applyRailPillOffset(double page) {
+    // Во время прямого драга таблетки не двигаем вертикальный офсет заголовка,
+    // чтобы исключить рывки и подергивания экранов под пальцем
+    if (sectionDragPage.value != null) return;
     final lastPage = _pagesCount > 0 ? _pagesCount - 1 : 0;
     final p = page.clamp(0.0, lastPage.toDouble());
     final from = p.floor();

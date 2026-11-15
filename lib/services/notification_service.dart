@@ -635,13 +635,14 @@ class NotificationService extends ChangeNotifier {
   }
 
   Future<bool> scheduleAlarm(Alarm alarm) async {
-    if (!_initialized || !_supported) {
-      // Раньше этот возврат был МОЛЧАЛИВЫМ: будильник оставался сохранённым,
-      // включённым в списке — и никогда не звенел. Теперь причина видна в
-      // журнале на телефоне.
+    if (!_initialized) {
+      try {
+        await init();
+      } catch (_) {}
+    }
+    if (!_supported) {
       await AlarmBlackBox.log(
-        'DART SKIP id=${alarm.id.hashCode} reason=not-ready '
-        'init=$_initialized supported=$_supported',
+        'DART SKIP id=${alarm.id.hashCode} reason=not-supported',
       );
       return false;
     }

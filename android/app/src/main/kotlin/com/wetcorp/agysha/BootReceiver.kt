@@ -79,18 +79,9 @@ class BootReceiver : BroadcastReceiver() {
                         set(Calendar.MILLISECOND, 0)
                     }
 
-                    // Пропущенный слот ищем ДО сдвига `next` в будущее.
-                    val missedAt =
-                        if (recoverMissed && days.isNotEmpty() && payload != "rc") {
-                            missedOccurrence(hour, minute, days, now)
-                        } else {
-                            null
-                        }
-
                     if (days.isEmpty()) {
                         // Одноразовый будильник: если его время уже прошло —
-                        // он либо уже сработал, либо «просрочен» (например,
-                        // телефон был выключен). Не воскрешаем.
+                        // он либо уже сработал, либо «просрочен». Не воскрешаем.
                         if (!next.after(now)) {
                             AlarmLog.write(
                                 ctx,
@@ -115,24 +106,6 @@ class BootReceiver : BroadcastReceiver() {
 
                     if (arm(am, ctx, code, buildIntent(ctx, code, title, body, soundName, vibrate, payload, hour, minute, repeatDays, customPath, null), next.timeInMillis, "BOOT")) {
                         scheduled++
-                    }
-
-                    missedAt?.let { was ->
-                        // Догон: звеним через минуту после включений, чтобы
-                        // система успела поднять статус-бар, и подписываем
-                        // уведомление как пропущенное.
-                        val ring = now.timeInMillis + MISSED_DELAY_MS
-                        val i = buildIntent(
-                            ctx, code, title, body, soundName, vibrate, payload,
-                            hour, minute, repeatDays, customPath,
-                            AlarmReceiver.ACTION_MISSED,
-                        )
-                        if (arm(am, ctx, code, i, ring, "BOOT-MISSED")) {
-                            AlarmLog.write(
-                                ctx,
-                                "BOOT MISS-RECOVER id=$code was=${AlarmLog.time(was)} ring=${AlarmLog.time(ring)}",
-                            )
-                        }
                     }
                 } catch (_: Exception) {}
             }

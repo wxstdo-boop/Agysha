@@ -241,6 +241,7 @@ class _SectionPillState extends State<SectionPill>
   // Последнее записанное положение камня (для снапшота волны на отпускании).
   double _dragSmooth = 0;
   double _dragGrabOffset = 0;
+  double _motionDir = 0.0;
 
   /// Последняя «принятая» X-координата пальца (px по дорожке). Дедзона:
   /// микросдвиги меньше [_dragDeadzone] игнорируются, поэтому дрожание руки
@@ -341,12 +342,17 @@ class _SectionPillState extends State<SectionPill>
     // Стартовая точка дедзоны — фактический палец (с учётом захвата).
     _dragFingerX = details.localPosition.dx + _dragGrabOffset;
     _dragNearest = _dragPage.round();
+    _motionDir = 0.0;
     sectionDragPage.value = _dragPage;
   }
 
   void _dragUpdate(DragUpdateDetails details, int count) {
     if (!_dragging) return;
     if (count < 2) return;
+    final deltaX = details.delta.dx;
+    if (deltaX.abs() > 0.4) {
+      _motionDir = deltaX > 0 ? 1.0 : -1.0;
+    }
     // ПОЗИЦИОННЫЙ скраббер, как выбор приоритета: палец задаёт ЦЕНТР
     // камня, а не долю «от края до края». Камень едет ровно под пальцем.
     //
@@ -390,6 +396,9 @@ class _SectionPillState extends State<SectionPill>
     // «Объём до конца»: тяга наливается весь ход пальца за край, поэтому
     // камень дышит на всю длину жеста. Нормированная доля (-0.9..0.9).
     _edgePull = (over / 90.0).clamp(-0.9, 0.9);
+    if (_edgePull.abs() > 0.02) {
+      _motionDir = _edgePull > 0 ? 1.0 : -1.0;
+    }
     // У края страница уже на пределе — sectionDragPage не меняется, и без
     // этого уведомления камень не перестроился бы (растяжка «замирала»).
     _edgePullNotifier.value = _edgePull;
@@ -415,6 +424,7 @@ class _SectionPillState extends State<SectionPill>
   void _dragEnd(int count) {
     if (!_dragging) return;
     _dragging = false;
+    _motionDir = 0.0;
     // Волна НЕ фиксируется: она и так считается из живой позиции карусели,
     // поэтому при отпускании камень продолжает форму плавно, без рывка в
     // растянутое положение. Гасим только захваченную тягу за край.
@@ -430,6 +440,7 @@ class _SectionPillState extends State<SectionPill>
   void _dragCancel() {
     if (!_dragging) return;
     _dragging = false;
+    _motionDir = 0.0;
     // Отмена (палец ушёл не по сценарию): то же гашение захваченной тяги.
     _startEdgeSettle();
     final count = sectionIconsFor(context).length;
@@ -647,31 +658,13 @@ final visualStretch = math.min(0.98, edgeStretch + 0.90 * wave);
               // плавно возвращается — ощущение, что таблетка «опускается» в экран.
               // Под пальцем (dragging) эффект выключен: только чистая растяжка.
               child: Transform.translate(
-                // Эффект ГЛУБИНЫ при приземлении на угол: чем сильнее камень
-                // растянут (visualStretch — непрерывная величина: под
-                // пальцем = _edgePull + wave, после отпускания сползает по
-                // _edgeSettle), тем чуть «выше» он парит; в центре секции
-                // (stretch = 0) садится ровно. Одна и та же формула везде,
-                // без ветки по _dragging: «в полёте 0 / под пальцем -3px»
-                // дёргало камень вертикально в момент отпускания.
-                offset: Offset(0, -2.6 * visualStretch),
+                // Стабильное положение по вертикали (без дёрганья по оси Y) и
+                // направленный сдвиг в сторону движения пальца
+                offset: Offset(_motionDir * 8.0 * visualStretch, 0),
                 child: Transform.scale(
-                  // Масштаб считается прямо из stretch — БЕЗ tween'а:
-                  // под пальцем 1:1 за движением (zero latency), после
-                  // отпускания stretch спадает по _edgeSettle (easeOut).
-                  // TweenAnimationBuilder здесь давал лаг 180–230 мс и
-                  // «мигал» у края (перезапуск при переключении duration).
-                  //
-                  // Якорь растяжки — непрерывный lerp по signed-тяге:
-                  // stretchDir (-1..0..1, всегда непрерывный) × edgeStretch,
-                  // без дискретных переключений Alignment.center/Left/Right.
-                  // Дискретный `_anchorSide` (гистерезис ±0.15) дёргал якорь
-                  // вбок у углов.
-                  // Симметричное жидкое растяжение от центра: исключает скачки якоря
-                  // и рывки индикатора при переходе через границы секций.
-                  alignment: Alignment.center,
-                  scaleX: 1.0 + 0.32 * visualStretch,
-                  scaleY: 1.0 - 0.08 * visualStretch,
+                  alignment: Alignment(-_motionDir * 0.85, 0),
+                  scaleX: 1.0 + 0.35 * visualStretch,
+                  scaleY: 1.0 - 0.06 * visualStretch,
                   // Layout-ширина — КОНСТАНТА (слот/карантин, не зависит от
                   // breath). Дышащий масштаб идёт через Transform — иначе
                   // каждый кадр пересобирался layout, камень «дёргался».

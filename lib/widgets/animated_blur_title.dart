@@ -147,18 +147,18 @@ class _CyberGlitchEffect extends StatelessWidget {
     }
 
     final encryptedBadge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
       decoration: BoxDecoration(
         color: dark ? const Color(0xFF0F0B10) : const Color(0xFFF3EBEF),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: const Color(0xFFE50914).withValues(alpha: 0.55),
-          width: 1.2,
+          color: const Color(0xFFE50914).withValues(alpha: 0.50),
+          width: 0.8,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE50914).withValues(alpha: 0.20),
-            blurRadius: 8,
+            color: const Color(0xFFE50914).withValues(alpha: 0.16),
+            blurRadius: 6,
           ),
         ],
       ),
@@ -166,20 +166,20 @@ class _CyberGlitchEffect extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6,
-            height: 6,
+            width: 4.5,
+            height: 4.5,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
               color: Color(0xFFE50914),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 5),
           Text(
             '// CLASSIFIED',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 10,
               fontWeight: FontWeight.w800,
-              letterSpacing: 2.2,
+              letterSpacing: 1.4,
               fontFamily: 'monospace',
               color: dark ? const Color(0xFFFCA5A5) : const Color(0xFFB91C1C),
             ),
@@ -194,56 +194,50 @@ class _CyberGlitchEffect extends StatelessWidget {
         if (hiddenOpacity > 0.001)
           Opacity(
             opacity: hiddenOpacity,
-            child: Transform.scale(
-              scale: 0.90 + 0.10 * (1.0 - t),
-              child: encryptedBadge,
-            ),
+            child: encryptedBadge,
           ),
         if (visibleOpacity > 0.001)
           Opacity(
             opacity: visibleOpacity,
-            child: Transform.scale(
-              scale: 0.92 + 0.08 * t,
-              child: glitch > 0.05
-                  ? Stack(
-                      children: [
-                        Transform.translate(
-                          offset: Offset(-3.2 * glitch, 0),
-                          child: ColorFiltered(
-                            colorFilter: const ColorFilter.mode(
-                              Color(0xFF00E5FF),
-                              BlendMode.srcATop,
-                            ),
-                            child: Opacity(
-                              opacity: 0.45 * glitch,
-                              child: visibleChild,
-                            ),
+            child: glitch > 0.05
+                ? Stack(
+                    children: [
+                      Transform.translate(
+                        offset: Offset(-1.2 * glitch, 0),
+                        child: ColorFiltered(
+                          colorFilter: const ColorFilter.mode(
+                            Color(0xFF00E5FF),
+                            BlendMode.srcATop,
+                          ),
+                          child: Opacity(
+                            opacity: 0.35 * glitch,
+                            child: visibleChild,
                           ),
                         ),
-                        Transform.translate(
-                          offset: Offset(3.2 * glitch, 0),
-                          child: ColorFiltered(
-                            colorFilter: const ColorFilter.mode(
-                              Color(0xFFFF0055),
-                              BlendMode.srcATop,
-                            ),
-                            child: Opacity(
-                              opacity: 0.45 * glitch,
-                              child: visibleChild,
-                            ),
+                      ),
+                      Transform.translate(
+                        offset: Offset(1.2 * glitch, 0),
+                        child: ColorFiltered(
+                          colorFilter: const ColorFilter.mode(
+                            Color(0xFFFF0055),
+                            BlendMode.srcATop,
+                          ),
+                          child: Opacity(
+                            opacity: 0.35 * glitch,
+                            child: visibleChild,
                           ),
                         ),
-                        CustomPaint(
-                          foregroundPainter: _ScanlineGlitchPainter(
-                            glitch: glitch,
-                            phase: t,
-                          ),
-                          child: visibleChild,
+                      ),
+                      CustomPaint(
+                        foregroundPainter: _ScanlineGlitchPainter(
+                          glitch: glitch,
+                          phase: t,
                         ),
-                      ],
-                    )
-                  : visibleChild,
-            ),
+                        child: visibleChild,
+                      ),
+                    ],
+                  )
+                : visibleChild,
           ),
       ],
     );

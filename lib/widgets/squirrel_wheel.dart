@@ -68,11 +68,11 @@ class _SquirrelWheelState extends State<SquirrelWheel>
     // Высококонтрастные цвета для идеальной читаемости на тёмной и светлой темах
     final wheelRim = widget.innerColor ??
         (dark
-            ? const Color(0xFFE2E8F0).withValues(alpha: 0.85)
-            : const Color(0xFF334155).withValues(alpha: 0.80));
+            ? const Color(0xFFFFFFFF)
+            : const Color(0xFF334155).withValues(alpha: 0.85));
     final wheelSpokes = dark
-        ? const Color(0xFF94A3B8).withValues(alpha: 0.55)
-        : const Color(0xFF64748B).withValues(alpha: 0.45);
+        ? const Color(0xFFCBD5E1).withValues(alpha: 0.80)
+        : const Color(0xFF64748B).withValues(alpha: 0.55);
     final hubColor = dark ? const Color(0xFFF43F5E) : const Color(0xFFE11D48);
 
     final furColor = dark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
@@ -111,31 +111,27 @@ class _SquirrelWheelState extends State<SquirrelWheel>
                     ),
                   ),
                 ),
-                // 2. Бегущий хомяк внутри колеса с задорным перебором лапок
+                // 2. Бегущий хомяк внутри колеса (аккуратный естественный бег без вращения самого хомяка)
                 RepaintBoundary(
                   child: AnimatedBuilder(
                     animation: _spin,
                     builder: (context, _) {
                       final scamper = reduceMotion
                           ? 0.0
-                          : math.sin(_spin.value * 8 * math.pi);
-                      final bobY = scamper * (widget.size * 0.035);
-                      final tilt = scamper * 0.04;
+                          : math.sin(_spin.value * 6 * math.pi);
+                      final bobY = scamper * (widget.size * 0.02);
                       return Transform.translate(
                         offset: Offset(0, bobY),
-                        child: Transform.rotate(
-                          angle: tilt,
-                          child: RepaintBoundary(
-                            child: CustomPaint(
-                              size: Size(widget.size, widget.size),
-                              isComplex: true,
-                              willChange: false,
-                              painter: _HamsterPainter(
-                                furColor: furColor,
-                                bellyColor: bellyColor,
-                                earColor: earColor,
-                                stepPhase: reduceMotion ? 0.0 : _spin.value,
-                              ),
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            size: Size(widget.size, widget.size),
+                            isComplex: true,
+                            willChange: false,
+                            painter: _HamsterPainter(
+                              furColor: furColor,
+                              bellyColor: bellyColor,
+                              earColor: earColor,
+                              stepPhase: reduceMotion ? 0.0 : _spin.value,
                             ),
                           ),
                         ),
@@ -194,27 +190,19 @@ class _WheelPainter extends CustomPainter {
     _rimPaint.strokeWidth = s * 0.025;
     canvas.drawCircle(center, innerR, _rimPaint);
 
-    // 4 изогнутые аэродинамические спицы турбины
+    // 3 прямые спицы к центральной оси (классическое колесо, без вертолётных лопастей)
     _spokePaint.color = spokeColor;
-    _spokePaint.strokeWidth = s * 0.045;
-    for (var i = 0; i < 4; i++) {
-      final angle = i * (math.pi / 2);
+    _spokePaint.strokeWidth = s * 0.032;
+    for (var i = 0; i < 3; i++) {
+      final angle = i * (2 * math.pi / 3);
       final pEnd = center + Offset(math.cos(angle), math.sin(angle)) * innerR;
-      final pMid = center +
-          Offset(
-            math.cos(angle + 0.36) * (innerR * 0.55),
-            math.sin(angle + 0.36) * (innerR * 0.55),
-          );
-      final path = Path()
-        ..moveTo(center.dx, center.dy)
-        ..quadraticBezierTo(pMid.dx, pMid.dy, pEnd.dx, pEnd.dy);
-      canvas.drawPath(path, _spokePaint);
+      canvas.drawLine(center, pEnd, _spokePaint);
     }
 
-    // 8 радиальных перекладин-ступенек между ободами
-    _spokePaint.strokeWidth = s * 0.035;
-    for (var i = 0; i < 8; i++) {
-      final a = i * (math.pi / 4);
+    // 12 радиальных перекладин-ступенек между ободами (как на беговой дорожке)
+    _spokePaint.strokeWidth = s * 0.026;
+    for (var i = 0; i < 12; i++) {
+      final a = i * (2 * math.pi / 12);
       final p1 = center + Offset(math.cos(a), math.sin(a)) * innerR;
       final p2 = center + Offset(math.cos(a), math.sin(a)) * outerR;
       canvas.drawLine(p1, p2, _spokePaint);

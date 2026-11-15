@@ -264,28 +264,11 @@ class _GiftCard3DState extends State<GiftCard3D>
                       const Spacer(),
                       // Центральная иконка артефакта с аурой
                       Center(
-                        child: Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: [
-                                (widget.gift.isFavorite
-                                        ? BrandColors.red
-                                        : rarity.color)
-                                    .withValues(alpha: 0.35),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                          child: Icon(
-                            widget.gift.icon,
-                            size: 38,
-                            color: widget.gift.isFavorite
-                                ? BrandColors.red
-                                : rarity.color,
-                          ),
+                        child: _ArtifactEmblem(
+                          icon: widget.gift.icon,
+                          color: rarity.color,
+                          isFavorite: widget.gift.isFavorite,
+                          size: 68,
                         ),
                       ),
                       const Spacer(),
@@ -325,6 +308,115 @@ class _GiftCard3DState extends State<GiftCard3D>
   }
 }
 
+/// Роскошная многослойная 3D-эмблема NFT артефакта с драгоценным сиянием и кристаллом
+class _ArtifactEmblem extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final bool isFavorite;
+  final double size;
+
+  const _ArtifactEmblem({
+    required this.icon,
+    required this.color,
+    required this.isFavorite,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = isFavorite ? BrandColors.red : color;
+    final iconSize = size * 0.58;
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Внешняя радиальная неоновая аура
+          Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  activeColor.withValues(alpha: 0.42),
+                  activeColor.withValues(alpha: 0.12),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.55, 1.0],
+              ),
+            ),
+          ),
+          // Фасетная кристаллическая подложка с многослойным градиентом
+          Container(
+            width: size * 0.82,
+            height: size * 0.82,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.28),
+                  activeColor.withValues(alpha: 0.22),
+                  Colors.black.withValues(alpha: 0.45),
+                ],
+              ),
+              border: Border.all(
+                color: activeColor.withValues(alpha: 0.65),
+                width: 1.4,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: activeColor.withValues(alpha: 0.35),
+                  blurRadius: 12,
+                  spreadRadius: -2,
+                ),
+              ],
+            ),
+          ),
+          // Тень иконки для объёма
+          Transform.translate(
+            offset: const Offset(0, 2),
+            child: Icon(
+              icon,
+              size: iconSize,
+              color: Colors.black.withValues(alpha: 0.45),
+            ),
+          ),
+          // Основной 3D-глиф
+          Icon(
+            icon,
+            size: iconSize,
+            color: activeColor,
+          ),
+          // Спекулярный световой блик по верхней дуге
+          Positioned(
+            top: size * 0.12,
+            child: Container(
+              width: size * 0.42,
+              height: size * 0.16,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(size),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.45),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Художественный шейдер голографического блика (фольги) с мягким спекулярным переливом
 class _HoloFoilPainter extends CustomPainter {
   final Offset tilt;
@@ -347,9 +439,9 @@ class _HoloFoilPainter extends CustomPainter {
       ),
       radius: 0.95,
       colors: [
-        Colors.white.withValues(alpha: 0.20),
-        rarityColor.withValues(alpha: 0.14),
-        BrandColors.red.withValues(alpha: 0.09),
+        Colors.white.withValues(alpha: 0.22),
+        rarityColor.withValues(alpha: 0.16),
+        BrandColors.red.withValues(alpha: 0.10),
         Colors.transparent,
       ],
       stops: const [0.0, 0.35, 0.65, 1.0],
@@ -361,6 +453,26 @@ class _HoloFoilPainter extends CustomPainter {
       ..blendMode = BlendMode.screen;
 
     canvas.drawRect(rect, paint);
+
+    // Диагональные голографические полосы перелива фольги (specular sheen stripes)
+    final stripeOffset = (tilt.dx + tilt.dy) * 0.4;
+    final stripeGradient = LinearGradient(
+      begin: Alignment(-1.2 + stripeOffset, -1.2 + stripeOffset),
+      end: Alignment(1.2 + stripeOffset, 1.2 + stripeOffset),
+      colors: [
+        Colors.transparent,
+        rarityColor.withValues(alpha: 0.08),
+        Colors.white.withValues(alpha: 0.24),
+        BrandColors.red.withValues(alpha: 0.15),
+        rarityColor.withValues(alpha: 0.12),
+        Colors.transparent,
+      ],
+      stops: const [0.0, 0.25, 0.50, 0.68, 0.85, 1.0],
+    );
+    final stripePaint = Paint()
+      ..shader = stripeGradient.createShader(rect)
+      ..blendMode = BlendMode.screen;
+    canvas.drawRect(rect, stripePaint);
   }
 
   @override
@@ -428,23 +540,11 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
             ),
             const SizedBox(height: 20),
             // Огромная иконка артефакта с неоновой аурой
-            Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    (_fav ? BrandColors.red : rarity.color).withValues(alpha: 0.45),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-              child: Icon(
-                widget.gift.icon,
-                size: 56,
-                color: _fav ? BrandColors.red : rarity.color,
-              ),
+            _ArtifactEmblem(
+              icon: widget.gift.icon,
+              color: rarity.color,
+              isFavorite: _fav,
+              size: 92,
             ),
             const SizedBox(height: 12),
             Text(
@@ -567,39 +667,40 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                           ],
                         ),
                         child: Center(
-                          child: AnimatedSize(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOutCubic,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 260),
-                                  child: Icon(
-                                    _fav ? Icons.star_rounded : Icons.star_outline_rounded,
-                                    key: ValueKey(_fav),
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 260),
+                                child: Icon(
+                                  _fav ? Icons.star_rounded : Icons.star_outline_rounded,
+                                  key: ValueKey(_fav),
+                                  color: Colors.white,
+                                  size: 18,
                                 ),
-                                const SizedBox(width: 8),
-                                AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 260),
-                                  switchInCurve: Curves.easeOutCubic,
-                                  switchOutCurve: Curves.easeInCubic,
-                                  child: Text(
-                                    _fav ? 'Главный талисман' : 'Выбрать талисманом',
-                                    key: ValueKey(_fav),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 160,
+                                child: Center(
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 260),
+                                    switchInCurve: Curves.easeOutCubic,
+                                    switchOutCurve: Curves.easeInCubic,
+                                    child: Text(
+                                      _fav ? 'Главный талисман' : 'Выбрать талисманом',
+                                      key: ValueKey(_fav),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

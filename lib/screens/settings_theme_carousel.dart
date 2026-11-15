@@ -24,6 +24,11 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
         Icons.brightness_2_outlined,
       ),
       _ThemeEntry(
+        'cyberpunkLight',
+        Translations.t('themeCyberpunkLight', context, 'Cyberpunk 2077 Light'),
+        Icons.wb_sunny_outlined,
+      ),
+      _ThemeEntry(
         'system',
         Translations.systemOf(context),
         Icons.brightness_auto,

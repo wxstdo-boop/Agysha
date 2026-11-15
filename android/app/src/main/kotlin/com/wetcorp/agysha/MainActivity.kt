@@ -89,7 +89,13 @@ class MainActivity : FlutterActivity() {
     private fun applyAlarmWindowFlags() {
         val isAlarm = intent?.getBooleanExtra("alarm_launch", false) == true ||
             (intent?.getStringExtra("payload")?.startsWith("alarm:") == true)
-        if (!isAlarm) return
+        if (!isAlarm) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(false)
+                setTurnScreenOn(false)
+            }
+            return
+        }
         // FIX (другой путь на экран): AlarmReceiver теперь ВСЕГДА запускает
         // MainActivity при срабатывании будильника (не только при
         // fullscreen=true). Два уровня:

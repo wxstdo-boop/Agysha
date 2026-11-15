@@ -27,6 +27,7 @@ import 'services/sounds.dart';
 import 'theme/app_theme.dart';
 import 'utils/motion_prefs.dart';
 import 'models/alarm.dart';
+import 'models/wake_task.dart';
 import 'services/alarm_service.dart';
 import 'services/reality_check_service.dart';
 import 'services/habit_service.dart';
@@ -310,7 +311,9 @@ Future<void> _handleNotificationTap(String? payload) async {
     final svc = AlarmService();
     await svc.load();
     final alarm = svc.getById(id);
-    if (alarm == null) return;
+    final taskType = alarm?.taskType ?? WakeUpTask.math;
+    final soundName = alarm?.soundName ?? 'Default';
+    final customSoundPath = alarm?.customSoundPath;
     for (int i = 0; i < 30; i++) {
       final context = navigatorKey.currentContext;
       if (context != null && context.mounted) {
@@ -325,10 +328,10 @@ Future<void> _handleNotificationTap(String? payload) async {
               // срабатывающий будильник появляется мягко, без резкого скачка.
               fadeRoute(
                 WakeTaskScreen(
-                  taskType: alarm.taskType,
+                  taskType: taskType,
                   isTest: false,
-                  soundName: alarm.soundName,
-                  customSoundPath: alarm.customSoundPath,
+                  soundName: soundName,
+                  customSoundPath: customSoundPath,
                 ),
               ),
             )
@@ -1119,6 +1122,8 @@ class AgyshaAppState extends State<AgyshaApp>
         return ThemeMode.dark;
       case 'oled':
         return ThemeMode.dark;
+      case 'cyberpunkLight':
+        return ThemeMode.light;
       case 'grok':
         return ThemeMode.light;
       case 'darkGrok':
@@ -1656,6 +1661,32 @@ class AgyshaAppState extends State<AgyshaApp>
                     surfaceContainer: Color(0xFFEDF5F7),
                     surfaceContainerHigh: Color(0xFFE6F0F3),
                     surfaceContainerHighest: Color(0xFFDFEBEF),
+                  );
+                }
+                if (_themeKey == 'cyberpunkLight') {
+                  // Cyberpunk 2077 Light — светлый футуризм: неон-кримсон,
+                  // солнечный кибер-жёлтый, циан и сверхчистый светлый фон.
+                  return const ColorScheme.light(
+                    primary: Color(0xFFE11D48),
+                    onPrimary: Colors.white,
+                    primaryContainer: Color(0xFFFFE4E6),
+                    onPrimaryContainer: Color(0xFF9F1239),
+                    secondary: Color(0xFFEAB308),
+                    onSecondary: Colors.black,
+                    secondaryContainer: Color(0xFFFEF3C7),
+                    onSecondaryContainer: Color(0xFF78350F),
+                    tertiary: Color(0xFF06B6D4),
+                    onTertiary: Colors.white,
+                    surface: Color(0xFFF8FAFC),
+                    onSurface: Color(0xFF0F172A),
+                    onSurfaceVariant: Color(0xFF334155),
+                    outline: Color(0xFF64748B),
+                    outlineVariant: Color(0xFFCBD5E1),
+                    surfaceContainerLowest: Colors.white,
+                    surfaceContainerLow: Color(0xFFF1F5F9),
+                    surfaceContainer: Color(0xFFE2E8F0),
+                    surfaceContainerHigh: Color(0xFFCBD5E1),
+                    surfaceContainerHighest: Color(0xFF94A3B8),
                   );
                 }
                 // Обычная СВЕТЛАЯ — светло-сиреневая: фиолетовый акцент и
