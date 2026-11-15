@@ -64,7 +64,15 @@ jobs:
           echo "$DEST" >> "$GITHUB_PATH"
 
       - name: Проверить workflow-файлы
-        run: actionlint
+        # На раннере есть shellcheck, локально его нет — поэтому часть
+        # замечаний видна только здесь. Гло заглушен ровно один код:
+        # SC2129 («лучше { cmd1; cmd2; } >> file, чем три редиректа») — это
+        # стиль, он ничего не меняет в корректности, а относится к записи в
+        # $GITHUB_OUTPUT в ship.yml, release-on-tag.yml и release-watchdog.yml.
+        # Трогать рабочий релизный shell ради косметики рискованнее, чем держать
+        # на него исключение; все остальные проверки actionlint продолжают
+        # фейлить CI.
+        run: actionlint -ignore 'SC2129'
 
   dependency-review:
     # Только для PR: diff двух lockfiles даёт список новых пакетов и их
