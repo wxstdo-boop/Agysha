@@ -649,8 +649,8 @@ class _SectionPillState extends State<SectionPill>
         // заметно вытягивается и округляется в сторону следующего раздела.
         // Коэффициент волны 0.72 (был 0.55 — растяжение «проскальзывало»)
         // держит эффект отчётливым, а `math.min(0.98, …)` не даёт раздуться.
-        // Визуальная растяжка: симметричная, широкая и непрерывная во всем диапазоне
-        final visualStretch = math.min(1.0, edgeStretch * 1.35 + 0.85 * wave);
+        // Визуальная растяжка: сочная, широкая и непрерывная во всем диапазоне
+        final visualStretch = math.min(1.0, edgeStretch * 1.55 + 0.95 * wave);
         final capRadius = 22.0 + 6.0 * visualStretch;
 
         return Stack(
@@ -665,8 +665,8 @@ class _SectionPillState extends State<SectionPill>
               alignment: Alignment(indicatorAlignment, 0),
               child: Transform.scale(
                 alignment: Alignment.center,
-                scaleX: 1.0 + 0.44 * visualStretch,
-                scaleY: 1.0 - 0.05 * visualStretch,
+                scaleX: 1.0 + 0.58 * visualStretch,
+                scaleY: 1.0 - 0.06 * visualStretch,
                 // Layout-ширина — КОНСТАНТА (слот/карантин, не зависит от
                 // breath). Дышащий масштаб идёт через Transform — иначе
                 // каждый кадр пересобирался layout, камень «дёргался».

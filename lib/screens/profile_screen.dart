@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -7,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -435,7 +437,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  /// Поиск и добавление отборного Drift Phonk бэнгера прямо по кнопке (без отдельного окна)
+  /// Поиск и добавление отборного Drift Phonk бэнгера из интернета прямо по кнопке
   Future<void> _searchAndAddHardtekkInline() async {
     if (_isSearchingHardtekk) return;
     if (!_service.canAddTrack) {
@@ -450,145 +452,202 @@ class _ProfileScreenState extends State<ProfileScreen>
     Haptics.light();
 
     try {
-      // Имитируем быстрый и плавный подбор бэнгера
-      await Future<void>.delayed(const Duration(milliseconds: 750));
-      if (!mounted) return;
+      final existingTitles =
+          _service.tracks.map((t) => t.title.toLowerCase().trim()).toSet();
+      final existingFingerprints = _service.tracks
+          .map((t) => t.fingerprint)
+          .where((f) => f.isNotEmpty)
+          .toSet();
 
-      final existingTitles = _service.tracks.map((t) => t.title.toLowerCase().trim()).toSet();
-      final existingFingerprints = _service.tracks.map((t) => t.fingerprint).where((f) => f.isNotEmpty).toSet();
+      const atmosphericQuestions = [
+        'Тебе нравится этот бэнгер?',
+        'Куда ведёт этот смертельный занос?',
+        'Чувствуешь дрожь ночного Найт-Сити?',
+        'Слышишь, как взрывается сабвуфер?',
+        'Готов разогнаться до предела?',
+        'Зачем ты гонишь по мокрому асфальту?',
+        'Поймал этот бешеный мемфисский ритм?',
+        'Чувствуешь этот плотный перегруз?',
+        'Слышишь этот фирменный 808 слайд?',
+        'Кто остановит тебя на этой трассе?',
+        'Помнишь первый занос на Сакуре?',
+        'Вкатывает этот холодный дисторшн?',
+        'Чувствуешь, как закипает адреналин?',
+        'Слышишь этот хлёсткий ковбелл в ночи?',
+        'Видишь эти неоновые вспышки в зеркале?',
+        'Готов войти в поворот боком?',
+        'Зацепил этот безжалостный дроп?',
+        'Чувствуешь этот подземный вайб?',
+        'Куда летит эта турбина на рассвете?',
+        'Слышишь рёв прямоточного выхлопа?',
+        'Знаешь, почему этот трек не отпускает?',
+        'Тебе знаком этот свист турбины?',
+        'Готов сорвать сцепление на сотне?',
+        'Слышишь, как плавится резина на треке?',
+        'Успеешь затормозить перед бездной?',
+        'Зачем смотреть назад на такой скорости?',
+        'Поймал этот глубокий аналоговый гул?',
+        'Ощущаешь этот яростный бас?',
+        'Готов раствориться в неоновом дыму?',
+        'Слышишь, как пробивает этот кик?',
+        'Хочешь выжать максимум из мотора?',
+        'Видишь, как гаснут огни автострады?',
+        'Узнаёшь этот дикий саундтрек ночи?',
+        'Готов сжечь полный бак за один заезд?',
+        'Чувствуешь, как дрожит этот асфальт?',
+        'Слышишь, как бьёт этот саб-бас в грудь?',
+        'Тебе по душе этот ночной вайб?',
+        'Готов втопить в пол до самого упора?',
+      ];
 
-      _PhonkItem? candidate;
-      for (final item in _PhonkCatalog.items) {
-        final itemWav = _synthesizePhonkWav(bpm: item.bpm, seed: item.seed);
-        final itemFp = _fingerprintOf(itemWav);
-        if (!existingTitles.contains(item.title.toLowerCase().trim()) &&
-            !existingFingerprints.contains(itemFp)) {
-          candidate = item;
+      String title = '';
+      for (final q in atmosphericQuestions) {
+        if (!existingTitles.contains(q.toLowerCase().trim())) {
+          title = q;
           break;
         }
       }
-
-      // Если все треки каталога уже добавлены или имеют совпадения, создаем уникальный процедурный VIP-бэнгер с вопросительным названием
-      int uniqueCounter = _service.tracks.length + 1;
-      if (candidate == null) {
-        const atmosphericQuestions = [
-          'Тебе нравится этот бэнгер?',
-          'Куда ведёт этот смертельный занос?',
-          'Чувствуешь дрожь ночного Найт-Сити?',
-          'Слышишь, как взрывается сабвуфер?',
-          'Готов разогнаться до предела?',
-          'Зачем ты гонишь по мокрому асфальту?',
-          'Поймал этот бешеный мемфисский ритм?',
-          'Чувствуешь этот плотный перегруз?',
-          'Слышишь этот фирменный 808 слайд?',
-          'Кто остановит тебя на этой трассе?',
-          'Помнишь первый занос на Сакуре?',
-          'Вкатывает этот холодный дисторшн?',
-          'Чувствуешь, как закипает адреналин?',
-          'Слышишь этот хлёсткий ковбелл в ночи?',
-          'Видишь эти неоновые вспышки в зеркале?',
-          'Готов войти в поворот боком?',
-          'Зацепил этот безжалостный дроп?',
-          'Чувствуешь этот подземный вайб?',
-          'Куда летит эта турбина на рассвете?',
-          'Слышишь рёв прямоточного выхлопа?',
-          'Знаешь, почему этот трек не отпускает?',
-          'Тебе знаком этот свист турбины?',
-          'Готов сорвать сцепление на сотне?',
-          'Слышишь, как плавится резина на треке?',
-          'Успеешь затормозить перед бездной?',
-          'Зачем смотреть назад на такой скорости?',
-          'Поймал этот глубокий аналоговый гул?',
-          'Ощущаешь этот яростный бас?',
-          'Готов раствориться в неоновом дыму?',
-          'Слышишь, как пробивает этот кик?',
-          'Хочешь выжать максимум из мотора?',
-          'Видишь, как гаснут огни автострады?',
+      if (title.isEmpty) {
+        final prefixes = [
+          'В темноте: ',
+          'На пределе: ',
+          'После полуночи: ',
+          'В тумане: ',
+          'На мокром асфальте: ',
         ];
-        String title = '';
-        for (final q in atmosphericQuestions) {
-          if (!existingTitles.contains(q.toLowerCase().trim())) {
-            title = q;
-            break;
-          }
-        }
-        if (title.isEmpty) {
-          final prefixes = [
-            'В темноте: ',
-            'На пределе: ',
-            'После полуночи: ',
-            'В тумане: ',
-            'На мокром асфальте: ',
-          ];
-          for (final prefix in prefixes) {
-            for (final q in atmosphericQuestions) {
-              final candidateTitle = '$prefix$q';
-              if (!existingTitles.contains(candidateTitle.toLowerCase().trim())) {
-                title = candidateTitle;
-                break;
-              }
+        for (final prefix in prefixes) {
+          for (final q in atmosphericQuestions) {
+            final candidateTitle = '$prefix$q';
+            if (!existingTitles.contains(candidateTitle.toLowerCase().trim())) {
+              title = candidateTitle;
+              break;
             }
-            if (title.isNotEmpty) break;
           }
+          if (title.isNotEmpty) break;
         }
-        if (title.isEmpty) {
-          title = 'Тебе нравится этот ночной бэнгер?';
-        }
-
-        final mode = uniqueCounter % 4;
-        final double chosenBpm;
-        final String modeTags;
-        switch (mode) {
-          case 0:
-            chosenBpm = 156.0;
-            modeTags = 'Memphis Drift • 156 BPM • 808 Slide';
-            break;
-          case 1:
-            chosenBpm = 142.0;
-            modeTags = 'Doom Phonk • 142 BPM • Reese 808';
-            break;
-          case 2:
-            chosenBpm = 148.0;
-            modeTags = 'Night City Wave • 148 BPM • Cyber Drift';
-            break;
-          default:
-            chosenBpm = 158.0;
-            modeTags = 'Brazilian Hardtekk • 158 BPM • 4x4 Kick';
-            break;
-        }
-        candidate = _PhonkItem(
-          id: 'phonk_procedural_${DateTime.now().millisecondsSinceEpoch}_$uniqueCounter',
-          title: title,
-          artist: 'Night City Syndicate',
-          tags: modeTags,
-          bpm: chosenBpm,
-          seed: 1000 + uniqueCounter * 73 + mode * 137 + DateTime.now().millisecond,
-        );
+      }
+      if (title.isEmpty) {
+        title = 'Тебе нравится этот ночной бэнгер?';
       }
 
       final dir = await getApplicationDocumentsDirectory();
       final soundsDir = Directory('${dir.path}/sounds');
       await soundsDir.create(recursive: true);
 
-      List<int> wavBytes = _synthesizePhonkWav(bpm: candidate.bpm, seed: candidate.seed);
-      String fingerprint = _fingerprintOf(wavBytes);
+      List<int>? downloadedBytes;
+      String fileExt = 'wav';
+      String trackId = 'phonk_net_${DateTime.now().millisecondsSinceEpoch}';
 
-      // Строгая дедупликация: исключаем совпадение отпечатков с уже добавленными звуками
-      int retry = 0;
-      while ((existingFingerprints.contains(fingerprint) || _service.hasTrackWithFingerprint(fingerprint)) && retry < 60) {
-        retry++;
-        final altSeed = candidate.seed + retry * 397 + DateTime.now().millisecond;
-        wavBytes = _synthesizePhonkWav(bpm: candidate.bpm, seed: altSeed);
-        fingerprint = _fingerprintOf(wavBytes);
+      // 1. Реальный поиск и загрузка фонка из интернета
+      try {
+        final searchUri = Uri.parse(
+          'https://archive.org/advancedsearch.php?q=phonk+AND+mediatype:audio&fl[]=identifier,title&sort[]=downloads+desc&rows=25&output=json',
+        );
+        final searchRes =
+            await http.get(searchUri).timeout(const Duration(seconds: 4));
+        if (searchRes.statusCode == 200) {
+          final data = json.decode(searchRes.body) as Map<String, dynamic>;
+          final docs = (data['response']?['docs'] as List<dynamic>?) ?? [];
+          final freshDocs = docs.where((d) {
+            final id = d['identifier']?.toString() ?? '';
+            return id.isNotEmpty &&
+                !_service.tracks.any((t) => t.path.contains(id));
+          }).toList();
+          freshDocs.shuffle();
+
+          for (final doc in freshDocs.take(4)) {
+            final id = doc['identifier'].toString();
+            final metaUri = Uri.parse('https://archive.org/metadata/$id/files');
+            final metaRes =
+                await http.get(metaUri).timeout(const Duration(seconds: 4));
+            if (metaRes.statusCode == 200) {
+              final metaData = json.decode(metaRes.body) as Map<String, dynamic>;
+              final files = (metaData['result'] as List<dynamic>?) ??
+                  (metaData['files'] as List<dynamic>?) ??
+                  [];
+              final audioFile = files.firstWhere(
+                (f) =>
+                    (f['name']?.toString() ?? '').toLowerCase().endsWith('.mp3'),
+                orElse: () => null,
+              );
+              if (audioFile != null) {
+                final fileName =
+                    Uri.encodeComponent(audioFile['name'].toString());
+                final dlUri =
+                    Uri.parse('https://archive.org/download/$id/$fileName');
+                final dlRes =
+                    await http.get(dlUri).timeout(const Duration(seconds: 15));
+                if (dlRes.statusCode == 200 && dlRes.bodyBytes.length > 5000) {
+                  final fp = _fingerprintOf(dlRes.bodyBytes);
+                  if (!existingFingerprints.contains(fp) &&
+                      !_service.hasTrackWithFingerprint(fp)) {
+                    downloadedBytes = dlRes.bodyBytes;
+                    fileExt = 'mp3';
+                    trackId = 'phonk_web_$id';
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {
+        // Оффлайн или сетевая задержка — мягкий fallback
       }
 
-      final filePath = '${soundsDir.path}/phonk_${candidate.id}_$fingerprint.wav';
+      // 2. Если из сети скачать не удалось (оффлайн), используем премиальный процедурный генератор
+      List<int> finalAudioBytes = const <int>[];
+      String fingerprint = '';
+
+      if (downloadedBytes != null) {
+        finalAudioBytes = downloadedBytes;
+        fingerprint = _fingerprintOf(finalAudioBytes);
+      } else {
+        _PhonkItem? catalogCandidate;
+        for (final item in _PhonkCatalog.items) {
+          final itemWav = _synthesizePhonkWav(bpm: item.bpm, seed: item.seed);
+          final itemFp = _fingerprintOf(itemWav);
+          if (!existingTitles.contains(item.title.toLowerCase().trim()) &&
+              !existingFingerprints.contains(itemFp) &&
+              !_service.hasTrackWithFingerprint(itemFp)) {
+            catalogCandidate = item;
+            finalAudioBytes = itemWav;
+            fingerprint = itemFp;
+            title = item.title;
+            break;
+          }
+        }
+        if (catalogCandidate == null) {
+          final uniqueCounter = _service.tracks.length + 1;
+          final mode = uniqueCounter % 4;
+          final double chosenBpm = [156.0, 142.0, 148.0, 158.0][mode];
+          final altSeed = 1000 +
+              uniqueCounter * 73 +
+              mode * 137 +
+              DateTime.now().millisecond;
+          finalAudioBytes = _synthesizePhonkWav(bpm: chosenBpm, seed: altSeed);
+          fingerprint = _fingerprintOf(finalAudioBytes);
+          int retry = 0;
+          while ((existingFingerprints.contains(fingerprint) ||
+                  _service.hasTrackWithFingerprint(fingerprint)) &&
+              retry < 60) {
+            retry++;
+            final rerollSeed = altSeed + retry * 397 + DateTime.now().millisecond;
+            finalAudioBytes =
+                _synthesizePhonkWav(bpm: chosenBpm, seed: rerollSeed);
+            fingerprint = _fingerprintOf(finalAudioBytes);
+          }
+        }
+      }
+
+      final filePath =
+          '${soundsDir.path}/${trackId}_$fingerprint.$fileExt';
       final file = File(filePath);
-      await file.writeAsBytes(wavBytes);
+      await file.writeAsBytes(finalAudioBytes);
 
       final added = await _service.addTrack(
         path: filePath,
-        title: candidate.title,
+        title: title,
         fingerprint: fingerprint,
       );
       if (!added) {
@@ -596,7 +655,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         _toast(Translations.t('profileMusicFull', context, 'Уже 99 треков'));
         return;
       }
-      final fresh = _service.tracks.where((t) => t.path == filePath).firstOrNull;
+      final fresh =
+          _service.tracks.where((t) => t.path == filePath).firstOrNull;
       if (fresh != null) {
         _newTrackIds.add(fresh.id);
         Future.delayed(const Duration(milliseconds: 760), () {
@@ -605,7 +665,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       }
       Haptics.heavy();
       if (!mounted) return;
-      _toast('«${candidate.title}» добавлен в профиль! 🏎️💨', icon: Icons.music_note_rounded);
+      _toast(
+        downloadedBytes != null
+            ? '«$title» найден в сети и добавлен в профиль! 🏎️💨'
+            : '«$title» добавлен в профиль! 🏎️💨',
+        icon: Icons.music_note_rounded,
+      );
     } catch (_) {
       if (mounted) _toast('Не удалось сохранить трек', icon: Icons.error_outline);
     } finally {
@@ -1476,14 +1541,28 @@ class _ProfileScreenState extends State<ProfileScreen>
                           const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
                           const SizedBox(width: 4),
                           AnimatedSize(
-                            duration: const Duration(milliseconds: 320),
-                            curve: Curves.easeInOutCubic,
+                            duration: const Duration(milliseconds: 260),
+                            curve: Curves.easeOutCubic,
                             alignment: Alignment.centerLeft,
-                            clipBehavior: Clip.none,
+                            clipBehavior: Clip.hardEdge,
                             child: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 260),
-                              switchInCurve: Curves.easeInOutCubic,
-                              switchOutCurve: Curves.easeInOutCubic,
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              layoutBuilder: (currentChild, previousChildren) => Stack(
+                                alignment: Alignment.centerLeft,
+                                children: [
+                                  ...previousChildren.map(
+                                    (p) => Positioned.fill(
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: p,
+                                      ),
+                                    ),
+                                  ),
+                                  ?currentChild,
+                                ],
+                              ),
                               transitionBuilder: (child, anim) => FadeTransition(
                                 opacity: anim,
                                 child: child,
@@ -1493,7 +1572,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 key: ValueKey(_service.prestigeTitle),
                                 maxLines: 1,
                                 softWrap: false,
-                                overflow: TextOverflow.visible,
+                                overflow: TextOverflow.clip,
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
@@ -1505,8 +1584,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                           const SizedBox(width: 4),
                           AnimatedRotation(
                             turns: _isPrestigePickerOpen ? 0.5 : 0.0,
-                            duration: const Duration(milliseconds: 320),
-                            curve: Curves.easeInOutCubic,
+                            duration: const Duration(milliseconds: 260),
+                            curve: Curves.easeOutCubic,
                             child: Icon(
                               Icons.keyboard_arrow_down_rounded,
                               size: 16,

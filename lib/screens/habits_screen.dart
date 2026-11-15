@@ -1168,13 +1168,11 @@ class _HabitsScreenState extends State<HabitsScreen>
         return confirmed ?? false;
       },
       onDismissed: (_) => _service.remove(habit.id),
-      child: SmoothHover(
-        // «Вдавливание» при зажатии (меньше 1 — карточка мягко
-        // уменьшается, как значки в таблетке), а не «вздутие».
-        hoverScale: 0.98,
-        duration: const Duration(milliseconds: 160),
+      child: PressScale(
+        pressedScale: 0.985,
         child: Card(
           key: ValueKey('card_${habit.id}'),
+          elevation: 0,
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),

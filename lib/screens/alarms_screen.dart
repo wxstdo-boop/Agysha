@@ -568,14 +568,28 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                   ),
                   const SizedBox(width: 8),
                   AnimatedSize(
-                    duration: const Duration(milliseconds: 320),
-                    curve: Curves.easeInOutCubic,
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
                     alignment: Alignment.centerLeft,
-                    clipBehavior: Clip.none,
+                    clipBehavior: Clip.hardEdge,
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 260),
-                      switchInCurve: Curves.easeInOutCubic,
-                      switchOutCurve: Curves.easeInOutCubic,
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: (currentChild, previousChildren) => Stack(
+                        alignment: Alignment.centerLeft,
+                        children: [
+                          ...previousChildren.map(
+                            (p) => Positioned.fill(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: p,
+                              ),
+                            ),
+                          ),
+                          ?currentChild,
+                        ],
+                      ),
                       transitionBuilder: (child, animation) => FadeTransition(
                         opacity: animation,
                         child: child,
@@ -585,7 +599,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                         key: ValueKey(text),
                         maxLines: 1,
                         softWrap: false,
-                        overflow: TextOverflow.visible,
+                        overflow: TextOverflow.clip,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w500,
                           color: hasActive

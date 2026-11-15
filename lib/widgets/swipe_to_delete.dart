@@ -110,7 +110,7 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
               valueListenable: _progress,
               builder: (context, p, _) {
                 if (p <= 0.001) return const SizedBox.shrink();
-                final opacity = (0.45 + 0.55 * p).clamp(0.0, 1.0);
+                final opacity = (0.50 + 0.50 * p).clamp(0.0, 1.0);
                 final cardWidth = (w - inset.left - inset.right).clamp(0.0, w);
                 final revealed = (p.clamp(0.0, 1.0) * w).clamp(0.0, cardWidth);
                 if (revealed < 0.5) return const SizedBox.shrink();
@@ -133,8 +133,8 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                               colors: [
-                                const Color(0xFFFF5252).withValues(alpha: opacity * 0.70),
-                                const Color(0xFFFF1744).withValues(alpha: opacity * 0.85),
+                                const Color(0xFFFF5252).withValues(alpha: opacity * 0.85),
+                                const Color(0xFFFF1744).withValues(alpha: opacity * 0.95),
                               ],
                             ),
                           ),

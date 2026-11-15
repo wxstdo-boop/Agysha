@@ -75,7 +75,7 @@ class _PhonkCatalog {
       artist: 'SXMPRA',
       tags: 'Hardcore Phonk • 152 BPM • Distortion',
       bpm: 152.0,
-      seed: 207,
+      seed: 206,
     ),
     _PhonkItem(
       id: 'phonk_disaster',

@@ -185,85 +185,90 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
           // Daily Motivation Card — верхняя панель и сама цитата сидят на
           // своих плашках «округлённый квадрат» (мягкий радиус 12, тонкая
           // обводка): заголовок читается как панель, цитата — как вкладыш.
-          _ringedCard(
-            theme: theme,
-            accent: theme.colorScheme.secondary,
-            child: Container(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.secondaryContainer,
-                borderRadius: const BorderRadius.all(Radius.circular(18.7)),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: theme.colorScheme.secondary.withValues(
-                        alpha: 0.10,
+          PressScale(
+            pressedScale: 0.975,
+            duration: const Duration(milliseconds: 220),
+            releaseDuration: const Duration(milliseconds: 320),
+            child: _ringedCard(
+              theme: theme,
+              accent: theme.colorScheme.secondary,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer,
+                  borderRadius: const BorderRadius.all(Radius.circular(18.7)),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
                       ),
-                      border: Border.all(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
                         color: theme.colorScheme.secondary.withValues(
-                          alpha: 0.30,
+                          alpha: 0.10,
                         ),
-                        width: 0.8,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.format_quote,
-                          size: 22,
-                          color: theme.colorScheme.secondary,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          Translations.t('dailyMotivation', context),
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: theme.colorScheme.onSecondaryContainer,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.2,
+                        border: Border.all(
+                          color: theme.colorScheme.secondary.withValues(
+                            alpha: 0.30,
                           ),
+                          width: 0.8,
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: theme.colorScheme.surface.withValues(alpha: 0.42),
-                      border: Border.all(
-                        color: theme.colorScheme.secondary.withValues(
-                          alpha: 0.18,
-                        ),
-                        width: 0.6,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.format_quote,
+                            size: 22,
+                            color: theme.colorScheme.secondary,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            Translations.t('dailyMotivation', context),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: theme.colorScheme.onSecondaryContainer,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Text(
-                      // Кавычки убраны по дизайну: цитата читается как
-                      // обычный мотивационный текст, а не как «вложенная»
-                      // реплика. Визуальный акцент дают панель заголовка,
-                      // иконка «format_quote» и курсив самого текста.
-                      motivationQuote.trim(),
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: theme.colorScheme.onSecondaryContainer,
-                        fontStyle: FontStyle.italic,
-                        height: 1.4,
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
                       ),
-                      textAlign: TextAlign.center,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: theme.colorScheme.surface.withValues(alpha: 0.42),
+                        border: Border.all(
+                          color: theme.colorScheme.secondary.withValues(
+                            alpha: 0.18,
+                          ),
+                          width: 0.6,
+                        ),
+                      ),
+                      child: Text(
+                        // Кавычки убраны по дизайну: цитата читается как
+                        // обычный мотивационный текст, а не как «вложенная»
+                        // реплика. Визуальный акцент дают панель заголовка,
+                        // иконка «format_quote» и курсив самого текста.
+                        motivationQuote.trim(),
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSecondaryContainer,
+                          fontStyle: FontStyle.italic,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
