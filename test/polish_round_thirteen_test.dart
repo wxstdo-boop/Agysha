@@ -14,6 +14,7 @@ import 'package:agysha/widgets/ada_avatars.dart';
 import 'package:agysha/widgets/inline_keyboard.dart';
 import 'package:agysha/widgets/music_pulse_ring.dart';
 import 'package:agysha/widgets/press_splat.dart' show GlassFabTile;
+import 'source_scope.dart';
 
 /// Регресс-тест круга 13: жалобы на канты, «квадратное» свечение, серую
 /// клавиатуру, тормозные переходы и щёлкающие очки.
@@ -73,7 +74,7 @@ void main() {
       isTrue,
       reason: '$path не найден — тест не из корня',
     );
-    return f.readAsStringSync();
+    return readLibrary(path);
   }
 
   test('кант окна обновления — красный бренда, как у клавиатуры', () {

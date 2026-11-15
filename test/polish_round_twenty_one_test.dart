@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'source_scope.dart';
 
 /// Регресс-тест круга 21: профиль, клавиатура, окно события, «Метель»,
 /// статистика и питание.
@@ -21,7 +22,7 @@ void main() {
   String read(String path) {
     final f = File(path);
     expect(f.existsSync(), isTrue, reason: '$path не найден — тест не из корня');
-    return f.readAsStringSync();
+    return readLibrary(path);
   }
 
   /// Код без строк-комментариев: проверки на подстроки не должны ловить сами

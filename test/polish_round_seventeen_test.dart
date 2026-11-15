@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'source_scope.dart';
 
 /// Регресс-тест круга 17: жалобы на кольцо музыки, окно ивента, кнопки
 /// «Забрать»/«Сбросить», профиль и статистику.
@@ -24,16 +25,11 @@ void main() {
       isTrue,
       reason: '$path не найден — тест не из корня',
     );
-    final text = f.readAsStringSync();
-    if (path == 'lib/l10n/translations.dart') {
-      final parts = ['translations_en.dart', 'translations_ru.dart', 'translations_fr.dart'];
-      final extra = parts
-          .map((p) => File('lib/l10n/$p'))
-          .where((file) => file.existsSync())
-          .map((file) => file.readAsStringSync());
-      return [text, ...extra].join('\n');
-    }
-    return text;
+    // Ручная дозагрузка translations_{en,ru,fr}.dart убрана: translations.dart
+    // сам объявляет их через `part`, а readLibrary() идёт по part-директивам
+    // сам. С ручной вставкой локали подмешивались ДВАЖДЫ, и `bodies.length`
+    // становился 6 вместо 3.
+    return readLibrary(path);
   }
 
   /// Код без строк-комментариев: иначе проверки «нет MaskFilter» ловят сами

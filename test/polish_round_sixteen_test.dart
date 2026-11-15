@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'source_scope.dart';
 
 /// Регресс-тест круга 16: жалобы на зайчика, кольцо музыки, новогоднее окно
 /// и плавность питания.
@@ -22,7 +23,7 @@ void main() {
       isTrue,
       reason: '$path не найден — тест не из корня',
     );
-    return f.readAsStringSync();
+    return readLibrary(path);
   }
 
   test('зайчик обновления появляется разово, без вечного «дыхания»', () {
