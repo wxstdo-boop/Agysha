@@ -76,6 +76,9 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
       // Схлопывание строки при удалении — тоже мягко.
       resizeDuration: widget.resizeDuration,
       direction: DismissDirection.endToStart,
+      dismissThresholds: const {
+        DismissDirection.endToStart: 0.24,
+      },
       confirmDismiss: widget.confirmDismiss,
       onDismissed: widget.onDismissed,
       onUpdate: (details) => _progress.value = details.progress,
@@ -89,8 +92,7 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
               builder: (context, p, _) {
                 // Красный проявляется по ходу жеста: до 12 % пути плашки ещё
                 // не видно, дальше она наливается и к полному свайпу видна
-                // целиком. Альфа запекается в цвета (см.
-                // [animatedDeleteBackground]), без слоя Opacity.
+                // целиком.
                 final opacity = ((p - 0.12) / 0.88).clamp(0.0, 1.0);
                 final cardWidth = (w - inset.left - inset.right).clamp(0.0, w);
                 final revealed = (p.clamp(0.0, 1.0) * cardWidth).clamp(0.0, cardWidth);

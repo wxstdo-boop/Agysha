@@ -66,19 +66,23 @@ class _SquirrelWheelState extends State<SquirrelWheel>
         ? 1.0
         : (widget.enter!.value <= 0.01 ? 1.0 : widget.enter!.value.clamp(0.0, 1.0));
 
-    // Высококонтрастные цвета для идеальной читаемости на тёмной и светлой темах
+    // Полупрозрачно-красное колесо и полупрозрачный кибер-хомяк (без желтизны!)
     final wheelRim = widget.innerColor ??
         (dark
-            ? const Color(0xFFFFFFFF)
-            : const Color(0xFF334155).withValues(alpha: 0.85));
+            ? const Color(0xFFFF2A55).withValues(alpha: 0.65)
+            : const Color(0xFFE11D48).withValues(alpha: 0.60));
     final wheelSpokes = dark
-        ? const Color(0xFFCBD5E1).withValues(alpha: 0.65)
-        : const Color(0xFF64748B).withValues(alpha: 0.45);
-    final hubColor = dark ? const Color(0xFFF43F5E) : const Color(0xFFE11D48);
+        ? const Color(0xFFFF2A55).withValues(alpha: 0.32)
+        : const Color(0xFFE11D48).withValues(alpha: 0.28);
+    final hubColor = const Color(0xFFFF1744).withValues(alpha: 0.85);
 
-    final furColor = dark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
-    final bellyColor = dark ? const Color(0xFFFFFBEB) : const Color(0xFFFEF3C7);
-    final earColor = dark ? const Color(0xFFFDA4AF) : const Color(0xFFF43F5E);
+    final furColor = dark
+        ? const Color(0xFFFF3366).withValues(alpha: 0.72)
+        : const Color(0xFFE11D48).withValues(alpha: 0.65);
+    final bellyColor = dark
+        ? const Color(0xFFFFB3C6).withValues(alpha: 0.60)
+        : const Color(0xFFFFCCD5).withValues(alpha: 0.55);
+    final earColor = const Color(0xFFFF6688).withValues(alpha: 0.75);
 
     return RepaintBoundary(
       child: Opacity(

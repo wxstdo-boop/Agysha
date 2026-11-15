@@ -36,7 +36,7 @@ Widget animatedDeleteBackground(
       ),
     ),
     alignment: Alignment.centerRight,
-    padding: const EdgeInsets.only(right: 24),
+    padding: const EdgeInsets.symmetric(horizontal: 14),
     // Плашка может быть УЖЕ своей подписи (она растёт вместе со свайпом),
     // поэтому содержимое не сжимается, а «уезжает» вправо и обрезается:
     // иконка с надписью прижаты к правому краю, левый край отсекает

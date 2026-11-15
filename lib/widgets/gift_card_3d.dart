@@ -70,13 +70,13 @@ class _GiftCard3DState extends State<GiftCard3D>
     final targetDy = ((localPosition.dy / widget.height - 0.5) * 2.0).clamp(-1.0, 1.0);
     setState(() {
       _tilt = Offset(
-        _tilt.dx + (targetDx - _tilt.dx) * 0.35,
-        _tilt.dy + (targetDy - _tilt.dy) * 0.35,
+        _tilt.dx + (targetDx - _tilt.dx) * 0.45,
+        _tilt.dy + (targetDy - _tilt.dy) * 0.45,
       );
     });
   }
 
-  void _onPanEnd(DragEndDetails details) {
+  void _resetTilt() {
     if (MotionPrefs.shouldReduceMotion) return;
     _tiltAnimation = Tween<Offset>(
       begin: _tilt,
@@ -123,30 +123,32 @@ class _GiftCard3DState extends State<GiftCard3D>
               ? _tiltAnimation.value
               : _tilt;
 
-          final tiltX = -currentTilt.dy * 0.28;
-          final tiltY = currentTilt.dx * 0.28;
+          final tiltX = -currentTilt.dy * 0.30;
+          final tiltY = currentTilt.dx * 0.30;
 
           final transform = Matrix4.identity()
             ..setEntry(3, 2, 0.0016)
             ..rotateX(tiltX)
             ..rotateY(tiltY);
 
-          return PressScale(
-            pressedScale: 0.94,
-            duration: const Duration(milliseconds: 140),
-            releaseDuration: const Duration(milliseconds: 220),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _openDetails(context),
-              onPanDown: (d) => _updateTiltFromPos(d.localPosition),
-              onPanStart: (d) => _updateTiltFromPos(d.localPosition),
-              onPanUpdate: (d) => _updateTiltFromPos(d.localPosition),
-              onPanEnd: _onPanEnd,
-              onPanCancel: () => _onPanEnd(DragEndDetails()),
-              child: Transform(
-                transform: transform,
-                alignment: FractionalOffset.center,
-                child: child!,
+          return Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (e) => _updateTiltFromPos(e.localPosition),
+            onPointerMove: (e) => _updateTiltFromPos(e.localPosition),
+            onPointerUp: (e) => _resetTilt(),
+            onPointerCancel: (e) => _resetTilt(),
+            child: PressScale(
+              pressedScale: 0.94,
+              duration: const Duration(milliseconds: 140),
+              releaseDuration: const Duration(milliseconds: 220),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openDetails(context),
+                child: Transform(
+                  transform: transform,
+                  alignment: FractionalOffset.center,
+                  child: child!,
+                ),
               ),
             ),
           );
@@ -395,30 +397,6 @@ class _ArtifactEmblem extends StatelessWidget {
                 giftId: giftId,
                 color: activeColor,
                 isFavorite: isFavorite,
-              ),
-            ),
-          ),
-          // Спекулярный световой блик по верхней дуге: вписан строго по круглому контуру фасета
-          ClipOval(
-            child: SizedBox(
-              width: size * 0.86,
-              height: size * 0.86,
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Container(
-                  width: size * 0.70,
-                  height: size * 0.32,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.38),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
               ),
             ),
           ),
@@ -1050,6 +1028,13 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                                     duration: const Duration(milliseconds: 260),
                                     switchInCurve: Curves.easeOutCubic,
                                     switchOutCurve: Curves.easeInCubic,
+                                    transitionBuilder: (child, anim) => FadeTransition(
+                                      opacity: anim,
+                                      child: ScaleTransition(
+                                        scale: Tween<double>(begin: 0.90, end: 1.0).animate(anim),
+                                        child: child,
+                                      ),
+                                    ),
                                     child: Text(
                                       _fav ? 'Главный талисман' : 'Выбрать талисманом',
                                       key: ValueKey(_fav),

@@ -411,8 +411,9 @@ class _HomeScreenState extends State<HomeScreen>
     final a = sectionPillSnapByPage[from] ?? sectionOffsetByPage[from] ?? 0.0;
     final b = sectionPillSnapByPage[to] ?? sectionOffsetByPage[to] ?? a;
     final value = a + (b - a) * t;
-    if ((sectionScrollOffset.value - value).abs() > 0.5) {
+    if ((sectionScrollOffset.value - value).abs() > 0.05) {
       sectionScrollOffset.value = value;
+      sectionPillVisible.value = value <= 8;
     }
   }
 

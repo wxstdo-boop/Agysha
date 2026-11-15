@@ -61,7 +61,7 @@ void reportSectionPillOffset(int page, double offset) {
   // Страница карусели — дробная? Значит идёт переезд: высоту ведёт Home.
   final rail = sectionRailPage.value;
   if (rail.isFinite && (rail - rail.roundToDouble()).abs() > 0.002) return;
-  if ((sectionScrollOffset.value - offset).abs() <= 0.5) return;
+  if ((sectionScrollOffset.value - offset).abs() <= 0.05) return;
   sectionScrollOffset.value = offset;
 }
 
