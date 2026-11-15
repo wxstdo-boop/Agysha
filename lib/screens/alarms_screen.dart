@@ -532,15 +532,16 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           pressedScale: 0.96,
           duration: const Duration(milliseconds: 140),
           releaseDuration: const Duration(milliseconds: 220),
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeInOutCubic,
-            alignment: Alignment.center,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            clipBehavior: Clip.antiAlias,
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 360),
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.center,
               clipBehavior: Clip.antiAlias,
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 320),
+                duration: const Duration(milliseconds: 360),
                 curve: Curves.easeOutCubic,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(

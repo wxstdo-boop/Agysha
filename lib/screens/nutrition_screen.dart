@@ -1941,28 +1941,32 @@ class _NutritionScreenState extends State<NutritionScreen>
           final tipTitle = tip['title'] as String;
           final tipBody = tip['body'] as String;
           final tipColor = tip['color'] as Color;
-          return Container(
-            width: 300,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  theme.colorScheme.surface,
-                  theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.4,
-                  ),
-                ],
+          return PressScale(
+            pressedScale: 0.96,
+            duration: const Duration(milliseconds: 140),
+            releaseDuration: const Duration(milliseconds: 220),
+            child: Container(
+              width: 300,
+              margin: const EdgeInsets.only(right: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    theme.colorScheme.surface,
+                    theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.4,
+                    ),
+                  ],
+                ),
+                border: Border.all(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                ),
               ),
-              border: Border.all(
-                color: theme.colorScheme.outline.withValues(alpha: 0.3),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
@@ -1997,8 +2001,9 @@ class _NutritionScreenState extends State<NutritionScreen>
                 ],
               ),
             ),
-          );
-        },
+          ),
+        );
+      },
       ),
     );
   }

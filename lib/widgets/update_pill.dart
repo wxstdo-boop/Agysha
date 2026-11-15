@@ -28,16 +28,11 @@ class _UpdatePillState extends State<UpdatePill>
     with SingleTickerProviderStateMixin {
   bool _busy = false;
 
-  /// Разовый вход значка: зайчик мягко «проявляется» и чуть набухает при
-  /// появлении таблетки — один раз, без вечного цикла. Прежнее бесконечное
-  /// «дыхание» владелец просил убрать: оно читалось дрожью, а глиф в нём
-  /// растеризовался каждый кадр.
+  /// Колесо и бегущий хомяк всегда видны сразу, без задержек и скрытия на старте
   late final AnimationController _enter = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 520),
-    // При «убрать анимации» вход не запускается — держим его сразу
-    // завершённым, иначе значок остался бы невидимым.
-    value: MotionPrefs.shouldReduceMotion ? 1 : 0,
+    value: 1.0,
   );
   late final Animation<double> _enterCurve = CurvedAnimation(
     parent: _enter,

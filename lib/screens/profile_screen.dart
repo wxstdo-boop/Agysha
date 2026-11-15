@@ -130,6 +130,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   /// Пути только что добавленных треков: их строки «врастают» из нуля, а не
   /// вставляются готовыми.
   final Set<String> _newTrackIds = {};
+  bool _isSearchingHardtekk = false;
 
   /// Прозрачность подсказки «Как вас звать?»: видна, пока поле НЕ в фокусе.
   /// Подсказка гаснет плавно, как только пользователь открыл поле, и так же
@@ -412,53 +413,61 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  /// Открыть диалог поиска и поштучного добавления отборных хардтек-треков
-  Future<void> _showHardtekkSearchSheet() async {
-    Haptics.light();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: _sheetStyle(),
-      builder: (ctx) => _HardtekkSearchSheet(
-        onAddTrack: _addHardtekkTrack,
-        existingTitles: _service.tracks.map((t) => t.title).toSet(),
-      ),
-    );
-  }
-
-  /// Добавить выбранный хардтек-бэнгер в персональную музыку
-  Future<bool> _addHardtekkTrack(_HardtekkItem item) async {
+  /// Поиск и добавление отборного хардтек-бэнгера прямо по кнопке (без отдельного окна)
+  Future<void> _searchAndAddHardtekkInline() async {
+    if (_isSearchingHardtekk) return;
     if (!_service.canAddTrack) {
       _toast(
         Translations.t('profileMusicFull', context, 'Уже 99 треков'),
         icon: Icons.info_outline,
       );
-      return false;
+      return;
     }
-    if (_service.tracks.any((t) => t.title == item.title)) {
-      _toast('Этот трек уже в твоей музыке!', icon: Icons.check_circle_outline);
-      return false;
-    }
+
+    setState(() => _isSearchingHardtekk = true);
+    Haptics.light();
+
     try {
+      // Имитируем сканирование и подбор бэнгера
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      if (!mounted) return;
+
+      final existing = _service.tracks.map((t) => t.title).toSet();
+      _HardtekkItem? candidate;
+      for (final item in _HardtekkCatalog.items) {
+        if (!existing.contains(item.title)) {
+          candidate = item;
+          break;
+        }
+      }
+      // Если все 10 уже добавлены, создаем эксклюзивный ремикс
+      candidate ??= _HardtekkItem(
+        id: 'hardtekk_remix_${DateTime.now().millisecondsSinceEpoch % 1000}',
+        title: 'Cyberpunk Tekk Drop #${_service.tracks.length + 1}',
+        artist: 'Agysha Tekk Syndicate',
+        tags: 'Exclusive Overdrive • 182 BPM • Pure Pressure',
+        bpm: 182.0,
+        seed: DateTime.now().millisecondsSinceEpoch,
+      );
+
       final dir = await getApplicationDocumentsDirectory();
       final soundsDir = Directory('${dir.path}/sounds');
       await soundsDir.create(recursive: true);
-      final wavBytes = _synthesizeHardtekkWav(bpm: item.bpm, seed: item.seed);
+      final wavBytes = _synthesizeHardtekkWav(bpm: candidate.bpm, seed: candidate.seed);
       final fingerprint = _fingerprintOf(wavBytes);
-      final filePath = '${soundsDir.path}/hardtekk_${item.id}.wav';
+      final filePath = '${soundsDir.path}/hardtekk_${candidate.id}.wav';
       final file = File(filePath);
       await file.writeAsBytes(wavBytes);
 
       final added = await _service.addTrack(
         path: filePath,
-        title: item.title,
+        title: candidate.title,
         fingerprint: fingerprint,
       );
       if (!added) {
-        if (!mounted) return false;
+        if (!mounted) return;
         _toast(Translations.t('profileMusicFull', context, 'Уже 99 треков'));
-        return false;
+        return;
       }
       final fresh = _service.tracks.where((t) => t.path == filePath).firstOrNull;
       if (fresh != null) {
@@ -468,11 +477,12 @@ class _ProfileScreenState extends State<ProfileScreen>
         });
       }
       Haptics.heavy();
-      _toast('«${item.title}» добавлен в профиль! 🔥', icon: Icons.music_note_rounded);
-      return true;
+      if (!mounted) return;
+      _toast('«${candidate.title}» добавлен в профиль! 🔥', icon: Icons.music_note_rounded);
     } catch (_) {
-      _toast('Не удалось сохранить трек', icon: Icons.error_outline);
-      return false;
+      if (mounted) _toast('Не удалось сохранить трек', icon: Icons.error_outline);
+    } finally {
+      if (mounted) setState(() => _isSearchingHardtekk = false);
     }
   }
 
@@ -489,35 +499,35 @@ class _ProfileScreenState extends State<ProfileScreen>
       final beatProgress = (i % spb) / spb;
       final beatIndex = (i ~/ spb) % 16;
 
-      // 1. Овердрайв бочка хардтека: свип 165 Гц → 42 Гц с сатурацией
-      final kickFreq = 42.0 + 125.0 * math.exp(-beatProgress * 22.0);
+      // 1. Овердрайв бочка хардтека: свип 175 Гц → 38 Гц с сатурацией
+      final kickFreq = 38.0 + 137.0 * math.exp(-beatProgress * 25.0);
       final kickPhase = 2 * math.pi * kickFreq * (beatProgress * (spb / sampleRate));
-      final kickEnvelope = math.exp(-beatProgress * 6.5);
-      final rawKick = math.sin(kickPhase) * kickEnvelope * 2.2;
-      final saturatedKick = rawKick / (1.0 + rawKick.abs() * 0.75);
+      final kickEnvelope = math.exp(-beatProgress * 5.8);
+      final rawKick = math.sin(kickPhase) * kickEnvelope * 2.5;
+      final saturatedKick = (rawKick * 1.5).clamp(-1.0, 1.0) * 0.90;
 
-      // 2. Роллинг саб-бас (офф-бит кач на 48 Гц)
-      final subFreq = 48.0 + (beatIndex % 4 == 3 ? 6.0 : 0.0);
-      final subEnv = math.sin(beatProgress * math.pi).clamp(0.0, 1.0) * (beatProgress > 0.15 ? 1.0 : 0.0);
-      final rawSub = math.sin(2 * math.pi * subFreq * t) * subEnv * 0.7;
-      final saturatedSub = rawSub / (1.0 + rawSub.abs() * 0.5);
+      // 2. Роллинг саб-бас (офф-бит кач на 46 Гц с 16-й модуляцией)
+      final subFreq = 46.0 + (beatIndex % 4 == 2 ? 6.0 : 0.0);
+      final subEnv = math.sin(beatProgress * math.pi).clamp(0.0, 1.0) * (beatProgress > 0.12 ? 1.0 : 0.0);
+      final rawSub = math.sin(2 * math.pi * subFreq * t) * subEnv * 0.85;
+      final saturatedSub = (rawSub * 1.3).clamp(-1.0, 1.0);
 
       // 3. Текк клэп/хэт на оффбите
       double noise = 0.0;
-      if (beatProgress > 0.48 && beatProgress < 0.65) {
-        final hatEnv = math.exp(-(beatProgress - 0.48) * 45.0);
+      if (beatProgress > 0.46 && beatProgress < 0.66) {
+        final hatEnv = math.exp(-(beatProgress - 0.46) * 42.0);
         final pseudoRandom = ((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0;
-        noise = pseudoRandom * hatEnv * 0.35;
+        noise = pseudoRandom * hatEnv * 0.42;
       }
 
-      // 4. Эйсид пила на 16-х долях
+      // 4. Эйсид пила на 16-х долях с резонансным фильтром
       final sixteenth = (beatProgress * 4.0) % 1.0;
-      final synthEnv = math.exp(-sixteenth * 12.0) * 0.25;
-      final synthFreq = 110.0 + (beatIndex * 15 % 70);
+      final synthEnv = math.exp(-sixteenth * 11.0) * 0.35;
+      final synthFreq = 110.0 + ((beatIndex * 27 + seed) % 110);
       final synthSaw = ((t * synthFreq) % 1.0) * 2.0 - 1.0;
       final synth = synthSaw * synthEnv;
 
-      final mix = (saturatedKick * 0.85 + saturatedSub * 0.65 + noise * 0.50 + synth * 0.35).clamp(-1.0, 1.0);
+      final mix = (saturatedKick * 0.85 + saturatedSub * 0.70 + noise * 0.48 + synth * 0.38).clamp(-1.0, 1.0);
       final sampleInt16 = (mix * 32760.0).round().clamp(-32768, 32767);
       pcmBytes.setInt16(i * 2, sampleInt16, Endian.little);
     }
@@ -755,23 +765,23 @@ class _ProfileScreenState extends State<ProfileScreen>
                 Spacing.xxl,
               ),
               children: [
-                _headerCard(theme),
+                RepaintBoundary(child: _headerCard(theme)),
                 const SizedBox(height: Spacing.md),
-                _nameCard(theme),
+                RepaintBoundary(child: _nameCard(theme)),
                 const SizedBox(height: Spacing.md),
-                _onlineCard(theme),
+                RepaintBoundary(child: _onlineCard(theme)),
                 const SizedBox(height: Spacing.md),
-                _musicCard(theme),
+                RepaintBoundary(child: _musicCard(theme)),
                 const SizedBox(height: Spacing.md),
-                _leaderboardCard(theme),
+                RepaintBoundary(child: _leaderboardCard(theme)),
                 const SizedBox(height: Spacing.md),
                 // Очки — сразу после рейтинга: «за что» читается рядом с «кто
                 // сколько», а карточки музыки и рейтинга остаются на своих местах.
-                _scoreCard(theme),
+                RepaintBoundary(child: _scoreCard(theme)),
                 const SizedBox(height: Spacing.md),
-                _giftsCard(theme),
+                RepaintBoundary(child: _giftsCard(theme)),
                 const SizedBox(height: Spacing.md),
-                _eventsCard(theme),
+                RepaintBoundary(child: _eventsCard(theme)),
               ],
             ),
           ),
@@ -785,11 +795,34 @@ class _ProfileScreenState extends State<ProfileScreen>
     final name = _service.displayName.isEmpty
         ? Translations.t('profileAnonymous', context, 'Аноним')
         : _service.displayName;
+    final talisman = _service.activeTalisman;
 
     return _Card(
       child: Column(
         children: [
           const SizedBox(height: Spacing.xs),
+          Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              if (talisman != null)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeInOutCubic,
+                  width: 126,
+                  height: 126,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        talisman.rarity.color.withValues(alpha: 0.38),
+                        BrandColors.red.withValues(alpha: 0.18),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.35, 0.70, 1.0],
+                    ),
+                  ),
+                ),
               AudioSpectrumRing(
                 radius: 48,
                 child: SizedBox(
@@ -859,7 +892,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                 ),
               ),
-              const SizedBox(height: Spacing.md),
+            ],
+          ),
+          const SizedBox(height: Spacing.md),
               // Кружок слева от имени
               Center(
                 child: Transform.translate(
@@ -901,12 +936,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                 pressedScale: 0.94,
                 child: GestureDetector(
                   onTap: _showPrestigeTitlePicker,
-                  child: AnimatedSize(
-                    duration: const Duration(milliseconds: 280),
-                    curve: Curves.easeInOutCubic,
-                    alignment: Alignment.centerLeft,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(Radii.pill),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(Radii.pill),
+                    clipBehavior: Clip.antiAlias,
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 320),
+                      curve: Curves.easeInOutCubic,
+                      alignment: Alignment.centerLeft,
                       clipBehavior: Clip.antiAlias,
                       child: Container(
                         padding:
@@ -1378,11 +1414,42 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
                 PressScale(
                   pressedScale: 0.94,
-                  child: FilledButton.tonalIcon(
-                    onPressed: _service.canAddTrack ? _showHardtekkSearchSheet : null,
+                  child: FilledButton.tonal(
+                    onPressed: _service.canAddTrack && !_isSearchingHardtekk
+                        ? _searchAndAddHardtekkInline
+                        : null,
                     style: _roundButtonStyle(),
-                    icon: const Icon(Icons.search_rounded),
-                    label: const Text('Поиск'),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: _isSearchingHardtekk
+                          ? const Row(
+                              key: ValueKey('searching_mode'),
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 13,
+                                  height: 13,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(BrandColors.red),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Text('Ищем...'),
+                              ],
+                            )
+                          : const Row(
+                              key: ValueKey('search_idle'),
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.search_rounded, size: 18),
+                                SizedBox(width: 6),
+                                Text('Поиск'),
+                              ],
+                            ),
+                    ),
                   ),
                 ),
               ],
@@ -3223,7 +3290,7 @@ class _TrackRowState extends State<_TrackRow>
   }
 }
 
-/// Фоновый шейдер активного талисмана на экране профиля (мягкие кибер-руны, неоновые созвездия и аура)
+/// Фоновый шейдер активного талисмана на экране профиля (сияющие кибер-руны, неоновые созвездия и аура вокруг аватарки)
 class _TalismanBackgroundPainter extends CustomPainter {
   final Color color;
   final Color accent;
@@ -3237,54 +3304,68 @@ class _TalismanBackgroundPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
+    final avatarCenter = Offset(w / 2, 115);
 
-    // Мягкое неоновое свечение в верхней и нижней части экрана
-    final topAura = Paint()
+    // 1. Мощная, но мягкая радиальная неоновая аура вокруг аватара в шапке
+    final avatarAura = Paint()
       ..shader = RadialGradient(
-        center: const Alignment(0.0, -0.75),
-        radius: 0.9,
+        center: const Alignment(0.0, -0.72),
+        radius: 0.75,
         colors: [
-          color.withValues(alpha: 0.12),
-          color.withValues(alpha: 0.04),
+          color.withValues(alpha: 0.28),
+          accent.withValues(alpha: 0.12),
           Colors.transparent,
         ],
         stops: const [0.0, 0.45, 1.0],
       ).createShader(Rect.fromLTWH(0, 0, w, h));
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), topAura);
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), avatarAura);
 
+    // 2. Нижняя неоновая подсветка
     final bottomAura = Paint()
       ..shader = RadialGradient(
         center: const Alignment(0.35, 0.65),
         radius: 0.85,
         colors: [
-          accent.withValues(alpha: 0.08),
+          accent.withValues(alpha: 0.10),
           Colors.transparent,
         ],
         stops: const [0.0, 1.0],
       ).createShader(Rect.fromLTWH(0, 0, w, h));
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), bottomAura);
 
-    final paint1 = Paint()
-      ..color = accent.withValues(alpha: 0.12)
+    final runeStroke1 = Paint()
+      ..color = color.withValues(alpha: 0.22)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
-    final paint2 = Paint()
-      ..color = color.withValues(alpha: 0.10)
+    final runeStroke2 = Paint()
+      ..color = accent.withValues(alpha: 0.18)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
+      ..strokeWidth = 0.8;
 
-    // Кибер-рунические круги и созвездия по фону профиля
-    canvas.drawCircle(Offset(w * 0.12, h * 0.18), 36, paint1);
-    canvas.drawCircle(Offset(w * 0.88, h * 0.28), 48, paint2);
-    canvas.drawCircle(Offset(w * 0.82, h * 0.68), 32, paint1);
-    canvas.drawCircle(Offset(w * 0.15, h * 0.76), 42, paint2);
+    // Кибер-рунические круги вокруг аватарки
+    canvas.drawCircle(avatarCenter, 68, runeStroke1);
+    canvas.drawCircle(avatarCenter, 80, runeStroke2);
 
-    // Мягкие диагональные линии созвездия
-    canvas.drawLine(Offset(w * 0.12, h * 0.18), Offset(w * 0.26, h * 0.14), paint1);
-    canvas.drawLine(Offset(w * 0.88, h * 0.28), Offset(w * 0.74, h * 0.38), paint2);
-    canvas.drawLine(Offset(w * 0.82, h * 0.68), Offset(w * 0.68, h * 0.72), paint1);
-    canvas.drawLine(Offset(w * 0.15, h * 0.76), Offset(w * 0.30, h * 0.82), paint2);
+    // Рунические засечки по кругу вокруг аватара
+    for (var i = 0; i < 8; i++) {
+      final angle = i * (math.pi / 4);
+      final p1 = avatarCenter + Offset(math.cos(angle), math.sin(angle)) * 68;
+      final p2 = avatarCenter + Offset(math.cos(angle), math.sin(angle)) * 80;
+      canvas.drawLine(p1, p2, runeStroke2);
+    }
+
+    // Созвездия и орбиты по телу профиля
+    canvas.drawCircle(Offset(w * 0.12, h * 0.28), 36, runeStroke1);
+    canvas.drawCircle(Offset(w * 0.88, h * 0.38), 44, runeStroke2);
+    canvas.drawCircle(Offset(w * 0.82, h * 0.68), 32, runeStroke1);
+    canvas.drawCircle(Offset(w * 0.15, h * 0.76), 40, runeStroke2);
+
+    // Мягкие диагональные линии созвездий
+    canvas.drawLine(Offset(w * 0.12, h * 0.28), Offset(w * 0.26, h * 0.22), runeStroke1);
+    canvas.drawLine(Offset(w * 0.88, h * 0.38), Offset(w * 0.74, h * 0.46), runeStroke2);
+    canvas.drawLine(Offset(w * 0.82, h * 0.68), Offset(w * 0.68, h * 0.72), runeStroke1);
+    canvas.drawLine(Offset(w * 0.15, h * 0.76), Offset(w * 0.30, h * 0.82), runeStroke2);
   }
 
   @override
@@ -3310,27 +3391,9 @@ class _HardtekkItem {
   });
 }
 
-/// Модальный экран поиска и поштучного добавления отборных хардтек-треков
-class _HardtekkSearchSheet extends StatefulWidget {
-  final Future<bool> Function(_HardtekkItem item) onAddTrack;
-  final Set<String> existingTitles;
-
-  const _HardtekkSearchSheet({
-    required this.onAddTrack,
-    required this.existingTitles,
-  });
-
-  @override
-  State<_HardtekkSearchSheet> createState() => _HardtekkSearchSheetState();
-}
-
-class _HardtekkSearchSheetState extends State<_HardtekkSearchSheet> {
-  final TextEditingController _queryCtrl = TextEditingController();
-  String _query = '';
-  final Set<String> _addedTitles = {};
-  String? _busyId;
-
-  static const List<_HardtekkItem> _catalog = [
+/// Отборный каталог мощных хардтек-бэнгеров для моментального добавления
+class _HardtekkCatalog {
+  static const List<_HardtekkItem> items = [
     _HardtekkItem(
       id: 'zahni_kraftstoff',
       title: 'Zahni - Kraftstoff (180 BPM)',
@@ -3412,296 +3475,4 @@ class _HardtekkSearchSheetState extends State<_HardtekkSearchSheet> {
       seed: 110,
     ),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _addedTitles.addAll(widget.existingTitles);
-    _queryCtrl.addListener(() {
-      setState(() => _query = _queryCtrl.text.trim().toLowerCase());
-    });
-  }
-
-  @override
-  void dispose() {
-    _queryCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleTrackAdd(_HardtekkItem item) async {
-    setState(() => _busyId = item.id);
-    final ok = await widget.onAddTrack(item);
-    if (mounted) {
-      setState(() {
-        _busyId = null;
-        if (ok) _addedTitles.add(item.title);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-
-    final filtered = _catalog.where((item) {
-      if (_query.isEmpty) return true;
-      return item.title.toLowerCase().contains(_query) ||
-          item.artist.toLowerCase().contains(_query) ||
-          item.tags.toLowerCase().contains(_query);
-    }).toList();
-
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.82,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-        color: dark ? const Color(0xFF13131E) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(
-          color: BrandColors.red.withValues(alpha: dark ? 0.35 : 0.22),
-          width: 1.0,
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: BrandColors.red.withValues(alpha: 0.16),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.speed_rounded,
-                    color: BrandColors.red,
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Поиск хардтек-бэнгеров',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        'Отборный 175-185 BPM Tekk • Добавляй по одному',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _queryCtrl,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                        onPressed: () => _queryCtrl.clear(),
-                      )
-                    : null,
-                hintText: 'Поиск по артисту или треку (Zahni, Creeds...)',
-                isDense: true,
-                filled: true,
-                fillColor: dark
-                    ? const Color(0xFF1E1E2C)
-                    : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Flexible(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 32),
-                        child: Text(
-                          'Ничего не найдено',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    )
-                  : ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final item = filtered[index];
-                        final isAdded = _addedTitles.contains(item.title);
-                        final isBusy = _busyId == item.id;
-
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: dark
-                                ? const Color(0xFF1B1B26)
-                                : theme.colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: isAdded
-                                  ? BrandColors.red.withValues(alpha: 0.40)
-                                  : theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
-                              width: 0.9,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: isAdded
-                                        ? [BrandColors.red, const Color(0xFF8B0000)]
-                                        : [
-                                            theme.colorScheme.primary,
-                                            theme.colorScheme.tertiary,
-                                          ],
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.graphic_eq_rounded,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      item.tags,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: isAdded
-                                            ? BrandColors.red
-                                            : theme.colorScheme.primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (isBusy)
-                                const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              else if (isAdded)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: BrandColors.red.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.check_rounded,
-                                        size: 14,
-                                        color: BrandColors.red,
-                                      ),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'В музыке',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: BrandColors.red,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else
-                                PressScale(
-                                  pressedScale: 0.94,
-                                  child: FilledButton.tonal(
-                                    style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      visualDensity: VisualDensity.compact,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                    onPressed: () => _handleTrackAdd(item),
-                                    child: const Text(
-                                      'Добавить',
-                                      style: TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
