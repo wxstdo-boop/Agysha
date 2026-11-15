@@ -1770,17 +1770,22 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       child: SizedBox(
         height: 220,
-        child: ListView.separated(
+        child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           clipBehavior: Clip.none,
-          itemCount: gifts.length,
-          separatorBuilder: (_, _) => const SizedBox(width: Spacing.sm),
-          itemBuilder: (context, i) => RepaintBoundary(
-            key: ValueKey('gift_card_${gifts[i].id}'),
-            child: GiftCard3D(
-              gift: gifts[i],
-              onFavoriteToggled: () => setState(() {}),
-            ),
+          child: Row(
+            children: [
+              for (var i = 0; i < gifts.length; i++) ...[
+                if (i > 0) const SizedBox(width: Spacing.sm),
+                RepaintBoundary(
+                  key: ValueKey('gift_card_${gifts[i].id}'),
+                  child: GiftCard3D(
+                    gift: gifts[i],
+                    onFavoriteToggled: () => setState(() {}),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
