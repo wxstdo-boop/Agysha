@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../utils/animated_delete.dart';
+import '../l10n/translations.dart';
 
 /// Свайп-удаление влево: карточка едет 1:1 за пальцем, а красная плашка
 /// ПРОЯВЛЯЕТСЯ по ходу жеста.
@@ -109,33 +109,74 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
             return ValueListenableBuilder<double>(
               valueListenable: _progress,
               builder: (context, p, _) {
-                // Красный фон удаления идёт сразу с первого пикселя свайпа (0px зазор)
-                // без задержек и плавно наливается до 1.0.
-                final opacity = (0.50 + 0.50 * p).clamp(0.0, 1.0);
+                if (p <= 0.001) return const SizedBox.shrink();
+                final opacity = (0.45 + 0.55 * p).clamp(0.0, 1.0);
                 final cardWidth = (w - inset.left - inset.right).clamp(0.0, w);
-                // Dismissible сдвигает контент ровно на p * w.
-                // Чтобы левый край красной подложки шёл вплотную к правому краю карточки (0px зазор),
-                // ширина раскрытия привязана к p * w и зажата по ширине карточки.
                 final revealed = (p.clamp(0.0, 1.0) * w).clamp(0.0, cardWidth);
                 if (revealed < 0.5) return const SizedBox.shrink();
-                return Stack(
-                  children: [
-                    Positioned(
-                      right: inset.right,
+
+                // Красный фон удаления: правый край закруглён по радиусу карточки,
+                // а левый край строго вертикальный и идёт вплотную к уезжающей карточке (0px зазор)
+                // без задвинутых внутрь скруглений.
+                return Padding(
+                  padding: widget.inset,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: SizedBox(
                       width: revealed,
-                      top: inset.top,
-                      bottom: inset.bottom,
+                      height: double.infinity,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(widget.borderRadius),
-                        child: animatedDeleteBackground(
-                          context,
-                          borderRadius: widget.borderRadius,
-                          opacity: opacity,
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(widget.borderRadius),
+                          bottomRight: Radius.circular(widget.borderRadius),
+                        ),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [
+                                const Color(0xFFFF5252).withValues(alpha: opacity * 0.70),
+                                const Color(0xFFFF1744).withValues(alpha: opacity * 0.85),
+                              ],
+                            ),
+                          ),
+                          // Иконка и надпись держатся близко к уезжающей карточке (слева внутри фона)
                           alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.only(left: 14),
+                          child: ClipRect(
+                            child: OverflowBox(
+                              alignment: Alignment.centerLeft,
+                              minWidth: 0,
+                              maxWidth: double.infinity,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.white.withValues(alpha: opacity),
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    Translations.deleteOf(context),
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    overflow: TextOverflow.clip,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: opacity),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 );
               },
             );

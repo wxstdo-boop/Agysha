@@ -226,10 +226,8 @@ class _NutritionScreenState extends State<NutritionScreen>
         setState(() => _addedAt.remove(meal.id));
       }
     });
-    // Клавиатура не должна оставаться открытой после добавления —
-    // убираем фокус с полей ввода сразу после успешного сохранения.
-    _hidePad();
-    FocusManager.instance.primaryFocus?.unfocus();
+    // Сохраняем стабильную высоту формы без рывка вверх: панель ввода не
+    // схлопывается рывком при добавлении, а поля ввода мягко очищаются.
     try {
       await _service.add(meal);
       if (mounted) {
@@ -2190,23 +2188,26 @@ class _DayHeaderState extends State<_DayHeader>
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: _NutritionScreenState._mealCollapse,
-    value: widget.removing ? 1.0 : 0.0,
+    value: widget.removing ? 0.0 : 1.0,
   );
 
   @override
   void initState() {
     super.initState();
     if (widget.removing) {
+      _c.value = 1.0;
       _run(false);
-    } else {
-      _run(true);
     }
   }
 
   @override
   void didUpdateWidget(covariant _DayHeader old) {
     super.didUpdateWidget(old);
-    if (widget.removing && !old.removing) _run(false);
+    if (widget.removing && !old.removing) {
+      _run(false);
+    } else if (!widget.removing && old.removing) {
+      _run(true);
+    }
   }
 
   void _run(bool visible) {

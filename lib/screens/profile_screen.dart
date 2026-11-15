@@ -456,22 +456,70 @@ class _ProfileScreenState extends State<ProfileScreen>
       // Если все треки каталога уже добавлены или имеют совпадения, создаем уникальный процедурный VIP-бэнгер с вопросительным названием
       int uniqueCounter = _service.tracks.length + 1;
       if (candidate == null) {
-        final proceduralQuestions = [
-          'Тебе нравится эта песня #$uniqueCounter?',
-          'Чувствуешь этот 808 слайд #$uniqueCounter?',
-          'Качает этот ночной саб-бас #$uniqueCounter?',
-          'Заходит этот дикий бит #$uniqueCounter?',
-          'Слышишь этот мощный дроп #$uniqueCounter?',
-          'Готов к разгону по Найт-Сити #$uniqueCounter?',
-          'Поймал этот плотный ритм #$uniqueCounter?',
-          'Вкатывает этот мемфисский вайб #$uniqueCounter?',
-          'Слышишь как ревёт сабвуфер #$uniqueCounter?',
+        const atmosphericQuestions = [
+          'Тебе нравится этот бэнгер?',
+          'Куда ведёт этот смертельный занос?',
+          'Чувствуешь дрожь ночного Найт-Сити?',
+          'Слышишь, как взрывается сабвуфер?',
+          'Готов разогнаться до предела?',
+          'Зачем ты гонишь по мокрому асфальту?',
+          'Поймал этот бешеный мемфисский ритм?',
+          'Чувствуешь этот плотный перегруз?',
+          'Слышишь этот фирменный 808 слайд?',
+          'Кто остановит тебя на этой трассе?',
+          'Помнишь первый занос на Сакуре?',
+          'Вкатывает этот холодный дисторшн?',
+          'Чувствуешь, как закипает адреналин?',
+          'Слышишь этот хлёсткий ковбелл в ночи?',
+          'Видишь эти неоновые вспышки в зеркале?',
+          'Готов войти в поворот боком?',
+          'Зацепил этот безжалостный дроп?',
+          'Чувствуешь этот подземный вайб?',
+          'Куда летит эта турбина на рассвете?',
+          'Слышишь рёв прямоточного выхлопа?',
+          'Знаешь, почему этот трек не отпускает?',
+          'Тебе знаком этот свист турбины?',
+          'Готов сорвать сцепление на сотне?',
+          'Слышишь, как плавится резина на треке?',
+          'Успеешь затормозить перед бездной?',
+          'Зачем смотреть назад на такой скорости?',
+          'Поймал этот глубокий аналоговый гул?',
+          'Ощущаешь этот яростный бас?',
+          'Готов раствориться в неоновом дыму?',
+          'Слышишь, как пробивает этот кик?',
+          'Хочешь выжать максимум из мотора?',
+          'Видишь, как гаснут огни автострады?',
         ];
-        var title = proceduralQuestions[uniqueCounter % proceduralQuestions.length];
-        while (existingTitles.contains(title.toLowerCase().trim())) {
-          uniqueCounter++;
-          title = 'Тебе нравится этот бэнгер #$uniqueCounter?';
+        String title = '';
+        for (final q in atmosphericQuestions) {
+          if (!existingTitles.contains(q.toLowerCase().trim())) {
+            title = q;
+            break;
+          }
         }
+        if (title.isEmpty) {
+          final prefixes = [
+            'В темноте: ',
+            'На пределе: ',
+            'После полуночи: ',
+            'В тумане: ',
+            'На мокром асфальте: ',
+          ];
+          for (final prefix in prefixes) {
+            for (final q in atmosphericQuestions) {
+              final candidateTitle = '$prefix$q';
+              if (!existingTitles.contains(candidateTitle.toLowerCase().trim())) {
+                title = candidateTitle;
+                break;
+              }
+            }
+            if (title.isNotEmpty) break;
+          }
+        }
+        if (title.isEmpty) {
+          title = 'Тебе нравится этот ночной бэнгер?';
+        }
+
         final bpmList = [144.0, 146.0, 148.0, 150.0, 152.0, 154.0, 156.0];
         final chosenBpm = bpmList[uniqueCounter % bpmList.length];
         candidate = _PhonkItem(
@@ -697,8 +745,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         break;
     }
 
+    double subPhase = 0.0;
     for (int i = 0; i < totalSamples; i++) {
-      final t = i / sampleRate;
       final step = (i ~/ stepSamples).clamp(0, 31);
       final stepSample = i % stepSamples;
       final stepT = stepSample / sampleRate;
@@ -724,8 +772,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       final isSlideStep = (step == 7 || step == 15 || step == 23 || step == 31);
       final slideFactor = isSlideStep ? (1.0 + 0.45 * (stepSample / stepSamples)) : 1.0;
       final subFreq = baseSubFreq * slideFactor;
-      final rawSub = math.sin(2 * math.pi * subFreq * t);
-      final saturatedSub = rawSub + 0.22 * math.sin(4 * math.pi * subFreq * t);
+      subPhase += 2 * math.pi * subFreq / sampleRate;
+      final rawSub = math.sin(subPhase);
+      final saturatedSub = rawSub + 0.22 * math.sin(subPhase * 2.0);
       final distSub = (saturatedSub * 2.9) / (1.0 + (saturatedSub * 1.3).abs());
 
       // 3. Пробивная трэп-бочка (808 Kick) со спадом высоты 185 -> 44 Гц
@@ -988,32 +1037,41 @@ class _ProfileScreenState extends State<ProfileScreen>
         );
   }
 
-  /// Шапка профиля: крупная аватарка со спектром, активным талисманом, имя и престижный титул.
+  /// Шапка профиля: крупная аватарка со спектром, размашистыми талисманами вокруг карточки, имя и престижный титул.
   Widget _headerCard(ThemeData theme) {
     final name = _service.displayName.isEmpty
         ? Translations.t('profileAnonymous', context, 'Аноним')
         : _service.displayName;
     final talisman = _service.activeTalisman;
+    final favGifts = _service.favoriteGifts;
+    const spots = [
+      _TalismanSpot(top: -12, left: 16),
+      _TalismanSpot(top: -12, right: 16),
+      _TalismanSpot(top: 80, left: -14),
+      _TalismanSpot(top: 80, right: -14),
+      _TalismanSpot(bottom: -12, right: 32),
+    ];
 
     return _Card(
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // 1. Арт активного талисмана прямо на фоне карточки аватара (кибер-руны, созвездия)
+          // 1. Арт активных талисманов прямо на фоне карточки аватара (кибер-руны, созвездия)
           Positioned.fill(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 500),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
-              child: talisman != null
+              child: favGifts.isNotEmpty
                   ? RepaintBoundary(
-                      key: ValueKey('header_talisman_bg_${talisman.id}'),
+                      key: ValueKey('header_talisman_bg_${favGifts.map((g) => g.id).join('_')}'),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(Radii.xl),
                         child: CustomPaint(
                           painter: _HeaderCardTalismanPainter(
-                            color: talisman.rarity.color,
+                            color: favGifts.first.rarity.color,
                             accent: BrandColors.red,
+                            colors: favGifts.map((g) => g.rarity.color).toList(),
                           ),
                         ),
                       ),
@@ -1021,6 +1079,78 @@ class _ProfileScreenState extends State<ProfileScreen>
                   : const SizedBox.shrink(key: ValueKey('no_talisman_header_bg')),
             ),
           ),
+          // 2. Размашистые парящие NFT-талисманы вокруг карточки на фоне (до 5 избранных)
+          ...spots.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final spot = entry.value;
+            final gift = idx < favGifts.length ? favGifts[idx] : null;
+            return Positioned(
+              top: spot.top,
+              bottom: spot.bottom,
+              left: spot.left,
+              right: spot.right,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 360),
+                switchInCurve: Curves.easeOutBack,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: ScaleTransition(scale: anim, child: child),
+                ),
+                child: gift != null
+                    ? KeyedSubtree(
+                        key: ValueKey('floating_talisman_${gift.id}'),
+                        child: PressScale(
+                          pressedScale: 0.90,
+                          duration: const Duration(milliseconds: 180),
+                          releaseDuration: const Duration(milliseconds: 240),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              Haptics.select();
+                              showGiftDetailsSheet(context, gift, () {
+                                if (mounted) setState(() {});
+                              });
+                            },
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF141422),
+                                border: Border.all(
+                                  color: gift.rarity.color,
+                                  width: 1.6,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: gift.rarity.color.withValues(alpha: 0.55),
+                                    blurRadius: 10,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CustomPaint(
+                                    painter: SharpArtifactPainter(
+                                      giftId: gift.id,
+                                      color: gift.rarity.color,
+                                      isFavorite: true,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('empty_talisman_spot')),
+              ),
+            );
+          }),
           Column(
             children: [
               const SizedBox(height: Spacing.xs),
@@ -1140,85 +1270,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                               ),
                             ),
                           ),
-                          // Стильный 3D NFT значок активного талисмана прямо на аватарке (как в Telegram!)
-                          Positioned(
-                            left: 2,
-                            top: 2,
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 360),
-                              switchInCurve: Curves.easeOutBack,
-                              switchOutCurve: Curves.easeInCubic,
-                              transitionBuilder: (child, animation) => FadeTransition(
-                                opacity: animation,
-                                child: ScaleTransition(
-                                  scale: animation,
-                                  child: child,
-                                ),
-                              ),
-                              child: talisman != null
-                                  ? KeyedSubtree(
-                                      key: ValueKey('avatar_talisman_${talisman.id}'),
-                                      child: PressScale(
-                                        pressedScale: 0.90,
-                                        duration: const Duration(milliseconds: 180),
-                                        releaseDuration: const Duration(milliseconds: 240),
-                                        child: GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: () {
-                                            Haptics.select();
-                                            final gift = _service.gifts.where((g) => g.id == talisman.id).firstOrNull;
-                                            if (gift != null) {
-                                              showGiftDetailsSheet(
-                                                context,
-                                                gift,
-                                                () {
-                                                  if (mounted) setState(() {});
-                                                },
-                                              );
-                                            }
-                                          },
-                                          child: Container(
-                                            width: 28,
-                                            height: 28,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: const Color(0xFF141422),
-                                              border: Border.all(
-                                                color: talisman.rarity.color,
-                                                width: 1.5,
-                                              ),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: talisman.rarity.color.withValues(alpha: 0.60),
-                                                  blurRadius: 8,
-                                                  spreadRadius: 1,
-                                                ),
-                                              ],
-                                            ),
-                                            child: Center(
-                                              child: SizedBox(
-                                                width: 18,
-                                                height: 18,
-                                                child: CustomPaint(
-                                                  painter: SharpArtifactPainter(
-                                                    giftId: talisman.id,
-                                                    color: talisman.rarity.color,
-                                                    isFavorite: true,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  : const SizedBox(
-                                      key: ValueKey('no_talisman_badge'),
-                                      width: 28,
-                                      height: 28,
-                                    ),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -1267,66 +1318,81 @@ class _ProfileScreenState extends State<ProfileScreen>
                 pressedScale: 0.94,
                 child: GestureDetector(
                   onTap: _showPrestigeTitlePicker,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(Radii.pill),
-                    child: AnimatedSize(
-                      duration: const Duration(milliseconds: 360),
-                      curve: Curves.easeInOutCubic,
-                      alignment: Alignment.centerLeft,
-                      clipBehavior: Clip.antiAlias,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: ShapeDecoration(
-                          color: BrandColors.red.withValues(alpha: 0.10),
-                          shape: StadiumBorder(
-                            side: BorderSide(
-                              color: BrandColors.red.withValues(alpha: 0.42),
-                              width: 0.9,
-                            ),
-                          ),
+                  child: Container(
+                    decoration: ShapeDecoration(
+                      color: BrandColors.red.withValues(alpha: 0.10),
+                      shape: StadiumBorder(
+                        side: BorderSide(
+                          color: BrandColors.red.withValues(alpha: 0.42),
+                          width: 0.9,
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
-                            const SizedBox(width: 4),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 320),
-                              switchInCurve: Curves.easeInOutCubic,
-                              switchOutCurve: Curves.easeInOutCubic,
-                              layoutBuilder: (currentChild, previousChildren) => Stack(
-                                alignment: Alignment.centerLeft,
-                                children: [
-                                  ...previousChildren.map((w) => Positioned.fill(child: w)),
-                                  ?currentChild,
-                                ],
-                              ),
-                              transitionBuilder: (child, anim) => FadeTransition(
-                                opacity: anim,
-                                child: child,
-                              ),
-                              child: Text(
-                                _service.prestigeTitle,
-                                key: ValueKey(_service.prestigeTitle),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(Radii.pill),
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 360),
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment.centerLeft,
+                        clipBehavior: Clip.none,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
+                              const SizedBox(width: 4),
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 320),
+                                switchInCurve: Curves.easeInOutCubic,
+                                switchOutCurve: Curves.easeInOutCubic,
+                                layoutBuilder: (currentChild, previousChildren) => Stack(
+                                  alignment: Alignment.centerLeft,
+                                  clipBehavior: Clip.hardEdge,
+                                  children: [
+                                    ...previousChildren.map((w) => Positioned.fill(
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          physics: const NeverScrollableScrollPhysics(),
+                                          child: w,
+                                        ),
+                                      ),
+                                    )),
+                                    ?currentChild,
+                                  ],
+                                ),
+                                transitionBuilder: (child, anim) => FadeTransition(
+                                  opacity: anim,
+                                  child: child,
+                                ),
+                                child: Text(
+                                  _service.prestigeTitle,
+                                  key: ValueKey(_service.prestigeTitle),
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  overflow: TextOverflow.clip,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: theme.colorScheme.onSurface,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 3),
-                            AnimatedRotation(
-                              turns: _isPrestigePickerOpen ? 0.5 : 0.0,
-                              duration: const Duration(milliseconds: 320),
-                              curve: Curves.easeInOutCubic,
-                              child: Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                size: 16,
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              const SizedBox(width: 3),
+                              AnimatedRotation(
+                                turns: _isPrestigePickerOpen ? 0.5 : 0.0,
+                                duration: const Duration(milliseconds: 320),
+                                curve: Curves.easeInOutCubic,
+                                child: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 16,
+                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -3543,14 +3609,24 @@ class _TrackRowState extends State<_TrackRow>
   }
 }
 
+class _TalismanSpot {
+  final double? top;
+  final double? bottom;
+  final double? left;
+  final double? right;
+  const _TalismanSpot({this.top, this.bottom, this.left, this.right});
+}
+
 /// Фоновый арт активного талисмана прямо на карточке аватара в профиле (неоновые кибер-руны, созвездия)
 class _HeaderCardTalismanPainter extends CustomPainter {
   final Color color;
   final Color accent;
+  final List<Color> colors;
 
   const _HeaderCardTalismanPainter({
     required this.color,
     required this.accent,
+    this.colors = const [],
   });
 
   @override
@@ -3559,14 +3635,17 @@ class _HeaderCardTalismanPainter extends CustomPainter {
     final h = size.height;
     final center = Offset(w / 2, 58); // центр над аватаркой
 
+    final primaryColor = colors.isNotEmpty ? colors.first : color;
+    final secondaryColor = colors.length > 1 ? colors[1] : accent;
+
     // Нежная неоновая радиальная подложка
     final aura = Paint()
       ..shader = RadialGradient(
         center: const Alignment(0.0, -0.45),
         radius: 0.70,
         colors: [
-          color.withValues(alpha: 0.16),
-          accent.withValues(alpha: 0.08),
+          primaryColor.withValues(alpha: 0.16),
+          secondaryColor.withValues(alpha: 0.08),
           Colors.transparent,
         ],
         stops: const [0.0, 0.55, 1.0],
@@ -3574,12 +3653,12 @@ class _HeaderCardTalismanPainter extends CustomPainter {
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), aura);
 
     final runeStroke1 = Paint()
-      ..color = color.withValues(alpha: 0.22)
+      ..color = primaryColor.withValues(alpha: 0.22)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
     final runeStroke2 = Paint()
-      ..color = accent.withValues(alpha: 0.18)
+      ..color = secondaryColor.withValues(alpha: 0.18)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8;
 
@@ -3611,7 +3690,7 @@ class _HeaderCardTalismanPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HeaderCardTalismanPainter old) =>
-      old.color != color || old.accent != accent;
+      old.color != color || old.accent != accent || old.colors != colors;
 }
 
 class _PhonkItem {
