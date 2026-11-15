@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'swipe_to_delete.dart' show SwipeToDeleteScope;
+
 /// Плавная отдача «вдавливания» для кнопок и значков: при зажатии элемент
 /// мягко уменьшается до [pressedScale], при отпускании так же плавно
 /// возвращается в исходный размер. То же поведение, что у значков в
@@ -76,6 +78,7 @@ class _PressScaleState extends State<PressScale>
   // контроллере ронял диспетчер жестов (флин в пикере это ловил).
   void _down(PointerDownEvent _) {
     if (!mounted || !widget.enabled) return;
+    if (SwipeToDeleteScope.of(context)) return;
     // Длительность переключаем ДО старта: контроллер живёт один, и без этого
     // после первого же нажатия он запомнил бы длину отпускания.
     _ctrl.duration = widget.duration;
@@ -96,6 +99,10 @@ class _PressScaleState extends State<PressScale>
 
   @override
   Widget build(BuildContext context) {
+    final isSwiping = SwipeToDeleteScope.of(context);
+    if (isSwiping && _ctrl.value > 0) {
+      _ctrl.reverse();
+    }
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: _down,
@@ -104,7 +111,7 @@ class _PressScaleState extends State<PressScale>
       child: AnimatedBuilder(
         animation: _anim,
         builder: (context, child) {
-          final v = _anim.value;
+          final v = isSwiping ? 0.0 : _anim.value;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
           final scaled = Transform.scale(scale: s, child: child);
           if (widget.pressedOpacity >= 1.0) return scaled;

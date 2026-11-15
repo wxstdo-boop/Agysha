@@ -26,7 +26,7 @@ import '../widgets/smooth_typing.dart';
 import '../widgets/premium_empty_state.dart';
 import '../utils/section_tints.dart';
 import '../widgets/section_pill.dart'
-    show kSectionPillSlotHeight, sectionCurrentIndex;
+    show kSectionPillSlotHeight, sectionCurrentIndex, sectionDragPage;
 import 'add_task_screen.dart';
 import '../widgets/agysha_confirm_dialog.dart';
 
@@ -192,6 +192,7 @@ class _TasksScreenState extends State<TasksScreen>
   /// вкладка не присылает событий скролла, а общий notifier мог остаться с
   /// устаревшей высотой: таблетка разделов исчезала до первого скролла).
   void _onCurrentSectionChanged() {
+    if (sectionDragPage.value != null) return;
     if (sectionCurrentIndex.value != widget.pillIndex) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncPillOffset();

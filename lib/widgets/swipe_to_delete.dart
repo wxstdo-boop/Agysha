@@ -19,6 +19,25 @@ import '../utils/animated_delete.dart';
 /// равна `ширина / movementDuration`, поэтому короткий свайп возвращался
 /// почти мгновенно (резкий щелчок). 450 мс даёт спокойный ход и на коротком
 /// свайпе, и на полном смахивании, без догоняющего тикера и лишних слоёв.
+/// Скоуп свайпа: позволяет вложенным кнопкам/виджетам отключать отклик зажатия
+/// (PressScale) во время движения карточки, чтобы карточка не сжималась и не дергалась.
+class SwipeToDeleteScope extends InheritedWidget {
+  final bool isSwiping;
+
+  const SwipeToDeleteScope({
+    super.key,
+    required this.isSwiping,
+    required super.child,
+  });
+
+  static bool of(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<SwipeToDeleteScope>()?.isSwiping ?? false;
+  }
+
+  @override
+  bool updateShouldNotify(SwipeToDeleteScope oldWidget) => isSwiping != oldWidget.isSwiping;
+}
+
 class SwipeToDelete extends StatefulWidget {
   final Key dismissKey;
   final Widget child;
@@ -95,7 +114,10 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
                 // целиком.
                 final opacity = ((p - 0.12) / 0.88).clamp(0.0, 1.0);
                 final cardWidth = (w - inset.left - inset.right).clamp(0.0, w);
-                final revealed = (p.clamp(0.0, 1.0) * cardWidth).clamp(0.0, cardWidth);
+                // Dismissible сдвигает контент ровно на p * w.
+                // Чтобы левый край красной подложки шёл вплотную к правому краю карточки (0px зазор),
+                // ширина раскрытия привязана к p * w и зажата по ширине карточки.
+                final revealed = (p.clamp(0.0, 1.0) * w).clamp(0.0, cardWidth);
                 if (revealed < 0.5) return const SizedBox.shrink();
                 return Stack(
                   children: [
@@ -121,7 +143,13 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
           },
         ),
       ),
-      child: widget.child,
+      child: ValueListenableBuilder<double>(
+        valueListenable: _progress,
+        builder: (context, p, _) => SwipeToDeleteScope(
+          isSwiping: p > 0.002,
+          child: widget.child,
+        ),
+      ),
     );
   }
 }

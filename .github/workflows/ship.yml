@@ -69,9 +69,16 @@ jobs:
     # Пропускаем триггер на push, если коммит начинается с «release:»
     # (это бамп, который сам ship сделал — не нужен рекурсивный запуск).
     # Для workflow_dispatch (ручной) условие всегда true.
-    if: >
+    # Force-push в main (github.event.forced=true) релиз НЕ запускает:
+    # paths-фильтр видит изменённые файлы во всей переписанной истории и
+    # выпускал релиз «на пустом месте» (так вышло с v1.6.79+45151 после
+    # переписи истории). Повисший после force-push настоящий бамп не теряется:
+    # release-watchdog.yml сравнивает версию из pubspec с releases/latest и
+    # зовёт release.yml сам.
+    if: >-
       github.event_name == 'workflow_dispatch' ||
-      !startsWith(github.event.head_commit.message, 'release:')
+      (!startsWith(github.event.head_commit.message, 'release:') &&
+      github.event.forced != true)
     runs-on: ubuntu-latest
     outputs:
       name: ${{ steps.ver.outputs.name }}
