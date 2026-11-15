@@ -18,12 +18,19 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: ^0.20.2
-  # Набор версий подобран под Flutter 3.47 / Dart 3.12. Связка
-  # file_picker 13 + share_plus 13 — единственная, которая резолвится
-  # вместе: share_plus 13 тянет win32 ^6, file_picker 13 — win32 ^6 тоже.
-  # Возврат file_picker к ^10 ломает solve, а удаление share_plus (он нигде
-  # не импортируется) откатывает file_picker и flutter_local_notifications
-  # на старыеmajor-версии и ломает компиляцию. Не откатывать без нужды.
+  # Набор версий подобран под Flutter 3.47 / Dart 3.12. file_picker 13 и
+  # flutter_local_notifications 23 требуют win32 ^6 — возврат file_picker к ^10
+  # ломает solve, не откатывать без нужды.
+  #
+  # Раньше здесь стоял share_plus: ^13.3.1, и комментарий утверждал, что его
+  # удаление «откатывает file_picker и flutter_local_notifications на старые
+  # major-версии и ломает компиляцию». Это проверено и НЕ так: `flutter pub
+  # remove share_plus` удаляет ровно share_plus, share_plus_platform_interface и
+  # mime, а file_picker (13.3.2), flutter_local_notifications (23.0.0) и win32
+  # (6.4.0) остаются на тех же версиях. Сам share_plus в коде не использовался:
+  # `grep -rn "share_plus" lib test` пуст, а упоминания встречались только в
+  # генерируемых registrant-файлах, которые появляются именно потому, что
+  # пакет объявлен в зависимостях.
   dynamic_color: ^1.9.0
   characters: ^1.4.1
   cryptography: ^2.7.0
@@ -52,8 +59,6 @@ dependencies:
   flutter_keyboard_visibility:
     path: third_party/flutter_keyboard_visibility
   http: ^1.2.0
-  share_plus: ^13.3.1
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
