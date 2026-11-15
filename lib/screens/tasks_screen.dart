@@ -17,7 +17,7 @@ import '../utils/page_transitions.dart';
 import '../utils/snackbar.dart';
 import '../utils/wide_dash_formatter.dart';
 import '../utils/wide_dash_controller.dart';
-import '../widgets/smooth_hover.dart';
+import '../widgets/press_scale.dart';
 import '../widgets/animated_strike_text.dart';
 import '../widgets/animated_fab_row.dart';
 import '../widgets/sliding_picker.dart';
@@ -788,14 +788,13 @@ class _TasksScreenState extends State<TasksScreen>
         );
       },
       onDismissed: (_) => _service.remove(task.id),
-      child: SmoothHover(
-        // «Вдавливание» при зажатии — карточка мягко уменьшается.
-        hoverScale: 0.98,
-        duration: const Duration(milliseconds: 160),
+      child: PressScale(
+        pressedScale: 0.985,
         child: _TaskHoldNote(
           onHold: () => _showTaskNote(task),
           child: Card(
             key: ValueKey(task.id),
+            elevation: 0,
             clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),

@@ -444,7 +444,11 @@ class _NutritionScreenState extends State<NutritionScreen>
     return SizedBox(
       width: double.infinity,
       child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: visible ? 1.0 : 0.0),
+        key: const ValueKey('meals_empty_anim'),
+        tween: Tween(
+          begin: visible ? 0.0 : 1.0,
+          end: visible ? 1.0 : 0.0,
+        ),
         duration: dur,
         curve: _mealCollapseCurve,
         builder: (context, v, child) => ClipRect(
@@ -1374,20 +1378,23 @@ class _NutritionScreenState extends State<NutritionScreen>
                         icon: willPin ? Icons.push_pin : Icons.push_pin_outlined,
                       );
                     },
-                    child: Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                    shape: RoundedRectangleBorder(
-                      // Радиус 20 — как у карточек привычек и задач: с 16
-                      // карточка выбивалась из общего языка скруглений, а
-                      // красная плашка удаления не совпадала с ней по углам.
-                      borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(
-                        color: accent.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: ListTile(
+                    child: PressScale(
+                      pressedScale: 0.985,
+                      child: Card(
+                        elevation: 0,
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        shape: RoundedRectangleBorder(
+                          // Радиус 20 — как у карточек привычек и задач: с 16
+                          // карточка выбивалась из общего языка скруглений, а
+                          // красная плашка удаления не совпадала с ней по углам.
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(
+                            color: accent.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: ListTile(
                       leading: Container(
                         width: 40,
                         height: 40,
@@ -1480,6 +1487,7 @@ class _NutritionScreenState extends State<NutritionScreen>
                     ),
                   ),
                 ),
+              ),
               ),
             ),
           ),
