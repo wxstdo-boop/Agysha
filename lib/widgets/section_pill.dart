@@ -236,9 +236,9 @@ class _SectionPillState extends State<SectionPill>
   /// Никаких Timer'ов и второго setState.
   late final AnimationController _edgeSettle;
 
-  /// Плавный довод камня на отпускании (landing): устраняет любой скачок
-  /// Плавный довод камня на отпускании (landing).
+  /// Плавный довод камня на отпускании (landing): устраняет любой скачок.
   late final AnimationController _landingCtrl;
+  double _landingFrom = 0.0;
 
   /// Куда палец увёл камень (дробная страница).
   double _dragPage = 0;
@@ -432,6 +432,7 @@ class _SectionPillState extends State<SectionPill>
     // растянутое положение. Гасим только захваченную тягу за край.
     _startEdgeSettle();
     final target = _dragNearest.clamp(0, count - 1);
+    _landingFrom = _dragPage;
     // Запускаем мягкий довод
     _landingCtrl.forward(from: 0.0);
     // Сначала фиксируем целевой раздел, чтобы подписчики sectionDragPage.value = null
@@ -450,6 +451,7 @@ class _SectionPillState extends State<SectionPill>
       final target = sectionRailPage.value.round().clamp(0, count - 1);
       sectionCurrentIndex.value = target;
     }
+    _landingFrom = _dragPage;
     _landingCtrl.forward(from: 0.0);
     sectionDragPage.value = null;
   }
@@ -538,6 +540,10 @@ class _SectionPillState extends State<SectionPill>
                       double rawPage;
                       if (_dragging && dragPage != null) {
                         rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
+                      } else if (_landingCtrl.isAnimating) {
+                        final t = Curves.easeOutCubic.transform(_landingCtrl.value);
+                        final target = current.toDouble();
+                        rawPage = _landingFrom + (target - _landingFrom) * t;
                       } else {
                         rawPage = page.isFinite ? page : current.toDouble();
                       }

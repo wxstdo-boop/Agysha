@@ -180,12 +180,18 @@ class _HomeScreenState extends State<HomeScreen>
     _onTabTap(sectionCurrentIndex.value);
   }
 
+  ScrollHoldController? _dragHold;
+
   /// Палец ведёт камень по таблетке — двигаем саму карусель мягкой пружиной,
   /// чтобы разделы ехали плавно за пальцем, а не прыгали 1:1.
+  /// Удерживаем позицию (_dragHold), чтобы PageScrollPhysics не пыталась
+  /// автономно доводить экраны во время паузы пальца между разделами.
   void _onSectionDragPage() {
     final page = sectionDragPage.value;
     if (page == null || !page.isFinite) {
-      // Палец отпустил — мягко доводим до выбранного раздела.
+      // Палец отпустил — освобождаем удержание и мягко доводим до выбранного раздела.
+      _dragHold?.cancel();
+      _dragHold = null;
       _dragSpring.stop();
       _pageSpring.to(
         sectionCurrentIndex.value.toDouble(),
@@ -198,11 +204,14 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
     _pageSpring.stop();
+    _dragHold ??= _pageController.position.hold(() {});
     _dragSpring.to(page, maxPage: (_pagesCount - 1).toDouble());
   }
 
   @override
   void dispose() {
+    _dragHold?.cancel();
+    _dragHold = null;
     WidgetsBinding.instance.removeObserver(this);
     sectionPillSnapTarget.removeListener(_onPillSnapTarget);
     _pillSnapCtrl.dispose();

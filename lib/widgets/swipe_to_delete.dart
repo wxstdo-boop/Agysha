@@ -115,9 +115,8 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
                 final revealed = (p.clamp(0.0, 1.0) * w).clamp(0.0, cardWidth);
                 if (revealed < 0.5) return const SizedBox.shrink();
 
-                // Красный фон удаления: правый край закруглён по радиусу карточки,
-                // а левый край строго вертикальный и идёт вплотную к уезжающей карточке (0px зазор)
-                // без задвинутых внутрь скруглений.
+                // Красный фон удаления со скруглением по радиусу карточки,
+                // идущий вплотную к уезжающей карточке (0px зазор)
                 return Padding(
                   padding: widget.inset,
                   child: Align(
@@ -126,12 +125,10 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
                       width: revealed,
                       height: double.infinity,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.only(
-                          topRight: Radius.circular(widget.borderRadius),
-                          bottomRight: Radius.circular(widget.borderRadius),
-                        ),
+                        borderRadius: BorderRadius.circular(widget.borderRadius),
                         child: Container(
                           decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(widget.borderRadius),
                             gradient: LinearGradient(
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
@@ -141,7 +138,6 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
                               ],
                             ),
                           ),
-                          // Иконка и надпись держатся близко к уезжающей карточке (слева внутри фона)
                           alignment: Alignment.centerLeft,
                           padding: const EdgeInsets.only(left: 14),
                           child: ClipRect(

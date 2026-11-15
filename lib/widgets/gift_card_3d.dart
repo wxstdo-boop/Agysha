@@ -130,7 +130,9 @@ class _GiftCard3DState extends State<GiftCard3D>
                 return Transform(
                   transform: transform,
                   alignment: FractionalOffset.center,
-                  child: Container(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.easeInOutCubic,
                     width: widget.width,
                     height: widget.height,
                     decoration: BoxDecoration(
@@ -319,72 +321,80 @@ class ArtifactEmblem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = activeColorOverride ?? (isFavorite ? BrandColors.red : color);
+    final targetColor = activeColorOverride ?? (isFavorite ? BrandColors.red : color);
 
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Внешняя радиальная неоновая аура
-          Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  activeColor.withValues(alpha: 0.38),
-                  activeColor.withValues(alpha: 0.10),
-                  Colors.transparent,
-                ],
-                stops: const [0.0, 0.55, 1.0],
-              ),
-            ),
-          ),
-          // Фасетная кристаллическая подложка с многослойным градиентом
-          Container(
-            width: size * 0.86,
-            height: size * 0.86,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.24),
-                  activeColor.withValues(alpha: 0.18),
-                  Colors.black.withValues(alpha: 0.55),
-                ],
-              ),
-              border: Border.all(
-                color: activeColor.withValues(alpha: 0.65),
-                width: 1.4,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: activeColor.withValues(alpha: 0.35),
-                  blurRadius: 12,
-                  spreadRadius: -2,
+    return TweenAnimationBuilder<Color?>(
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeInOutCubic,
+      tween: ColorTween(end: targetColor),
+      builder: (context, animColor, _) {
+        final activeColor = animColor ?? targetColor;
+        return SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Внешняя радиальная неоновая аура
+              Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      activeColor.withValues(alpha: 0.38),
+                      activeColor.withValues(alpha: 0.10),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.55, 1.0],
+                  ),
                 ),
-              ],
-            ),
-          ),
-          // Острый геометрический векторный артефакт
-          SizedBox(
-            width: size * 0.65,
-            height: size * 0.65,
-            child: CustomPaint(
-              painter: SharpArtifactPainter(
-                giftId: giftId,
-                color: activeColor,
-                isFavorite: isFavorite,
               ),
-            ),
+              // Фасетная кристаллическая подложка с многослойным градиентом
+              Container(
+                width: size * 0.86,
+                height: size * 0.86,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.28),
+                      activeColor.withValues(alpha: 0.22),
+                      const Color(0xFF0C0E1A),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: activeColor.withValues(alpha: 0.70),
+                    width: 1.4,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: activeColor.withValues(alpha: 0.38),
+                      blurRadius: 12,
+                      spreadRadius: -2,
+                    ),
+                  ],
+                ),
+              ),
+              // Острый геометрический векторный артефакт
+              SizedBox(
+                width: size * 0.65,
+                height: size * 0.65,
+                child: CustomPaint(
+                  painter: SharpArtifactPainter(
+                    giftId: giftId,
+                    color: activeColor,
+                    isFavorite: isFavorite,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -441,10 +451,9 @@ class SharpArtifactPainter extends CustomPainter {
   }
 
   void _drawChronoCrystal(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
-    // Внешняя кроваво-кристаллическая аура
-    final glowColor = isFavorite ? BrandColors.red : color;
+    // Внешняя кристаллическая аура
     final glow = Paint()
-      ..color = glowColor.withValues(alpha: 0.35)
+      ..color = color.withValues(alpha: 0.35)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
     canvas.drawCircle(Offset(cx, cy), r * 0.80, glow);
 
@@ -457,44 +466,44 @@ class SharpArtifactPainter extends CustomPainter {
     final mLeft = Offset(cx - r * 0.36, cy + r * 0.24);
     final mRight = Offset(cx + r * 0.36, cy + r * 0.24);
 
-    // Верхние фасеты (глубокий обсидиан + кровавый неон)
+    // Верхние фасеты (чистый неон + прозрачные кристаллы)
     final tablePath = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(top.dx, top.dy)..close();
-    fill.color = glowColor.withValues(alpha: 0.95);
+    fill.color = color.withValues(alpha: 0.92);
     canvas.drawPath(tablePath, fill);
 
     final fLt = Path()..moveTo(top.dx, top.dy)..lineTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..close();
-    fill.color = const Color(0xFF160A14);
+    fill.color = color.withValues(alpha: 0.38);
     canvas.drawPath(fLt, fill);
 
     final fRt = Path()..moveTo(top.dx, top.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..close();
-    fill.color = glowColor.withValues(alpha: 0.85);
+    fill.color = color.withValues(alpha: 0.80);
     canvas.drawPath(fRt, fill);
 
-    // Центральное плато с кровавым отблеском
+    // Центральное плато с белым спекулярным отблеском
     final fCenter = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
-    fill.color = Colors.white.withValues(alpha: 0.55);
+    fill.color = Colors.white.withValues(alpha: 0.65);
     canvas.drawPath(fCenter, fill);
 
     // Боковые фасеты
     final fCl = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
-    fill.color = const Color(0xFF1E0E1B);
+    fill.color = color.withValues(alpha: 0.28);
     canvas.drawPath(fCl, fill);
 
     final fCr = Path()..moveTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..close();
-    fill.color = glowColor.withValues(alpha: 0.70);
+    fill.color = color.withValues(alpha: 0.70);
     canvas.drawPath(fCr, fill);
 
     // Нижние кинжальные грани
     final fBc = Path()..moveTo(mLeft.dx, mLeft.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
-    fill.color = glowColor;
+    fill.color = color.withValues(alpha: 0.95);
     canvas.drawPath(fBc, fill);
 
     final fBl = Path()..moveTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..lineTo(bot.dx, bot.dy)..close();
-    fill.color = const Color(0xFF120710);
+    fill.color = color.withValues(alpha: 0.22);
     canvas.drawPath(fBl, fill);
 
     final fBr = Path()..moveTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
-    fill.color = glowColor.withValues(alpha: 0.80);
+    fill.color = color.withValues(alpha: 0.75);
     canvas.drawPath(fBr, fill);
 
     // Брутальная центральная темпоральная трещина (кровавый лазерный разлом)
@@ -519,7 +528,7 @@ class SharpArtifactPainter extends CustomPainter {
       ..close();
     canvas.drawPath(outline, stroke);
 
-    stroke.color = glowColor.withValues(alpha: 0.85);
+    stroke.color = color.withValues(alpha: 0.85);
     stroke.strokeWidth = 1.2;
     canvas.drawLine(tLeft, tRight, stroke);
     canvas.drawLine(mLeft, mRight, stroke);
@@ -726,9 +735,8 @@ class SharpArtifactPainter extends CustomPainter {
   }
 
   void _drawSamuraiVisor(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
-    final activeColor = isFavorite ? BrandColors.red : color;
-    // Окровавленные скрещенные кибер-катаны за шлемом
-    stroke.color = activeColor.withValues(alpha: 0.85);
+    // Скрещенные кибер-катаны за шлемом
+    stroke.color = color.withValues(alpha: 0.85);
     stroke.strokeWidth = 2.4;
     canvas.drawLine(Offset(cx - r * 0.90, cy - r * 0.90), Offset(cx + r * 0.90, cy + r * 0.90), stroke);
     canvas.drawLine(Offset(cx + r * 0.90, cy - r * 0.90), Offset(cx - r * 0.90, cy + r * 0.90), stroke);
@@ -739,7 +747,7 @@ class SharpArtifactPainter extends CustomPainter {
     canvas.drawLine(Offset(cx - r * 0.86, cy - r * 0.86), Offset(cx + r * 0.86, cy + r * 0.86), stroke);
     canvas.drawLine(Offset(cx + r * 0.86, cy - r * 0.86), Offset(cx - r * 0.86, cy + r * 0.86), stroke);
 
-    // Рога Кабуто (демонический кровавый полумесяц Они)
+    // Рога Кабуто (демонический полумесяц Они в неоновой оправе)
     final horns = Path()
       ..moveTo(cx, cy - r * 0.32)
       ..lineTo(cx - r * 0.86, cy - r * 1.02)
@@ -748,13 +756,13 @@ class SharpArtifactPainter extends CustomPainter {
       ..lineTo(cx + r * 0.60, cy - r * 1.02)
       ..lineTo(cx + r * 0.86, cy - r * 1.02)
       ..close();
-    fill.color = const Color(0xFF140810);
+    fill.color = const Color(0xFF0C0E1A);
     canvas.drawPath(horns, fill);
-    stroke.color = BrandColors.red;
+    stroke.color = color;
     stroke.strokeWidth = 1.6;
     canvas.drawPath(horns, stroke);
 
-    // Броня Мэмпо (обсидиановая черепная маска демона-самурая)
+    // Броня Мэмпо (обсидиановая маска демона-самурая с белым лазерным контуром)
     final mask = Path()
       ..moveTo(cx - r * 0.72, cy - r * 0.28)
       ..lineTo(cx + r * 0.72, cy - r * 0.28)
@@ -762,20 +770,20 @@ class SharpArtifactPainter extends CustomPainter {
       ..lineTo(cx, cy + r * 1.00)
       ..lineTo(cx - r * 0.62, cy + r * 0.40)
       ..close();
-    fill.color = const Color(0xFF0F060D);
+    fill.color = const Color(0xFF101322);
     canvas.drawPath(mask, fill);
-    stroke.color = Colors.white.withValues(alpha: 0.90);
+    stroke.color = Colors.white.withValues(alpha: 0.95);
     stroke.strokeWidth = 1.6;
     canvas.drawPath(mask, stroke);
 
-    // Кровавые боевые полосы на броне щек
-    stroke.color = BrandColors.red;
+    // Неоновые боевые полосы на броне щек
+    stroke.color = color;
     stroke.strokeWidth = 2.0;
     canvas.drawLine(Offset(cx - r * 0.50, cy + r * 0.10), Offset(cx - r * 0.25, cy + r * 0.48), stroke);
     canvas.drawLine(Offset(cx + r * 0.50, cy + r * 0.10), Offset(cx + r * 0.25, cy + r * 0.48), stroke);
 
-    // Угрожающий лазерный оптический разрез глаз
-    fill.color = BrandColors.red;
+    // Лазерный оптический разрез глаз / визор
+    fill.color = color;
     final eyeL = Path()..moveTo(cx - r * 0.56, cy - r * 0.04)..lineTo(cx - r * 0.12, cy + r * 0.08)..lineTo(cx - r * 0.12, cy + r * 0.18)..lineTo(cx - r * 0.56, cy + r * 0.08)..close();
     final eyeR = Path()..moveTo(cx + r * 0.56, cy - r * 0.04)..lineTo(cx + r * 0.12, cy + r * 0.08)..lineTo(cx + r * 0.12, cy + r * 0.18)..lineTo(cx + r * 0.56, cy + r * 0.08)..close();
     canvas.drawPath(eyeL, fill);
