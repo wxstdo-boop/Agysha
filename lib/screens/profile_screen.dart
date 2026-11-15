@@ -575,36 +575,65 @@ class _ProfileScreenState extends State<ProfileScreen>
         leading: const BackButtonTooltip(),
         centerTitle: true,
       ),
-      body: AnimatedBuilder(
-        animation: _service,
-        builder: (context, _) => ListView(
-          controller: _scrollCtrl,
-          padding: const EdgeInsets.fromLTRB(
-            Spacing.md,
-            Spacing.sm,
-            Spacing.md,
-            Spacing.xxl,
+      body: Stack(
+        children: [
+          // Талисманы плавно появляются на фоне профиля повсюду
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _service,
+              builder: (context, _) {
+                final talisman = _service.activeTalisman;
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 600),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: talisman != null
+                      ? RepaintBoundary(
+                          key: ValueKey('bg_talisman_${talisman.id}'),
+                          child: CustomPaint(
+                            painter: _TalismanBackgroundPainter(
+                              color: talisman.rarity.color,
+                              accent: BrandColors.red,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('no_bg_talisman')),
+                );
+              },
+            ),
           ),
-          children: [
-            _headerCard(theme),
-            const SizedBox(height: Spacing.md),
-            _nameCard(theme),
-            const SizedBox(height: Spacing.md),
-            _onlineCard(theme),
-            const SizedBox(height: Spacing.md),
-            _musicCard(theme),
-            const SizedBox(height: Spacing.md),
-            _leaderboardCard(theme),
-            const SizedBox(height: Spacing.md),
-            // Очки — сразу после рейтинга: «за что» читается рядом с «кто
-            // сколько», а карточки музыки и рейтинга остаются на своих местах.
-            _scoreCard(theme),
-            const SizedBox(height: Spacing.md),
-            _giftsCard(theme),
-            const SizedBox(height: Spacing.md),
-            _eventsCard(theme),
-          ],
-        ),
+          AnimatedBuilder(
+            animation: _service,
+            builder: (context, _) => ListView(
+              controller: _scrollCtrl,
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.md,
+                Spacing.sm,
+                Spacing.md,
+                Spacing.xxl,
+              ),
+              children: [
+                _headerCard(theme),
+                const SizedBox(height: Spacing.md),
+                _nameCard(theme),
+                const SizedBox(height: Spacing.md),
+                _onlineCard(theme),
+                const SizedBox(height: Spacing.md),
+                _musicCard(theme),
+                const SizedBox(height: Spacing.md),
+                _leaderboardCard(theme),
+                const SizedBox(height: Spacing.md),
+                // Очки — сразу после рейтинга: «за что» читается рядом с «кто
+                // сколько», а карточки музыки и рейтинга остаются на своих местах.
+                _scoreCard(theme),
+                const SizedBox(height: Spacing.md),
+                _giftsCard(theme),
+                const SizedBox(height: Spacing.md),
+                _eventsCard(theme),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -614,33 +643,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     final name = _service.displayName.isEmpty
         ? Translations.t('profileAnonymous', context, 'Аноним')
         : _service.displayName;
-    final talisman = _service.activeTalisman;
 
-    return Stack(
-      children: [
-        // Талисманы плавно появляются на фоне профиля повсюду, а не за аватаркой
-        Positioned.fill(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 500),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child: talisman != null
-                ? RepaintBoundary(
-                    key: ValueKey('bg_talisman_${talisman.id}'),
-                    child: CustomPaint(
-                      painter: _TalismanBackgroundPainter(
-                        color: talisman.rarity.color,
-                        accent: BrandColors.red,
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink(key: ValueKey('no_bg_talisman')),
-          ),
-        ),
-        _Card(
-          child: Column(
-            children: [
-              const SizedBox(height: Spacing.xs),
+    return _Card(
+      child: Column(
+        children: [
+          const SizedBox(height: Spacing.xs),
               AudioSpectrumRing(
                 radius: 48,
                 child: SizedBox(
@@ -753,8 +760,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                 child: GestureDetector(
                   onTap: _showPrestigeTitlePicker,
                   child: AnimatedSize(
-                    duration: const Duration(milliseconds: 320),
+                    duration: const Duration(milliseconds: 280),
                     curve: Curves.easeInOutCubic,
+                    alignment: Alignment.centerLeft,
                     child: Container(
                       padding:
                           const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -772,14 +780,21 @@ class _ProfileScreenState extends State<ProfileScreen>
                           const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
                           const SizedBox(width: 4),
                           AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 320),
+                            duration: const Duration(milliseconds: 260),
                             switchInCurve: Curves.easeOutCubic,
                             switchOutCurve: Curves.easeInCubic,
+                            layoutBuilder: (currentChild, previousChildren) => Stack(
+                              alignment: Alignment.centerLeft,
+                              children: [
+                                ...previousChildren,
+                                ?currentChild,
+                              ],
+                            ),
                             transitionBuilder: (child, anim) => FadeTransition(
                               opacity: anim,
                               child: SlideTransition(
                                 position: Tween<Offset>(
-                                  begin: const Offset(0, 0.2),
+                                  begin: const Offset(0, 0.15),
                                   end: Offset.zero,
                                 ).animate(anim),
                                 child: child,
@@ -809,9 +824,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ],
           ),
-        ),
-      ],
-    );
+        );
   }
 
   static const List<String> _prestigeTitles = [
@@ -3052,7 +3065,7 @@ class _TrackRowState extends State<_TrackRow>
   }
 }
 
-/// Фоновый шейдер активного талисмана на карточке профиля (мягкие кибер-руны и созвездие ауры)
+/// Фоновый шейдер активного талисмана на экране профиля (мягкие кибер-руны, неоновые созвездия и аура)
 class _TalismanBackgroundPainter extends CustomPainter {
   final Color color;
   final Color accent;
@@ -3067,25 +3080,53 @@ class _TalismanBackgroundPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
+    // Мягкое неоновое свечение в верхней и нижней части экрана
+    final topAura = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(0.0, -0.75),
+        radius: 0.9,
+        colors: [
+          color.withValues(alpha: 0.12),
+          color.withValues(alpha: 0.04),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.45, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), topAura);
+
+    final bottomAura = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(0.35, 0.65),
+        radius: 0.85,
+        colors: [
+          accent.withValues(alpha: 0.08),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), bottomAura);
+
     final paint1 = Paint()
-      ..color = accent.withValues(alpha: 0.08)
+      ..color = accent.withValues(alpha: 0.12)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
     final paint2 = Paint()
-      ..color = color.withValues(alpha: 0.07)
+      ..color = color.withValues(alpha: 0.10)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
-    // Несколько геометрических кибер-рунических кругов по углам фона
-    canvas.drawCircle(Offset(w * 0.12, h * 0.25), 32, paint1);
-    canvas.drawCircle(Offset(w * 0.88, h * 0.35), 44, paint2);
-    canvas.drawCircle(Offset(w * 0.82, h * 0.78), 28, paint1);
-    canvas.drawCircle(Offset(w * 0.18, h * 0.82), 38, paint2);
+    // Кибер-рунические круги и созвездия по фону профиля
+    canvas.drawCircle(Offset(w * 0.12, h * 0.18), 36, paint1);
+    canvas.drawCircle(Offset(w * 0.88, h * 0.28), 48, paint2);
+    canvas.drawCircle(Offset(w * 0.82, h * 0.68), 32, paint1);
+    canvas.drawCircle(Offset(w * 0.15, h * 0.76), 42, paint2);
 
     // Мягкие диагональные линии созвездия
-    canvas.drawLine(Offset(w * 0.12, h * 0.25), Offset(w * 0.28, h * 0.18), paint1);
-    canvas.drawLine(Offset(w * 0.88, h * 0.35), Offset(w * 0.72, h * 0.48), paint2);
+    canvas.drawLine(Offset(w * 0.12, h * 0.18), Offset(w * 0.26, h * 0.14), paint1);
+    canvas.drawLine(Offset(w * 0.88, h * 0.28), Offset(w * 0.74, h * 0.38), paint2);
+    canvas.drawLine(Offset(w * 0.82, h * 0.68), Offset(w * 0.68, h * 0.72), paint1);
+    canvas.drawLine(Offset(w * 0.15, h * 0.76), Offset(w * 0.30, h * 0.82), paint2);
   }
 
   @override

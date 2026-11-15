@@ -95,6 +95,9 @@ class _AudioSpectrumRingState extends State<AudioSpectrumRing>
       child: AnimatedBuilder(
         animation: Listenable.merge([_phaseController, _playTransition]),
         builder: (context, child) {
+          if (_playTransition.value <= 0.001) {
+            return child!;
+          }
           final transitionCurve = Curves.easeInOutCubic.transform(
             _playTransition.value.clamp(0.0, 1.0),
           );

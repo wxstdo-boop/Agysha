@@ -322,12 +322,14 @@ void main() {
     final svc = HabitService();
     await svc.load();
     // Три привычки с одной и той же историей (отметка 2 дня назад,
-    // стрик 5), но разными расписаниями: ежедневная, будни и «только
+    // стрик 5), но разными расписаниями: ежедневная, положенная вчера и «только
     // сегодняшний день недели».
-    final todayWd = HabitService.mskToday().weekday;
+    final today = HabitService.mskToday();
+    final todayWd = today.weekday;
+    final yesterdayWd = today.subtract(const Duration(days: 1)).weekday;
     final variants = <String, List<int>>{
       'h-daily': const [],
-      'h-weekdays': const [1, 2, 3, 4, 5],
+      'h-yesterday': <int>[yesterdayWd],
       'h-today': <int>[todayWd],
     };
     for (final e in variants.entries) {
@@ -342,9 +344,9 @@ void main() {
         ),
       );
     }
-    // Для ежедневной и будничной пропущен положенный день → сброс.
+    // Для ежедневной и вчерашней пропущен положенный день → сброс.
     expect(svc.habits.firstWhere((h) => h.id == 'h-daily').streak, 0);
-    expect(svc.habits.firstWhere((h) => h.id == 'h-weekdays').streak, 0);
+    expect(svc.habits.firstWhere((h) => h.id == 'h-yesterday').streak, 0);
     // А у привычки «только сегодня» пропущенный день не был положен —
     // серия честно живёт. Это и есть правильное (не одинаковое!) поведение.
     expect(svc.habits.firstWhere((h) => h.id == 'h-today').streak, 5);
