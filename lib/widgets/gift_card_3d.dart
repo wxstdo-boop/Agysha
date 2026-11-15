@@ -91,22 +91,7 @@ class _GiftCard3DState extends State<GiftCard3D>
   }
 
   void _openDetails(BuildContext context) {
-    Haptics.select();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: AnimationStyle(
-        curve: Curves.easeOutCubic,
-        duration: const Duration(milliseconds: 340),
-        reverseCurve: Curves.easeInCubic,
-        reverseDuration: const Duration(milliseconds: 240),
-      ),
-      builder: (ctx) => _GiftDetailsSheet(
-        gift: widget.gift,
-        onFavoriteToggled: widget.onFavoriteToggled,
-      ),
-    );
+    showGiftDetailsSheet(context, widget.gift, widget.onFavoriteToggled);
   }
 
   @override
@@ -131,24 +116,25 @@ class _GiftCard3DState extends State<GiftCard3D>
             ..rotateX(tiltX)
             ..rotateY(tiltY);
 
-          return Listener(
+          return GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onPointerDown: (e) => _updateTiltFromPos(e.localPosition),
-            onPointerMove: (e) => _updateTiltFromPos(e.localPosition),
-            onPointerUp: (e) => _resetTilt(),
-            onPointerCancel: (e) => _resetTilt(),
+            onHorizontalDragStart: (d) => _updateTiltFromPos(d.localPosition),
+            onHorizontalDragUpdate: (d) => _updateTiltFromPos(d.localPosition),
+            onHorizontalDragEnd: (_) => _resetTilt(),
+            onHorizontalDragCancel: _resetTilt,
+            onVerticalDragStart: (d) => _updateTiltFromPos(d.localPosition),
+            onVerticalDragUpdate: (d) => _updateTiltFromPos(d.localPosition),
+            onVerticalDragEnd: (_) => _resetTilt(),
+            onVerticalDragCancel: _resetTilt,
+            onTap: () => _openDetails(context),
             child: PressScale(
               pressedScale: 0.94,
               duration: const Duration(milliseconds: 140),
               releaseDuration: const Duration(milliseconds: 220),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _openDetails(context),
-                child: Transform(
-                  transform: transform,
-                  alignment: FractionalOffset.center,
-                  child: child!,
-                ),
+              child: Transform(
+                transform: transform,
+                alignment: FractionalOffset.center,
+                child: child!,
               ),
             ),
           );
@@ -273,7 +259,7 @@ class _GiftCard3DState extends State<GiftCard3D>
                       const Spacer(),
                       // Центральная иконка артефакта с аурой
                       Center(
-                        child: _ArtifactEmblem(
+                        child: ArtifactEmblem(
                           giftId: widget.gift.id,
                           icon: widget.gift.icon,
                           color: rarity.color,
@@ -319,14 +305,15 @@ class _GiftCard3DState extends State<GiftCard3D>
 }
 
 /// Роскошная многослойная 3D-эмблема NFT артефакта с драгоценным сиянием и острым векторным кристаллом
-class _ArtifactEmblem extends StatelessWidget {
+class ArtifactEmblem extends StatelessWidget {
   final String giftId;
   final IconData icon;
   final Color color;
   final bool isFavorite;
   final double size;
 
-  const _ArtifactEmblem({
+  const ArtifactEmblem({
+    super.key,
     this.giftId = '',
     required this.icon,
     required this.color,
@@ -393,7 +380,7 @@ class _ArtifactEmblem extends StatelessWidget {
             width: size * 0.65,
             height: size * 0.65,
             child: CustomPaint(
-              painter: _SharpArtifactPainter(
+              painter: SharpArtifactPainter(
                 giftId: giftId,
                 color: activeColor,
                 isFavorite: isFavorite,
@@ -407,12 +394,12 @@ class _ArtifactEmblem extends StatelessWidget {
 }
 
 /// Острые, высокодетализированные геометрические векторные значки NFT артефактов
-class _SharpArtifactPainter extends CustomPainter {
+class SharpArtifactPainter extends CustomPainter {
   final String giftId;
   final Color color;
   final bool isFavorite;
 
-  const _SharpArtifactPainter({
+  const SharpArtifactPainter({
     required this.giftId,
     required this.color,
     required this.isFavorite,
@@ -734,7 +721,7 @@ class _SharpArtifactPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _SharpArtifactPainter oldDelegate) {
+  bool shouldRepaint(covariant SharpArtifactPainter oldDelegate) {
     return oldDelegate.giftId != giftId ||
         oldDelegate.color != color ||
         oldDelegate.isFavorite != isFavorite;
@@ -805,6 +792,30 @@ class _HoloFoilPainter extends CustomPainter {
   }
 }
 
+/// Открыть модальное окно деталей и примерки артефакта
+void showGiftDetailsSheet(
+  BuildContext context,
+  ProfileGift gift,
+  VoidCallback? onFavoriteToggled,
+) {
+  Haptics.select();
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    sheetAnimationStyle: AnimationStyle(
+      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 340),
+      reverseCurve: Curves.easeInCubic,
+      reverseDuration: const Duration(milliseconds: 240),
+    ),
+    builder: (ctx) => _GiftDetailsSheet(
+      gift: gift,
+      onFavoriteToggled: onFavoriteToggled,
+    ),
+  );
+}
+
 /// Модальный лист детального осмотра артефакта в стиле киберпанк
 class _GiftDetailsSheet extends StatefulWidget {
   final ProfileGift gift;
@@ -866,7 +877,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
             ),
             const SizedBox(height: 20),
             // Огромная иконка артефакта с неоновой аурой
-            _ArtifactEmblem(
+            ArtifactEmblem(
               giftId: widget.gift.id,
               icon: widget.gift.icon,
               color: rarity.color,

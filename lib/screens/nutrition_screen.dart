@@ -53,6 +53,8 @@ class _NutritionScreenState extends State<NutritionScreen>
   /// после этого `confirmDismiss` возвращает true, а модель теряет запись.
   /// Соседи подаются вверх непрерывно — собственных прыжков ни у кого нет.
   final Set<String> _removingMealIds = <String>{};
+  final Set<int> _removingDayDiffs = <int>{};
+  double _lastReportedTodayCalories = 0.0;
 
   /// Схлопывание строки при удалении и «догонялка» [AnimatedSize] над блоком
   /// истории идут РОВНО этой длительностью и кривой. Разные значения означали
@@ -100,7 +102,12 @@ class _NutritionScreenState extends State<NutritionScreen>
       if (mounted) _enter.forward();
     });
     _service.load().whenComplete(() {
-      if (mounted) setState(() => _loaded = true);
+      if (mounted) {
+        setState(() {
+          _loaded = true;
+          _lastReportedTodayCalories = _service.todayCalories.toDouble();
+        });
+      }
     });
   }
 
@@ -1036,9 +1043,16 @@ class _NutritionScreenState extends State<NutritionScreen>
     return PressScale(
       pressedScale: 0.96,
       child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0, end: _service.todayCalories.toDouble()),
-        duration: const Duration(milliseconds: 620),
-        curve: Curves.easeOutCubic,
+        key: const ValueKey('trends_today_calories'),
+        tween: Tween<double>(
+          begin: _lastReportedTodayCalories,
+          end: _service.todayCalories.toDouble(),
+        ),
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOutCubic,
+        onEnd: () {
+          _lastReportedTodayCalories = _service.todayCalories.toDouble();
+        },
         builder: (context, shown, _) => _ringed(
           accent: theme.colorScheme.secondary,
           child: NutritionTrends(
@@ -1193,6 +1207,7 @@ class _NutritionScreenState extends State<NutritionScreen>
       key: ValueKey('day_$diff'),
       label: label,
       theme: theme,
+      removing: _removingDayDiffs.contains(diff),
     );
   }
 
@@ -1258,11 +1273,27 @@ class _NutritionScreenState extends State<NutritionScreen>
           destructive: true,
         );
         if (ok == true && mounted) {
-          // Строка сама отыгрывает уход (растворение + схлопывание), и только
-          // после этого Dismissible завершает жест: место освобождается
-          // непрерывно, соседи подаются вверх плавно.
-          setState(() => _removingMealIds.add(meal.id));
+          final today = DateTime.now();
+          final mDate = DateTime(meal.date.year, meal.date.month, meal.date.day);
+          final diff = DateTime(today.year, today.month, today.day).difference(mDate).inDays;
+          final dayMeals = _service.meals.where((m) {
+            final d = DateTime(m.date.year, m.date.month, m.date.day);
+            return d == mDate && !_removingMealIds.contains(m.id);
+          }).toList();
+          final isLastMealOfDay = dayMeals.length <= 1 && dayMeals.any((m) => m.id == meal.id);
+
+          setState(() {
+            _removingMealIds.add(meal.id);
+            if (isLastMealOfDay) {
+              _removingDayDiffs.add(diff);
+            }
+          });
           await Future<void>.delayed(_mealCollapse);
+          if (mounted) {
+            setState(() {
+              _removingDayDiffs.remove(diff);
+            });
+          }
         }
         return ok == true;
       },

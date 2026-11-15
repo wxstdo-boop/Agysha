@@ -15,6 +15,7 @@ Widget animatedDeleteBackground(
   BuildContext context, {
   double borderRadius = 20,
   double opacity = 1.0,
+  Alignment alignment = Alignment.centerLeft,
 }) {
   final a = opacity.clamp(0.0, 1.0);
   // Полупрозрачно-красный: сквозь плашку просвечивает карточка, и удаление
@@ -35,15 +36,13 @@ Widget animatedDeleteBackground(
         ],
       ),
     ),
-    alignment: Alignment.centerRight,
+    alignment: alignment,
     padding: const EdgeInsets.symmetric(horizontal: 14),
-    // Плашка может быть УЖЕ своей подписи (она растёт вместе со свайпом),
-    // поэтому содержимое не сжимается, а «уезжает» вправо и обрезается:
-    // иконка с надписью прижаты к правому краю, левый край отсекает
-    // ClipRect — без этого Row переполнялся и рисовал полосы переполнения.
+    // Содержимое прижато к левому краю (вплотную к краю уезжающей карточки),
+    // чтобы не было огромного пустого расстояния при свайпе
     child: ClipRect(
       child: OverflowBox(
-        alignment: Alignment.centerRight,
+        alignment: alignment,
         minWidth: 0,
         maxWidth: double.infinity,
         child: Row(

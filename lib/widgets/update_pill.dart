@@ -285,9 +285,7 @@ class _UpdatePillState extends State<UpdatePill>
                       size: 18,
                       color: cs.onPrimaryContainer,
                       enter: _enterCurve,
-                      // Колесо крутится плавно и непрерывно: оборот чуть
-                      // быстрее, чем у окна, чтобы в узкой таблетке движение
-                      // читалось, но не суетилось.
+                      isSpinning: _busy || update != null,
                       period: const Duration(milliseconds: 2600),
                     ),
                   ),
@@ -460,6 +458,7 @@ class _UpdateConfirmDialogState extends State<_UpdateConfirmDialog>
                               size: 22,
                               color: cs.primary,
                               enter: _enterCurve,
+                              isSpinning: true,
                               period: const Duration(milliseconds: 3600),
                             ),
                           ),

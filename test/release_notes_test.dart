@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,9 @@ void main() {
   /// они честно помечаются как пропущенные, а не «сломанные».
   final skipWithoutBash = _bashAvailable() ? null : 'нужен bash (есть в CI)';
 
+  /// Путь в POSIX-виде: `C:\a\b` -> `C:/a/b`, что Git Bash понимает.
+  String posix(String p) => p.replaceAll('\\', '/');
+
   /// Прогоняет настоящий скрипт (не мок) и возвращает его stdout.
   ///
   /// Вызывается только когда bash доступен (см. [skipWithoutBash]).
@@ -28,13 +32,14 @@ void main() {
         reason: 'tool/release_notes.sh не найден — тест не из корня');
 
     // Скрипт читает stdin; Process.runSync не умеет его заполнять, поэтому
-    // подаём вход через временный файл.
+    // подаём вход через временный файл. Пути переводим в POSIX-вид: под
+    // Git Bash на Windows бэкслеши в `bash -c` съедаются как escape-символы.
     final tmp = File('${Directory.systemTemp.path}/release_notes_in.txt')
       ..writeAsStringSync(input);
     final res = Process.runSync('bash', [
       '-c',
-      'bash ${script.path} < ${tmp.path}',
-    ]);
+      'bash ${posix(script.path)} < ${posix(tmp.path)}',
+    ], stdoutEncoding: utf8);
     tmp.deleteSync();
     expect(res.exitCode, 0,
         reason: 'фильтр заметок обязан завершаться успешно');

@@ -11,7 +11,6 @@ import '../services/habit_service.dart';
 import '../services/settings_service.dart';
 import '../l10n/translations.dart';
 import '../widgets/swipe_to_delete.dart';
-import '../widgets/press_splat.dart' show PressSplat;
 import '../widgets/blood_speck.dart' show BloodSpeck, BloodSpeckPainter;
 import '../widgets/press_scale.dart';
 import '../utils/page_transitions.dart';
@@ -1535,97 +1534,75 @@ class _HabitsScreenState extends State<HabitsScreen>
                         // как раскрывалась.
                         // 760 мс (было 480): вход и выход — одна мягкая волна
                         // (easeInOutCubic), без рывка в конце.
+                        // Раскрытие/закрытие заметки: плавная синхронная анимация высоты
+                        // (AnimatedSize + Fade) ровно за 320 мс по Curves.easeInOutCubic,
+                        // в полной гармонии с поворотом стрелочки.
                         if (habit.notes.isNotEmpty ||
                             (habit.type == 'good' && habit.status.isNotEmpty))
-                          TweenAnimationBuilder<double>(
-                            tween: Tween<double>(
-                              // begin всегда 0: при первом построении закрытая
-                              // панель не «проигрывает» открытие. Когда end
-                              // меняется, твин стартует с ТЕКУЩЕГО значения —
-                              // поэтому закрытие идёт из 1 в 0 так же гладко.
-                              begin: 0.0,
-                              end: (_expandedNotes[habit.id] ?? false)
-                                  ? 1.0
-                                  : 0.0,
-                            ),
-                            duration: const Duration(milliseconds: 760),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 320),
                             curve: Curves.easeInOutCubic,
-                            builder: (context, t, child) => ClipRect(
-                              child: Align(
-                                alignment: Alignment.topCenter,
-                                // Высота сжимается вместе с прозрачностью:
-                                // панель уезжает вверх, а не пропадает.
-                                heightFactor: t,
-                                child: Opacity(
-                                  opacity: t,
-                                  child: Transform.translate(
-                                    offset: Offset(0, (1.0 - t) * -12),
-                                    child: child,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            // Панель строится ВСЕГДА (пока есть контент): заметки
-                            // — всегда; статус — только у полезной привычки
-                            // (у вредной статус не рисуется).
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 6, bottom: 4),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color:
-                                      theme.colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (habit.type == 'good' &&
-                                        habit.status.isNotEmpty) ...[
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                            alignment: Alignment.topCenter,
+                            clipBehavior: Clip.hardEdge,
+                            child: (_expandedNotes[habit.id] ?? false)
+                                ? Padding(
+                                    padding: const EdgeInsets.only(top: 6, bottom: 4),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Icon(
-                                            Icons.lightbulb,
-                                            size: 16,
-                                            color: theme.colorScheme.primary,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              habit.status,
+                                          if (habit.type == 'good' &&
+                                              habit.status.isNotEmpty) ...[
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Icon(
+                                                  Icons.lightbulb,
+                                                  size: 16,
+                                                  color: theme.colorScheme.primary,
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Expanded(
+                                                  child: Text(
+                                                    habit.status,
+                                                    style: theme.textTheme.bodyMedium
+                                                        ?.copyWith(
+                                                          color: theme
+                                                              .colorScheme
+                                                              .onSurface,
+                                                          height: 1.5,
+                                                        ),
+                                                    softWrap: true,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            if (habit.notes.isNotEmpty)
+                                              const SizedBox(height: 8),
+                                          ],
+                                          if (habit.notes.isNotEmpty)
+                                            Text(
+                                              habit.notes,
                                               style: theme.textTheme.bodyMedium
                                                   ?.copyWith(
-                                                    color: theme
-                                                        .colorScheme
-                                                        .onSurface,
+                                                    color:
+                                                        theme.colorScheme.onSurface,
                                                     height: 1.5,
                                                   ),
                                               softWrap: true,
                                             ),
-                                          ),
                                         ],
                                       ),
-                                      if (habit.notes.isNotEmpty)
-                                        const SizedBox(height: 8),
-                                    ],
-                                    if (habit.notes.isNotEmpty)
-                                      Text(
-                                        habit.notes,
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                              color:
-                                                  theme.colorScheme.onSurface,
-                                              height: 1.5,
-                                            ),
-                                        softWrap: true,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
                           ),
                         _daysRow(habit, theme, context),
                       ],
@@ -1699,100 +1676,42 @@ class _HabitsScreenState extends State<HabitsScreen>
     required Color color,
     required VoidCallback onPressed,
     double rotation = 0,
-    // true — угловая кнопка раскрытия заметки: кнопка компактная и на своём
-    // месте, а поверх неё живёт фирменное пятно (только на тап, не на
-    // зажатие — см. PressSplat.bloomOnRelease).
     bool cornerRipple = false,
   }) {
     final cs = Theme.of(context).colorScheme;
-    // Иконка + плавный поворот и плавная смена цвета — общая для обеих кнопок.
+    // Иконка + плавный поворот и плавная смена цвета, синхронные с анимацией заметки (320 мс)
     final rotatingIcon = AnimatedRotation(
       turns: rotation / 3.14159 / 2,
-      duration: const Duration(milliseconds: 460),
+      duration: const Duration(milliseconds: 320),
       curve: Curves.easeInOutCubic,
       child: TweenAnimationBuilder<Color?>(
         tween: ColorTween(end: color),
-        duration: const Duration(milliseconds: 420),
+        duration: const Duration(milliseconds: 320),
         curve: Curves.easeInOutCubic,
         builder: (context, c, _) => Icon(icon, size: 18, color: c),
       ),
     );
 
-    // Компактная кнопка (карандаш и подобные): без ink-«пятен» — при
-    // удержании мягко уменьшается сама кнопка (та же отдача, что у карандаша
-    // и корзины в окне задачи).
-    if (!cornerRipple) {
-      return Padding(
-        padding: const EdgeInsets.only(left: 2),
-        child: PressScale(
-          pressedScale: 0.9,
-          duration: const Duration(milliseconds: 460),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onPressed,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: cs.primaryContainer.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: rotatingIcon,
-              ),
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: PressScale(
+        pressedScale: 0.90,
+        duration: const Duration(milliseconds: 200),
+        releaseDuration: const Duration(milliseconds: 280),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: rotatingIcon,
             ),
           ),
         ),
-      );
-    }
-
-    // Угловая кнопка (раскрытие заметки): иконка компактная и на месте, а
-    // поверх — фирменное размашистое пятно, которое расцветает ВМЕСТЕ с
-    // раскрытием заметки и так же мягко растворяется.
-    //
-    // ВАЖНО: пока палец ДЕРЖИТ кнопку, пятна нет (bloomOnRelease) — под
-    // пальцем видна только плавная отдача самой кнопки. Пятно появляется на
-    // отпускании, одновременно с раскрытием заметки.
-    return PressScale(
-      pressedScale: 0.9,
-      duration: const Duration(milliseconds: 460),
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.topRight,
-        children: [
-          Positioned(
-            top: -16,
-            right: -20,
-            width: 76,
-            height: 76,
-            child: PressSplat(
-              color: cs.primary,
-              maxRadius: 42,
-              alpha: 0.06,
-              seed: 47.9,
-              smeary: 0.85,
-              // Вспышка — 900 мс, уход — 1300 мс: пятно раскрывается медленно,
-              // а уходит ещё медленнее и ровнее (мягкое растворение, без
-              // «сдувания» в последних кадрах).
-              duration: const Duration(milliseconds: 900),
-              exitDuration: const Duration(milliseconds: 1300),
-              hitBox: const Size(84, 84),
-              bloomOnRelease: true,
-              onTap: onPressed,
-              child: const SizedBox(width: 76, height: 76),
-            ),
-          ),
-          IgnorePointer(
-            child: Material(
-              color: cs.primaryContainer.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(12),
-              clipBehavior: Clip.none,
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: rotatingIcon,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

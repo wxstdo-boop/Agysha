@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../utils/motion_prefs.dart';
 
@@ -18,6 +19,7 @@ class SquirrelWheel extends StatefulWidget {
     this.innerColor,
     this.enter,
     this.period = const Duration(milliseconds: 2400),
+    this.isSpinning = true,
   });
 
   /// Вписанный квадрат значка, px.
@@ -35,25 +37,74 @@ class SquirrelWheel extends StatefulWidget {
   /// Период одного полного оборота колеса.
   final Duration period;
 
+  /// Крутится ли колесо (плавный разгон и плавное торможение).
+  final bool isSpinning;
+
   @override
   State<SquirrelWheel> createState() => _SquirrelWheelState();
 }
 
 class _SquirrelWheelState extends State<SquirrelWheel>
-    with SingleTickerProviderStateMixin, MotionAwareRepeat {
-  late final AnimationController _spin;
+    with TickerProviderStateMixin {
+  late final AnimationController _speedCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
+    value: widget.isSpinning ? 1.0 : 0.0,
+  );
+  late final CurvedAnimation _speedCurved = CurvedAnimation(
+    parent: _speedCtrl,
+    curve: Curves.easeInOutCubic,
+    reverseCurve: Curves.easeInOutCubic,
+  );
+
+  late final Ticker _ticker;
+  final ValueNotifier<double> _angle = ValueNotifier<double>(0.0);
+  Duration _lastTick = Duration.zero;
 
   @override
   void initState() {
     super.initState();
-    _spin = ambientRepeat(
-      AnimationController(vsync: this, duration: widget.period),
-    );
+    _ticker = createTicker(_onTick)..start();
+    if (widget.isSpinning) {
+      _speedCtrl.value = 1.0;
+    } else {
+      _speedCtrl.value = 0.0;
+    }
+  }
+
+  void _onTick(Duration elapsed) {
+    if (_lastTick == Duration.zero) {
+      _lastTick = elapsed;
+      return;
+    }
+    final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
+    _lastTick = elapsed;
+
+    final mult = _speedCurved.value;
+    if (mult > 0.0001 && !MotionPrefs.shouldReduceMotion) {
+      final periodSec = widget.period.inMilliseconds / 1000.0;
+      final delta = (dt / periodSec) * 2 * math.pi * mult;
+      _angle.value = (_angle.value + delta) % (2 * math.pi);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SquirrelWheel old) {
+    super.didUpdateWidget(old);
+    if (widget.isSpinning != old.isSpinning) {
+      if (widget.isSpinning) {
+        _speedCtrl.forward();
+      } else {
+        _speedCtrl.reverse();
+      }
+    }
   }
 
   @override
   void dispose() {
-    _spin.dispose();
+    _ticker.dispose();
+    _speedCtrl.dispose();
+    _angle.dispose();
     super.dispose();
   }
 
@@ -61,28 +112,29 @@ class _SquirrelWheelState extends State<SquirrelWheel>
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final reduceMotion = MotionPrefs.shouldReduceMotion;
-    // Колесо и бегущий хомяк отображаются ВСЕГДА сразу, без задержек и скрытия
+    // Колесо и хомяк отображаются ВСЕГДА сразу, без задержек и скрытия
     final entered = reduceMotion || widget.enter == null
         ? 1.0
         : (widget.enter!.value <= 0.01 ? 1.0 : widget.enter!.value.clamp(0.0, 1.0));
 
-    // Полупрозрачно-красное колесо и полупрозрачный кибер-хомяк (без желтизны!)
+    // Насыщенные, неоновые кибер-красные цвета на темной теме (без бледности и белизны!)
     final wheelRim = widget.innerColor ??
         (dark
-            ? const Color(0xFFFF2A55).withValues(alpha: 0.65)
-            : const Color(0xFFE11D48).withValues(alpha: 0.60));
+            ? const Color(0xFFFF003C).withValues(alpha: 0.85)
+            : const Color(0xFFE11D48).withValues(alpha: 0.70));
     final wheelSpokes = dark
-        ? const Color(0xFFFF2A55).withValues(alpha: 0.32)
-        : const Color(0xFFE11D48).withValues(alpha: 0.28);
-    final hubColor = const Color(0xFFFF1744).withValues(alpha: 0.85);
+        ? const Color(0xFFFF2A55).withValues(alpha: 0.48)
+        : const Color(0xFFE11D48).withValues(alpha: 0.35);
+    final hubColor = dark ? const Color(0xFFFF003C) : const Color(0xFFFF1744);
+    final hubCenterColor = dark ? const Color(0xFFFF5252) : const Color(0xFFFF80AB);
 
     final furColor = dark
-        ? const Color(0xFFFF3366).withValues(alpha: 0.72)
-        : const Color(0xFFE11D48).withValues(alpha: 0.65);
+        ? const Color(0xFFFF1744).withValues(alpha: 0.88)
+        : const Color(0xFFE11D48).withValues(alpha: 0.75);
     final bellyColor = dark
-        ? const Color(0xFFFFB3C6).withValues(alpha: 0.60)
-        : const Color(0xFFFFCCD5).withValues(alpha: 0.55);
-    final earColor = const Color(0xFFFF6688).withValues(alpha: 0.75);
+        ? const Color(0xFFFF4081).withValues(alpha: 0.72)
+        : const Color(0xFFFF80AB).withValues(alpha: 0.65);
+    final earColor = dark ? const Color(0xFFFF2A55) : const Color(0xFFFF5252);
 
     return RepaintBoundary(
       child: Opacity(
@@ -97,10 +149,10 @@ class _SquirrelWheelState extends State<SquirrelWheel>
               children: [
                 // 1. Вращающееся колесо (обод, перекладины-ступеньки и тонкие спицы)
                 RepaintBoundary(
-                  child: AnimatedBuilder(
-                    animation: _spin,
-                    builder: (context, _) => Transform.rotate(
-                      angle: reduceMotion ? 0.0 : _spin.value * 2 * math.pi,
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: _angle,
+                    builder: (context, currentAngle, _) => Transform.rotate(
+                      angle: reduceMotion ? 0.0 : currentAngle,
                       child: RepaintBoundary(
                         child: CustomPaint(
                           size: Size(widget.size, widget.size),
@@ -110,6 +162,7 @@ class _SquirrelWheelState extends State<SquirrelWheel>
                             rimColor: wheelRim,
                             spokeColor: wheelSpokes,
                             hubColor: hubColor,
+                            hubCenterColor: hubCenterColor,
                           ),
                         ),
                       ),
@@ -118,16 +171,16 @@ class _SquirrelWheelState extends State<SquirrelWheel>
                 ),
                 // 2. Бегущий хомяк внутри колеса (аккуратный естественный бег внизу колеса)
                 RepaintBoundary(
-                  child: AnimatedBuilder(
-                    animation: _spin,
-                    builder: (context, _) {
-                      // Монотонный, размеренный бег в гармонии со ступеньками колеса
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: _angle,
+                    builder: (context, currentAngle, _) {
+                      final phase = currentAngle / (2 * math.pi);
                       final scamper = reduceMotion
                           ? 0.0
-                          : math.sin(_spin.value * 4 * math.pi);
+                          : math.sin(phase * 4 * math.pi);
                       final bobY = scamper * (widget.size * 0.015);
                       return Opacity(
-                        opacity: 0.92,
+                        opacity: 0.95,
                         child: Transform.translate(
                           offset: Offset(0, bobY),
                           child: RepaintBoundary(
@@ -139,7 +192,7 @@ class _SquirrelWheelState extends State<SquirrelWheel>
                                 furColor: furColor,
                                 bellyColor: bellyColor,
                                 earColor: earColor,
-                                stepPhase: reduceMotion ? 0.0 : _spin.value,
+                                stepPhase: reduceMotion ? 0.0 : phase,
                               ),
                             ),
                           ),
@@ -162,6 +215,7 @@ class _WheelPainter extends CustomPainter {
   final Color rimColor;
   final Color spokeColor;
   final Color hubColor;
+  final Color hubCenterColor;
 
   static final Paint _rimPaint = Paint()
     ..style = PaintingStyle.stroke
@@ -180,6 +234,7 @@ class _WheelPainter extends CustomPainter {
     required this.rimColor,
     required this.spokeColor,
     required this.hubColor,
+    required this.hubCenterColor,
   });
 
   @override
@@ -221,7 +276,7 @@ class _WheelPainter extends CustomPainter {
     _hubPaint.color = hubColor;
     canvas.drawCircle(center, s * 0.055, _hubPaint);
 
-    _hubPaint.color = Colors.white.withValues(alpha: 0.90);
+    _hubPaint.color = hubCenterColor;
     canvas.drawCircle(center, s * 0.020, _hubPaint);
   }
 
@@ -229,7 +284,8 @@ class _WheelPainter extends CustomPainter {
   bool shouldRepaint(covariant _WheelPainter old) =>
       old.rimColor != rimColor ||
       old.spokeColor != spokeColor ||
-      old.hubColor != hubColor;
+      old.hubColor != hubColor ||
+      old.hubCenterColor != hubCenterColor;
 }
 
 /// Выверенный векторный силуэт милого бегущего хомячка:

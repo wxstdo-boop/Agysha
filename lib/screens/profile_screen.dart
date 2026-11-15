@@ -428,27 +428,41 @@ class _ProfileScreenState extends State<ProfileScreen>
     Haptics.light();
 
     try {
-      // Имитируем быстрый подбор бэнгера
-      await Future<void>.delayed(const Duration(milliseconds: 1000));
+      // Имитируем быстрый и плавный подбор бэнгера
+      await Future<void>.delayed(const Duration(milliseconds: 950));
       if (!mounted) return;
 
-      final existing = _service.tracks.map((t) => t.title).toSet();
+      final existingTitles = _service.tracks.map((t) => t.title.toLowerCase().trim()).toSet();
       _PhonkItem? candidate;
       for (final item in _PhonkCatalog.items) {
-        if (!existing.contains(item.title)) {
+        if (!existingTitles.contains(item.title.toLowerCase().trim())) {
           candidate = item;
           break;
         }
       }
-      // Если все 10 уже добавлены, создаем эксклюзивный ремикс
-      candidate ??= _PhonkItem(
-        id: 'phonk_remix_${DateTime.now().millisecondsSinceEpoch % 1000}',
-        title: 'Cyberpunk Drift Phonk #${_service.tracks.length + 1}',
-        artist: 'Night City Syndicate',
-        tags: 'Memphis Cowbell • 146 BPM • Pure Heat',
-        bpm: 146.0,
-        seed: DateTime.now().millisecondsSinceEpoch,
-      );
+      // Если все 15 треков каталога уже добавлены, создаем уникальный процедурный VIP-бэнгер без дублирования
+      if (candidate == null) {
+        final uniqueNum = _service.tracks.length + 1;
+        final proceduralTitles = [
+          'Night City Syndicate - Chrome Ghost (VIP Drift #$uniqueNum)',
+          'Arasaka Black Ops - Netrunner 808 (Memphis Cut #$uniqueNum)',
+          'Tokyo Midnight - Shinjuku Speed (Hardtekk Edit #$uniqueNum)',
+          'Drift Godz - Neon Highway (808 Overdrive #$uniqueNum)',
+          'Cyber Syndicate - Dark Horizon (Cowbell Rework #$uniqueNum)',
+        ];
+        var title = proceduralTitles[uniqueNum % proceduralTitles.length];
+        if (existingTitles.contains(title.toLowerCase().trim())) {
+          title = '$title · ${DateTime.now().millisecond}';
+        }
+        candidate = _PhonkItem(
+          id: 'phonk_procedural_${DateTime.now().millisecondsSinceEpoch}',
+          title: title,
+          artist: 'Night City Syndicate',
+          tags: 'Memphis Cowbell • 148 BPM • VIP Heat',
+          bpm: 148.0,
+          seed: DateTime.now().millisecondsSinceEpoch,
+        );
+      }
 
       final dir = await getApplicationDocumentsDirectory();
       final soundsDir = Directory('${dir.path}/sounds');
@@ -486,17 +500,20 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  /// Синтезирует настоящий 16-битный 44.1 кГц PCM WAV Drift Phonk луп с легендарным 808 ковбеллом,
-  /// сатурированным мемфисским 808 саб-басом, трэп-бочкой и снэром.
+  /// Синтезирует мощный, сатурированный 16-битный 44.1 кГц PCM WAV Drift Phonk луп (32 шага / 2 такта)
+  /// с аутентичным Roland TR-808 ковбеллом, мемфисским 808 саб-басом с ламповой сатурацией,
+  /// пробивной бочкой и трэп-снэром.
   static List<int> _synthesizePhonkWav({required double bpm, required int seed}) {
     const sampleRate = 44100;
-    final totalSamples = ((sampleRate * 60 / bpm) * 16).round();
-    final stepSamples = (totalSamples / 16).round();
+    // 32 шага (2 полных такта 4/4)
+    final totalSamples = ((sampleRate * 60 / bpm) * 32 / 4).round();
+    final stepSamples = (totalSamples / 32).round();
 
     final pcmBytes = ByteData(totalSamples * 2);
 
-    // Ноты для аутентичного Drift Phonk риффа (минорная пентатоника F#)
+    // Ноты для аутентичного 32-шагового Drift Phonk риффа (минорная пентатоника F# с тритоном)
     const melodySteps = [
+      // Такт 1
       369.99, // 0: F#4
       0.0,    // 1: rest
       440.00, // 2: A4
@@ -511,25 +528,45 @@ class _ProfileScreenState extends State<ProfileScreen>
       329.63, // 11: E4
       369.99, // 12: F#4
       0.0,    // 13: rest
-      523.25, // 14: C5 (dark drift phonk tritone)
+      523.25, // 14: C5 (тёмный тритон)
       554.37, // 15: C#5
+      // Такт 2 (кульминация риффа)
+      369.99, // 16: F#4
+      0.0,    // 17: rest
+      440.00, // 18: A4
+      554.37, // 19: C#5
+      0.0,    // 20: rest
+      659.25, // 21: E5 (высокий пик)
+      587.33, // 22: D5
+      0.0,    // 23: rest
+      554.37, // 24: C#5
+      0.0,    // 25: rest
+      493.88, // 26: B4
+      0.0,    // 27: rest
+      440.00, // 28: A4
+      0.0,    // 29: rest
+      415.30, // 30: G#4
+      369.99, // 31: F#4
     ];
 
-    // Басовые ноты для каждого шага
+    // Басовые ноты для каждого шага (F#1 -> D1 -> E1 -> C#1)
     const bassSteps = [
-      46.25, 46.25, 46.25, 46.25, // F#1
-      36.71, 36.71, 36.71, 36.71, // D1
-      41.20, 41.20, 41.20, 41.20, // E1
-      34.65, 34.65, 43.65, 43.65, // C#1 -> F1
+      46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25, // 0..7: F#1
+      36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, // 8..15: D1
+      41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, // 16..23: E1
+      34.65, 34.65, 34.65, 34.65, 43.65, 43.65, 46.25, 46.25, // 24..31: C#1 -> F1
     ];
+
+    // Синкопированные шаги 808 бочки
+    const kickSteps = {0, 3, 6, 10, 14, 16, 19, 22, 26, 30};
 
     for (int i = 0; i < totalSamples; i++) {
       final t = i / sampleRate;
-      final step = (i ~/ stepSamples).clamp(0, 15);
+      final step = (i ~/ stepSamples).clamp(0, 31);
       final stepSample = i % stepSamples;
       final stepT = stepSample / sampleRate;
 
-      // 1. Легендарный Roland TR-808 Cowbell (два прямоугольных осциллятора с соотношением 1.481)
+      // 1. Аутентичный Roland TR-808 Cowbell: двойной прямоугольный осциллятор + металлический фильтр и щелчок
       double cowbell = 0.0;
       final bellFreq = melodySteps[step];
       if (bellFreq > 0.0) {
@@ -537,41 +574,46 @@ class _ProfileScreenState extends State<ProfileScreen>
         final f2 = bellFreq * 1.48148;
         final sq1 = math.sin(2 * math.pi * f1 * stepT) >= 0 ? 1.0 : -1.0;
         final sq2 = math.sin(2 * math.pi * f2 * stepT) >= 0 ? 1.0 : -1.0;
-        final bellEnv = math.exp(-stepT * 12.5);
-        final rawBell = (sq1 + sq2) * 0.5 * bellEnv;
-        cowbell = (rawBell * 1.35).clamp(-1.0, 1.0);
+        final sine1 = math.sin(2 * math.pi * f1 * stepT);
+        final sine2 = math.sin(2 * math.pi * f2 * stepT);
+        final bellBody = (sine1 + 0.65 * sine2) * 0.60 + (sq1 + sq2) * 0.35;
+        final bellEnv = math.exp(-stepT * 13.5);
+        final click = math.exp(-stepT * 85.0) * math.sin(2 * math.pi * 1850.0 * stepT) * 0.45;
+        cowbell = (bellBody * bellEnv + click) * 1.35;
       }
 
-      // 2. Глубокий, сатурированный мемфисский 808 Саб-бас
+      // 2. Глубокий, сатурированный мемфисский 808 Саб-бас с ламповым овердрайвом
       final subFreq = bassSteps[step];
       final rawSub = math.sin(2 * math.pi * subFreq * t);
-      final distSub = (rawSub * 2.2).clamp(-1.0, 1.0) * 0.92;
+      final distSub = (rawSub * 2.8) / (1.0 + (rawSub * 1.4).abs());
 
-      // 3. Трэп-бочка (808 Kick) на шагах 0, 3, 6, 10, 12
+      // 3. Пробивная трэп-бочка (808 Kick) со спадом высоты 170 -> 46 Гц
       double kick = 0.0;
-      final isKickStep = (step == 0 || step == 3 || step == 6 || step == 10 || step == 12);
-      if (isKickStep) {
-        final kickEnv = math.exp(-stepT * 18.0);
-        final kickFreq = 42.0 + 138.0 * math.exp(-stepT * 55.0);
+      if (kickSteps.contains(step)) {
+        final kickEnv = math.exp(-stepT * 16.0);
+        final kickFreq = 46.0 + 138.0 * math.exp(-stepT * 50.0);
         final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.0;
-        kick = (rawKick * 1.4).clamp(-1.0, 1.0);
+        kick = (rawKick * 1.5) / (1.0 + (rawKick * 0.8).abs());
       }
 
-      // 4. Мемфисский снэр / хлопок на шагах 4 и 12 (2 и 4 четверти)
+      // 4. Мемфисский трэп-снэр / хлопок на 4, 12, 20, 28 четвертях
       double snare = 0.0;
-      if (step == 4 || step == 12) {
-        final snareEnv = math.exp(-stepT * 26.0);
-        final noise = (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.85;
-        final body = math.sin(2 * math.pi * 195.0 * stepT) * math.exp(-stepT * 32.0);
-        snare = (noise * 0.75 + body * 0.5) * snareEnv;
+      if (step == 4 || step == 12 || step == 20 || step == 28) {
+        final snareEnv = math.exp(-stepT * 24.0);
+        final noise = (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.80;
+        final body = math.sin(2 * math.pi * 215.0 * stepT) * math.exp(-stepT * 30.0);
+        snare = (noise * 0.75 + body * 0.55) * snareEnv;
       }
 
-      // 5. Трэп хэты (16-е доли)
-      final hatEnv = math.exp(-stepT * 50.0);
-      final hatNoise = (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.18 * hatEnv;
+      // 5. Трэп хэты (16-е доли + 32-е роллы на шагах 14, 15, 30, 31)
+      final isRoll = (step == 14 || step == 15 || step == 30 || step == 31);
+      final hatRate = isRoll ? 4.0 : 2.0;
+      final hatEnv = math.exp(-((stepT * hatRate) % 1.0) * 45.0);
+      final hatNoise = (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.22 * hatEnv;
 
-      // Мастеринг микс
-      final mix = (kick * 0.78 + distSub * 0.62 + cowbell * 0.55 + snare * 0.52 + hatNoise * 0.35).clamp(-1.0, 1.0);
+      // Мастеринг: аналоговый компрессор-лимитер с плотным саундом
+      final sum = kick * 0.82 + distSub * 0.72 + cowbell * 0.60 + snare * 0.54 + hatNoise * 0.28;
+      final mix = (sum * 1.38) / (1.0 + (sum * 0.55).abs());
       final sampleInt16 = (mix * 32760.0).round().clamp(-32768, 32767);
       pcmBytes.setInt16(i * 2, sampleInt16, Endian.little);
     }
@@ -838,38 +880,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                   : const SizedBox.shrink(key: ValueKey('no_talisman_header_bg')),
             ),
           ),
-          // 2. Красивый компактный значок активного талисмана в правом верхнем углу карточки
-          if (talisman != null)
-            Positioned(
-              top: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: BrandColors.red.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(Radii.pill),
-                  border: Border.all(
-                    color: BrandColors.red.withValues(alpha: 0.35),
-                    width: 0.9,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.star_rounded, size: 12, color: BrandColors.red),
-                    const SizedBox(width: 4),
-                    Text(
-                      talisman.title,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           Column(
             children: [
               const SizedBox(height: Spacing.xs),
@@ -973,6 +983,63 @@ class _ProfileScreenState extends State<ProfileScreen>
                               ),
                             ),
                           ),
+                          // Стильный 3D NFT значок активного талисмана прямо на аватарке (как в Telegram!)
+                          if (talisman != null)
+                            Positioned(
+                              left: 2,
+                              top: 2,
+                              child: PressScale(
+                                pressedScale: 0.90,
+                                duration: const Duration(milliseconds: 180),
+                                releaseDuration: const Duration(milliseconds: 240),
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    Haptics.select();
+                                    final gift = _service.gifts.where((g) => g.id == talisman.id).firstOrNull;
+                                    if (gift != null) {
+                                      showGiftDetailsSheet(
+                                        context,
+                                        gift,
+                                        () => _service.toggleGiftFavorite(gift.id),
+                                      );
+                                    }
+                                  },
+                                  child: Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: const Color(0xFF141422),
+                                      border: Border.all(
+                                        color: talisman.rarity.color,
+                                        width: 1.5,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: talisman.rarity.color.withValues(alpha: 0.60),
+                                          blurRadius: 8,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CustomPaint(
+                                          painter: SharpArtifactPainter(
+                                            giftId: talisman.id,
+                                            color: talisman.rarity.color,
+                                            isFavorite: true,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -1503,24 +1570,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                         : null,
                     style: _roundButtonStyle(),
                     child: AnimatedSize(
-                      duration: const Duration(milliseconds: 300),
+                      duration: const Duration(milliseconds: 240),
                       curve: Curves.easeInOutCubic,
-                      clipBehavior: Clip.none,
                       child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
+                        duration: const Duration(milliseconds: 200),
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
-                        layoutBuilder: (currentChild, previousChildren) => Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            ...previousChildren,
-                            ?currentChild,
-                          ],
-                        ),
                         transitionBuilder: (child, anim) => FadeTransition(
                           opacity: anim,
                           child: ScaleTransition(
-                            scale: Tween<double>(begin: 0.90, end: 1.0).animate(anim),
+                            scale: Tween<double>(begin: 0.94, end: 1.0).animate(anim),
                             child: child,
                           ),
                         ),
@@ -3486,31 +3545,31 @@ class _PhonkCatalog {
   static const List<_PhonkItem> items = [
     _PhonkItem(
       id: 'kordhell_murder',
-      title: 'Kordhell - Murder In My Mind',
+      title: 'Kordhell - Murder In My Mind (Night City VIP)',
       artist: 'Kordhell',
-      tags: 'Drift Phonk • 146 BPM • 808 Cowbell',
-      bpm: 146.0,
+      tags: 'Drift Phonk • 148 BPM • 808 Cowbell',
+      bpm: 148.0,
       seed: 201,
     ),
     _PhonkItem(
       id: 'dvrst_close_eyes',
-      title: 'DVRST - Close Eyes',
+      title: 'DVRST - Close Eyes (Cyberpunk 2077 Rework)',
       artist: 'DVRST',
-      tags: 'Cyber Drift • 144 BPM • Atmospheric',
-      bpm: 144.0,
+      tags: 'Cyber Drift • 146 BPM • Atmospheric',
+      bpm: 146.0,
       seed: 202,
     ),
     _PhonkItem(
       id: 'ghostface_playa_why_not',
-      title: 'Ghostface Playa - Why Not',
+      title: 'Ghostface Playa - Why Not (Memphis Drift Cut)',
       artist: 'Ghostface Playa',
-      tags: 'Night City Phonk • 148 BPM • Pure Heat',
-      bpm: 148.0,
+      tags: 'Night City Phonk • 150 BPM • Pure Heat',
+      bpm: 150.0,
       seed: 203,
     ),
     _PhonkItem(
       id: 'pharmacist_north_memphis',
-      title: 'Pharmacist - North Memphis',
+      title: 'Pharmacist - North Memphis (Overdrive Bass)',
       artist: 'Pharmacist',
       tags: 'Memphis Phonk • 145 BPM • Raw 808',
       bpm: 145.0,
@@ -3518,51 +3577,91 @@ class _PhonkCatalog {
     ),
     _PhonkItem(
       id: 'hensonn_sahara',
-      title: 'Hensonn - Sahara',
+      title: 'Hensonn - Sahara (808 Distortion Riff)',
       artist: 'Hensonn',
-      tags: 'Aggressive Drift • 146 BPM • Cowbell Riff',
-      bpm: 146.0,
+      tags: 'Aggressive Drift • 148 BPM • Cowbell Riff',
+      bpm: 148.0,
       seed: 205,
     ),
     _PhonkItem(
       id: 'playaphonk_phonky_town',
-      title: 'PlayaPhonk - Phonky Town',
+      title: 'PlayaPhonk - Phonky Town (Arasaka Special)',
       artist: 'PlayaPhonk',
-      tags: 'Classic Phonk • 144 BPM • Memphis Bounce',
-      bpm: 144.0,
+      tags: 'Classic Phonk • 146 BPM • Memphis Bounce',
+      bpm: 146.0,
       seed: 206,
     ),
     _PhonkItem(
       id: 'sxmpra_cowbell_warrior',
-      title: 'SXMPRA - COWBELL WARRIOR',
+      title: 'SXMPRA - COWBELL WARRIOR (Night Drive Edit)',
       artist: 'SXMPRA',
-      tags: 'Hardcore Phonk • 150 BPM • Distortion',
-      bpm: 150.0,
+      tags: 'Hardcore Phonk • 152 BPM • Distortion',
+      bpm: 152.0,
       seed: 207,
     ),
     _PhonkItem(
       id: 'kslv_disaster',
-      title: 'KSLV Noh - Disaster',
+      title: 'KSLV Noh - Disaster (Tokyo Drift VIP)',
       artist: 'KSLV Noh',
-      tags: 'Drift Legend • 146 BPM • Bass Pressure',
-      bpm: 146.0,
+      tags: 'Drift Legend • 148 BPM • Bass Pressure',
+      bpm: 148.0,
       seed: 208,
     ),
     _PhonkItem(
       id: 'interworld_metamorphosis',
-      title: 'Interworld - Metamorphosis',
+      title: 'Interworld - Metamorphosis (Speed Hardtekk VIP)',
       artist: 'Interworld',
-      tags: 'Speed Phonk • 152 BPM • Cyber Cowbell',
-      bpm: 152.0,
+      tags: 'Speed Phonk • 154 BPM • Cyber Cowbell',
+      bpm: 154.0,
       seed: 209,
     ),
     _PhonkItem(
       id: 'twisted_worth_nothing',
-      title: 'Twisted - Worth Nothing',
+      title: 'Twisted - Worth Nothing (Sub Saturated Mix)',
       artist: 'Twisted',
       tags: 'Peak Energy • 148 BPM • Memphis Sub',
       bpm: 148.0,
       seed: 210,
+    ),
+    _PhonkItem(
+      id: 'gigachad_phonk',
+      title: 'GigaChad - Phonk Edition (Immortal Hardtekk)',
+      artist: 'GigaChad',
+      tags: 'Ultra Phonk • 150 BPM • Heavy 808',
+      bpm: 150.0,
+      seed: 211,
+    ),
+    _PhonkItem(
+      id: 'hxnvx_tokyo_revenge',
+      title: 'HXNVX - Tokyo Revenge (Neon Street Phonk)',
+      artist: 'HXNVX',
+      tags: 'Drift Culture • 146 BPM • Cowbell Riff',
+      bpm: 146.0,
+      seed: 212,
+    ),
+    _PhonkItem(
+      id: 'shadxwbxrn_knight',
+      title: 'Shadxwbxrn - KNIGHT (Dark Memphis Riff)',
+      artist: 'Shadxwbxrn',
+      tags: 'Dark Phonk • 148 BPM • Memphis Bass',
+      bpm: 148.0,
+      seed: 213,
+    ),
+    _PhonkItem(
+      id: 'mupp_vendetta',
+      title: 'MUPP & Sadfriendd - vendetta! (Cyber Cowbell)',
+      artist: 'MUPP',
+      tags: 'Aggressive • 150 BPM • Hard Bass',
+      bpm: 150.0,
+      seed: 214,
+    ),
+    _PhonkItem(
+      id: 'kute_avoid_me',
+      title: 'KUTE - AVOID ME (Heavy Memphis Sub)',
+      artist: 'KUTE',
+      tags: 'Pure Drift • 148 BPM • Overdrive',
+      bpm: 148.0,
+      seed: 215,
     ),
   ];
 }
