@@ -24,7 +24,7 @@ const double kSectionPillSlotHeight = 64;
 /// Позиция круга в Material: низ = edgeOffset + sizeFactor*(displacement+40).
 /// При sizeFactor=1 верх круга = edgeOffset + displacement (40) — поэтому
 /// edgeOffset = 58 (низ капсулы) - 40 = 18. Увеличили на 6 px, чтобы кружок
-/// не налезал на обводку капсулы и не выглядел «слишком高о».
+/// не налезал на обводку капсулы и не выглядел «слишком высоко».
 const double kSectionRefreshEdgeOffset = kSectionPillSlotHeight - 6 - 34;
 
 /// Верхний «запретный пояс» для плавающего окошка Ады: статус-бар + шапка +
