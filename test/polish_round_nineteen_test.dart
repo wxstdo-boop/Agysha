@@ -10,6 +10,7 @@ import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/profile_service.dart';
 import 'package:agysha/widgets/profile_avatar.dart';
+import 'source_scope.dart';
 
 /// Регресс-тест круга 19: своя аватарка из галереи у ДРУГА.
 ///
@@ -53,7 +54,7 @@ void main() {
   String read(String path) {
     final f = File(path);
     expect(f.existsSync(), isTrue, reason: '$path не найден');
-    return f.readAsStringSync();
+    return readLibrary(path);
   }
 
   String code(String path) => read(

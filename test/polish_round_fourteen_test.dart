@@ -28,7 +28,7 @@ void main() {
       isTrue,
       reason: '$path не найден — тест не из корня',
     );
-    return f.readAsStringSync();
+    return readLibrary(path);
   }
 
   test('значок обновления — «белка в колесе», а не чужая иконка', () {

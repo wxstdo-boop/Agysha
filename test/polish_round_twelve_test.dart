@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:agysha/widgets/music_pulse_ring.dart';
+import 'source_scope.dart';
 
 /// Регресс-тест круга 12: жалобы на плавность и на «иероглиф» в кантах.
 ///
@@ -28,7 +29,7 @@ void main() {
       isTrue,
       reason: '$path не найден — тест не из корня',
     );
-    return f.readAsStringSync();
+    return readLibrary(path);
   }
 
   test('кант карточек статистики — ровная линия, а не градиент', () {
