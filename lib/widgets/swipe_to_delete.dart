@@ -110,13 +110,13 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
               valueListenable: _progress,
               builder: (context, p, _) {
                 if (p <= 0.001) return const SizedBox.shrink();
-                final opacity = (0.50 + 0.50 * p).clamp(0.0, 1.0);
+                final opacity = (0.40 + 0.60 * p).clamp(0.0, 1.0);
                 final cardWidth = (w - inset.left - inset.right).clamp(0.0, w);
                 final revealed = (p.clamp(0.0, 1.0) * w).clamp(0.0, cardWidth);
                 if (revealed < 0.5) return const SizedBox.shrink();
 
                 // Красный фон удаления со скруглением по радиусу карточки,
-                // идущий вплотную к уезжающей карточке (0px зазор)
+                // идущий строго вплотную к уезжающей карточке (0px зазор)
                 return Padding(
                   padding: widget.inset,
                   child: Align(
@@ -138,22 +138,22 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
                               ],
                             ),
                           ),
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.only(left: 14),
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
                           child: ClipRect(
                             child: OverflowBox(
-                              alignment: Alignment.centerLeft,
+                              alignment: Alignment.centerRight,
                               minWidth: 0,
                               maxWidth: double.infinity,
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    Icons.delete_outline,
+                                    Icons.delete_outline_rounded,
                                     color: Colors.white.withValues(alpha: opacity),
                                     size: 22,
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 8),
                                   Text(
                                     Translations.deleteOf(context),
                                     maxLines: 1,
@@ -161,8 +161,9 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
                                     overflow: TextOverflow.clip,
                                     style: TextStyle(
                                       color: Colors.white.withValues(alpha: opacity),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13.5,
+                                      letterSpacing: 0.2,
                                     ),
                                   ),
                                 ],

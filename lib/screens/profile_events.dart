@@ -85,14 +85,12 @@ class _Card extends StatelessWidget {
       ),
     );
     if (!pressable) return card;
-    // Отдача небольшая и мягкая (0.99): карточка крупная, глубокое уменьшение
-    // читалось бы «прыжком» всего блока, а лёгкая просадка вместе с потерей
-    // плотности даёт понятный, но спокойный отклик.
+    // Мягкое вдавливание и тактильный 3D-наклон карточки
     return PressScale(
-      pressedScale: 0.99,
+      pressedScale: 0.975,
       duration: const Duration(milliseconds: 220),
-      releaseDuration: const Duration(milliseconds: 360),
-      pressedOpacity: 0.94,
+      releaseDuration: const Duration(milliseconds: 320),
+      pressedOpacity: 0.96,
       child: card,
     );
   }
