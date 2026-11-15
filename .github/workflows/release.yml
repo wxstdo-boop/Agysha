@@ -48,6 +48,15 @@ permissions:
 
 jobs:
   build-and-release:
+    # Одна сборка на тег. ship.yml (push в main) и release-on-tag.yml (push
+    # тега) способны стартовать на одном и том же HEAD в одну секунду — в
+    # логах видно release-on-tag 14:11:26 и ship 14:11:25 оба in_progress.
+    # Без сериализации два прогона грузят APK в один релиз параллельно:
+    # дубли ассетов, лишний раннер-тайм и гонка за releases/latest.
+    # cancel-in-progress: false — второй ждёт первый, а не убивает его.
+    concurrency:
+      group: release-${{ inputs.tag }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # Жёсткий потолок на весь прогон: сегодня Gradle-сборка зависала на
     # занятом раннере на ~3 часа и «молча глотала» релиз — автообновление
@@ -226,3 +235,37 @@ jobs:
           body: ${{ steps.hashes.outputs.body }}
           generate_release_notes: true
           files: build/app/outputs/flutter-apk/*.apk
+
+  prune-assets:
+    # Страж хранилища: оставляет APK-ассеты только у последних релизов.
+    #
+    # Почему это нужно в CI, а не «почистить руками»: ship.yml публикует
+    # релиз на каждый пуш в main (18 релизов за сутки бывало), три APK по
+    # ~27 МБ на каждый. За ноябрь накопилось 126 релизов и ~10 ГБ при
+    # рекомендации GitHub ≤5 ГБ — дальше приходят письма от support и
+    # ограничение на выгрузку. 2026-11-15 разовая чистка забрала 9.19 ГБ;
+    # этот job не даёт им вырасти снова.
+    #
+    # Удаляем ТОЛЬКО ассеты. Записи релизов остаются: из них приложение
+    # собирает экран «Что нового», а Obtainium — список версий.
+    #
+    # continue-on-error: это уборка, а не часть релиза. Если шаг упадёт
+    # (изменилась форма ответа API, кончились запросы к нему), published
+    # релиз от этого не должен становиться красным или исчезать.
+    needs: build-and-release
+    if: ${{ inputs.dry_run != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Удалить ассеты старых релизов
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Сколько релизов с APK оставляем. 10 — это ~800 МБ и запас для
+          # отката на пару версий назад при неудачном релизе.
+          KEEP: '10'
+        run: bash tool/prune_release_assets.sh "$KEEP" 0
