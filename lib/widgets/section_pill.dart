@@ -236,6 +236,11 @@ class _SectionPillState extends State<SectionPill>
   /// Никаких Timer'ов и второго setState.
   late final AnimationController _edgeSettle;
 
+  /// Плавный довод камня на отпускании (landing): устраняет любой скачок
+  /// между позицией пальца (_dragSmooth) и текущей позицией карусели (sectionRailPage).
+  late final AnimationController _landingCtrl;
+  double _landingFrom = 0.0;
+
   /// Куда палец увёл камень (дробная страница).
   double _dragPage = 0;
   // Последнее записанное положение камня (для снапшота волны на отпускании).
@@ -274,6 +279,10 @@ class _SectionPillState extends State<SectionPill>
   @override
   void initState() {
     super.initState();
+    _landingCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
     _edgeSettle =
         AnimationController(
           vsync: this,
@@ -301,6 +310,7 @@ class _SectionPillState extends State<SectionPill>
 
   @override
   void dispose() {
+    _landingCtrl.dispose();
     _edgeSettle.dispose();
     _edgePullNotifier.dispose();
     // Экран мог закрыться прямо во время тяги — не оставляем Home с
@@ -312,6 +322,7 @@ class _SectionPillState extends State<SectionPill>
   void _dragStart(DragStartDetails details, int count) {
     if (count < 2) return;
     _dragging = true;
+    _landingCtrl.stop();
     // Новый жест отменяет «расслабление» предыдущего: камень, ещё
     // растянутый старой тягой, не должен прыгать в ноль по-своему.
     _edgeSettle.stop();
@@ -403,9 +414,17 @@ class _SectionPillState extends State<SectionPill>
     sectionDragPage.value = _dragPage;
     // Направление «резинки» НЕПРЕРЫВНОЕ (см. stretchDir в
     // _buildStoneRow): знак _edgePull — под пальцем, знак _releasePull
-    // (затухающий по _edgeSettle) — в полёте. Дискретный гистерезис
-    // `_anchorSide` (±0.15) «тикал» у углов и дёргал камень.
-    final nearest = _dragPage.round();
+    // (затухающий по _edgeSettle) — в полёте.
+    // Гистерезис переключения ближайшего раздела: удерживание пальца
+    // на границе разделов (0.5 ± 0.08) не флудит хаптиками и не дергает экраны.
+    int nearest = _dragNearest;
+    if (nearest < 0) {
+      nearest = _dragPage.round().clamp(0, count - 1);
+    } else if (_dragPage > nearest + 0.58) {
+      nearest = (_dragPage - 0.08).round().clamp(0, count - 1);
+    } else if (_dragPage < nearest - 0.58) {
+      nearest = (_dragPage + 0.08).round().clamp(0, count - 1);
+    }
     if (nearest != _dragNearest) {
       _dragNearest = nearest;
       Haptics.light();
@@ -419,12 +438,14 @@ class _SectionPillState extends State<SectionPill>
     // поэтому при отпускании камень продолжает форму плавно, без рывка в
     // растянутое положение. Гасим только захваченную тягу за край.
     _startEdgeSettle();
-    final target = _dragSmooth.round().clamp(0, count - 1);
+    final target = _dragNearest.clamp(0, count - 1);
+    // Фиксируем исходную точку отпускания и запускаем мягкий довод
+    _landingFrom = _dragSmooth;
+    _landingCtrl.forward(from: 0.0);
     // Сначала фиксируем целевой раздел, чтобы подписчики sectionDragPage.value = null
-    // не улетали на старый индекс.
+    // мягко довели карусель пружиной Home.
     sectionCurrentIndex.value = target;
     sectionDragPage.value = null;
-    sectionTabTap.value++;
   }
 
   void _dragCancel() {
@@ -437,10 +458,9 @@ class _SectionPillState extends State<SectionPill>
       final target = sectionRailPage.value.round().clamp(0, count - 1);
       sectionCurrentIndex.value = target;
     }
+    _landingFrom = _dragSmooth;
+    _landingCtrl.forward(from: 0.0);
     sectionDragPage.value = null;
-    if (count > 1) {
-      sectionTabTap.value++;
-    }
   }
 
 
@@ -512,6 +532,7 @@ class _SectionPillState extends State<SectionPill>
                     // вешает _edgeSettle через merge внутри, а здесь только
                     // прокидываем rawPage.
                     animation: Listenable.merge([
+                      _landingCtrl,
                       sectionCurrentIndex,
                       sectionDragPage,
                       sectionRailPage,
@@ -523,11 +544,16 @@ class _SectionPillState extends State<SectionPill>
                       final cs = Theme.of(context).colorScheme;
                       final dark =
                           Theme.of(context).brightness == Brightness.dark;
-                      final rawPage = _dragging && dragPage != null
-                          ? dragPage.clamp(0.0, (count - 1).toDouble())
-                          : page.isFinite
-                          ? page
-                          : current.toDouble();
+                      double rawPage;
+                      if (_dragging && dragPage != null) {
+                        rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
+                      } else if (_landingCtrl.isAnimating) {
+                        final t = Curves.easeOutCubic.transform(_landingCtrl.value);
+                        final base = page.isFinite ? page : current.toDouble();
+                        rawPage = _landingFrom + (base - _landingFrom) * t;
+                      } else {
+                        rawPage = page.isFinite ? page : current.toDouble();
+                      }
                       return _buildStoneRow(
                         context: context,
                         cs: cs,
@@ -596,6 +622,7 @@ class _SectionPillState extends State<SectionPill>
     return AnimatedBuilder(
       animation: Listenable.merge([
         _edgeSettle,
+        _landingCtrl,
         _edgePullNotifier,
         sectionCurrentIndex,
         sectionDragPage,

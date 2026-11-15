@@ -237,4 +237,53 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
   });
+
+  testWidgets('красная плашка удаления при свайпе прилегает вплотную к карточке (без зазора)', (tester) async {
+    const cardMargin = EdgeInsets.symmetric(horizontal: 16);
+    await tester.pumpWidget(
+      LocaleProvider(
+        locale: const Locale('ru'),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 400,
+                child: SwipeToDelete(
+                  dismissKey: const ValueKey('gap_test'),
+                  inset: cardMargin,
+                  child: Card(
+                    margin: cardMargin,
+                    child: const SizedBox(height: 80, child: Center(child: Text('flush_card'))),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(tester.getCenter(find.text('flush_card')));
+    await gesture.moveBy(const Offset(-100, 0));
+    await tester.pump();
+
+    // В Flutter RenderBox карточки включает margin, а рисуемая область - это Material внутри Card
+    final materialFinder = find.descendant(of: find.byType(Card), matching: find.byType(Material));
+    final materialRect = tester.getRect(materialFinder.first);
+    final bgFinder = find.byWidgetPredicate(
+      (w) =>
+          w is Container &&
+          w.decoration is BoxDecoration &&
+          (w.decoration as BoxDecoration).gradient is LinearGradient,
+    );
+    final bgRect = tester.getRect(bgFinder);
+
+    // Зазор между правым краем рисуемой карточки и левым краем фона удаления должен быть строго 0
+    final gap = (bgRect.left - materialRect.right).abs();
+    expect(gap, lessThan(1.0), reason: 'красный фон должен идти вплотную к карточке');
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
 }

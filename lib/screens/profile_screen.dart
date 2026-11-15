@@ -131,6 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   /// вставляются готовыми.
   final Set<String> _newTrackIds = {};
   bool _isSearchingHardtekk = false;
+  bool _isPrestigePickerOpen = false;
 
   /// Прозрачность подсказки «Как вас звать?»: видна, пока поле НЕ в фокусе.
   /// Подсказка гаснет плавно, как только пользователь открыл поле, и так же
@@ -429,10 +430,12 @@ class _ProfileScreenState extends State<ProfileScreen>
 
     try {
       // Имитируем быстрый и плавный подбор бэнгера
-      await Future<void>.delayed(const Duration(milliseconds: 950));
+      await Future<void>.delayed(const Duration(milliseconds: 750));
       if (!mounted) return;
 
       final existingTitles = _service.tracks.map((t) => t.title.toLowerCase().trim()).toSet();
+      final existingFingerprints = _service.tracks.map((t) => t.fingerprint).where((f) => f.isNotEmpty).toSet();
+
       _PhonkItem? candidate;
       for (final item in _PhonkCatalog.items) {
         if (!existingTitles.contains(item.title.toLowerCase().trim())) {
@@ -440,36 +443,51 @@ class _ProfileScreenState extends State<ProfileScreen>
           break;
         }
       }
-      // Если все 15 треков каталога уже добавлены, создаем уникальный процедурный VIP-бэнгер без дублирования
+
+      // Если все 15 треков каталога уже добавлены, создаем уникальный процедурный VIP-бэнгер с вопросительным названием
+      int uniqueCounter = _service.tracks.length + 1;
       if (candidate == null) {
-        final uniqueNum = _service.tracks.length + 1;
-        final proceduralTitles = [
-          'Night City Syndicate - Chrome Ghost (VIP Drift #$uniqueNum)',
-          'Arasaka Black Ops - Netrunner 808 (Memphis Cut #$uniqueNum)',
-          'Tokyo Midnight - Shinjuku Speed (Hardtekk Edit #$uniqueNum)',
-          'Drift Godz - Neon Highway (808 Overdrive #$uniqueNum)',
-          'Cyber Syndicate - Dark Horizon (Cowbell Rework #$uniqueNum)',
+        final proceduralQuestions = [
+          'Тебе нравится эта песня #$uniqueCounter?',
+          'Чувствуешь этот 808 слайд #$uniqueCounter?',
+          'Качает этот ночной саб-бас #$uniqueCounter?',
+          'Заходит этот дикий бит #$uniqueCounter?',
+          'Слышишь этот мощный дроп #$uniqueCounter?',
+          'Готов к разгону по Найт-Сити #$uniqueCounter?',
+          'Поймал этот плотный ритм #$uniqueCounter?',
         ];
-        var title = proceduralTitles[uniqueNum % proceduralTitles.length];
-        if (existingTitles.contains(title.toLowerCase().trim())) {
-          title = '$title · ${DateTime.now().millisecond}';
+        var title = proceduralQuestions[uniqueCounter % proceduralQuestions.length];
+        while (existingTitles.contains(title.toLowerCase().trim())) {
+          uniqueCounter++;
+          title = 'Тебе нравится этот бэнгер #$uniqueCounter?';
         }
         candidate = _PhonkItem(
-          id: 'phonk_procedural_${DateTime.now().millisecondsSinceEpoch}',
+          id: 'phonk_procedural_${DateTime.now().millisecondsSinceEpoch}_$uniqueCounter',
           title: title,
           artist: 'Night City Syndicate',
           tags: 'Memphis Cowbell • 148 BPM • VIP Heat',
           bpm: 148.0,
-          seed: DateTime.now().millisecondsSinceEpoch,
+          seed: DateTime.now().millisecondsSinceEpoch + uniqueCounter * 137,
         );
       }
 
       final dir = await getApplicationDocumentsDirectory();
       final soundsDir = Directory('${dir.path}/sounds');
       await soundsDir.create(recursive: true);
-      final wavBytes = _synthesizePhonkWav(bpm: candidate.bpm, seed: candidate.seed);
-      final fingerprint = _fingerprintOf(wavBytes);
-      final filePath = '${soundsDir.path}/phonk_${candidate.id}.wav';
+
+      List<int> wavBytes = _synthesizePhonkWav(bpm: candidate.bpm, seed: candidate.seed);
+      String fingerprint = _fingerprintOf(wavBytes);
+
+      // Строгая дедупликация: исключаем совпадение отпечатков с уже добавленными
+      int retry = 0;
+      while (existingFingerprints.contains(fingerprint) && retry < 30) {
+        retry++;
+        final altSeed = candidate.seed + retry * 269 + DateTime.now().millisecond;
+        wavBytes = _synthesizePhonkWav(bpm: candidate.bpm, seed: altSeed);
+        fingerprint = _fingerprintOf(wavBytes);
+      }
+
+      final filePath = '${soundsDir.path}/phonk_${candidate.id}_$fingerprint.wav';
       final file = File(filePath);
       await file.writeAsBytes(wavBytes);
 
@@ -500,8 +518,34 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  static List<double> _getMelodyPattern(int seed) {
+    const patternA = [
+      369.99, 0.0, 440.00, 369.99, 0.0, 554.37, 493.88, 0.0,
+      440.00, 0.0, 369.99, 329.63, 369.99, 0.0, 523.25, 554.37,
+      369.99, 0.0, 440.00, 554.37, 0.0, 659.25, 587.33, 0.0,
+      554.37, 0.0, 493.88, 0.0, 440.00, 0.0, 415.30, 369.99,
+    ];
+    const patternB = [
+      329.63, 329.63, 0.0, 392.00, 329.63, 0.0, 493.88, 440.00,
+      0.0, 392.00, 329.63, 0.0, 440.00, 493.88, 523.25, 493.88,
+      329.63, 0.0, 392.00, 0.0, 493.88, 587.33, 523.25, 0.0,
+      493.88, 0.0, 440.00, 392.00, 329.63, 0.0, 311.13, 329.63,
+    ];
+    const patternC = [
+      440.00, 0.0, 523.25, 440.00, 0.0, 659.25, 587.33, 0.0,
+      523.25, 0.0, 440.00, 392.00, 440.00, 0.0, 622.25, 659.25,
+      440.00, 0.0, 523.25, 659.25, 0.0, 783.99, 698.46, 0.0,
+      659.25, 0.0, 587.33, 0.0, 523.25, 0.0, 493.88, 440.00,
+    ];
+    final variant = seed % 3;
+    final base = variant == 0 ? patternA : (variant == 1 ? patternB : patternC);
+    final pitchShift = (seed % 5) - 2;
+    final factor = math.pow(2.0, pitchShift / 12.0).toDouble();
+    return base.map((f) => f > 0 ? f * factor : 0.0).toList();
+  }
+
   /// Синтезирует мощный, сатурированный 16-битный 44.1 кГц PCM WAV Drift Phonk луп (32 шага / 2 такта)
-  /// с аутентичным Roland TR-808 ковбеллом, мемфисским 808 саб-басом с ламповой сатурацией,
+  /// с аутентичным Roland TR-808 ковбеллом, мемфисским 808 слайд-басом с ламповой сатурацией,
   /// пробивной бочкой и трэп-снэром.
   static List<int> _synthesizePhonkWav({required double bpm, required int seed}) {
     const sampleRate = 44100;
@@ -510,44 +554,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     final stepSamples = (totalSamples / 32).round();
 
     final pcmBytes = ByteData(totalSamples * 2);
-
-    // Ноты для аутентичного 32-шагового Drift Phonk риффа (минорная пентатоника F# с тритоном)
-    const melodySteps = [
-      // Такт 1
-      369.99, // 0: F#4
-      0.0,    // 1: rest
-      440.00, // 2: A4
-      369.99, // 3: F#4
-      0.0,    // 4: rest
-      554.37, // 5: C#5
-      493.88, // 6: B4
-      0.0,    // 7: rest
-      440.00, // 8: A4
-      0.0,    // 9: rest
-      369.99, // 10: F#4
-      329.63, // 11: E4
-      369.99, // 12: F#4
-      0.0,    // 13: rest
-      523.25, // 14: C5 (тёмный тритон)
-      554.37, // 15: C#5
-      // Такт 2 (кульминация риффа)
-      369.99, // 16: F#4
-      0.0,    // 17: rest
-      440.00, // 18: A4
-      554.37, // 19: C#5
-      0.0,    // 20: rest
-      659.25, // 21: E5 (высокий пик)
-      587.33, // 22: D5
-      0.0,    // 23: rest
-      554.37, // 24: C#5
-      0.0,    // 25: rest
-      493.88, // 26: B4
-      0.0,    // 27: rest
-      440.00, // 28: A4
-      0.0,    // 29: rest
-      415.30, // 30: G#4
-      369.99, // 31: F#4
-    ];
+    final melodySteps = _getMelodyPattern(seed);
 
     // Басовые ноты для каждого шага (F#1 -> D1 -> E1 -> C#1)
     const bassSteps = [
@@ -577,23 +584,27 @@ class _ProfileScreenState extends State<ProfileScreen>
         final sine1 = math.sin(2 * math.pi * f1 * stepT);
         final sine2 = math.sin(2 * math.pi * f2 * stepT);
         final bellBody = (sine1 + 0.65 * sine2) * 0.60 + (sq1 + sq2) * 0.35;
-        final bellEnv = math.exp(-stepT * 13.5);
-        final click = math.exp(-stepT * 85.0) * math.sin(2 * math.pi * 1850.0 * stepT) * 0.45;
-        cowbell = (bellBody * bellEnv + click) * 1.35;
+        final bellEnv = math.exp(-stepT * 14.0);
+        final click = math.exp(-stepT * 90.0) * math.sin(2 * math.pi * 1920.0 * stepT) * 0.45;
+        cowbell = (bellBody * bellEnv + click) * 1.45;
       }
 
-      // 2. Глубокий, сатурированный мемфисский 808 Саб-бас с ламповым овердрайвом
-      final subFreq = bassSteps[step];
+      // 2. Глубокий, сатурированный мемфисский 808 Саб-бас со слайдом и ламповым овердрайвом
+      final baseSubFreq = bassSteps[step];
+      final isSlideStep = (step == 7 || step == 15 || step == 23 || step == 31);
+      final slideFactor = isSlideStep ? (1.0 + 0.45 * (stepSample / stepSamples)) : 1.0;
+      final subFreq = baseSubFreq * slideFactor;
       final rawSub = math.sin(2 * math.pi * subFreq * t);
-      final distSub = (rawSub * 2.8) / (1.0 + (rawSub * 1.4).abs());
+      final saturatedSub = rawSub + 0.22 * math.sin(4 * math.pi * subFreq * t);
+      final distSub = (saturatedSub * 2.9) / (1.0 + (saturatedSub * 1.3).abs());
 
-      // 3. Пробивная трэп-бочка (808 Kick) со спадом высоты 170 -> 46 Гц
+      // 3. Пробивная трэп-бочка (808 Kick) со спадом высоты 185 -> 44 Гц
       double kick = 0.0;
       if (kickSteps.contains(step)) {
-        final kickEnv = math.exp(-stepT * 16.0);
-        final kickFreq = 46.0 + 138.0 * math.exp(-stepT * 50.0);
-        final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.0;
-        kick = (rawKick * 1.5) / (1.0 + (rawKick * 0.8).abs());
+        final kickEnv = math.exp(-stepT * 17.0);
+        final kickFreq = 44.0 + 142.0 * math.exp(-stepT * 48.0);
+        final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.2;
+        kick = (rawKick * 1.6) / (1.0 + (rawKick * 0.85).abs());
       }
 
       // 4. Мемфисский трэп-снэр / хлопок на 4, 12, 20, 28 четвертях
@@ -612,8 +623,8 @@ class _ProfileScreenState extends State<ProfileScreen>
       final hatNoise = (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.22 * hatEnv;
 
       // Мастеринг: аналоговый компрессор-лимитер с плотным саундом
-      final sum = kick * 0.82 + distSub * 0.72 + cowbell * 0.60 + snare * 0.54 + hatNoise * 0.28;
-      final mix = (sum * 1.38) / (1.0 + (sum * 0.55).abs());
+      final sum = kick * 0.85 + distSub * 0.75 + cowbell * 0.62 + snare * 0.56 + hatNoise * 0.28;
+      final mix = (sum * 1.40) / (1.0 + (sum * 0.55).abs());
       final sampleInt16 = (mix * 32760.0).round().clamp(-32768, 32767);
       pcmBytes.setInt16(i * 2, sampleInt16, Endian.little);
     }
@@ -1083,70 +1094,78 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ),
               const SizedBox(height: 6),
-              // Престижный титул (с плавной сменой габаритов и кровавой подсветкой)
+              // Престижный титул (с непрерывным стадионным скруглением и плавной стрелочкой)
               PressScale(
                 pressedScale: 0.94,
                 child: GestureDetector(
                   onTap: _showPrestigeTitlePicker,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: BrandColors.red.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(Radii.pill),
-                      border: Border.all(
-                        color: BrandColors.red.withValues(alpha: 0.42),
-                        width: 0.9,
-                      ),
-                    ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(Radii.pill),
                     child: AnimatedSize(
-                      duration: const Duration(milliseconds: 320),
+                      duration: const Duration(milliseconds: 360),
                       curve: Curves.easeInOutCubic,
                       alignment: Alignment.centerLeft,
-                      clipBehavior: Clip.none,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
-                          const SizedBox(width: 4),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 260),
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeInCubic,
-                            layoutBuilder: (currentChild, previousChildren) => Stack(
-                              alignment: Alignment.centerLeft,
-                              children: [
-                                ...previousChildren,
-                                ?currentChild,
-                              ],
-                            ),
-                            transitionBuilder: (child, anim) => FadeTransition(
-                              opacity: anim,
-                              child: SlideTransition(
-                                position: Tween<Offset>(
-                                  begin: const Offset(0, 0.15),
-                                  end: Offset.zero,
-                                ).animate(anim),
-                                child: child,
-                              ),
-                            ),
-                            child: Text(
-                              _service.prestigeTitle,
-                              key: ValueKey(_service.prestigeTitle),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: theme.colorScheme.onSurface,
-                              ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: ShapeDecoration(
+                          color: BrandColors.red.withValues(alpha: 0.10),
+                          shape: StadiumBorder(
+                            side: BorderSide(
+                              color: BrandColors.red.withValues(alpha: 0.42),
+                              width: 0.9,
                             ),
                           ),
-                          const SizedBox(width: 2),
-                          Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            size: 16,
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                        ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
+                            const SizedBox(width: 4),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 280),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              layoutBuilder: (currentChild, previousChildren) => Stack(
+                                alignment: Alignment.centerLeft,
+                                children: [
+                                  ...previousChildren,
+                                  ?currentChild,
+                                ],
+                              ),
+                              transitionBuilder: (child, anim) => FadeTransition(
+                                opacity: anim,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.15),
+                                    end: Offset.zero,
+                                  ).animate(anim),
+                                  child: child,
+                                ),
+                              ),
+                              child: Text(
+                                _service.prestigeTitle,
+                                key: ValueKey(_service.prestigeTitle),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            AnimatedRotation(
+                              turns: _isPrestigePickerOpen ? 0.5 : 0.0,
+                              duration: const Duration(milliseconds: 320),
+                              curve: Curves.easeInOutCubic,
+                              child: Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 16,
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1170,11 +1189,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     'Хранитель рассвета',
   ];
 
-  void _showPrestigeTitlePicker() {
+  void _showPrestigeTitlePicker() async {
     Haptics.select();
+    setState(() => _isPrestigePickerOpen = true);
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    showModalBottomSheet<void>(
+    await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       sheetAnimationStyle: _sheetStyle(),
@@ -1286,6 +1306,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         );
       },
     );
+    if (mounted) {
+      setState(() => _isPrestigePickerOpen = false);
+    }
   }
 
   Widget _giftsCard(ThemeData theme) {
@@ -2313,158 +2336,63 @@ String _funScore(String seed) {
   return '${40 + ((r + h) % 951)}';
 }
 
-/// Пул «человеческих» названий для треков подборки. Имена файлов показывать
-/// неинтересно («record_2024_05_11»), поэтому трек получает живое название из
-/// этого списка — так подборка читается как плейлист, а не как папка.
-/// Пул большой и разноплановый: настроение, время суток, места, музыкальные
-/// образы, живые ассоциации. При лимите 99 треков пары «основа + хвост»
-/// почти не повторяются.
+/// Пул названий-вопросов для треков подборки в стиле «Тебе нравится эта песня?».
 const List<String> _kSongTitles = [
   'Тебе нравится эта песня?',
-  'Танцуй, пока играет',
-  'Утро начинается с тебя',
-  'Не выключай',
-  'Громче, чем вчера',
-  'Оставь на повтор',
-  'Песня для дороги домой',
-  'Что-то в этом есть',
-  'Слушай до конца',
-  'Мой личный саундтрек',
-  'Тише, я думаю о тебе',
-  'Эта мелодия — про нас',
-  'Лови настроение',
-  'Ещё один припев',
-  'Специально для тебя',
-  'Пусть играет',
-  'Ночная волна',
-  'Между строк',
-  'Этот бит — мой',
-  'Держи ритм',
-  'Один на один с музыкой',
-  'Тёплый звук',
-  'В ритме города',
-  'На репите',
-  'Мелодия для тебя',
-  'Без слов понятно',
-  'Свет и звук',
-  'Твоя частота',
-  'Мое хорошее настроение',
-  'Громкая тишина',
-  'Половина восьмого',
-  'Пузырь из мыла',
-  'Крыша нараспашку',
-  'Волна на волну',
-  'Дыхание моря',
-  'Снег на подоконнике',
-  'Последний вагон',
-  'Рассвет над крышами',
-  'Город засыпает',
-  'Три часа ночи',
-  'Бесконечный вечер',
-  'Первый луч',
-  'Ранний поезд',
-  'Дневной свет',
-  'Закат над рекой',
-  'Лунный путь',
-  'Янтарный вечер',
-  'Полночь',
-  'Звёздное небо',
-  'Весенняя лихорадка',
-  'Летний день без конца',
-  'Осенние листья',
-  'Зимнее окно',
-  'Открытые окна',
-  'Сквозняк',
-  'Высокие горы',
-  'Пустая трасса',
-  'Двор дома',
-  'Старый квартал',
-  'Мост в тумане',
-  'Тихая бухта',
-  'Балкон на юг',
-  'Лестница вниз',
-  'Путь домой',
-  'Дальняя станция',
-  'Свет в окне',
-  'Долгое эхо',
-  'Шум дождя',
-  'Городские огни',
-  'Побережье',
-  'Тропа в лес',
-  'Высокий берег',
-  'Мост к завтрашнему дню',
-  'Восьмой такт',
-  'Нотация',
-  'Пять строчек',
-  'Паразит',
-  'Скрытая мелодия',
-  'Сольфеджио',
-  'Диссонанс',
-  'Металлический голос',
-  'Гитара на кухне',
-  'Виноватая нота',
-  'Струна',
-  'Пальцы на клавишах',
-  'Барабанный круг',
-  'Скрип винила',
-  'Голос в наушниках',
-  'Демо',
-  'Недоделанный',
-  'Бесконечный бридж',
-  'Последний дубль',
-  'Тёмная сторона',
-  'Кофе и дождь',
-  'Молочный шоколад',
-  'Помидорный суп',
-  'Спокойная суббота',
-  'Пятница к вечеру',
-  'Медленный понедельник',
-  'Утро в пижаме',
-  'Ленивое утро',
-  'Кровать до полудня',
-  'Обещание себе',
-  'Маленькая победа',
-  'Не сдавайся',
-  'Горящий финал',
-  'Освободи голову',
-  'Прости и отпусти',
-  'Держись за тёплое',
-  'Замедлитель',
-  'Прыжок',
-  'Крен',
-  'Разворот',
-  'Дрейф',
-  'Полёт',
-  'Штиль',
-  'Метель за окном',
-  'Замысел',
-  'Импульс',
-  'Прыг',
-  'Свист',
-  'Хлопок',
-  'Топот',
+  'Чувствуешь этот мемфисский бас?',
+  'Качает этот ночной дрифт?',
+  'Слышишь этот 808 ковбелл?',
+  'Готов к разгону по Найт-Сити?',
+  'Тебе заходит этот хардтек?',
+  'Почувствовал плотный саб-бас?',
+  'Узнаёшь этот дикий дроп?',
+  'Нравится этот кибер-вайб?',
+  'Хочешь еще больше баса?',
+  'Качает эта ночная тема?',
+  'Слышишь эти сочные перегрузы?',
+  'Тебе по кайфу этот саунд?',
+  'Заценил этот плотный бит?',
+  'Готов покорять этот ритм?',
+  'Тебе нравится этот фонк?',
+  'Чувствуешь дрожь от перегруза?',
+  'Как тебе этот злой ковбелл?',
+  'Слышишь этот дикий слайд?',
+  'Заценишь эту пушку?',
+  'Поймал этот ночной ритм?',
+  'Чувствуешь вибрацию в груди?',
+  'Тебе нравится этот ночной вайб?',
+  'Готов втопить педаль в пол?',
+  'Заходит этот чистый кач?',
+  'Слышишь этот мощный бас?',
+  'Нравится этот дрифт-саунд?',
+  'Почувствовал этот удар?',
+  'Качает под этот трек?',
+  'Узнал этот дерзкий мотив?',
+  'Готов прокатиться с ветерком?',
+  'Чувствуешь эту мощь звука?',
+  'Зацепил этот плотный дроп?',
+  'Нравится эта атмосфера?',
+  'Слышишь ночной перегруз?',
+  'Хочешь продолжения трека?',
+  'Тебе зашёл этот вайб?',
+  'Почувствовал удар по перепонкам?',
+  'Как тебе этот сочный ритм?',
+  'Готов повторить этот заезд?',
 ];
 
-/// Хвосты к названию: с ними одна и та же основа не повторяется, и подборка
-/// читается живой даже когда фраз из основного списка не хватает.
+/// Хвосты к названию: с ними основа получает дополнительный оттенок и не теряет вопросительной интонации.
 const List<String> _kSongTails = [
   '',
   '',
-  ' · live',
-  ' · remix',
-  ' (nocturne)',
-  ' · acoustic',
-  ' (night mix)',
-  ' · slow',
-  ' (piano)',
-  ' · rework',
-  ' (dub)',
-  ' · demo',
+  ' (Night City Mix)',
+  ' (VIP Hardtekk)',
+  ' (Memphis Drift)',
+  ' (808 Overdrive)',
+  ' (Cowbell Rework)',
+  ' (Tokyo Drift)',
 ];
 
 String _funSongTitle(String seed) {
-  // Два независимых хеша от одного семени: основа и хвост выбираются по
-  // разным разрядам, поэтому пары не «слипаются» в один порядок.
   var h = 17;
   for (final c in seed.codeUnits) {
     h = (h * 31 + c) & 0x7fffffff;
@@ -2475,7 +2403,9 @@ String _funSongTitle(String seed) {
   }
   final base = _kSongTitles[h % _kSongTitles.length];
   final tail = _kSongTails[h2 % _kSongTails.length];
-  return '$base$tail';
+  if (tail.isEmpty) return base;
+  final cleanBase = base.endsWith('?') ? base.substring(0, base.length - 1) : base;
+  return '$cleanBase$tail?';
 }
 
 /// Добавление друга: имя, аватарка, стартовые очки.
@@ -3540,127 +3470,127 @@ class _PhonkItem {
   });
 }
 
-/// Отборный каталог легендарных фонк-бэнгеров для моментального добавления
+/// Отборный каталог легендарных фонк-бэнгеров с названиями-вопросами для моментального добавления
 class _PhonkCatalog {
   static const List<_PhonkItem> items = [
     _PhonkItem(
-      id: 'kordhell_murder',
-      title: 'Kordhell - Murder In My Mind (Night City VIP)',
+      id: 'phonk_murder',
+      title: 'Тебе нравится этот фонк?',
       artist: 'Kordhell',
       tags: 'Drift Phonk • 148 BPM • 808 Cowbell',
       bpm: 148.0,
       seed: 201,
     ),
     _PhonkItem(
-      id: 'dvrst_close_eyes',
-      title: 'DVRST - Close Eyes (Cyberpunk 2077 Rework)',
+      id: 'phonk_close_eyes',
+      title: 'Чувствуешь этот мемфисский бас?',
       artist: 'DVRST',
       tags: 'Cyber Drift • 146 BPM • Atmospheric',
       bpm: 146.0,
       seed: 202,
     ),
     _PhonkItem(
-      id: 'ghostface_playa_why_not',
-      title: 'Ghostface Playa - Why Not (Memphis Drift Cut)',
+      id: 'phonk_why_not',
+      title: 'Качает этот ночной дрифт?',
       artist: 'Ghostface Playa',
       tags: 'Night City Phonk • 150 BPM • Pure Heat',
       bpm: 150.0,
       seed: 203,
     ),
     _PhonkItem(
-      id: 'pharmacist_north_memphis',
-      title: 'Pharmacist - North Memphis (Overdrive Bass)',
+      id: 'phonk_north_memphis',
+      title: 'Слышишь этот 808 ковбелл?',
       artist: 'Pharmacist',
       tags: 'Memphis Phonk • 145 BPM • Raw 808',
       bpm: 145.0,
       seed: 204,
     ),
     _PhonkItem(
-      id: 'hensonn_sahara',
-      title: 'Hensonn - Sahara (808 Distortion Riff)',
+      id: 'phonk_sahara',
+      title: 'Готов к разгону по Найт-Сити?',
       artist: 'Hensonn',
       tags: 'Aggressive Drift • 148 BPM • Cowbell Riff',
       bpm: 148.0,
       seed: 205,
     ),
     _PhonkItem(
-      id: 'playaphonk_phonky_town',
-      title: 'PlayaPhonk - Phonky Town (Arasaka Special)',
+      id: 'phonk_phonky_town',
+      title: 'Тебе заходит этот хардтек?',
       artist: 'PlayaPhonk',
       tags: 'Classic Phonk • 146 BPM • Memphis Bounce',
       bpm: 146.0,
       seed: 206,
     ),
     _PhonkItem(
-      id: 'sxmpra_cowbell_warrior',
-      title: 'SXMPRA - COWBELL WARRIOR (Night Drive Edit)',
+      id: 'phonk_cowbell_warrior',
+      title: 'Почувствовал плотный саб-бас?',
       artist: 'SXMPRA',
       tags: 'Hardcore Phonk • 152 BPM • Distortion',
       bpm: 152.0,
       seed: 207,
     ),
     _PhonkItem(
-      id: 'kslv_disaster',
-      title: 'KSLV Noh - Disaster (Tokyo Drift VIP)',
+      id: 'phonk_disaster',
+      title: 'Узнаёшь этот дикий дроп?',
       artist: 'KSLV Noh',
       tags: 'Drift Legend • 148 BPM • Bass Pressure',
       bpm: 148.0,
       seed: 208,
     ),
     _PhonkItem(
-      id: 'interworld_metamorphosis',
-      title: 'Interworld - Metamorphosis (Speed Hardtekk VIP)',
+      id: 'phonk_metamorphosis',
+      title: 'Нравится этот кибер-вайб?',
       artist: 'Interworld',
       tags: 'Speed Phonk • 154 BPM • Cyber Cowbell',
       bpm: 154.0,
       seed: 209,
     ),
     _PhonkItem(
-      id: 'twisted_worth_nothing',
-      title: 'Twisted - Worth Nothing (Sub Saturated Mix)',
+      id: 'phonk_worth_nothing',
+      title: 'Хочешь еще больше баса?',
       artist: 'Twisted',
       tags: 'Peak Energy • 148 BPM • Memphis Sub',
       bpm: 148.0,
       seed: 210,
     ),
     _PhonkItem(
-      id: 'gigachad_phonk',
-      title: 'GigaChad - Phonk Edition (Immortal Hardtekk)',
+      id: 'phonk_gigachad',
+      title: 'Качает эта ночная тема?',
       artist: 'GigaChad',
       tags: 'Ultra Phonk • 150 BPM • Heavy 808',
       bpm: 150.0,
       seed: 211,
     ),
     _PhonkItem(
-      id: 'hxnvx_tokyo_revenge',
-      title: 'HXNVX - Tokyo Revenge (Neon Street Phonk)',
-      artist: 'HXNVX',
-      tags: 'Drift Culture • 146 BPM • Cowbell Riff',
-      bpm: 146.0,
+      id: 'phonk_tokyo_drift',
+      title: 'Слышишь эти сочные перегрузы?',
+      artist: 'Teriyaki Boyz',
+      tags: 'Shinjuku Hardtekk • 149 BPM • Slide Bass',
+      bpm: 149.0,
       seed: 212,
     ),
     _PhonkItem(
-      id: 'shadxwbxrn_knight',
-      title: 'Shadxwbxrn - KNIGHT (Dark Memphis Riff)',
-      artist: 'Shadxwbxrn',
-      tags: 'Dark Phonk • 148 BPM • Memphis Bass',
-      bpm: 148.0,
+      id: 'phonk_neon_blade',
+      title: 'Тебе по кайфу этот саунд?',
+      artist: 'MoonDeity',
+      tags: 'Dark Electro Phonk • 151 BPM • Cowbell Punch',
+      bpm: 151.0,
       seed: 213,
     ),
     _PhonkItem(
-      id: 'mupp_vendetta',
-      title: 'MUPP & Sadfriendd - vendetta! (Cyber Cowbell)',
-      artist: 'MUPP',
-      tags: 'Aggressive • 150 BPM • Hard Bass',
-      bpm: 150.0,
+      id: 'phonk_speed_demon',
+      title: 'Заценил этот плотный бит?',
+      artist: 'MUPP & Sadfriendd',
+      tags: 'Speed Demon • 153 BPM • Maximum Overdrive',
+      bpm: 153.0,
       seed: 214,
     ),
     _PhonkItem(
-      id: 'kute_avoid_me',
-      title: 'KUTE - AVOID ME (Heavy Memphis Sub)',
-      artist: 'KUTE',
-      tags: 'Pure Drift • 148 BPM • Overdrive',
-      bpm: 148.0,
+      id: 'phonk_night_drive',
+      title: 'Готов покорять ночной город?',
+      artist: 'Night City Syndicate',
+      tags: 'Highway Heat • 147 BPM • 808 Thunder',
+      bpm: 147.0,
       seed: 215,
     ),
   ];

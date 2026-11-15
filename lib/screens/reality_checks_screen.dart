@@ -87,6 +87,7 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
   /// вкладка не присылает событий скролла, а общий notifier мог остаться с
   /// устаревшей высотой: таблетка разделов исчезала до первого скролла).
   void _onCurrentSectionChanged() {
+    if (sectionDragPage.value != null) return;
     if (sectionCurrentIndex.value != widget.pillIndex) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncPillOffset();

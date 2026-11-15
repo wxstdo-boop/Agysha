@@ -110,6 +110,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
   /// вкладка не присылает событий скролла, а общий notifier мог остаться с
   /// устаревшей высотой: таблетка разделов исчезала до первого скролла).
   void _onCurrentSectionChanged() {
+    if (sectionDragPage.value != null) return;
     if (sectionCurrentIndex.value != widget.pillIndex) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncPillOffset();
@@ -532,33 +533,36 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           pressedScale: 0.96,
           duration: const Duration(milliseconds: 140),
           releaseDuration: const Duration(milliseconds: 220),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeInOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: pillBg,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: borderColor,
-                width: 0.9,
-              ),
-              boxShadow: [
-                if (hasActive)
-                  BoxShadow(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                    blurRadius: 16,
-                    spreadRadius: -4,
-                    offset: const Offset(0, 3),
-                  ),
-              ],
-            ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
             child: AnimatedSize(
-              duration: const Duration(milliseconds: 320),
+              duration: const Duration(milliseconds: 360),
               curve: Curves.easeInOutCubic,
               alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              child: AnimatedSwitcher(
+              clipBehavior: Clip.antiAlias,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 360),
+                curve: Curves.easeInOutCubic,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: ShapeDecoration(
+                  color: pillBg,
+                  shape: StadiumBorder(
+                    side: BorderSide(
+                      color: borderColor,
+                      width: 0.9,
+                    ),
+                  ),
+                  shadows: [
+                    if (hasActive)
+                      BoxShadow(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                        blurRadius: 16,
+                        spreadRadius: -4,
+                        offset: const Offset(0, 3),
+                      ),
+                  ],
+                ),
+                child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 280),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
@@ -607,7 +611,8 @@ class _AlarmsScreenState extends State<AlarmsScreen>
         ),
       ),
     ),
-  );
+  ),
+);
 }
 
   Widget _buildAlarmList(

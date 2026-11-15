@@ -101,201 +101,199 @@ class _GiftCard3DState extends State<GiftCard3D>
     final rarity = widget.gift.rarity;
 
     return RepaintBoundary(
-      child: AnimatedBuilder(
-        animation: _resetController,
-        builder: (context, child) {
-          final currentTilt = _resetController.isAnimating
-              ? _tiltAnimation.value
-              : _tilt;
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (e) => _updateTiltFromPos(e.localPosition),
+        onPointerMove: (e) => _updateTiltFromPos(e.localPosition),
+        onPointerUp: (_) => _resetTilt(),
+        onPointerCancel: (_) => _resetTilt(),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openDetails(context),
+          child: PressScale(
+            pressedScale: 0.94,
+            duration: const Duration(milliseconds: 140),
+            releaseDuration: const Duration(milliseconds: 220),
+            child: AnimatedBuilder(
+              animation: _resetController,
+              builder: (context, _) {
+                final currentTilt = _resetController.isAnimating
+                    ? _tiltAnimation.value
+                    : _tilt;
 
-          final tiltX = -currentTilt.dy * 0.30;
-          final tiltY = currentTilt.dx * 0.30;
+                final tiltX = -currentTilt.dy * 0.30;
+                final tiltY = currentTilt.dx * 0.30;
 
-          final transform = Matrix4.identity()
-            ..setEntry(3, 2, 0.0016)
-            ..rotateX(tiltX)
-            ..rotateY(tiltY);
+                final transform = Matrix4.identity()
+                  ..setEntry(3, 2, 0.0016)
+                  ..rotateX(tiltX)
+                  ..rotateY(tiltY);
 
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragStart: (d) => _updateTiltFromPos(d.localPosition),
-            onHorizontalDragUpdate: (d) => _updateTiltFromPos(d.localPosition),
-            onHorizontalDragEnd: (_) => _resetTilt(),
-            onHorizontalDragCancel: _resetTilt,
-            onVerticalDragStart: (d) => _updateTiltFromPos(d.localPosition),
-            onVerticalDragUpdate: (d) => _updateTiltFromPos(d.localPosition),
-            onVerticalDragEnd: (_) => _resetTilt(),
-            onVerticalDragCancel: _resetTilt,
-            onTap: () => _openDetails(context),
-            child: PressScale(
-              pressedScale: 0.94,
-              duration: const Duration(milliseconds: 140),
-              releaseDuration: const Duration(milliseconds: 220),
-              child: Transform(
-                transform: transform,
-                alignment: FractionalOffset.center,
-                child: child!,
-              ),
-            ),
-          );
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 320),
-          curve: Curves.easeInOutCubic,
-          width: widget.width,
-          height: widget.height,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(Radii.lg),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: dark
-                  ? [
-                      const Color(0xFF141420),
-                      const Color(0xFF0A0A12),
-                    ]
-                  : [
-                      Colors.white,
-                      const Color(0xFFF0F4F8),
-                    ],
-            ),
-            border: Border.all(
-              color: widget.gift.isFavorite
-                  ? BrandColors.red.withValues(alpha: 0.70)
-                  : rarity.color.withValues(alpha: dark ? 0.60 : 0.45),
-              width: widget.gift.isFavorite ? 1.8 : 1.3,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: widget.gift.isFavorite
-                    ? BrandColors.red.withValues(alpha: dark ? 0.35 : 0.22)
-                    : rarity.color.withValues(alpha: dark ? 0.25 : 0.16),
-                blurRadius: widget.gift.isFavorite ? 14 : 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(Radii.lg),
-            child: Stack(
-              children: [
-                // Голографический фольгированный блик
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _HoloFoilPainter(
-                      tilt: _tilt,
-                      rarityColor: widget.gift.isFavorite
-                          ? BrandColors.red
-                          : rarity.color,
+                return Transform(
+                  transform: transform,
+                  alignment: FractionalOffset.center,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.easeInOutCubic,
+                    width: widget.width,
+                    height: widget.height,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(Radii.lg),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: dark
+                            ? [
+                                const Color(0xFF141420),
+                                const Color(0xFF0A0A12),
+                              ]
+                            : [
+                                Colors.white,
+                                const Color(0xFFF0F4F8),
+                              ],
+                      ),
+                      border: Border.all(
+                        color: widget.gift.isFavorite
+                            ? BrandColors.red.withValues(alpha: 0.70)
+                            : rarity.color.withValues(alpha: dark ? 0.60 : 0.45),
+                        width: widget.gift.isFavorite ? 1.8 : 1.3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: widget.gift.isFavorite
+                              ? BrandColors.red.withValues(alpha: dark ? 0.35 : 0.22)
+                              : rarity.color.withValues(alpha: dark ? 0.25 : 0.16),
+                          blurRadius: widget.gift.isFavorite ? 14 : 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-                // Содержимое карточки
-                Padding(
-                  padding: const EdgeInsets.all(Spacing.sm),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Верхний ряд: Редкость и Серийник (плюс звездочка без наезда)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(Radii.lg),
+                      child: Stack(
                         children: [
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: rarity.color.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(Radii.xs),
-                                border: Border.all(
-                                  color: rarity.color.withValues(alpha: 0.45),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Text(
-                                rarity.labelRu.toUpperCase(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: rarity.color,
-                                  letterSpacing: 0.6,
-                                ),
+                          // Голографический фольгированный блик
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: _HoloFoilPainter(
+                                tilt: currentTilt,
+                                rarityColor: widget.gift.isFavorite
+                                    ? BrandColors.red
+                                    : rarity.color,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          // Номер и кровавая звездочка рядом
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (widget.gift.isFavorite) ...[
-                                const Icon(
-                                  Icons.star_rounded,
-                                  size: 14,
-                                  color: BrandColors.red,
+                          // Содержимое карточки
+                          Padding(
+                            padding: const EdgeInsets.all(Spacing.sm),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Верхний ряд: Редкость и Серийник (плюс звездочка без наезда)
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Flexible(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: rarity.color.withValues(alpha: 0.18),
+                                          borderRadius: BorderRadius.circular(Radii.xs),
+                                          border: Border.all(
+                                            color: rarity.color.withValues(alpha: 0.45),
+                                            width: 0.8,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          rarity.labelRu.toUpperCase(),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: rarity.color,
+                                            letterSpacing: 0.6,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    // Номер и кровавая звездочка рядом
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (widget.gift.isFavorite) ...[
+                                          const Icon(
+                                            Icons.star_rounded,
+                                            size: 14,
+                                            color: BrandColors.red,
+                                          ),
+                                          const SizedBox(width: 2),
+                                        ],
+                                        Text(
+                                          '#${widget.gift.serialNumber.toString().padLeft(4, '0')}',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontFamily: 'monospace',
+                                            fontWeight: FontWeight.w700,
+                                            color: widget.gift.isFavorite
+                                                ? BrandColors.red
+                                                : theme.colorScheme.onSurface
+                                                    .withValues(alpha: 0.60),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 2),
+                                const Spacer(),
+                                // Центральная иконка артефакта с аурой
+                                Center(
+                                  child: ArtifactEmblem(
+                                    giftId: widget.gift.id,
+                                    icon: widget.gift.icon,
+                                    color: rarity.color,
+                                    isFavorite: widget.gift.isFavorite,
+                                    size: 68,
+                                  ),
+                                ),
+                                const Spacer(),
+                                // Название артефакта
+                                Text(
+                                  widget.gift.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                // Бафф/эффект
+                                Text(
+                                  widget.gift.buffText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: widget.gift.isFavorite
+                                        ? BrandColors.red
+                                        : theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ],
-                              Text(
-                                '#${widget.gift.serialNumber.toString().padLeft(4, '0')}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontFamily: 'monospace',
-                                  fontWeight: FontWeight.w700,
-                                  color: widget.gift.isFavorite
-                                      ? BrandColors.red
-                                      : theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.60),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
-                      const Spacer(),
-                      // Центральная иконка артефакта с аурой
-                      Center(
-                        child: ArtifactEmblem(
-                          giftId: widget.gift.id,
-                          icon: widget.gift.icon,
-                          color: rarity.color,
-                          isFavorite: widget.gift.isFavorite,
-                          size: 68,
-                        ),
-                      ),
-                      const Spacer(),
-                      // Название артефакта
-                      Text(
-                        widget.gift.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      // Бафф/эффект
-                      Text(
-                        widget.gift.buffText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: widget.gift.isFavorite
-                              ? BrandColors.red
-                              : theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ),
@@ -311,6 +309,7 @@ class ArtifactEmblem extends StatelessWidget {
   final Color color;
   final bool isFavorite;
   final double size;
+  final Color? activeColorOverride;
 
   const ArtifactEmblem({
     super.key,
@@ -319,11 +318,12 @@ class ArtifactEmblem extends StatelessWidget {
     required this.color,
     required this.isFavorite,
     required this.size,
+    this.activeColorOverride,
   });
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = isFavorite ? BrandColors.red : color;
+    final activeColor = activeColorOverride ?? (isFavorite ? BrandColors.red : color);
 
     return SizedBox(
       width: size,
@@ -877,12 +877,22 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
             ),
             const SizedBox(height: 20),
             // Огромная иконка артефакта с неоновой аурой
-            ArtifactEmblem(
-              giftId: widget.gift.id,
-              icon: widget.gift.icon,
-              color: rarity.color,
-              isFavorite: _fav,
-              size: 92,
+            TweenAnimationBuilder<Color?>(
+              duration: const Duration(milliseconds: 360),
+              curve: Curves.easeInOutCubic,
+              tween: ColorTween(
+                end: _fav ? BrandColors.red : rarity.color,
+              ),
+              builder: (context, animColor, _) {
+                return ArtifactEmblem(
+                  giftId: widget.gift.id,
+                  icon: widget.gift.icon,
+                  color: rarity.color,
+                  isFavorite: _fav,
+                  activeColorOverride: animColor,
+                  size: 92,
+                );
+              },
             ),
             const SizedBox(height: 12),
             Text(

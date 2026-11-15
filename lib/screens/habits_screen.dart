@@ -23,7 +23,7 @@ import '../widgets/animated_fab_row.dart';
 import '../widgets/premium_empty_state.dart';
 import '../utils/section_tints.dart';
 import '../widgets/section_pill.dart'
-    show kSectionPillSlotHeight, sectionCurrentIndex;
+    show kSectionPillSlotHeight, sectionCurrentIndex, sectionDragPage;
 import 'add_habit_screen.dart';
 import '../widgets/agysha_confirm_dialog.dart';
 
@@ -430,6 +430,7 @@ class _HabitsScreenState extends State<HabitsScreen>
   /// другого раздела. Из-за этого таблетка разделов иногда исчезала при
   /// перезаходе и возвращалась только после первого ручного скролла.
   void _onCurrentSectionChanged() {
+    if (sectionDragPage.value != null) return;
     if (sectionCurrentIndex.value != widget.pillIndex) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncPillOffset();
@@ -1534,13 +1535,13 @@ class _HabitsScreenState extends State<HabitsScreen>
                         // как раскрывалась.
                         // 760 мс (было 480): вход и выход — одна мягкая волна
                         // (easeInOutCubic), без рывка в конце.
-                        // Раскрытие/закрытие заметки: плавная синхронная анимация высоты
-                        // (AnimatedSize + Fade) ровно за 320 мс по Curves.easeInOutCubic,
-                        // в полной гармонии с поворотом стрелочки.
+                        // Раскрытие/закрытие заметки: глубокая, роскошная плавная анимация высоты
+                        // (AnimatedSize) за 760 мс по Curves.easeInOutCubic,
+                        // в полной гармонии с плавным 760 мс поворотом стрелочки.
                         if (habit.notes.isNotEmpty ||
                             (habit.type == 'good' && habit.status.isNotEmpty))
                           AnimatedSize(
-                            duration: const Duration(milliseconds: 320),
+                            duration: const Duration(milliseconds: 760),
                             curve: Curves.easeInOutCubic,
                             alignment: Alignment.topCenter,
                             clipBehavior: Clip.hardEdge,
@@ -1679,14 +1680,14 @@ class _HabitsScreenState extends State<HabitsScreen>
     bool cornerRipple = false,
   }) {
     final cs = Theme.of(context).colorScheme;
-    // Иконка + плавный поворот и плавная смена цвета, синхронные с анимацией заметки (320 мс)
+    // Иконка + плавный поворот и плавная смена цвета, синхронные с анимацией заметки (760 мс)
     final rotatingIcon = AnimatedRotation(
       turns: rotation / 3.14159 / 2,
-      duration: const Duration(milliseconds: 320),
+      duration: const Duration(milliseconds: 760),
       curve: Curves.easeInOutCubic,
       child: TweenAnimationBuilder<Color?>(
         tween: ColorTween(end: color),
-        duration: const Duration(milliseconds: 320),
+        duration: const Duration(milliseconds: 760),
         curve: Curves.easeInOutCubic,
         builder: (context, c, _) => Icon(icon, size: 18, color: c),
       ),

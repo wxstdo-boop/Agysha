@@ -1384,10 +1384,8 @@ class _NutritionScreenState extends State<NutritionScreen>
                         icon: willPin ? Icons.push_pin : Icons.push_pin_outlined,
                       );
                     },
-                    child: PressScale(
-                      pressedScale: 0.96,
-                      child: Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
                     shape: RoundedRectangleBorder(
                       // Радиус 20 — как у карточек привычек и задач: с 16
                       // карточка выбивалась из общего языка скруглений, а
@@ -1489,7 +1487,6 @@ class _NutritionScreenState extends State<NutritionScreen>
                         vertical: 12,
                         horizontal: 16,
                       ),
-                    ),
                     ),
                   ),
                   ),
