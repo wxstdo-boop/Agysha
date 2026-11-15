@@ -185,6 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   void initState() {
     super.initState();
+    _service.addListener(_onServiceChanged);
     _music.addListener(_onMusicChanged);
     _nameCtrl.text = _service.name;
     _nameCtrl.addListener(_syncHint);
@@ -213,6 +214,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   void dispose() {
+    _service.removeListener(_onServiceChanged);
     // Плеер НЕ останавливаем и не уничтожаем: музыка — общий сервис, она
     // должна продолжать играть при уходе с экрана (см. [MusicService]).
     _music.removeListener(_onMusicChanged);
@@ -226,6 +228,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _onMusicChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onServiceChanged() {
     if (mounted) setState(() {});
   }
 
@@ -438,13 +444,16 @@ class _ProfileScreenState extends State<ProfileScreen>
 
       _PhonkItem? candidate;
       for (final item in _PhonkCatalog.items) {
-        if (!existingTitles.contains(item.title.toLowerCase().trim())) {
+        final itemWav = _synthesizePhonkWav(bpm: item.bpm, seed: item.seed);
+        final itemFp = _fingerprintOf(itemWav);
+        if (!existingTitles.contains(item.title.toLowerCase().trim()) &&
+            !existingFingerprints.contains(itemFp)) {
           candidate = item;
           break;
         }
       }
 
-      // Если все 15 треков каталога уже добавлены, создаем уникальный процедурный VIP-бэнгер с вопросительным названием
+      // Если все треки каталога уже добавлены или имеют совпадения, создаем уникальный процедурный VIP-бэнгер с вопросительным названием
       int uniqueCounter = _service.tracks.length + 1;
       if (candidate == null) {
         final proceduralQuestions = [
@@ -455,19 +464,23 @@ class _ProfileScreenState extends State<ProfileScreen>
           'Слышишь этот мощный дроп #$uniqueCounter?',
           'Готов к разгону по Найт-Сити #$uniqueCounter?',
           'Поймал этот плотный ритм #$uniqueCounter?',
+          'Вкатывает этот мемфисский вайб #$uniqueCounter?',
+          'Слышишь как ревёт сабвуфер #$uniqueCounter?',
         ];
         var title = proceduralQuestions[uniqueCounter % proceduralQuestions.length];
         while (existingTitles.contains(title.toLowerCase().trim())) {
           uniqueCounter++;
           title = 'Тебе нравится этот бэнгер #$uniqueCounter?';
         }
+        final bpmList = [144.0, 146.0, 148.0, 150.0, 152.0, 154.0, 156.0];
+        final chosenBpm = bpmList[uniqueCounter % bpmList.length];
         candidate = _PhonkItem(
           id: 'phonk_procedural_${DateTime.now().millisecondsSinceEpoch}_$uniqueCounter',
           title: title,
           artist: 'Night City Syndicate',
-          tags: 'Memphis Cowbell • 148 BPM • VIP Heat',
-          bpm: 148.0,
-          seed: DateTime.now().millisecondsSinceEpoch + uniqueCounter * 137,
+          tags: 'Memphis Cowbell • ${chosenBpm.toInt()} BPM • VIP Heat',
+          bpm: chosenBpm,
+          seed: 1000 + uniqueCounter * 73 + DateTime.now().millisecond,
         );
       }
 
@@ -478,11 +491,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       List<int> wavBytes = _synthesizePhonkWav(bpm: candidate.bpm, seed: candidate.seed);
       String fingerprint = _fingerprintOf(wavBytes);
 
-      // Строгая дедупликация: исключаем совпадение отпечатков с уже добавленными
+      // Строгая дедупликация: исключаем совпадение отпечатков с уже добавленными звуками
       int retry = 0;
-      while (existingFingerprints.contains(fingerprint) && retry < 30) {
+      while ((existingFingerprints.contains(fingerprint) || _service.hasTrackWithFingerprint(fingerprint)) && retry < 60) {
         retry++;
-        final altSeed = candidate.seed + retry * 269 + DateTime.now().millisecond;
+        final altSeed = candidate.seed + retry * 397 + DateTime.now().millisecond;
         wavBytes = _synthesizePhonkWav(bpm: candidate.bpm, seed: altSeed);
         fingerprint = _fingerprintOf(wavBytes);
       }
@@ -519,27 +532,69 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   static List<double> _getMelodyPattern(int seed) {
-    const patternA = [
-      369.99, 0.0, 440.00, 369.99, 0.0, 554.37, 493.88, 0.0,
-      440.00, 0.0, 369.99, 329.63, 369.99, 0.0, 523.25, 554.37,
-      369.99, 0.0, 440.00, 554.37, 0.0, 659.25, 587.33, 0.0,
-      554.37, 0.0, 493.88, 0.0, 440.00, 0.0, 415.30, 369.99,
+    // 8 аутентичных мемфисских ковбелл-риффов (минорные пентатоники)
+    // Шаг 1/16, 32 шага (2 такта 4/4)
+    const patterns = [
+      // 0: Classic Drift Aggression (F# minor)
+      [
+        369.99, 0.0, 440.00, 369.99, 0.0, 554.37, 493.88, 0.0,
+        440.00, 0.0, 369.99, 329.63, 369.99, 0.0, 523.25, 554.37,
+        369.99, 0.0, 440.00, 554.37, 0.0, 659.25, 587.33, 0.0,
+        554.37, 0.0, 493.88, 0.0, 440.00, 0.0, 415.30, 369.99,
+      ],
+      // 1: Heavy Memphis Nightmare (D# minor)
+      [
+        311.13, 0.0, 311.13, 369.99, 0.0, 466.16, 415.30, 0.0,
+        369.99, 0.0, 311.13, 277.18, 311.13, 0.0, 415.30, 466.16,
+        311.13, 311.13, 0.0, 466.16, 0.0, 554.37, 466.16, 0.0,
+        415.30, 0.0, 369.99, 0.0, 349.23, 329.63, 311.13, 0.0,
+      ],
+      // 2: Cyber Highway Night (A minor)
+      [
+        440.00, 0.0, 523.25, 440.00, 0.0, 659.25, 587.33, 0.0,
+        523.25, 0.0, 440.00, 392.00, 440.00, 0.0, 622.25, 659.25,
+        440.00, 0.0, 523.25, 659.25, 0.0, 783.99, 698.46, 0.0,
+        659.25, 0.0, 587.33, 0.0, 523.25, 0.0, 493.88, 440.00,
+      ],
+      // 3: Dark Underworld Bounce (C minor)
+      [
+        261.63, 261.63, 0.0, 311.13, 0.0, 392.00, 349.23, 0.0,
+        311.13, 0.0, 261.63, 0.0, 349.23, 392.00, 415.30, 392.00,
+        261.63, 0.0, 311.13, 0.0, 392.00, 466.16, 415.30, 0.0,
+        392.00, 0.0, 349.23, 311.13, 293.66, 0.0, 261.63, 0.0,
+      ],
+      // 4: Toxic Devil Riff (E minor)
+      [
+        329.63, 0.0, 392.00, 329.63, 0.0, 493.88, 440.00, 0.0,
+        392.00, 0.0, 329.63, 293.66, 329.63, 0.0, 440.00, 493.88,
+        329.63, 0.0, 392.00, 493.88, 0.0, 587.33, 523.25, 0.0,
+        493.88, 0.0, 440.00, 0.0, 392.00, 0.0, 370.00, 329.63,
+      ],
+      // 5: G-Shit Street Demon (G# minor)
+      [
+        415.30, 415.30, 0.0, 493.88, 415.30, 0.0, 622.25, 554.37,
+        0.0, 493.88, 415.30, 0.0, 554.37, 622.25, 659.25, 622.25,
+        415.30, 0.0, 493.88, 0.0, 622.25, 739.99, 659.25, 0.0,
+        622.25, 0.0, 554.37, 493.88, 415.30, 0.0, 392.00, 415.30,
+      ],
+      // 6: Shadow Stalker (B minor)
+      [
+        493.88, 0.0, 587.33, 493.88, 0.0, 739.99, 659.25, 0.0,
+        587.33, 0.0, 493.88, 440.00, 493.88, 0.0, 698.46, 739.99,
+        493.88, 0.0, 587.33, 739.99, 0.0, 880.00, 783.99, 0.0,
+        739.99, 0.0, 659.25, 0.0, 587.33, 0.0, 554.37, 493.88,
+      ],
+      // 7: Midnight Doom Rider (D minor)
+      [
+        293.66, 0.0, 349.23, 293.66, 0.0, 440.00, 392.00, 0.0,
+        349.23, 0.0, 293.66, 261.63, 293.66, 0.0, 392.00, 440.00,
+        293.66, 0.0, 349.23, 440.00, 0.0, 523.25, 466.16, 0.0,
+        440.00, 0.0, 392.00, 0.0, 349.23, 0.0, 329.63, 293.66,
+      ],
     ];
-    const patternB = [
-      329.63, 329.63, 0.0, 392.00, 329.63, 0.0, 493.88, 440.00,
-      0.0, 392.00, 329.63, 0.0, 440.00, 493.88, 523.25, 493.88,
-      329.63, 0.0, 392.00, 0.0, 493.88, 587.33, 523.25, 0.0,
-      493.88, 0.0, 440.00, 392.00, 329.63, 0.0, 311.13, 329.63,
-    ];
-    const patternC = [
-      440.00, 0.0, 523.25, 440.00, 0.0, 659.25, 587.33, 0.0,
-      523.25, 0.0, 440.00, 392.00, 440.00, 0.0, 622.25, 659.25,
-      440.00, 0.0, 523.25, 659.25, 0.0, 783.99, 698.46, 0.0,
-      659.25, 0.0, 587.33, 0.0, 523.25, 0.0, 493.88, 440.00,
-    ];
-    final variant = seed % 3;
-    final base = variant == 0 ? patternA : (variant == 1 ? patternB : patternC);
-    final pitchShift = (seed % 5) - 2;
+    final pIdx = (seed.abs()) % patterns.length;
+    final base = patterns[pIdx];
+    final pitchShift = ((seed.abs() ~/ 7) % 5) - 2;
     final factor = math.pow(2.0, pitchShift / 12.0).toDouble();
     return base.map((f) => f > 0 ? f * factor : 0.0).toList();
   }
@@ -556,16 +611,91 @@ class _ProfileScreenState extends State<ProfileScreen>
     final pcmBytes = ByteData(totalSamples * 2);
     final melodySteps = _getMelodyPattern(seed);
 
-    // Басовые ноты для каждого шага (F#1 -> D1 -> E1 -> C#1)
-    const bassSteps = [
-      46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25, // 0..7: F#1
-      36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, // 8..15: D1
-      41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, // 16..23: E1
-      34.65, 34.65, 34.65, 34.65, 43.65, 43.65, 46.25, 46.25, // 24..31: C#1 -> F1
-    ];
+    final bassMode = (seed.abs()) % 8;
+    final List<double> bassSteps;
+    switch (bassMode) {
+      case 0: // F#1 -> D1 -> E1 -> C#1
+        bassSteps = const [
+          46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25,
+          36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71,
+          41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20,
+          34.65, 34.65, 34.65, 34.65, 43.65, 43.65, 46.25, 46.25,
+        ];
+        break;
+      case 1: // D#1 -> B0 -> C#1 -> A#0
+        bassSteps = const [
+          38.89, 38.89, 38.89, 38.89, 38.89, 38.89, 38.89, 38.89,
+          30.87, 30.87, 30.87, 30.87, 30.87, 30.87, 30.87, 30.87,
+          34.65, 34.65, 34.65, 34.65, 34.65, 34.65, 34.65, 34.65,
+          29.14, 29.14, 29.14, 29.14, 36.71, 36.71, 38.89, 38.89,
+        ];
+        break;
+      case 2: // A1 -> F1 -> G1 -> E1
+        bassSteps = const [
+          55.00, 55.00, 55.00, 55.00, 55.00, 55.00, 55.00, 55.00,
+          43.65, 43.65, 43.65, 43.65, 43.65, 43.65, 43.65, 43.65,
+          49.00, 49.00, 49.00, 49.00, 49.00, 49.00, 49.00, 49.00,
+          41.20, 41.20, 41.20, 41.20, 51.91, 51.91, 55.00, 55.00,
+        ];
+        break;
+      case 3: // C1 -> G#0 -> A#0 -> G0
+        bassSteps = const [
+          32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70,
+          25.96, 25.96, 25.96, 25.96, 25.96, 25.96, 25.96, 25.96,
+          29.14, 29.14, 29.14, 29.14, 29.14, 29.14, 29.14, 29.14,
+          24.50, 24.50, 24.50, 24.50, 30.87, 30.87, 32.70, 32.70,
+        ];
+        break;
+      case 4: // E1 -> C1 -> D1 -> B0
+        bassSteps = const [
+          41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20,
+          32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70,
+          36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71,
+          30.87, 30.87, 30.87, 30.87, 38.89, 38.89, 41.20, 41.20,
+        ];
+        break;
+      case 5: // G#1 -> E1 -> F#1 -> D#1
+        bassSteps = const [
+          51.91, 51.91, 51.91, 51.91, 51.91, 51.91, 51.91, 51.91,
+          41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20,
+          46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25,
+          38.89, 38.89, 38.89, 38.89, 49.00, 49.00, 51.91, 51.91,
+        ];
+        break;
+      case 6: // B1 -> G1 -> A1 -> F#1
+        bassSteps = const [
+          61.74, 61.74, 61.74, 61.74, 61.74, 61.74, 61.74, 61.74,
+          49.00, 49.00, 49.00, 49.00, 49.00, 49.00, 49.00, 49.00,
+          55.00, 55.00, 55.00, 55.00, 55.00, 55.00, 55.00, 55.00,
+          46.25, 46.25, 46.25, 46.25, 58.27, 58.27, 61.74, 61.74,
+        ];
+        break;
+      default: // D1 -> Bb0 -> C1 -> A0
+        bassSteps = const [
+          36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71,
+          29.14, 29.14, 29.14, 29.14, 29.14, 29.14, 29.14, 29.14,
+          32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70,
+          27.50, 27.50, 27.50, 27.50, 34.65, 34.65, 36.71, 36.71,
+        ];
+        break;
+    }
 
-    // Синкопированные шаги 808 бочки
-    const kickSteps = {0, 3, 6, 10, 14, 16, 19, 22, 26, 30};
+    final kickMode = (seed.abs() ~/ 3) % 4;
+    final Set<int> kickSteps;
+    switch (kickMode) {
+      case 0:
+        kickSteps = const {0, 3, 6, 10, 14, 16, 19, 22, 26, 30};
+        break;
+      case 1:
+        kickSteps = const {0, 4, 8, 12, 14, 16, 20, 24, 28, 30};
+        break;
+      case 2:
+        kickSteps = const {0, 10, 16, 26, 28};
+        break;
+      default:
+        kickSteps = const {0, 3, 8, 11, 14, 16, 19, 24, 27, 30};
+        break;
+    }
 
     for (int i = 0; i < totalSamples; i++) {
       final t = i / sampleRate;
@@ -898,24 +1028,40 @@ class _ProfileScreenState extends State<ProfileScreen>
                 alignment: Alignment.center,
                 clipBehavior: Clip.none,
                 children: [
-                  if (talisman != null)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 500),
-                      curve: Curves.easeInOutCubic,
-                      width: 126,
-                      height: 126,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            talisman.rarity.color.withValues(alpha: 0.38),
-                            BrandColors.red.withValues(alpha: 0.18),
-                            Colors.transparent,
-                          ],
-                          stops: const [0.35, 0.70, 1.0],
-                        ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.85, end: 1.0).animate(animation),
+                        child: child,
                       ),
                     ),
+                    child: talisman != null
+                        ? Container(
+                            key: ValueKey('talisman_aura_${talisman.id}'),
+                            width: 126,
+                            height: 126,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  talisman.rarity.color.withValues(alpha: 0.38),
+                                  BrandColors.red.withValues(alpha: 0.18),
+                                  Colors.transparent,
+                                ],
+                                stops: const [0.35, 0.70, 1.0],
+                              ),
+                            ),
+                          )
+                        : const SizedBox(
+                            key: ValueKey('no_talisman_aura'),
+                            width: 126,
+                            height: 126,
+                          ),
+                  ),
                   AudioSpectrumRing(
                     radius: 48,
                     child: SizedBox(
@@ -995,62 +1141,84 @@ class _ProfileScreenState extends State<ProfileScreen>
                             ),
                           ),
                           // Стильный 3D NFT значок активного талисмана прямо на аватарке (как в Telegram!)
-                          if (talisman != null)
-                            Positioned(
-                              left: 2,
-                              top: 2,
-                              child: PressScale(
-                                pressedScale: 0.90,
-                                duration: const Duration(milliseconds: 180),
-                                releaseDuration: const Duration(milliseconds: 240),
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () {
-                                    Haptics.select();
-                                    final gift = _service.gifts.where((g) => g.id == talisman.id).firstOrNull;
-                                    if (gift != null) {
-                                      showGiftDetailsSheet(
-                                        context,
-                                        gift,
-                                        () => _service.toggleGiftFavorite(gift.id),
-                                      );
-                                    }
-                                  },
-                                  child: Container(
-                                    width: 28,
-                                    height: 28,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: const Color(0xFF141422),
-                                      border: Border.all(
-                                        color: talisman.rarity.color,
-                                        width: 1.5,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: talisman.rarity.color.withValues(alpha: 0.60),
-                                          blurRadius: 8,
-                                          spreadRadius: 1,
-                                        ),
-                                      ],
-                                    ),
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CustomPaint(
-                                          painter: SharpArtifactPainter(
-                                            giftId: talisman.id,
-                                            color: talisman.rarity.color,
-                                            isFavorite: true,
+                          Positioned(
+                            left: 2,
+                            top: 2,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 360),
+                              switchInCurve: Curves.easeOutBack,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) => FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: animation,
+                                  child: child,
+                                ),
+                              ),
+                              child: talisman != null
+                                  ? KeyedSubtree(
+                                      key: ValueKey('avatar_talisman_${talisman.id}'),
+                                      child: PressScale(
+                                        pressedScale: 0.90,
+                                        duration: const Duration(milliseconds: 180),
+                                        releaseDuration: const Duration(milliseconds: 240),
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () {
+                                            Haptics.select();
+                                            final gift = _service.gifts.where((g) => g.id == talisman.id).firstOrNull;
+                                            if (gift != null) {
+                                              showGiftDetailsSheet(
+                                                context,
+                                                gift,
+                                                () {
+                                                  if (mounted) setState(() {});
+                                                },
+                                              );
+                                            }
+                                          },
+                                          child: Container(
+                                            width: 28,
+                                            height: 28,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: const Color(0xFF141422),
+                                              border: Border.all(
+                                                color: talisman.rarity.color,
+                                                width: 1.5,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: talisman.rarity.color.withValues(alpha: 0.60),
+                                                  blurRadius: 8,
+                                                  spreadRadius: 1,
+                                                ),
+                                              ],
+                                            ),
+                                            child: Center(
+                                              child: SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child: CustomPaint(
+                                                  painter: SharpArtifactPainter(
+                                                    giftId: talisman.id,
+                                                    color: talisman.rarity.color,
+                                                    isFavorite: true,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
+                                    )
+                                  : const SizedBox(
+                                      key: ValueKey('no_talisman_badge'),
+                                      width: 28,
+                                      height: 28,
                                     ),
-                                  ),
-                                ),
-                              ),
                             ),
+                          ),
                         ],
                       ),
                     ),
@@ -1123,25 +1291,19 @@ class _ProfileScreenState extends State<ProfileScreen>
                             const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
                             const SizedBox(width: 4),
                             AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 280),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
+                              duration: const Duration(milliseconds: 320),
+                              switchInCurve: Curves.easeInOutCubic,
+                              switchOutCurve: Curves.easeInOutCubic,
                               layoutBuilder: (currentChild, previousChildren) => Stack(
                                 alignment: Alignment.centerLeft,
                                 children: [
-                                  ...previousChildren,
+                                  ...previousChildren.map((w) => Positioned.fill(child: w)),
                                   ?currentChild,
                                 ],
                               ),
                               transitionBuilder: (child, anim) => FadeTransition(
                                 opacity: anim,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0, 0.15),
-                                    end: Offset.zero,
-                                  ).animate(anim),
-                                  child: child,
-                                ),
+                                child: child,
                               ),
                               child: Text(
                                 _service.prestigeTitle,

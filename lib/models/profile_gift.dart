@@ -188,7 +188,6 @@ class ProfileGift {
       serialNumber: 42,
       unlockedAt: DateTime.now().millisecondsSinceEpoch - 86400000 * 7,
       buffText: '+20% к осознанности снов',
-      isFavorite: true,
     ),
     ProfileGift(
       id: 'samurai_visor',

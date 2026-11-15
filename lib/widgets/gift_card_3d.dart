@@ -445,53 +445,75 @@ class SharpArtifactPainter extends CustomPainter {
   }
 
   void _drawChronoCrystal(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
-    final top = Offset(cx, cy - r * 0.90);
-    final bot = Offset(cx, cy + r * 0.92);
-    final left = Offset(cx - r * 0.72, cy - r * 0.22);
-    final right = Offset(cx + r * 0.72, cy - r * 0.22);
-    final tLeft = Offset(cx - r * 0.38, cy - r * 0.50);
-    final tRight = Offset(cx + r * 0.38, cy - r * 0.50);
-    final mLeft = Offset(cx - r * 0.32, cy + r * 0.22);
-    final mRight = Offset(cx + r * 0.32, cy + r * 0.22);
+    // Внешняя кристаллическая аура
+    final glow = Paint()
+      ..color = color.withValues(alpha: 0.25)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawCircle(Offset(cx, cy), r * 0.75, glow);
 
+    final top = Offset(cx, cy - r * 0.94);
+    final bot = Offset(cx, cy + r * 0.94);
+    final left = Offset(cx - r * 0.78, cy - r * 0.20);
+    final right = Offset(cx + r * 0.78, cy - r * 0.20);
+    final tLeft = Offset(cx - r * 0.40, cy - r * 0.52);
+    final tRight = Offset(cx + r * 0.40, cy - r * 0.52);
+    final mLeft = Offset(cx - r * 0.34, cy + r * 0.24);
+    final mRight = Offset(cx + r * 0.34, cy + r * 0.24);
+
+    // Верхние фасеты
     final tablePath = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(top.dx, top.dy)..close();
-    fill.color = color.withValues(alpha: 0.85);
+    fill.color = color.withValues(alpha: 0.90);
     canvas.drawPath(tablePath, fill);
 
     final fLt = Path()..moveTo(top.dx, top.dy)..lineTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..close();
-    fill.color = color.withValues(alpha: 0.60);
+    fill.color = color.withValues(alpha: 0.65);
     canvas.drawPath(fLt, fill);
 
     final fRt = Path()..moveTo(top.dx, top.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..close();
-    fill.color = color.withValues(alpha: 0.75);
+    fill.color = color.withValues(alpha: 0.80);
     canvas.drawPath(fRt, fill);
 
+    // Центральное плато
     final fCenter = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
-    fill.color = Colors.white.withValues(alpha: 0.35);
+    fill.color = Colors.white.withValues(alpha: 0.40);
     canvas.drawPath(fCenter, fill);
 
+    // Боковые фасеты
     final fCl = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
-    fill.color = color.withValues(alpha: 0.45);
+    fill.color = color.withValues(alpha: 0.50);
     canvas.drawPath(fCl, fill);
 
     final fCr = Path()..moveTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..close();
-    fill.color = color.withValues(alpha: 0.55);
+    fill.color = color.withValues(alpha: 0.60);
     canvas.drawPath(fCr, fill);
 
+    // Нижние кинжальные грани
     final fBc = Path()..moveTo(mLeft.dx, mLeft.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
-    fill.color = color.withValues(alpha: 0.90);
+    fill.color = color.withValues(alpha: 0.95);
     canvas.drawPath(fBc, fill);
 
     final fBl = Path()..moveTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..lineTo(bot.dx, bot.dy)..close();
-    fill.color = color.withValues(alpha: 0.50);
+    fill.color = color.withValues(alpha: 0.55);
     canvas.drawPath(fBl, fill);
 
     final fBr = Path()..moveTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
-    fill.color = color.withValues(alpha: 0.65);
+    fill.color = color.withValues(alpha: 0.70);
     canvas.drawPath(fBr, fill);
 
-    stroke.color = Colors.white.withValues(alpha: 0.85);
-    stroke.strokeWidth = 1.3;
+    // Брутальная центральная темпоральная трещина (квантовый разлом)
+    final rift = Path()
+      ..moveTo(cx, cy - r * 0.70)
+      ..lineTo(cx + r * 0.10, cy - r * 0.25)
+      ..lineTo(cx - r * 0.08, cy + r * 0.15)
+      ..lineTo(cx + r * 0.05, cy + r * 0.55)
+      ..lineTo(cx, cy + r * 0.85);
+    stroke.color = Colors.white;
+    stroke.strokeWidth = 1.6;
+    canvas.drawPath(rift, stroke);
+
+    // Острый контур и кристаллическая сетка
+    stroke.color = Colors.white.withValues(alpha: 0.90);
+    stroke.strokeWidth = 1.4;
     final outline = Path()
       ..moveTo(top.dx, top.dy)
       ..lineTo(right.dx, right.dy)
@@ -500,8 +522,8 @@ class SharpArtifactPainter extends CustomPainter {
       ..close();
     canvas.drawPath(outline, stroke);
 
-    stroke.color = Colors.white.withValues(alpha: 0.50);
-    stroke.strokeWidth = 0.9;
+    stroke.color = Colors.white.withValues(alpha: 0.55);
+    stroke.strokeWidth = 1.0;
     canvas.drawLine(tLeft, tRight, stroke);
     canvas.drawLine(mLeft, mRight, stroke);
     canvas.drawLine(tLeft, mLeft, stroke);
@@ -514,132 +536,159 @@ class SharpArtifactPainter extends CustomPainter {
 
   void _drawCyberSakura(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
     const n = 5;
+    // Брутальные лезвия-сюрикены в форме сакуры
     for (int i = 0; i < n; i++) {
       final angle = -math.pi / 2 + i * (2 * math.pi / n);
-      final tip = Offset(cx + math.cos(angle) * r * 0.92, cy + math.sin(angle) * r * 0.92);
-      final wLeft = Offset(cx + math.cos(angle - 0.32) * r * 0.48, cy + math.sin(angle - 0.32) * r * 0.48);
-      final wRight = Offset(cx + math.cos(angle + 0.32) * r * 0.48, cy + math.sin(angle + 0.32) * r * 0.48);
-      final base = Offset(cx + math.cos(angle) * r * 0.16, cy + math.sin(angle) * r * 0.16);
+      final tip = Offset(cx + math.cos(angle) * r * 0.95, cy + math.sin(angle) * r * 0.95);
+      final wLeft = Offset(cx + math.cos(angle - 0.35) * r * 0.52, cy + math.sin(angle - 0.35) * r * 0.52);
+      final wRight = Offset(cx + math.cos(angle + 0.35) * r * 0.52, cy + math.sin(angle + 0.35) * r * 0.52);
+      final base = Offset(cx + math.cos(angle) * r * 0.18, cy + math.sin(angle) * r * 0.18);
 
       final petal = Path()..moveTo(base.dx, base.dy)..lineTo(wLeft.dx, wLeft.dy)..lineTo(tip.dx, tip.dy)..lineTo(wRight.dx, wRight.dy)..close();
-      fill.color = color.withValues(alpha: 0.65 + 0.25 * math.sin(i * 1.5));
+      fill.color = color.withValues(alpha: 0.70 + 0.22 * math.sin(i * 1.5));
       canvas.drawPath(petal, fill);
 
-      stroke.color = Colors.white.withValues(alpha: 0.75);
-      stroke.strokeWidth = 1.2;
-      canvas.drawPath(petal, stroke);
+      // Неоновый лазерный желоб по центру каждого лезвия
+      final groove = Path()
+        ..moveTo(base.dx, base.dy)
+        ..lineTo(tip.dx, tip.dy);
+      stroke.color = Colors.white.withValues(alpha: 0.95);
+      stroke.strokeWidth = 1.4;
+      canvas.drawPath(groove, stroke);
 
-      stroke.color = Colors.white.withValues(alpha: 0.90);
-      stroke.strokeWidth = 0.9;
-      canvas.drawLine(base, tip, stroke);
+      stroke.color = Colors.white.withValues(alpha: 0.80);
+      stroke.strokeWidth = 1.1;
+      canvas.drawPath(petal, stroke);
     }
-    final centerPath = Path();
+    // Центральный квантовый сердечник
+    final core = Path();
     for (int i = 0; i < n; i++) {
       final angle = -math.pi / 2 + i * (2 * math.pi / n);
-      final p = Offset(cx + math.cos(angle) * r * 0.22, cy + math.sin(angle) * r * 0.22);
+      final p = Offset(cx + math.cos(angle) * r * 0.26, cy + math.sin(angle) * r * 0.26);
       if (i == 0) {
-        centerPath.moveTo(p.dx, p.dy);
+        core.moveTo(p.dx, p.dy);
       } else {
-        centerPath.lineTo(p.dx, p.dy);
+        core.lineTo(p.dx, p.dy);
       }
     }
-    centerPath.close();
+    core.close();
     fill.color = Colors.white;
-    canvas.drawPath(centerPath, fill);
+    canvas.drawPath(core, fill);
+    stroke.color = color;
+    stroke.strokeWidth = 1.2;
+    canvas.drawPath(core, stroke);
   }
 
   void _drawNeonLotus(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    // Центральный боевой клинок-пика
     final spire = Path()
-      ..moveTo(cx, cy - r * 0.95)
-      ..lineTo(cx + r * 0.24, cy - r * 0.20)
-      ..lineTo(cx + r * 0.14, cy + r * 0.40)
-      ..lineTo(cx - r * 0.14, cy + r * 0.40)
-      ..lineTo(cx - r * 0.24, cy - r * 0.20)
+      ..moveTo(cx, cy - r * 0.98)
+      ..lineTo(cx + r * 0.26, cy - r * 0.22)
+      ..lineTo(cx + r * 0.15, cy + r * 0.42)
+      ..lineTo(cx - r * 0.15, cy + r * 0.42)
+      ..lineTo(cx - r * 0.26, cy - r * 0.22)
       ..close();
-    fill.color = color.withValues(alpha: 0.88);
+    fill.color = color.withValues(alpha: 0.92);
     canvas.drawPath(spire, fill);
-    stroke.color = Colors.white.withValues(alpha: 0.85);
-    stroke.strokeWidth = 1.2;
+    stroke.color = Colors.white;
+    stroke.strokeWidth = 1.4;
     canvas.drawPath(spire, stroke);
 
+    // Левый и правый серповидные боевые закрылки
     final pL = Path()
-      ..moveTo(cx - r * 0.78, cy - r * 0.35)
-      ..lineTo(cx - r * 0.26, cy - r * 0.10)
-      ..lineTo(cx - r * 0.15, cy + r * 0.45)
-      ..lineTo(cx - r * 0.55, cy + r * 0.20)
+      ..moveTo(cx - r * 0.86, cy - r * 0.38)
+      ..lineTo(cx - r * 0.28, cy - r * 0.12)
+      ..lineTo(cx - r * 0.16, cy + r * 0.48)
+      ..lineTo(cx - r * 0.60, cy + r * 0.22)
       ..close();
-    fill.color = color.withValues(alpha: 0.60);
+    fill.color = color.withValues(alpha: 0.65);
     canvas.drawPath(pL, fill);
+    stroke.color = Colors.white.withValues(alpha: 0.85);
     canvas.drawPath(pL, stroke);
 
     final pR = Path()
-      ..moveTo(cx + r * 0.78, cy - r * 0.35)
-      ..lineTo(cx + r * 0.26, cy - r * 0.10)
-      ..lineTo(cx + r * 0.15, cy + r * 0.45)
-      ..lineTo(cx + r * 0.55, cy + r * 0.20)
+      ..moveTo(cx + r * 0.86, cy - r * 0.38)
+      ..lineTo(cx + r * 0.28, cy - r * 0.12)
+      ..lineTo(cx + r * 0.16, cy + r * 0.48)
+      ..lineTo(cx + r * 0.60, cy + r * 0.22)
       ..close();
-    fill.color = color.withValues(alpha: 0.60);
+    fill.color = color.withValues(alpha: 0.65);
     canvas.drawPath(pR, fill);
     canvas.drawPath(pR, stroke);
 
+    // Неоновая режущая основа
     final base = Path()
-      ..moveTo(cx - r * 0.60, cy + r * 0.52)
-      ..lineTo(cx + r * 0.60, cy + r * 0.52)
-      ..lineTo(cx + r * 0.38, cy + r * 0.82)
-      ..lineTo(cx - r * 0.38, cy + r * 0.82)
+      ..moveTo(cx - r * 0.65, cy + r * 0.54)
+      ..lineTo(cx + r * 0.65, cy + r * 0.54)
+      ..lineTo(cx + r * 0.42, cy + r * 0.88)
+      ..lineTo(cx - r * 0.42, cy + r * 0.88)
       ..close();
-    fill.color = Colors.white.withValues(alpha: 0.30);
+    fill.color = Colors.white.withValues(alpha: 0.35);
     canvas.drawPath(base, fill);
     canvas.drawPath(base, stroke);
+
+    // Центральный лазерный фокус
+    stroke.color = Colors.white;
+    stroke.strokeWidth = 1.8;
+    canvas.drawLine(Offset(cx, cy - r * 0.75), Offset(cx, cy + r * 0.35), stroke);
   }
 
   void _drawGoldenBell(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    // Массивный колокол-титан с рогатой они-короной
     final bell = Path()
-      ..moveTo(cx - r * 0.28, cy - r * 0.70)
-      ..lineTo(cx + r * 0.28, cy - r * 0.70)
-      ..lineTo(cx + r * 0.68, cy + r * 0.28)
-      ..lineTo(cx + r * 0.78, cy + r * 0.48)
-      ..lineTo(cx - r * 0.78, cy + r * 0.48)
-      ..lineTo(cx - r * 0.68, cy + r * 0.28)
+      ..moveTo(cx - r * 0.32, cy - r * 0.68)
+      ..lineTo(cx + r * 0.32, cy - r * 0.68)
+      ..lineTo(cx + r * 0.74, cy + r * 0.30)
+      ..lineTo(cx + r * 0.84, cy + r * 0.52)
+      ..lineTo(cx - r * 0.84, cy + r * 0.52)
+      ..lineTo(cx - r * 0.74, cy + r * 0.30)
       ..close();
-    fill.color = color.withValues(alpha: 0.75);
+    fill.color = color.withValues(alpha: 0.82);
     canvas.drawPath(bell, fill);
-    stroke.color = Colors.white.withValues(alpha: 0.85);
-    stroke.strokeWidth = 1.3;
+    stroke.color = Colors.white;
+    stroke.strokeWidth = 1.5;
     canvas.drawPath(bell, stroke);
 
+    // Рогатая корона демона-стража
     final crown = Path()
-      ..moveTo(cx - r * 0.18, cy - r * 0.70)
-      ..lineTo(cx, cy - r * 0.95)
-      ..lineTo(cx + r * 0.18, cy - r * 0.70)
+      ..moveTo(cx - r * 0.35, cy - r * 0.68)
+      ..lineTo(cx - r * 0.20, cy - r * 0.98)
+      ..lineTo(cx, cy - r * 0.76)
+      ..lineTo(cx + r * 0.20, cy - r * 0.98)
+      ..lineTo(cx + r * 0.35, cy - r * 0.68)
       ..close();
-    fill.color = Colors.white.withValues(alpha: 0.90);
+    fill.color = Colors.white;
     canvas.drawPath(crown, fill);
+    stroke.color = color;
+    stroke.strokeWidth = 1.2;
     canvas.drawPath(crown, stroke);
 
+    // Рунический язык колокола
     final clapper = Path()
-      ..moveTo(cx - r * 0.18, cy + r * 0.52)
-      ..lineTo(cx + r * 0.18, cy + r * 0.52)
-      ..lineTo(cx, cy + r * 0.85)
+      ..moveTo(cx - r * 0.20, cy + r * 0.54)
+      ..lineTo(cx + r * 0.20, cy + r * 0.54)
+      ..lineTo(cx, cy + r * 0.92)
       ..close();
     fill.color = Colors.white;
     canvas.drawPath(clapper, fill);
 
-    stroke.color = color.withValues(alpha: 0.90);
-    stroke.strokeWidth = 1.8;
-    final arcL = Path()..moveTo(cx - r * 0.88, cy - r * 0.15)..lineTo(cx - r * 0.98, cy + r * 0.15)..lineTo(cx - r * 0.88, cy + r * 0.45);
-    final arcR = Path()..moveTo(cx + r * 0.88, cy - r * 0.15)..lineTo(cx + r * 0.98, cy + r * 0.15)..lineTo(cx + r * 0.88, cy + r * 0.45);
+    // Акустические звуковые лезвия по бокам
+    stroke.color = color.withValues(alpha: 0.95);
+    stroke.strokeWidth = 2.0;
+    final arcL = Path()..moveTo(cx - r * 0.92, cy - r * 0.18)..lineTo(cx - r * 1.04, cy + r * 0.15)..lineTo(cx - r * 0.92, cy + r * 0.48);
+    final arcR = Path()..moveTo(cx + r * 0.92, cy - r * 0.18)..lineTo(cx + r * 1.04, cy + r * 0.15)..lineTo(cx + r * 0.92, cy + r * 0.48);
     canvas.drawPath(arcL, stroke);
     canvas.drawPath(arcR, stroke);
   }
 
   void _drawAdaNeuralShard(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    // Внешняя гексагональная микросхема процессора
     final hex = Path();
     const n = 6;
     final pts = <Offset>[];
     for (int i = 0; i < n; i++) {
       final angle = i * math.pi / 3;
-      final p = Offset(cx + math.cos(angle) * r * 0.85, cy + math.sin(angle) * r * 0.85);
+      final p = Offset(cx + math.cos(angle) * r * 0.90, cy + math.sin(angle) * r * 0.90);
       pts.add(p);
       if (i == 0) {
         hex.moveTo(p.dx, p.dy);
@@ -648,75 +697,89 @@ class SharpArtifactPainter extends CustomPainter {
       }
     }
     hex.close();
-    fill.color = color.withValues(alpha: 0.40);
+    fill.color = color.withValues(alpha: 0.45);
     canvas.drawPath(hex, fill);
 
-    stroke.color = Colors.white.withValues(alpha: 0.85);
-    stroke.strokeWidth = 1.4;
+    stroke.color = Colors.white;
+    stroke.strokeWidth = 1.6;
     canvas.drawPath(hex, stroke);
 
-    stroke.color = Colors.white.withValues(alpha: 0.50);
-    stroke.strokeWidth = 1.0;
+    // Дорожки нейро-платы
+    stroke.color = Colors.white.withValues(alpha: 0.65);
+    stroke.strokeWidth = 1.1;
     for (final p in pts) {
       canvas.drawLine(Offset(cx, cy), p, stroke);
     }
 
+    // Режущий кристаллический ромб процессора
     final core = Path()
-      ..moveTo(cx, cy - r * 0.35)
-      ..lineTo(cx + r * 0.35, cy)
-      ..lineTo(cx, cy + r * 0.35)
-      ..lineTo(cx - r * 0.35, cy)
+      ..moveTo(cx, cy - r * 0.42)
+      ..lineTo(cx + r * 0.42, cy)
+      ..lineTo(cx, cy + r * 0.42)
+      ..lineTo(cx - r * 0.42, cy)
       ..close();
     fill.color = isFavorite ? BrandColors.red : color;
     canvas.drawPath(core, fill);
     stroke.color = Colors.white;
-    stroke.strokeWidth = 1.5;
+    stroke.strokeWidth = 1.8;
     canvas.drawPath(core, stroke);
+
+    // Центральный квантовый глаз
+    canvas.drawCircle(Offset(cx, cy), r * 0.14, Paint()..color = Colors.white);
   }
 
   void _drawSamuraiVisor(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+    // Скрещенные кибер-катаны за шлемом
+    stroke.color = Colors.white.withValues(alpha: 0.65);
+    stroke.strokeWidth = 1.8;
+    canvas.drawLine(Offset(cx - r * 0.85, cy - r * 0.85), Offset(cx + r * 0.85, cy + r * 0.85), stroke);
+    canvas.drawLine(Offset(cx + r * 0.85, cy - r * 0.85), Offset(cx - r * 0.85, cy + r * 0.85), stroke);
+
+    // Рога Кабуто (грозный полумесяц Они)
     final horns = Path()
-      ..moveTo(cx, cy - r * 0.30)
-      ..lineTo(cx - r * 0.75, cy - r * 0.95)
-      ..lineTo(cx - r * 0.52, cy - r * 0.95)
-      ..lineTo(cx, cy - r * 0.48)
-      ..lineTo(cx + r * 0.52, cy - r * 0.95)
-      ..lineTo(cx + r * 0.75, cy - r * 0.95)
+      ..moveTo(cx, cy - r * 0.32)
+      ..lineTo(cx - r * 0.82, cy - r * 0.98)
+      ..lineTo(cx - r * 0.58, cy - r * 0.98)
+      ..lineTo(cx, cy - r * 0.52)
+      ..lineTo(cx + r * 0.58, cy - r * 0.98)
+      ..lineTo(cx + r * 0.82, cy - r * 0.98)
       ..close();
-    fill.color = Colors.white.withValues(alpha: 0.88);
+    fill.color = Colors.white;
     canvas.drawPath(horns, fill);
 
+    // Броня Мэмпо (черепная маска самурая)
     final mask = Path()
-      ..moveTo(cx - r * 0.65, cy - r * 0.25)
-      ..lineTo(cx + r * 0.65, cy - r * 0.25)
-      ..lineTo(cx + r * 0.55, cy + r * 0.35)
-      ..lineTo(cx, cy + r * 0.92)
-      ..lineTo(cx - r * 0.55, cy + r * 0.35)
+      ..moveTo(cx - r * 0.70, cy - r * 0.28)
+      ..lineTo(cx + r * 0.70, cy - r * 0.28)
+      ..lineTo(cx + r * 0.60, cy + r * 0.38)
+      ..lineTo(cx, cy + r * 0.96)
+      ..lineTo(cx - r * 0.60, cy + r * 0.38)
       ..close();
-    fill.color = color.withValues(alpha: 0.55);
+    fill.color = color.withValues(alpha: 0.60);
     canvas.drawPath(mask, fill);
-    stroke.color = Colors.white.withValues(alpha: 0.85);
-    stroke.strokeWidth = 1.3;
+    stroke.color = Colors.white;
+    stroke.strokeWidth = 1.5;
     canvas.drawPath(mask, stroke);
 
+    // Угрожающий лазерный оптический разрез глаз
     fill.color = isFavorite ? BrandColors.red : const Color(0xFF00E5FF);
-    final eyeL = Path()..moveTo(cx - r * 0.50, cy)..lineTo(cx - r * 0.12, cy + r * 0.08)..lineTo(cx - r * 0.12, cy + r * 0.16)..lineTo(cx - r * 0.50, cy + r * 0.08)..close();
-    final eyeR = Path()..moveTo(cx + r * 0.50, cy)..lineTo(cx + r * 0.12, cy + r * 0.08)..lineTo(cx + r * 0.12, cy + r * 0.16)..lineTo(cx + r * 0.50, cy + r * 0.08)..close();
+    final eyeL = Path()..moveTo(cx - r * 0.54, cy - r * 0.02)..lineTo(cx - r * 0.14, cy + r * 0.08)..lineTo(cx - r * 0.14, cy + r * 0.18)..lineTo(cx - r * 0.54, cy + r * 0.08)..close();
+    final eyeR = Path()..moveTo(cx + r * 0.54, cy - r * 0.02)..lineTo(cx + r * 0.14, cy + r * 0.08)..lineTo(cx + r * 0.14, cy + r * 0.18)..lineTo(cx + r * 0.54, cy + r * 0.08)..close();
     canvas.drawPath(eyeL, fill);
     canvas.drawPath(eyeR, fill);
   }
 
   void _drawDefaultSharpCrystal(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
     final p = Path()
-      ..moveTo(cx, cy - r * 0.90)
-      ..lineTo(cx + r * 0.80, cy)
-      ..lineTo(cx, cy + r * 0.90)
-      ..lineTo(cx - r * 0.80, cy)
+      ..moveTo(cx, cy - r * 0.95)
+      ..lineTo(cx + r * 0.85, cy)
+      ..lineTo(cx, cy + r * 0.95)
+      ..lineTo(cx - r * 0.85, cy)
       ..close();
-    fill.color = color.withValues(alpha: 0.70);
+    fill.color = color.withValues(alpha: 0.75);
     canvas.drawPath(p, fill);
     stroke.color = Colors.white;
-    stroke.strokeWidth = 1.5;
+    stroke.strokeWidth = 1.6;
     canvas.drawPath(p, stroke);
   }
 
@@ -813,7 +876,7 @@ void showGiftDetailsSheet(
       gift: gift,
       onFavoriteToggled: onFavoriteToggled,
     ),
-  );
+  ).then((_) => onFavoriteToggled?.call());
 }
 
 /// Модальный лист детального осмотра артефакта в стиле киберпанк

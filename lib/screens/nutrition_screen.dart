@@ -1359,20 +1359,9 @@ class _NutritionScreenState extends State<NutritionScreen>
                 curve: _mealCollapseCurve,
                 builder: (context, fade, child) =>
                     Opacity(opacity: fade.clamp(0.0, 1.0), child: child),
-                child: PressScale(
-                  // Приём пищи «вдавливается» — уменьшается, а не растёт:
-                  // раньше карточка на зажатии увеличивалась, и на плотном
-                  // списке это читалось как «наезд» на соседей.
-                  pressedScale: 0.982,
-                  duration: const Duration(milliseconds: 240),
-                  releaseDuration: const Duration(milliseconds: 340),
-                  // Долгое нажатие — закрепить/снять закреп: ровно то же
-                  // действие, что у привычки и задачи. Подсказка после
-                  // переключения та же, что там, поэтому экраны читаются
-                  // одним языком.
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onLongPress: () {
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onLongPress: () {
                       Haptics.medium();
                       final willPin = !meal.pinned;
                       _service.togglePin(meal.id);
@@ -1488,7 +1477,6 @@ class _NutritionScreenState extends State<NutritionScreen>
                         horizontal: 16,
                       ),
                     ),
-                  ),
                   ),
                 ),
               ),

@@ -109,10 +109,9 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
             return ValueListenableBuilder<double>(
               valueListenable: _progress,
               builder: (context, p, _) {
-                // Красный проявляется по ходу жеста: до 12 % пути плашки ещё
-                // не видно, дальше она наливается и к полному свайпу видна
-                // целиком.
-                final opacity = ((p - 0.12) / 0.88).clamp(0.0, 1.0);
+                // Красный фон удаления идёт сразу с первого пикселя свайпа (0px зазор)
+                // без задержек и плавно наливается до 1.0.
+                final opacity = (0.50 + 0.50 * p).clamp(0.0, 1.0);
                 final cardWidth = (w - inset.left - inset.right).clamp(0.0, w);
                 // Dismissible сдвигает контент ровно на p * w.
                 // Чтобы левый край красной подложки шёл вплотную к правому краю карточки (0px зазор),
