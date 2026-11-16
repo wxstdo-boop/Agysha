@@ -71,7 +71,6 @@ class BootReceiver : BroadcastReceiver() {
                     val repeatDays = o.optString("repeatDays", "")
                     val soundName = o.optString("soundName", "alarm_default")
                     val vibrate = o.optBoolean("vibrate", true)
-                    val payload = o.optString("payload", "")
                     val customPath = o.optString("customSoundPath", "").ifEmpty { null }
 
                     val days = repeatDays.split(",").mapNotNull { it.trim().toIntOrNull() }
