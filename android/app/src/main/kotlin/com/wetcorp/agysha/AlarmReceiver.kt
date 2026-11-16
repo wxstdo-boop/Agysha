@@ -26,6 +26,7 @@ class AlarmReceiver : BroadcastReceiver() {
         if (intent.action == ACTION_DISMISS) {
             val id = intent.getIntExtra("alarm_id", 0)
             AlarmForegroundService.stop(context)
+            cancelVibration(context)
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.cancel(id)
             logToFile(context, "ALARM DISMISSED FROM NOTIFICATION id=$id")
@@ -88,7 +89,13 @@ class AlarmReceiver : BroadcastReceiver() {
 
             val isRealityCheck = payload == "rc"
 
-            if (vibrate) doVibrate(context)
+            if (vibrate) {
+                if (isRealityCheck) {
+                    doRealityCheckVibrate(context)
+                } else {
+                    doVibrate(context)
+                }
+            }
 
             // Право полноэкранного показа читаем ОДИН раз, до сборки
             // уведомления, и отдаём его в билдер (см. showNotification).
@@ -333,7 +340,7 @@ class AlarmReceiver : BroadcastReceiver() {
     @Suppress("DEPRECATION")
     private fun doVibrate(ctx: Context) {
         try {
-            val p = longArrayOf(0, 800, 400, 800, 400, 800)
+            val p = longArrayOf(0, 800, 400, 800)
             val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 (ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager)
                     .defaultVibrator
@@ -343,18 +350,53 @@ class AlarmReceiver : BroadcastReceiver() {
             // HyperOS глушит вибрацию без назначения (usage UNKNOWN стоит в
             // «Сила вибрации → Другое = OFF»). Просим USAGE_ALARM явно —
             // иначе будильник беззвучно дрожит лишь на бумаге.
+            // ВАЖНО: repeatIndex = -1 (однократный запуск!). Повтор вибрации
+            // при звонке будильника контролирует AlarmForegroundService,
+            // который корректно гасит её по остановке.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 vib.vibrate(
-                    VibrationEffect.createWaveform(p, 0),
+                    VibrationEffect.createWaveform(p, -1),
                     android.os.VibrationAttributes.Builder()
                         .setUsage(android.os.VibrationAttributes.USAGE_ALARM)
                         .build(),
                 )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vib.vibrate(VibrationEffect.createWaveform(p, -1))
             } else {
-                vib.vibrate(VibrationEffect.createWaveform(p, 0))
+                vib.vibrate(p, -1)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Vibrate failed: $e")
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun doRealityCheckVibrate(ctx: Context) {
+        try {
+            val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager)
+                    .defaultVibrator
+            } else {
+                ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            }
+            // Проверка реальности — это обычное напоминание, а не тревога.
+            // Короткий одиночный вибросигнал 250 мс с USAGE_NOTIFICATION (без зацикливания!).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    vib.vibrate(
+                        VibrationEffect.createOneShot(250, VibrationEffect.DEFAULT_AMPLITUDE),
+                        android.os.VibrationAttributes.Builder()
+                            .setUsage(android.os.VibrationAttributes.USAGE_NOTIFICATION)
+                            .build(),
+                    )
+                } else {
+                    vib.vibrate(VibrationEffect.createOneShot(250, VibrationEffect.DEFAULT_AMPLITUDE))
+                }
+            } else {
+                vib.vibrate(250)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "RC Vibrate failed: $e")
         }
     }
 
@@ -782,6 +824,19 @@ class AlarmReceiver : BroadcastReceiver() {
                     }
                 } catch (_: Exception) {}
             }
+        }
+
+        @Suppress("DEPRECATION")
+        fun cancelVibration(ctx: Context) {
+            try {
+                val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    (ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager)
+                        .defaultVibrator
+                } else {
+                    ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                }
+                vib.cancel()
+            } catch (_: Exception) {}
         }
     }
 }

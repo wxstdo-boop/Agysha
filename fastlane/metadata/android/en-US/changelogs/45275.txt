@@ -1,0 +1,4 @@
+- fix(alarm): fix infinite vibration bug in AlarmReceiver and Reality Checks
+- fix(alarm): ensure disabled alarms are cancelled in rescheduleAllNotifications
+- fix(alarm): prevent one-shot alarms in current minute from shifting to next day
+- fix(alarm): await alarm cancellation on toggle and cancel lingering vibration

@@ -476,6 +476,10 @@ Future<void> rescheduleAllNotifications() async {
       } catch (_) {
         failed++;
       }
+    } else {
+      try {
+        await notificationService.cancelAlarm(a.id);
+      } catch (_) {}
     }
   }
   // Итоговая проверка: что по мнению САМОЙ системы сейчас взведено. Если
