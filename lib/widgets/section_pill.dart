@@ -516,16 +516,13 @@ class _SectionPillState extends State<SectionPill>
                   clipBehavior: Clip.none,
                   borderRadius: BorderRadius.circular(22),
                   child: AnimatedBuilder(
-                    // ЕДИНЫЙ слушатель на все 4 канала (вместе с _edgeSettle
-                    // внутри _buildStoneRow): ДВА вложенных AnimatedBuilder
-                    // (внешний без _edgeSettle, внутренний с _edgeSettle)
-                    // пересобирали кадр ДВАЖДЫ на каждый тик любого notifier'а
-                    // (внешний билдер прогнал дерево, потом внутренний снова) —
-                    // на Adreno это давало микрофризы. _buildStoneRow сам
-                    // вешает _edgeSettle через merge внутри, а здесь только
-                    // прокидываем rawPage.
+                    // ЕДИНЫЙ слушатель на все каналы изменения таблетки:
+                    // устраняет вложенный AnimatedBuilder, исключая двойную пересборку
+                    // дерева на каждый тик (нет микрофризов и дёрганий).
                     animation: Listenable.merge([
+                      _edgeSettle,
                       _landingCtrl,
+                      _edgePullNotifier,
                       sectionCurrentIndex,
                       sectionDragPage,
                       sectionRailPage,
@@ -545,13 +542,8 @@ class _SectionPillState extends State<SectionPill>
                         final target = current.toDouble();
                         rawPage = _landingFrom + (target - _landingFrom) * t;
                       } else {
-                        // После завершения доводки остаёмся строго на целевом разделе current,
-                        // пока карусель не сдвинута реальным пользовательским жестом
-                        if (page.isFinite && (page - current).abs() > 0.04) {
-                          rawPage = page;
-                        } else {
-                          rawPage = current.toDouble();
-                        }
+                        // Непрерывное следование за каруселью без ступенчатых мертвых зон
+                        rawPage = page.isFinite ? page : current.toDouble();
                       }
                       return _buildStoneRow(
                         context: context,
@@ -593,109 +585,45 @@ class _SectionPillState extends State<SectionPill>
         ? 0.0
         : -1.0 + (2.0 * p / (count - 1));
 
-    // Лёгкая «резинка»: в полёте камень чуть
-    // вытягивается и мягко закругляется. Никаких
-    // бликов и переливов — движение читается само,
-    // без световых наклеек поверх таблетки.
-    //
     // «Резинка» выбранной вкладки: чем дальше палец от центра текущей
-    // секции, тем сильнее камень «наливается» и вытягивается в сторону
-    // следующей. Именно это и есть РАСТЯЖЕНИЕ выбранной таблетки при
-    // перетягивании.
+    // секции, тем сильнее камень «наливается» и вытягивается в обе стороны.
     final transit = (p - p.roundToDouble()).abs();
-    // Живая транзитная волна: по ней считается растяжка камня в середине
-    // секции (между разделами). Читается прямо из позиции карусели, поэтому
-    // непрерывна и под пальцем, и в доводке после отпускания.
     _lastWave = _waveShape(transit);
-    // «Расслабление» камня после отпускания: он сползает с _releasePull к
-    // нулю по _edgeSettle (220 мс, easeOut). Под пальцем — 1:1 (_edgePull),
-    // БЕЗ лага. TweenAnimationBuilder убран: он догонял цель с лагом
-    // 180–230 мс и перезапускался у самого края (duration zero↔180
-    // переключался на каждом кадре) — это и была «мигалка/скачок».
-    //
-    // Важно: слушаем не только _edgeSettle, а и три канала тяги
-    // (current/drag/rail). Во время перетягивания _edgeSettle стоит на
-    // паузе, и если бы билдер слушал только его, камень НЕ растягивался бы
-    // и не следовал за пальцем («растягивания выбранной нет вообще»).
-    // Мerged-listenable пересобирает камень на каждый тик любого из них.
-    return AnimatedBuilder(
-      animation: Listenable.merge([
-        _edgeSettle,
-        _landingCtrl,
-        _edgePullNotifier,
-        sectionCurrentIndex,
-        sectionDragPage,
-        sectionRailPage,
-      ]),
-      builder: (context, _) {
-        // СИММЕТРИЧНАЯ кривая: easeOutCubic в первом кадре сбрасывал ~15 %
-        // растяжки — на крайних разделах это читалось как «соскочило и
-        // дёргано возвращается». easeInOutCubic стартует и финиширует с
-        // нулевой скоростью — камень плавно «отпускает» край.
-        final settle = Curves.easeInOutCubic.transform(_edgeSettle.value);
-        // ВОЛНА УГЛОВ — всегда живая [_lastWave]: считается из текущей
-        // позиции карусели, поэтому под пальцем и после отпускания меняется
-        // непрерывно, без рывка «в растянутое положение».
-        final wave = _lastWave;
-        // Signed-тяга камня: под пальцем — чистая _edgePull, после отпускания
-        // — захваченная _releasePull, затухающая по settle.
-        final stretch = _dragging ? _edgePull : _releasePull * (1.0 - settle);
-        final edgeStretch = stretch.abs();
-        // ОБЪЁМНЫЙ СЛОЙ: «резинка» (wave) — наливка/растяжение выбранной
-        // вкладки по ходу к СЛЕДУЮЩЕЙ секции. Под пальцем амплитуда ~0.85,
-        // в свободном полёте — 1.0 (см. выше). Это и есть то самое
-        // РАСТЯЖЕНИЕ выбранной таблетки при перетягивании: без волны scaleX
-        // по ходу секции остаётся константой, и камень просто «едет».
-        //
-        // Единая визуальная растяжка кадра: крайняя тяга (edgeStretch) +
-        // волна-резинка (wave). Оба вливаются в один коэффициент, чтобы
-        // масштаб/скругление/якорь считались из одного числа — камень дышит
-        // ровно за пальцем, без раздельных скачков.
-        // РАСТЯЖЕНИЕ В УГЛАХ: у порогов раздела (t2≈1, wave→1) камень
-        // заметно вытягивается и округляется в сторону следующего раздела.
-        // Коэффициент волны 0.72 (был 0.55 — растяжение «проскальзывало»)
-        // держит эффект отчётливым, а `math.min(0.98, …)` не даёт раздуться.
-        // Визуальная растяжка: сочная, широкая и направленная в обе стороны
-        final visualStretch = math.min(1.0, edgeStretch * 1.60 + 0.95 * wave);
-        final capRadius = 22.0 + 8.0 * visualStretch;
 
-        // Направление растяжки в обе стороны: при движении вправо таблетка вытягивается
-        // вправо к цели, при движении влево — вытягивается влево к цели
-        final pullDir = edgeStretch > 0.005
-            ? (stretch > 0 ? 1.0 : -1.0)
-            : ((p - selectedIndex).abs() > 0.01 ? (p > selectedIndex ? 1.0 : -1.0) : 0.0);
-        final anchorX = -pullDir * 0.55 * visualStretch;
+    final settle = Curves.easeInOutCubic.transform(_edgeSettle.value);
+    final wave = _lastWave;
+    final stretch = _dragging ? _edgePull : _releasePull * (1.0 - settle);
+    final edgeStretch = stretch.abs();
 
-        return Stack(
-          clipBehavior: Clip.none,
-          fit: StackFit.expand,
-          children: [
-            // Позиция камня непрерывна всегда: `indicatorAlignment`
-            // (linear по p) идёт одним числом в любой момент — при тяге за
-            // край Align не переключается мгновенно на -1/+1 и камень не
-            // «мигает в стороны».
-            Align(
-              alignment: Alignment(indicatorAlignment, 0),
-              child: Transform.scale(
-                alignment: Alignment(anchorX, 0),
-                scaleX: 1.0 + 0.55 * visualStretch,
-                scaleY: 1.0 - 0.06 * visualStretch,
-                // Layout-ширина — КОНСТАНТА (слот/карантин, не зависит от
-                // breath). Дышащий масштаб идёт через Transform — иначе
-                // каждый кадр пересобирался layout, камень «дёргался».
-                child: FractionallySizedBox(
-                  widthFactor: 1.0 / count,
-                  heightFactor: 1,
-                  child: RepaintBoundary(
-                    child: _GlassStone(
-                      capRadius: capRadius,
-                      primary: cs.primary,
-                      dark: dark,
-                    ),
-                  ),
+    // Сочная, широкая и плавная растяжка таблетки в обе стороны:
+    // центрированное масштабирование (Alignment.center) полностью устраняет
+    // горизонтальные рывки и перескоки якоря на стыках разделов.
+    final visualStretch = math.min(1.0, edgeStretch * 1.60 + 0.95 * wave);
+    final capRadius = 22.0 + 8.0 * visualStretch;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      fit: StackFit.expand,
+      children: [
+        Align(
+          alignment: Alignment(indicatorAlignment, 0),
+          child: Transform.scale(
+            alignment: Alignment.center,
+            scaleX: 1.0 + 0.60 * visualStretch,
+            scaleY: 1.0 - 0.06 * visualStretch,
+            child: FractionallySizedBox(
+              widthFactor: 1.0 / count,
+              heightFactor: 1,
+              child: RepaintBoundary(
+                child: _GlassStone(
+                  capRadius: capRadius,
+                  primary: cs.primary,
+                  dark: dark,
                 ),
               ),
             ),
+          ),
+        ),
             // Тяга пальцем: как в выборе приоритета — камень
             // едет за пальцем, а отпускание доводит его до
             // ближайшего раздела пружиной Home. Тап по иконке
@@ -819,8 +747,6 @@ class _SectionPillState extends State<SectionPill>
             ),
           ],
         );
-      },
-    );
   }
 }
 

@@ -46,14 +46,14 @@ class _GiftCard3DState extends State<GiftCard3D>
     super.initState();
     _resetController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 320),
+      duration: const Duration(milliseconds: 460),
     );
     _tiltAnimation = Tween<Offset>(
       begin: Offset.zero,
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _resetController,
-      curve: Curves.easeOutBack,
+      curve: Curves.easeOutCubic,
     ));
   }
 
@@ -63,13 +63,25 @@ class _GiftCard3DState extends State<GiftCard3D>
     super.dispose();
   }
 
+  /// Мягкое сглаживание упора: вместо резкого удара в .clamp(-1, 1)
+  /// плавно демпфирует на границе карточки (soft cushioning).
+  static double _softClamp(double u) {
+    final abs = u.abs();
+    if (abs <= 0.70) return u;
+    final sign = u.isNegative ? -1.0 : 1.0;
+    final excess = abs - 0.70;
+    final damped = 0.70 + 0.32 * (1.0 - math.exp(-excess / 0.55));
+    return sign * damped;
+  }
+
   void _updateTiltFromPos(Offset localPosition) {
     if (MotionPrefs.shouldReduceMotion) return;
     _resetController.stop();
-    final targetDx = ((localPosition.dx / widget.width - 0.5) * 2.0).clamp(-1.0, 1.0);
-    final targetDy = ((localPosition.dy / widget.height - 0.5) * 2.0).clamp(-1.0, 1.0);
-    final next = Offset(targetDx, targetDy);
-    if ((next - _tilt).distance > 0.001) {
+    final rawDx = (localPosition.dx / widget.width - 0.5) * 2.0;
+    final rawDy = (localPosition.dy / widget.height - 0.5) * 2.0;
+    final target = Offset(_softClamp(rawDx), _softClamp(rawDy));
+    final next = Offset.lerp(_tilt, target, 0.28) ?? target;
+    if ((next - _tilt).distance > 0.0005) {
       setState(() => _tilt = next);
     }
   }
@@ -109,9 +121,10 @@ class _GiftCard3DState extends State<GiftCard3D>
           behavior: HitTestBehavior.opaque,
           onTap: () => _openDetails(context),
           child: PressScale(
-            pressedScale: 0.95,
-            duration: const Duration(milliseconds: 140),
-            releaseDuration: const Duration(milliseconds: 220),
+            enableTilt: false,
+            pressedScale: 0.965,
+            duration: const Duration(milliseconds: 280),
+            releaseDuration: const Duration(milliseconds: 360),
             child: AnimatedBuilder(
               animation: _resetController,
               builder: (context, _) {
@@ -119,11 +132,11 @@ class _GiftCard3DState extends State<GiftCard3D>
                     ? _tiltAnimation.value
                     : _tilt;
 
-                final tiltX = -currentTilt.dy * 0.28;
-                final tiltY = currentTilt.dx * 0.28;
+                final tiltX = -currentTilt.dy * 0.105;
+                final tiltY = currentTilt.dx * 0.105;
 
                 final transform = Matrix4.identity()
-                  ..setEntry(3, 2, 0.0016)
+                  ..setEntry(3, 2, 0.0010)
                   ..rotateX(tiltX)
                   ..rotateY(tiltY);
 
