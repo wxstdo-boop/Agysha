@@ -510,6 +510,7 @@ class AlarmForegroundService : Service() {
                 }
                 ctx.sendBroadcast(i)
                 ctx.stopService(Intent(ctx, AlarmForegroundService::class.java))
+                AlarmReceiver.cancelVibration(ctx)
             } catch (_: Exception) {}
         }
 

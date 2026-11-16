@@ -685,7 +685,17 @@ class NotificationService extends ChangeNotifier {
       alarm.time.hour,
       alarm.time.minute,
     );
-    if (scheduled.isBefore(now)) {
+    // Если одноразовый будильник выставлен на текущую минуту (например,
+    // пользователь проверяет будильник прямо сейчас), не переносим его
+    // на завтра: даём ему сработать через 5 секунд, иначе человек ждёт звонка,
+    // а будильник «тихо» улетел на завтрашний день.
+    if (alarm.repeatDays.isEmpty &&
+        alarm.time.hour == now.hour &&
+        alarm.time.minute == now.minute) {
+      if (scheduled.isBefore(now)) {
+        scheduled = now.add(const Duration(seconds: 5));
+      }
+    } else if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }
     if (alarm.repeatDays.isNotEmpty) {

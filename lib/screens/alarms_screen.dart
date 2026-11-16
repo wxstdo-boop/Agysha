@@ -761,7 +761,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                 );
                               }
                             } else {
-                              notificationService.cancelAlarm(updated.id);
+                              await notificationService.cancelAlarm(updated.id);
                             }
                           },
                         ),

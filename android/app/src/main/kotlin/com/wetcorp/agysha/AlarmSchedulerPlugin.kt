@@ -149,7 +149,7 @@ class AlarmSchedulerPlugin private constructor(private val context: Context) :
     }
 
     private fun handleScheduleAlarmClock(call: MethodCall, result: MethodChannel.Result) {
-        val id = call.argument<Int>("id") ?: 0
+        val id = (call.argument<Any>("id") as? Number)?.toInt() ?: 0
         val title = call.argument<String>("title") ?: "Alarm"
         val body = call.argument<String>("body") ?: ""
         val channelId = call.argument<String>("channelId") ?: "agysha_alarm"
@@ -157,11 +157,11 @@ class AlarmSchedulerPlugin private constructor(private val context: Context) :
         val rawSoundName = call.argument<String>("soundName") ?: "alarm_default"
         val soundName = mapSoundName(rawSoundName)
         val vibrate = call.argument<Boolean>("vibrate") ?: true
-        val fireTimestamp = call.argument<Long>("fireTimestamp") ?: 0L
+        val fireTimestamp = (call.argument<Any>("fireTimestamp") as? Number)?.toLong() ?: 0L
         val payload = call.argument<String>("payload") ?: ""
         val fullscreen = call.argument<Boolean>("fullscreen") ?: true
-        val hour = call.argument<Int>("hour") ?: 0
-        val minute = call.argument<Int>("minute") ?: 0
+        val hour = (call.argument<Any>("hour") as? Number)?.toInt() ?: 0
+        val minute = (call.argument<Any>("minute") as? Number)?.toInt() ?: 0
         val repeatDays = call.argument<String>("repeatDays") ?: ""
         val customSoundPath = call.argument<String>("customSoundPath")
 
@@ -292,7 +292,7 @@ class AlarmSchedulerPlugin private constructor(private val context: Context) :
     }
 
     private fun handleCancelAlarmClock(call: MethodCall, result: MethodChannel.Result) {
-        val id = call.argument<Int>("id") ?: 0
+        val id = (call.argument<Any>("id") as? Number)?.toInt() ?: 0
         val intent = Intent(context, AlarmReceiver::class.java)
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
@@ -307,6 +307,7 @@ class AlarmSchedulerPlugin private constructor(private val context: Context) :
             AlarmLog.write(appContext, "CANCEL id=$id")
         }
         removeManifestEntry(id)
+        AlarmReceiver.cancelVibration(context)
         result.success(true)
     }
 
