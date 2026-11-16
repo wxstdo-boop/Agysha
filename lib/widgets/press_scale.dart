@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../utils/motion_prefs.dart';
@@ -36,21 +38,21 @@ class PressScale extends StatefulWidget {
   /// Включён ли тактильный 3D-наклон карточки по направлению касания.
   final bool enableTilt;
 
-  /// Максимальный угол наклона (радианы). По умолчанию 0.045 (~2.6°) —
-  /// аккуратный, премиальный, мягкий тилт без искажений.
+  /// Максимальный угол наклона (радианы). По умолчанию 0.065 (~3.7°) —
+  /// аккуратный, премиальный, мягкий тилт без резких искажений.
   final double maxTiltAngle;
 
   const PressScale({
     super.key,
     required this.child,
     this.pressedScale = 0.975,
-    this.duration = const Duration(milliseconds: 260),
-    this.releaseDuration,
+    this.duration = const Duration(milliseconds: 280),
+    this.releaseDuration = const Duration(milliseconds: 360),
     this.curve = Curves.easeOutCubic,
     this.enabled = true,
     this.pressedOpacity = 1.0,
     this.enableTilt = true,
-    this.maxTiltAngle = 0.15,
+    this.maxTiltAngle = 0.065,
   });
 
   @override
@@ -64,6 +66,18 @@ class _PressScaleState extends State<PressScale>
 
   Offset _tilt = Offset.zero;
   Offset _releaseTilt = Offset.zero;
+
+  /// Мягкое асимптотическое сглаживание к границе наклона:
+  /// при приближении к краю и выходе за него карточка не упирается в жесткую стену,
+  /// а плавно и упруго амортизирует (soft rubber-band cushion).
+  static double _softClamp(double u) {
+    final abs = u.abs();
+    if (abs <= 0.70) return u;
+    final sign = u.isNegative ? -1.0 : 1.0;
+    final excess = abs - 0.70;
+    final damped = 0.70 + 0.32 * (1.0 - math.exp(-excess / 0.55));
+    return sign * damped;
+  }
 
   @override
   void initState() {
@@ -84,13 +98,18 @@ class _PressScaleState extends State<PressScale>
     super.dispose();
   }
 
-  void _updateTilt(Offset pos) {
+  void _updateTilt(Offset pos, {bool smooth = false}) {
     if (!widget.enableTilt || MotionPrefs.shouldReduceMotion) return;
     final size = context.size;
     if (size == null || size.width <= 0 || size.height <= 0) return;
-    final nx = ((pos.dx / size.width - 0.5) * 2.0).clamp(-1.0, 1.0);
-    final ny = ((pos.dy / size.height - 0.5) * 2.0).clamp(-1.0, 1.0);
-    _tilt = Offset(nx, ny);
+    final rawNx = (pos.dx / size.width - 0.5) * 2.0;
+    final rawNy = (pos.dy / size.height - 0.5) * 2.0;
+    final target = Offset(_softClamp(rawNx), _softClamp(rawNy));
+    if (smooth) {
+      _tilt = Offset.lerp(_tilt, target, 0.28) ?? target;
+    } else {
+      _tilt = target;
+    }
   }
 
   // Проверка `mounted` обязательна: при быстром смахивании элемент успевает
@@ -99,7 +118,7 @@ class _PressScaleState extends State<PressScale>
   void _down(PointerDownEvent e) {
     if (!mounted || !widget.enabled) return;
     if (SwipeToDeleteScope.of(context)) return;
-    _updateTilt(e.localPosition);
+    _updateTilt(e.localPosition, smooth: false);
     // Длительность переключаем ДО старта: контроллер живёт один, и без этого
     // после первого же нажатия он запомнил бы длину отпускания.
     _ctrl.duration = widget.duration;
@@ -112,7 +131,7 @@ class _PressScaleState extends State<PressScale>
       if (_ctrl.value > 0) _ctrl.reverse();
       return;
     }
-    _updateTilt(e.localPosition);
+    _updateTilt(e.localPosition, smooth: true);
     if (mounted) setState(() {});
   }
 
@@ -158,7 +177,7 @@ class _PressScaleState extends State<PressScale>
 
           final matrix = Matrix4.identity();
           if (tiltActive) {
-            matrix.setEntry(3, 2, 0.0014);
+            matrix.setEntry(3, 2, 0.0010);
             matrix.rotateX(tiltX);
             matrix.rotateY(tiltY);
           }
