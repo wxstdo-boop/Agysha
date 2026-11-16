@@ -161,17 +161,19 @@ class AlarmReceiver : BroadcastReceiver() {
             // Перепланируем следующий — но НЕ для догона: BootReceiver уже
             // взвёл ближайший будущий срабатывание, второй раз означал бы
             // задвоение будильника.
-            if (repeatDays.isNotEmpty() && !isMissed) {
-                rescheduleNext(context, id, intent, hour, minute, repeatDays)
-            } else if (repeatDays.isEmpty() && !isMissed) {
-                // Одноразовый будильник отзвонил. Помечаем его прозвеневшим
-                // и убираем из манифеста загрузки: иначе Dart-перепланировка
+            if (repeatDays.isNotEmpty()) {
+                if (!isMissed) {
+                    rescheduleNext(context, id, intent, hour, minute, repeatDays)
+                }
+            } else {
+                // Одноразовый будильник отзвонил (в срок или догоном после выключения).
+                // Помечаем его прозвеневшим и убираем из манифеста загрузки: иначе Dart-перепланировка
                 // (и BootReceiver) сочтут его «ещё не наступившим» и взведут
                 // снова на завтра — «один раз» тихо становилось «каждый
                 // день». Dart гасит такие будильники по consumeFiredOneShots.
                 AlarmSchedulerPlugin.markOneShotFired(context, id)
                 AlarmSchedulerPlugin.removeManifestEntryFor(context, id)
-                AlarmLog.write(context, "ONESHOT FIRED id=$id removed from manifest")
+                AlarmLog.write(context, "ONESHOT FIRED id=$id removed from manifest missed=$isMissed")
             }
         } catch (e: Exception) {
             // Непойманное исключение отсюда убивает процесс, а вместе с ним и
@@ -466,11 +468,11 @@ class AlarmReceiver : BroadcastReceiver() {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(if (isRealityCheck) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_MAX)
+            .setCategory(if (isRealityCheck) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setAutoCancel(false)
-            .setOngoing(true)
+            .setAutoCancel(isRealityCheck)
+            .setOngoing(!isRealityCheck)
             .setContentIntent(pi)
             .setColor(0xFFFDF2F6.toInt())
             .setDeleteIntent(cancelPi)  // Защита от случайного закрытия
@@ -495,7 +497,11 @@ class AlarmReceiver : BroadcastReceiver() {
         }
 
         if (vibrate) {
-            builder.setVibrate(longArrayOf(0, 800, 400, 800, 400, 800))
+            if (isRealityCheck) {
+                builder.setVibrate(longArrayOf(0, 250))
+            } else {
+                builder.setVibrate(longArrayOf(0, 800, 400, 800, 400, 800))
+            }
             builder.setDefaults(NotificationCompat.DEFAULT_VIBRATE)
         }
 
