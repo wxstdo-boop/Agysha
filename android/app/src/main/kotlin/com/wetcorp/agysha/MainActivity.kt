@@ -69,6 +69,7 @@ class MainActivity : FlutterActivity() {
         AlarmForegroundService.stop(applicationContext)
         cancelAlarmNotifications()
         clearAlarmWakeFlags()
+        AlarmReceiver.cancelVibration(applicationContext)
         intent.removeExtra("alarm_id")
         intent.action = null
     }
@@ -309,8 +310,9 @@ class MainActivity : FlutterActivity() {
                     // продолжал бы играть до 5-минутного таймаута — «удалил
                     // будильник, а он всё равно звенит». Сервис глушит звук
                     // только если звонит именно этот будильник.
-                    val code = call.argument<Int>("id") ?: -1
+                    val code = (call.argument<Any>("id") as? Number)?.toInt() ?: -1
                     AlarmForegroundService.stopFor(applicationContext, code)
+                    AlarmReceiver.cancelVibration(applicationContext)
                     // Уведомление этого будильника тоже убираем.
                     val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
                     nm.cancel(code)

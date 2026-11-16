@@ -59,6 +59,12 @@ class AlarmService extends ChangeNotifier {
     final idx = _alarms.indexWhere((a) => a.id == id);
     if (idx != -1) {
       _alarms[idx].enabled = !_alarms[idx].enabled;
+      if (!_alarms[idx].enabled) {
+        try {
+          await AlarmScheduler.cancelAlarmClock(id.hashCode);
+          await AlarmScheduler.stopRingingAlarm(id.hashCode);
+        } catch (_) {}
+      }
       notifyListeners();
       await _save();
     }
@@ -67,6 +73,12 @@ class AlarmService extends ChangeNotifier {
   Future<void> update(Alarm alarm) async {
     final idx = _alarms.indexWhere((a) => a.id == alarm.id);
     if (idx != -1) {
+      if (!alarm.enabled) {
+        try {
+          await AlarmScheduler.cancelAlarmClock(alarm.id.hashCode);
+          await AlarmScheduler.stopRingingAlarm(alarm.id.hashCode);
+        } catch (_) {}
+      }
       _alarms[idx] = alarm;
       notifyListeners();
       await _save();

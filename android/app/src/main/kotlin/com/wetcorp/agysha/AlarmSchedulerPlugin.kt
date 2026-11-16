@@ -295,17 +295,31 @@ class AlarmSchedulerPlugin private constructor(private val context: Context) :
         val id = (call.argument<Any>("id") as? Number)?.toInt() ?: 0
         val intent = Intent(context, AlarmReceiver::class.java)
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         } else {
-            PendingIntent.FLAG_NO_CREATE
+            PendingIntent.FLAG_UPDATE_CURRENT
         }
-        val pendingIntent = PendingIntent.getBroadcast(context, id, intent, flags)
-        if (pendingIntent != null) {
-            alarmManager.cancel(pendingIntent)
-            pendingIntent.cancel()
-            Log.d(TAG, "Cancelled alarm id=$id")
-            AlarmLog.write(appContext, "CANCEL id=$id")
+        try {
+            val pendingIntent = PendingIntent.getBroadcast(context, id, intent, flags)
+            if (pendingIntent != null) {
+                alarmManager.cancel(pendingIntent)
+                pendingIntent.cancel()
+                Log.d(TAG, "Cancelled alarm id=$id")
+                AlarmLog.write(appContext, "CANCEL id=$id")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cancelling pendingIntent for id=$id", e)
         }
+
+        try {
+            val showIntent = Intent(context, MainActivity::class.java).apply {
+                action = Intent.ACTION_MAIN
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            }
+            val showPi = PendingIntent.getActivity(context, id, showIntent, flags)
+            showPi?.cancel()
+        } catch (_: Exception) {}
+
         removeManifestEntry(id)
         AlarmReceiver.cancelVibration(context)
         result.success(true)
@@ -328,6 +342,9 @@ class AlarmSchedulerPlugin private constructor(private val context: Context) :
         soundName: String, vibrate: Boolean,
         payload: String, customSoundPath: String?,
     ) {
+        // Проверки реальности не должны попадать в манифест системных будильников:
+        // они перепланируются Dart-слоем и не должны создавать значок будильника на экране блокировки.
+        if (payload == "rc" || payload.startsWith("rc")) return
         try {
             val arr = loadManifest()
             val keep = JSONArray()

@@ -61,6 +61,9 @@ class BootReceiver : BroadcastReceiver() {
                     val o = arr.getJSONObject(i)
                     val code = o.optInt("code", -1)
                     if (code < 0) continue
+                    val payload = o.optString("payload", "")
+                    // Проверки реальности не взводятся нативно как будильник после перезагрузки
+                    if (payload == "rc" || payload.startsWith("rc")) continue
                     val title = o.optString("title", "Alarm")
                     val body = o.optString("body", "")
                     val hour = o.optInt("hour", 0)

@@ -203,7 +203,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       context,
     ).push<Alarm>(slideUpRoute(const AddAlarmScreen()));
     if (result != null) {
-      _service.add(result);
+      await _service.add(result);
       if (result.enabled) {
         // Сначала мягкая проверка notifications. Если scheduleAlarm вернёт
         // false — значит нет exact-alarm permission; показываем снекбар
@@ -233,7 +233,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       context,
     ).push<Alarm>(slideUpRoute(AddAlarmScreen(existing: alarm)));
     if (result != null) {
-      _service.update(result);
+      await _service.update(result);
       await notificationService.cancelAlarm(result.id);
       if (result.enabled) {
         notificationService.requestPermissionsSoft();
@@ -668,7 +668,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           _service.reorder(oldIndex, newIndex),
       proxyDecorator: (child, index, animation) =>
           buildDragProxy(child, theme, animation),
-      itemBuilder: (context, i) {
+      itemBuilder: (_, i) {
         final alarm = alarms[i];
         return SwipeToDelete(
           // Ключ на ВНЕШНЕМ виджете: ReorderableListView берёт key от него.
@@ -733,16 +733,17 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                           value: alarm.enabled,
                           onChanged: (v) async {
                             final ctx = context;
-                            _service.toggle(alarm.id);
+                            final noExactText = Translations.t(
+                              'alarmNoExact',
+                              ctx,
+                            );
+                            await _service.toggle(alarm.id);
+                            if (!ctx.mounted) return;
                             final updated = _service.alarms.firstWhere(
                               (a) => a.id == alarm.id,
                             );
                             if (updated.enabled) {
                               notificationService.requestPermissionsSoft();
-                              final noExactText = Translations.t(
-                                'alarmNoExact',
-                                ctx,
-                              );
                               final ok = await notificationService
                                   .scheduleAlarm(updated);
                               if (!ok && ctx.mounted) {

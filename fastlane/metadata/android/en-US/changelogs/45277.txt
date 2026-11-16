@@ -1,0 +1,5 @@
+- fix(alarm): ensure disabled alarms are never rescheduled by BootReceiver
+- fix(alarm): guarantee PendingIntent cancellation in native cancelAlarmClock
+- fix(alarm): disarm one-shot alarms unconditionally on missed catch-up firing
+- fix(alarm): exclude reality checks from system alarm manifest
+- fix(alarm): immediately disarm alarm on service toggle and update
