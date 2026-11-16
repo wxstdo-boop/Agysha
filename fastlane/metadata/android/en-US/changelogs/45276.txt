@@ -1,0 +1,1 @@
+- fix(alarm): fix infinite vibration bug, cancel disabled alarms, safe argument parsing, and reliable time scheduling (v1.6.203+45275)
