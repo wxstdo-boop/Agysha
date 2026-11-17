@@ -38,21 +38,21 @@ class PressScale extends StatefulWidget {
   /// Включён ли тактильный 3D-наклон карточки по направлению касания.
   final bool enableTilt;
 
-  /// Максимальный угол наклона (радианы). По умолчанию 0.065 (~3.7°) —
-  /// аккуратный, премиальный, мягкий тилт без резких искажений.
+  /// Максимальный угол наклона (радианы). По умолчанию 0.13 (~7.5°) —
+  /// выразительный, сочный, тактильный 3D-тилт.
   final double maxTiltAngle;
 
   const PressScale({
     super.key,
     required this.child,
     this.pressedScale = 0.975,
-    this.duration = const Duration(milliseconds: 280),
+    this.duration = const Duration(milliseconds: 240),
     this.releaseDuration = const Duration(milliseconds: 360),
     this.curve = Curves.easeOutCubic,
     this.enabled = true,
     this.pressedOpacity = 1.0,
     this.enableTilt = true,
-    this.maxTiltAngle = 0.065,
+    this.maxTiltAngle = 0.13,
   });
 
   @override
@@ -68,14 +68,14 @@ class _PressScaleState extends State<PressScale>
   Offset _releaseTilt = Offset.zero;
 
   /// Мягкое асимптотическое сглаживание к границе наклона:
-  /// при приближении к краю и выходе за него карточка не упирается в жесткую стену,
-  /// а плавно и упруго амортизирует (soft rubber-band cushion).
+  /// в пределах карточки (abs <= 0.90) угол передаётся 1:1 без срезания,
+  /// а у границы и за её пределами плавно и упруго амортизирует (soft rubber-band cushion).
   static double _softClamp(double u) {
     final abs = u.abs();
-    if (abs <= 0.70) return u;
+    if (abs <= 0.90) return u;
     final sign = u.isNegative ? -1.0 : 1.0;
-    final excess = abs - 0.70;
-    final damped = 0.70 + 0.32 * (1.0 - math.exp(-excess / 0.55));
+    final excess = abs - 0.90;
+    final damped = 0.90 + 0.25 * (1.0 - math.exp(-excess / 0.50));
     return sign * damped;
   }
 
@@ -106,7 +106,7 @@ class _PressScaleState extends State<PressScale>
     final rawNy = (pos.dy / size.height - 0.5) * 2.0;
     final target = Offset(_softClamp(rawNx), _softClamp(rawNy));
     if (smooth) {
-      _tilt = Offset.lerp(_tilt, target, 0.28) ?? target;
+      _tilt = Offset.lerp(_tilt, target, 0.40) ?? target;
     } else {
       _tilt = target;
     }
@@ -177,7 +177,7 @@ class _PressScaleState extends State<PressScale>
 
           final matrix = Matrix4.identity();
           if (tiltActive) {
-            matrix.setEntry(3, 2, 0.0010);
+            matrix.setEntry(3, 2, 0.0012);
             matrix.rotateX(tiltX);
             matrix.rotateY(tiltY);
           }

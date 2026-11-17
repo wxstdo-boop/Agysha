@@ -67,10 +67,10 @@ class _GiftCard3DState extends State<GiftCard3D>
   /// плавно демпфирует на границе карточки (soft cushioning).
   static double _softClamp(double u) {
     final abs = u.abs();
-    if (abs <= 0.70) return u;
+    if (abs <= 0.90) return u;
     final sign = u.isNegative ? -1.0 : 1.0;
-    final excess = abs - 0.70;
-    final damped = 0.70 + 0.32 * (1.0 - math.exp(-excess / 0.55));
+    final excess = abs - 0.90;
+    final damped = 0.90 + 0.25 * (1.0 - math.exp(-excess / 0.50));
     return sign * damped;
   }
 
@@ -80,7 +80,7 @@ class _GiftCard3DState extends State<GiftCard3D>
     final rawDx = (localPosition.dx / widget.width - 0.5) * 2.0;
     final rawDy = (localPosition.dy / widget.height - 0.5) * 2.0;
     final target = Offset(_softClamp(rawDx), _softClamp(rawDy));
-    final next = Offset.lerp(_tilt, target, 0.28) ?? target;
+    final next = Offset.lerp(_tilt, target, 0.38) ?? target;
     if ((next - _tilt).distance > 0.0005) {
       setState(() => _tilt = next);
     }
@@ -123,7 +123,7 @@ class _GiftCard3DState extends State<GiftCard3D>
           child: PressScale(
             enableTilt: false,
             pressedScale: 0.965,
-            duration: const Duration(milliseconds: 280),
+            duration: const Duration(milliseconds: 240),
             releaseDuration: const Duration(milliseconds: 360),
             child: AnimatedBuilder(
               animation: _resetController,
@@ -132,11 +132,11 @@ class _GiftCard3DState extends State<GiftCard3D>
                     ? _tiltAnimation.value
                     : _tilt;
 
-                final tiltX = -currentTilt.dy * 0.105;
-                final tiltY = currentTilt.dx * 0.105;
+                final tiltX = -currentTilt.dy * 0.26;
+                final tiltY = currentTilt.dx * 0.26;
 
                 final transform = Matrix4.identity()
-                  ..setEntry(3, 2, 0.0010)
+                  ..setEntry(3, 2, 0.0014)
                   ..rotateX(tiltX)
                   ..rotateY(tiltY);
 
