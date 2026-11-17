@@ -66,6 +66,7 @@ class _PressScaleState extends State<PressScale>
 
   Offset _tilt = Offset.zero;
   Offset _releaseTilt = Offset.zero;
+  final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(Offset.zero);
 
   /// Мягкое асимптотическое сглаживание к границе наклона:
   /// в пределах карточки (abs <= 0.90) угол передаётся 1:1 без срезания,
@@ -94,6 +95,7 @@ class _PressScaleState extends State<PressScale>
 
   @override
   void dispose() {
+    _tiltNotifier.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -110,6 +112,7 @@ class _PressScaleState extends State<PressScale>
     } else {
       _tilt = target;
     }
+    _tiltNotifier.value = _tilt;
   }
 
   // Проверка `mounted` обязательна: при быстром смахивании элемент успевает
@@ -132,7 +135,8 @@ class _PressScaleState extends State<PressScale>
       return;
     }
     _updateTilt(e.localPosition, smooth: true);
-    if (mounted) setState(() {});
+    // НЕ вызываем setState: _tiltNotifier обновляет только Transform в AnimatedBuilder,
+    // без инвалидации и пересборки дерева виджетов карточки на каждый пиксель движения!
   }
 
   void _up(PointerUpEvent _) {
@@ -162,7 +166,7 @@ class _PressScaleState extends State<PressScale>
       onPointerUp: _up,
       onPointerCancel: _cancel,
       child: AnimatedBuilder(
-        animation: _anim,
+        animation: Listenable.merge([_anim, _tiltNotifier]),
         builder: (context, child) {
           final v = isSwiping ? 0.0 : _anim.value;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
@@ -198,7 +202,7 @@ class _PressScaleState extends State<PressScale>
             child: transformed,
           );
         },
-        child: widget.child,
+        child: RepaintBoundary(child: widget.child),
       ),
     );
   }

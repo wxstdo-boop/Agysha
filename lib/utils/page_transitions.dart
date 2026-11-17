@@ -173,15 +173,18 @@ Route<T> slideSideRoute<T>(Widget page) {
         fit: StackFit.expand,
         children: [
           // Лёгкое затемнение старого экрана — дёшево, без saveLayer/blur.
-          Container(
-            color: Colors.black.withValues(alpha: 0.10 * animation.value),
+          FadeTransition(
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+            child: const ColoredBox(
+              color: Colors.black12,
+            ),
           ),
           SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(1, 0),
               end: Offset.zero,
             ).animate(curved),
-            child: child,
+            child: RepaintBoundary(child: child),
           ),
         ],
       );

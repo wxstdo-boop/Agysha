@@ -23,12 +23,14 @@ class PageSpring {
     required this.controller,
     double stiffness = 300,
     double dampingRatio = 0.92,
+    this.onSettled,
   }) : _stiffness = stiffness,
        _damping = 2 * math.sqrt(stiffness) * dampingRatio {
     _ticker = vsync.createTicker(_tick);
   }
 
   final PageController controller;
+  final VoidCallback? onSettled;
   late final Ticker _ticker;
 
   /// Жёсткость (больше — быстрее разгон и короче «хвост») и демпфирование
@@ -96,6 +98,7 @@ class PageSpring {
       _pos = _target;
       _follow();
       stop();
+      onSettled?.call();
     }
   }
 

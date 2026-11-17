@@ -3,22 +3,22 @@
 ## Текущее состояние (проверено в CI)
 
 GitHub Actions, workflow `CI` (`.github/workflows/ci.yml`), Flutter **3.47.5**,
-ветка `main`, 2026-11-14:
+ветка `main`, 2026-11-17:
 
 ```
 flutter pub get --enforce-lockfile
 flutter analyze                 →  No issues found!
-flutter test                    →  All tests passed! (410, 6 skipped)
+flutter test                    →  All tests passed! (419, 6 skipped)
 ```
 
-Прогон зелёный целиком: **410 тестов в 72 файлах**, падений нет; 6 тестов
+Прогон зелёный целиком: **419 тестов в 74 файлах**, падений нет; 6 тестов
 помечены `skip` — это ручные прогоны, которым нужны сеть и токен
 (`live_forge_test.dart`). В том числе проходит `exit_dialog_localization_test.dart`
 (3 теста: ru/en/fr).
 
-Число тестов берётся из итога прогона `flutter test` (410); объявлений
+Число тестов берётся из итога прогона `flutter test` (419); объявлений
 `test(` / `testWidgets(` в `test/*.dart` чуть больше, потому что часть
-проверок объявлена внутри общих хелперов. Файлов `test/*.dart` — 72.
+проверок объявлена внутри общих хелперов. Файлов `test/*.dart` — 74.
 
 Эти же команды CI выполняет на каждый pull request и на каждый push в `main`,
 поэтому состояние воспроизводимо на раннере GitHub: локальный SDK для проверки

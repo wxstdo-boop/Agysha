@@ -9,11 +9,11 @@ Agysha — Flutter-приложение с нативным Android-слоем. 
 ```
 ┌─────────────────────────────────────────────┐
 │  Presentation (lib/screens, lib/widgets)    │
-│  24 файла · 63 UI-компонента                │
+│  42 файла · 65 UI-компонента                │
 └───────────────┬─────────────────────────────┘
                 │  вызовы сервисов
 ┌───────────────▼─────────────────────────────┐
-│  Services (lib/services) — 34 штуки          │
+│  Services (lib/services) — 39 штук          │
 │  данные · уведомления · ИИ · обновления     │
 └───────┬───────────────────────────┬─────────┘
         │                           │
@@ -71,15 +71,20 @@ Agysha — Flutter-приложение с нативным Android-слоем. 
 
 ### 3. Экраны — `lib/screens/`
 
-Крупнейшие Dart-файлы проекта: `lib/l10n/translations.dart` (около 171 КиБ),
-`lib/screens/settings_screen.dart` (около 153 КиБ) и
-`lib/services/ai_guide_service.dart` (около 144 КиБ).
-Экран настроек и экран PIN уже вынесены в отдельные компоненты, а чат Ады
-разделён на `ai_guide_bubbles.dart` и `ai_guide_floating.dart`.
+42 экрана. Раньше крупнейшие файлы проекта (`translations.dart`,
+`settings_screen.dart`, `ai_guide_service.dart`) были монолитами по 150–170 КБ,
+но их разбили на мелкие компоненты: экран настроек — каркас
+`settings_screen.dart` плюс 13 секционных `settings_section_*.dart` /
+`settings_*.dart`, ИИ-сервис — на `ai_guide_service_{models,commands,providers,
+reports,web}.dart`, переводы — на `translations_{en,ru,fr}.dart`
+(см. «Локализация»). Чат Ады разделился на `ai_guide_bubbles.dart` и
+`ai_guide_floating.dart`. Сегодня самые крупные файлы проекта:
+`profile_screen.dart` (~113 КБ), `main.dart` (~104 КБ) и
+`habits_screen.dart` (~103 КБ).
 
 ### 4. Виджеты — `lib/widgets/`
 
-63 UI-компонента. Отдельный интерес представляет «слой плавности»:
+65 UI-компонентов. Отдельный интерес представляет «слой плавности»:
 `page_spring.dart`, `press_splat.dart`, `smooth_typing.dart`,
 `rolling_counter.dart`, `smooth_tooltip.dart`, `section_pill.dart`,
 `stained_glass.dart`. Это то, чем приложение отличается от обычного
@@ -190,9 +195,11 @@ READ_EXTERNAL_STORAGE (maxSdk 32)     выбор файлов для экспо�
 
 ## Локализация
 
-`lib/l10n/translations.dart` — один файл со словарями `en`, `ru`, `fr`
-(≈172 КБ). Ключи лежат в одном месте, поэтому перевод нельзя рассыпать по
-экранам. Рядом `locale_provider.dart` переключает язык в рантайме.
+`lib/l10n/translations.dart` — диспетчер (≈10 КБ), который через `part`
+подключает словари `translations_en.dart` / `translations_ru.dart` /
+`translations_fr.dart` (вместе ≈165 КБ). Ключи лежат в одном месте, поэтому
+перевод нельзя рассыпать по экранам. Рядом `locale_provider.dart` переключает
+язык в рантайме.
 
 Системные диалоги (например, отказ в разрешении) переводятся отдельно —
 `lib/utils/android_settings.dart`.

@@ -40,6 +40,7 @@ class _GiftCard3DState extends State<GiftCard3D>
   late Animation<Offset> _tiltAnimation;
 
   Offset _tilt = Offset.zero;
+  final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(Offset.zero);
 
   @override
   void initState() {
@@ -59,6 +60,7 @@ class _GiftCard3DState extends State<GiftCard3D>
 
   @override
   void dispose() {
+    _tiltNotifier.dispose();
     _resetController.dispose();
     super.dispose();
   }
@@ -82,7 +84,8 @@ class _GiftCard3DState extends State<GiftCard3D>
     final target = Offset(_softClamp(rawDx), _softClamp(rawDy));
     final next = Offset.lerp(_tilt, target, 0.38) ?? target;
     if ((next - _tilt).distance > 0.0005) {
-      setState(() => _tilt = next);
+      _tilt = next;
+      _tiltNotifier.value = next;
     }
   }
 
@@ -96,7 +99,8 @@ class _GiftCard3DState extends State<GiftCard3D>
       curve: Curves.easeOutCubic,
     ));
     _resetController.forward(from: 0).then((_) {
-      if (mounted) setState(() => _tilt = Offset.zero);
+      _tilt = Offset.zero;
+      _tiltNotifier.value = Offset.zero;
     });
   }
 
@@ -109,6 +113,151 @@ class _GiftCard3DState extends State<GiftCard3D>
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final rarity = widget.gift.rarity;
+
+    final cardContent = AnimatedContainer(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeInOutCubic,
+      width: widget.width,
+      height: widget.height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Radii.lg),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? [
+                  const Color(0xFF141420),
+                  const Color(0xFF0A0A12),
+                ]
+              : [
+                  Colors.white,
+                  const Color(0xFFF0F4F8),
+                ],
+        ),
+        border: Border.all(
+          color: widget.gift.isFavorite
+              ? BrandColors.red.withValues(alpha: 0.85)
+              : rarity.color.withValues(alpha: dark ? 0.60 : 0.45),
+          width: widget.gift.isFavorite ? 1.8 : 1.3,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: widget.gift.isFavorite
+                ? BrandColors.red.withValues(alpha: dark ? 0.40 : 0.26)
+                : rarity.color.withValues(alpha: dark ? 0.25 : 0.16),
+            blurRadius: widget.gift.isFavorite ? 14 : 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(Radii.lg),
+        child: Padding(
+          padding: const EdgeInsets.all(Spacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Верхний ряд: Редкость и Серийник (плюс звездочка без наезда)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: rarity.color.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(Radii.xs),
+                        border: Border.all(
+                          color: rarity.color.withValues(alpha: 0.45),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Text(
+                        rarity.labelRu.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: rarity.color,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  // Номер и кровавая звездочка рядом
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.gift.isFavorite) ...[
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 14,
+                          color: BrandColors.red,
+                        ),
+                        const SizedBox(width: 2),
+                      ],
+                      Text(
+                        '#${widget.gift.serialNumber.toString().padLeft(4, '0')}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w700,
+                          color: widget.gift.isFavorite
+                              ? BrandColors.red
+                              : theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.60),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const Spacer(),
+              // Центральная иконка артефакта с аурой
+              Center(
+                child: ArtifactEmblem(
+                  giftId: widget.gift.id,
+                  icon: widget.gift.icon,
+                  color: rarity.color,
+                  isFavorite: widget.gift.isFavorite,
+                  size: 68,
+                ),
+              ),
+              const Spacer(),
+              // Название артефакта
+              Text(
+                widget.gift.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // Бафф/эффект
+              Text(
+                widget.gift.buffText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: widget.gift.isFavorite
+                      ? BrandColors.red
+                      : theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
 
     return RepaintBoundary(
       child: Listener(
@@ -126,8 +275,8 @@ class _GiftCard3DState extends State<GiftCard3D>
             duration: const Duration(milliseconds: 240),
             releaseDuration: const Duration(milliseconds: 360),
             child: AnimatedBuilder(
-              animation: _resetController,
-              builder: (context, _) {
+              animation: Listenable.merge([_resetController, _tiltNotifier]),
+              builder: (context, child) {
                 final currentTilt = _resetController.isAnimating
                     ? _tiltAnimation.value
                     : _tilt;
@@ -143,168 +292,27 @@ class _GiftCard3DState extends State<GiftCard3D>
                 return Transform(
                   transform: transform,
                   alignment: FractionalOffset.center,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 320),
-                    curve: Curves.easeInOutCubic,
-                    width: widget.width,
-                    height: widget.height,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(Radii.lg),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: dark
-                            ? [
-                                const Color(0xFF141420),
-                                const Color(0xFF0A0A12),
-                              ]
-                            : [
-                                Colors.white,
-                                const Color(0xFFF0F4F8),
-                              ],
-                      ),
-                      border: Border.all(
-                        color: widget.gift.isFavorite
-                            ? BrandColors.red.withValues(alpha: 0.85)
-                            : rarity.color.withValues(alpha: dark ? 0.60 : 0.45),
-                        width: widget.gift.isFavorite ? 1.8 : 1.3,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: widget.gift.isFavorite
-                              ? BrandColors.red.withValues(alpha: dark ? 0.40 : 0.26)
-                              : rarity.color.withValues(alpha: dark ? 0.25 : 0.16),
-                          blurRadius: widget.gift.isFavorite ? 14 : 10,
-                          offset: const Offset(0, 4),
+                  child: Stack(
+                    children: [
+                      child!,
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(Radii.lg),
+                          child: CustomPaint(
+                            painter: _HoloFoilPainter(
+                              tilt: currentTilt,
+                              rarityColor: widget.gift.isFavorite
+                                  ? BrandColors.red
+                                  : rarity.color,
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(Radii.lg),
-                      child: Stack(
-                        children: [
-                          // Голографический фольгированный блик
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _HoloFoilPainter(
-                                tilt: currentTilt,
-                                rarityColor: widget.gift.isFavorite
-                                    ? BrandColors.red
-                                    : rarity.color,
-                              ),
-                            ),
-                          ),
-                          // Содержимое карточки
-                          Padding(
-                            padding: const EdgeInsets.all(Spacing.sm),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Верхний ряд: Редкость и Серийник (плюс звездочка без наезда)
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Flexible(
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: rarity.color.withValues(alpha: 0.18),
-                                          borderRadius: BorderRadius.circular(Radii.xs),
-                                          border: Border.all(
-                                            color: rarity.color.withValues(alpha: 0.45),
-                                            width: 0.8,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          rarity.labelRu.toUpperCase(),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w700,
-                                            color: rarity.color,
-                                            letterSpacing: 0.6,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    // Номер и кровавая звездочка рядом
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (widget.gift.isFavorite) ...[
-                                          const Icon(
-                                            Icons.star_rounded,
-                                            size: 14,
-                                            color: BrandColors.red,
-                                          ),
-                                          const SizedBox(width: 2),
-                                        ],
-                                        Text(
-                                          '#${widget.gift.serialNumber.toString().padLeft(4, '0')}',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontFamily: 'monospace',
-                                            fontWeight: FontWeight.w700,
-                                            color: widget.gift.isFavorite
-                                                ? BrandColors.red
-                                                : theme.colorScheme.onSurface
-                                                    .withValues(alpha: 0.60),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const Spacer(),
-                                // Центральная иконка артефакта с аурой
-                                Center(
-                                  child: ArtifactEmblem(
-                                    giftId: widget.gift.id,
-                                    icon: widget.gift.icon,
-                                    color: rarity.color,
-                                    isFavorite: widget.gift.isFavorite,
-                                    size: 68,
-                                  ),
-                                ),
-                                const Spacer(),
-                                // Название артефакта
-                                Text(
-                                  widget.gift.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                // Бафф/эффект
-                                Text(
-                                  widget.gift.buffText,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: widget.gift.isFavorite
-                                        ? BrandColors.red
-                                        : theme.colorScheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
                       ),
-                    ),
+                    ],
                   ),
                 );
               },
+              child: cardContent,
             ),
           ),
         ),
