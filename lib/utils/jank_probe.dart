@@ -66,7 +66,7 @@ class JankProbe {
   /// смысла (тесты и десктоп-сборки не являются целью замера).
   static void start() {
     if (_started || _stopped) return;
-    if (kIsWeb || !Platform.isAndroid) return;
+    if (kIsWeb || !Platform.isAndroid || kReleaseMode) return;
     _started = true;
     WidgetsBinding.instance.addTimingsCallback(_onTimings);
   }

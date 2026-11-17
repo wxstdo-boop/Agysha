@@ -62,23 +62,9 @@ class _HomeScreenState extends State<HomeScreen>
   late final PageSpring _pageSpring = PageSpring(
     vsync: this,
     controller: _pageController,
-    // Мягче и медленнее, чем карусель категорий: разделы большие, и
-    // «камень» таблетки должен именно ПРОСКОЛЬЗИТЬ между вкладками
-    // (≈440 мс, без отскока), а не перескочить.
-    // Плавнее и мягче прежних (200/0.94): «камень» должен именно
-    // ПРОСКОЛЬЗЫВАТЬ между вкладками, а не дубакать. Ниже жёсткость,
-    // чуть больше демпфинга — перелёт дольше, но ровнее.
-    // МЕДЛЕННЕЕ и РАВНЕЕ (было 140/0.99 — «слишком быстро» и дёргано):
-    // камень проскальзывает за ~700 мс, без отскока. Ниже жёсткость —
-    // длиннее, плавнее «приземление» на угол.
-    // КРИТИЧЕСКИ ДЕМПФИРОВАННАЯ (damping 1.0): перелёт между разделами
-    // БЕЗ отскока — «приземление» в угол не дёргается назад (жалоба
-    // «отпускаю дёргано возвращаются»). Жёсткость 90: 52 было вялым
-    // («подтормаживает при нажатиях»), 200 — «адски быстро».
-    // 210 — компромисс: перелёт заметно собраннее (≈300 мс до покоя),
-    // без отскока; 90 читалось как «экран тормозит», 160 — ещё чуть вяло.
     stiffness: 210,
     dampingRatio: 1.0,
+    onSettled: _onSpringSettled,
   );
 
   /// Пружина СЛЕДОВАНИЯ карусели за пальцем (тяга таблетки).
@@ -404,12 +390,26 @@ class _HomeScreenState extends State<HomeScreen>
     final a = sectionPillSnapByPage[from] ?? sectionOffsetByPage[from] ?? 0.0;
     final b = sectionPillSnapByPage[to] ?? sectionOffsetByPage[to] ?? a;
     final value = a + (b - a) * t;
-    if ((sectionScrollOffset.value - value).abs() > 0.05) {
+    if ((sectionScrollOffset.value - value).abs() > 0.08) {
       sectionScrollOffset.value = value;
       // ВАЖНО: не дергаем sectionPillVisible.value во время дробного листания карусели,
       // чтобы таблетка не пряталась и не дергалась на стыке разделов.
       // Фиксация видимости происходит на settled странице в _onPageScrollEnd.
     }
+  }
+
+  void _onSpringSettled() {
+    if (!mounted || !_pageController.hasClients) return;
+    final page = _pageController.page;
+    if (page == null || !page.isFinite) return;
+    final settled = page.round();
+    _lastSettledPage = settled;
+    sectionScrollOffset.value =
+        sectionPillSnapByPage[settled] ??
+        sectionOffsetByPage[settled] ??
+        0;
+    sectionPillVisible.value = sectionScrollOffset.value <= 8;
+    globalPrefs.setInt('last_home_tab', settled);
   }
 
   void _onPageChanged(int index) {
@@ -430,33 +430,24 @@ class _HomeScreenState extends State<HomeScreen>
   /// анимации) — только тогда таблетка стартует видимой. Промежуточные
   /// пересечения границ во время перелёта её не дёргают.
   bool _onPageScrollEnd(ScrollEndNotification n) {
+    // Если пружина ещё ведёт доводку карусели, не мешаем ей и не перезаписываем
+    // состояние преждевременно: _onSpringSettled выполнит фиксацию точно в момент покоя.
+    if (_pageSpring.isRunning || _dragSpring.isRunning) return false;
     if (_pageController.hasClients &&
         _pageController.position.hasContentDimensions) {
       final page = _pageController.page;
       if (page != null && page.isFinite) {
         final settled = page.round();
         // Офсет таблетки и сохранённая вкладка — ТОЛЬКО когда карусель
-        // реально доехала. Посреди баллистики высоту ведёт интерполяция
-        // (_applyRailPillOffset), и жёсткая запись здесь давала скачок
-        // ровно в момент отпускания пальца.
-        final landed = (page - settled).abs() < 0.02;
+        // реально доехала (порог 0.005, чтобы исключить преждевременные дерганья).
+        final landed = (page - settled).abs() < 0.005;
         if (settled != _lastSettledPage && landed) {
           _lastSettledPage = settled;
-          // Не 0: вкладка keepAlive, её список остался прокрученным, и
-          // события скролла от неё не придут. Возвращаем планшетке её
-          // сохранённую высоту — иначе она налезала на контент до
-          // первого скролла.
           sectionScrollOffset.value =
               sectionPillSnapByPage[settled] ??
               sectionOffsetByPage[settled] ??
               0;
-          // Общий FAB-ряд живёт на Home, а не внутри страницы: после
-          // переезда он должен следовать позиции НОВОЙ страницы, а не
-          // оставаться скрытым от прокрутки предыдущей.
           sectionPillVisible.value = sectionScrollOffset.value <= 8;
-          // Пишем в SharedPreferences только на settled странице
-          // (не на каждом пересечении границ PageView — так было 3
-          // async platform channel calls на один дальний перелёт).
           globalPrefs.setInt('last_home_tab', settled);
         }
       }
