@@ -291,48 +291,95 @@ part of 'ai_guide_service.dart';
     return '$lang\n\n$short';
   }
 
-  /// Достаёт text из OpenAI-формата ответа; null, если это не JSON.
-  String? _extractOpenAiText(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        final choices = decoded['choices'];
-        if (choices is List && choices.isNotEmpty) {
-          final first = choices.first;
-          if (first is Map<String, dynamic>) {
-            final message = first['message'];
-            if (message is Map<String, dynamic>) {
-              return AiGuideService._asString(message['content']);
+  /// Pollinations AI — 100% бесплатный, сверхбыстрый и надёжный LLM API без ключа.
+  /// Работает анонимно, стабильно отвечает на русском языке и следует системному промпту.
+  const _pollinationsUrl = 'https://text.pollinations.ai/';
+
+  Future<String> _sendPollinations(
+    String userText,
+    List<AiMessage> history,
+    String languageCode,
+  ) async {
+    final ctx = AiGuideService._trimContext(history);
+    final messages = <Map<String, dynamic>>[
+      {
+        'role': 'system',
+        'content': AiGuideService.systemPrompt(languageCode, withContext: true),
+      },
+      for (final m in ctx)
+        {'role': m.isUser ? 'user' : 'assistant', 'content': m.text},
+      {'role': 'user', 'content': userText},
+    ];
+
+    for (final model in const ['openai-fast', 'openai']) {
+      try {
+        final resp = await http
+            .post(
+              Uri.parse(_pollinationsUrl),
+              headers: {
+                'Content-Type': 'application/json',
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              },
+              body: jsonEncode({
+                'messages': messages,
+                'model': model,
+                'seed': DateTime.now().millisecondsSinceEpoch % 10000,
+                'jsonMode': false,
+              }),
+            )
+            .timeout(const Duration(seconds: 14));
+
+        if (resp.statusCode == 200 && resp.body.trim().isNotEmpty) {
+          final body = resp.body.trim();
+          if (!body.startsWith('<')) {
+            final cleaned = AiGuideService._cleanText(body);
+            if (cleaned.isNotEmpty && !AiGuideService._isRefusal(cleaned)) {
+              AiGuideService._setModel('Pollinations · GPT');
+              return cleaned;
             }
           }
         }
-      }
-    } catch (_) {}
-    return null;
-  }
+      } catch (_) {}
+    }
 
-  /// Достаёт имя модели из OpenAI-ответа («openrouter/free» и т.п.).
-  String? _extractModelName(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        final m = decoded['model'];
-        if (m is String && m.isNotEmpty) return m;
+    // Резервный GET-маршрут Pollinations
+    final prompt = _freePrompt(userText, languageCode);
+    final getUri = Uri.parse(
+      '$_pollinationsUrl${Uri.encodeComponent(prompt)}?model=openai-fast',
+    );
+    final getResp = await http.get(
+      getUri,
+      headers: {
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    ).timeout(const Duration(seconds: 12));
+
+    if (getResp.statusCode == 200 && getResp.body.trim().isNotEmpty) {
+      final body = getResp.body.trim();
+      if (!body.startsWith('<')) {
+        final cleaned = AiGuideService._cleanText(body);
+        if (cleaned.isNotEmpty && !AiGuideService._isRefusal(cleaned)) {
+          AiGuideService._setModel('Pollinations · GPT');
+          return cleaned;
+        }
       }
-    } catch (_) {}
-    return null;
+    }
+
+    throw Exception('Pollinations unavailable');
   }
 
   /// AI Horde — асинхронный распределённый text API. Анонимный ключ
-  /// разрешён, но имеет низкий приоритет; ждём ограниченное время, затем
-  /// передаём запрос пользователю следующего раза без зависания UI.
+  /// разрешён. Заголовок браузера предотвращает Cloudflare 1010 блокировку.
   const _hordeBaseUrl = 'https://aihorde.net/api/v2';
 
   Future<String> _sendHorde(String userText, String languageCode) async {
     const headers = {
       'Content-Type': 'application/json',
       'apikey': '0000000000',
-      'Client-Agent': 'Agysha:1.3.0:flutter',
+      'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     };
     final submitted = await http
         .post(
@@ -350,7 +397,7 @@ part of 'ai_guide_service.dart';
             'dry_run': false,
           }),
         )
-        .timeout(const Duration(seconds: 8));
+        .timeout(const Duration(seconds: 10));
     if (submitted.statusCode != 200 && submitted.statusCode != 202) {
       throw Exception('AI Horde submit ${submitted.statusCode}');
     }
@@ -359,15 +406,18 @@ part of 'ai_guide_service.dart';
       throw Exception('AI Horde returned no request id');
     }
     final requestId = submission['id'] as String;
-    final deadline = DateTime.now().add(const Duration(seconds: 4));
+    final deadline = DateTime.now().add(const Duration(seconds: 12));
     while (DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(seconds: 1));
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
       final response = await http
           .get(
             Uri.parse('$_hordeBaseUrl/generate/text/status/$requestId'),
-            headers: const {'Client-Agent': 'Agysha:1.3.0:flutter'},
+            headers: const {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            },
           )
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 5));
       if (response.statusCode != 200) {
         throw Exception('AI Horde status ${response.statusCode}');
       }
@@ -378,7 +428,10 @@ part of 'ai_guide_service.dart';
         final first = generations.first;
         final text = first is Map ? first['text'] : null;
         if (text is String && text.trim().isNotEmpty) {
-          AiGuideService._setModel('AI Horde · ${first['model'] ?? 'text'}');
+          final modelName = first['model'] != null
+              ? '${first['model']}'.split('/').last
+              : 'text';
+          AiGuideService._setModel('AI Horde · $modelName');
           return AiGuideService._cleanText(text);
         }
       }
@@ -387,140 +440,4 @@ part of 'ai_guide_service.dart';
       }
     }
     throw TimeoutException('AI Horde queue timeout');
-  }
-
-  /// OVHcloud AI Endpoints — бесплатный резерв без ключа (2 запроса/мин
-  /// анонимно). Mistral-Nemo-Instruct-2407 — подтверждена рабочей.
-  const _ovhUrl =
-      'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions';
-  const _ovhModels = <String>[
-    'Mistral-Nemo-Instruct-2407',
-    'Mistral-Small-3.2-24B-Instruct-2506',
-    'Qwen3.5-397B-A17B',
-  ];
-
-  Future<String> _sendOvhcloud(
-    String userText,
-    String languageCode,
-  ) async {
-    final prompt = _freePrompt(userText, languageCode);
-
-    for (final model in _ovhModels) {
-      try {
-        final resp = await http
-            .post(
-              Uri.parse(_ovhUrl),
-              headers: {
-                'Content-Type': 'application/json',
-                'User-Agent': 'AgyshaApp/1.0',
-              },
-              body: jsonEncode({
-                'model': model,
-                'messages': [
-                  {'role': 'user', 'content': prompt},
-                ],
-                'max_tokens': 320,
-                'temperature': 0.7,
-              }),
-            )
-            .timeout(const Duration(seconds: 12));
-        // 429 = rate limit — сразу выходим.
-        if (resp.statusCode == 429) {
-          throw Exception('OVH rate-limited (429)');
-        }
-        if (resp.statusCode == 200 &&
-            resp.body.trim().isNotEmpty &&
-            !resp.body.trimLeft().startsWith('<')) {
-          final text = _extractOpenAiText(resp.body);
-          if (text != null && text.trim().isNotEmpty) {
-            return AiGuideService._cleanText(text);
-          }
-        }
-      } catch (_) {
-        rethrow;
-      }
-    }
-
-    throw Exception('OVHcloud unavailable');
-  }
-
-  /// Murakumo — публичный OpenAI-совместимый endpoint без ключа.
-  /// Бесплатный маршрут имеет небольшой общий лимит на IP, поэтому
-  /// используется только после основных бесплатных провайдеров.
-  const _murakumoUrl = 'https://api.murakumo.cloud/v1/chat/completions';
-
-  Future<String> _sendMurakumo(
-    String userText,
-    String languageCode,
-  ) async {
-    final response = await http
-        .post(
-          Uri.parse(_murakumoUrl),
-          headers: const {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'model': 'murakumo/free',
-            'messages': [
-              {'role': 'user', 'content': _freePrompt(userText, languageCode)},
-            ],
-            'max_tokens': 512,
-            'temperature': 0.7,
-          }),
-        )
-        .timeout(const Duration(seconds: 4));
-    if (response.statusCode != 200 ||
-        response.body.trim().isEmpty ||
-        response.body.trimLeft().startsWith('<')) {
-      throw Exception('Murakumo HTTP ${response.statusCode}');
-    }
-    final text = _extractOpenAiText(response.body);
-    if (text == null || text.trim().isEmpty) {
-      throw Exception('Murakumo returned empty text');
-    }
-    return AiGuideService._cleanText(text);
-  }
-
-  /// Kilo Gateway — бесплатные модели без ключа (openrouter/free — лучшая
-  /// доступная бесплатная модель; анонимно до 200 запросов/час на IP).
-  const _kiloUrl = 'https://api.kilo.ai/api/gateway/chat/completions';
-  const _kiloModels = <String>[
-    // Проверено вживую: openrouter/free отвечает (роутит на сильную
-    // бесплатную модель), kilo-auto/free — запасной.
-    'openrouter/free',
-    'kilo-auto/free',
-  ];
-
-  Future<String> _sendKilo(String userText, String languageCode) async {
-    final prompt = _freePrompt(userText, languageCode);
-    for (final model in _kiloModels) {
-      try {
-        final resp = await http
-            .post(
-              Uri.parse(_kiloUrl),
-              headers: {
-                'Content-Type': 'application/json',
-                'User-Agent': 'AgyshaApp/1.3.0',
-              },
-              body: jsonEncode({
-                'model': model,
-                'messages': [
-                  {'role': 'user', 'content': prompt},
-                ],
-              }),
-            )
-            .timeout(const Duration(seconds: 15));
-        if (resp.statusCode == 200 &&
-            resp.body.trim().isNotEmpty &&
-            !resp.body.trimLeft().startsWith('<')) {
-          final text = _extractOpenAiText(resp.body);
-          if (text != null && text.trim().isNotEmpty) {
-            AiGuideService._setModel('Kilo · ${_extractModelName(resp.body) ?? model}');
-            return AiGuideService._cleanText(text);
-          }
-        }
-      } catch (_) {
-        // Любая ошибка — пробуем следующую модель Kilo, затем следующий провайдер.
-        rethrow;
-      }
-    }
-    throw Exception('Kilo unavailable');
   }

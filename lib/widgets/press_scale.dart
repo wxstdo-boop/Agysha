@@ -169,6 +169,7 @@ class _PressScaleState extends State<PressScale>
         animation: Listenable.merge([_anim, _tiltNotifier]),
         builder: (context, child) {
           final v = isSwiping ? 0.0 : _anim.value;
+          if (v <= 0.0001) return child!;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
 
           final tiltActive =

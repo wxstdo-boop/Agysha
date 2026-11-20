@@ -745,8 +745,6 @@ class AiGuideService {
     bool useHf = true,
   }) async {
     providerTrace.value = <String>[];
-    _lastModel = '';
-    modelLabelTick.value++;
 
     final poolsideKey = await SettingsService.loadAiKey();
     if (poolsideKey.isNotEmpty) {
@@ -756,12 +754,12 @@ class AiGuideService {
         12,
       );
       if (answer != null) {
-        _setModel('Poolside — свой ключ');
+        _setModel('Poolside · Laguna');
         return answer;
       }
     } else {
       _recordProviderTrace(
-        'Poolside: \u043f\u0440\u043e\u043f\u0443\u0449\u0435\u043d, \u043a\u043b\u044e\u0447 \u043d\u0435 \u0437\u0430\u0434\u0430\u043d',
+        'Poolside: пропущен, ключ не задан',
       );
     }
 
@@ -778,7 +776,7 @@ class AiGuideService {
       }
     } else {
       _recordProviderTrace(
-        'Agnes AI: \u043f\u0440\u043e\u043f\u0443\u0449\u0435\u043d, \u043a\u043b\u044e\u0447 \u043d\u0435 \u0437\u0430\u0434\u0430\u043d',
+        'Agnes AI: пропущен, ключ не задан',
       );
     }
 
@@ -795,29 +793,18 @@ class AiGuideService {
       }
     } else {
       _recordProviderTrace(
-        'Zen: \u043f\u0440\u043e\u043f\u0443\u0449\u0435\u043d, \u043a\u043b\u044e\u0447 \u043d\u0435 \u0437\u0430\u0434\u0430\u043d',
+        'Zen: пропущен, ключ не задан',
       );
     }
 
+    // Бесплатные провайдеры без ключа (Pollinations AI + AI Horde)
     final providers = <(String, Future<String?> Function())>[
       (
-        'Kilo',
-        () => _tryProvider('Kilo', () => _sendKilo(userText, languageCode), 6),
-      ),
-      (
-        'OVHcloud',
+        'Pollinations',
         () => _tryProvider(
-          'OVHcloud',
-          () => _sendOvhcloud(userText, languageCode),
-          6,
-        ),
-      ),
-      (
-        'Murakumo',
-        () => _tryProvider(
-          'Murakumo',
-          () => _sendMurakumo(userText, languageCode),
-          4,
+          'Pollinations',
+          () => _sendPollinations(userText, history, languageCode),
+          14,
         ),
       ),
       (
@@ -825,44 +812,30 @@ class AiGuideService {
         () => _tryProvider(
           'AI Horde',
           () => _sendHorde(userText, languageCode),
-          12,
+          14,
         ),
       ),
     ];
     for (final (name, send) in providers) {
       final answer = await send();
       if (answer != null) {
-        _setModel(name);
         _recordProviderTrace('Selected: $name');
         return answer;
       }
     }
-    // Второй заход: по одному повтору самых дешёвых резервов БЕЗ учёта
-    // кулдаунов. Много «отказов» — разовые сетевые сбои; раньше после
-    // первой неудачи всё падало мгновенной ошибкой, и «Ада не всегда
-    // отвечала». Дешёвые хосты получают ещё один шанс.
-    _cooldownUntil.remove('Kilo');
-    final retryKilo = await _tryProvider(
-      'Kilo',
-      () => _sendKilo(userText, languageCode),
-      8,
+
+    // Второй заход: резервный повтор Pollinations
+    _cooldownUntil.remove('Pollinations');
+    final retryPollinations = await _tryProvider(
+      'Pollinations',
+      () => _sendPollinations(userText, history, languageCode),
+      12,
     );
-    if (retryKilo != null) {
-      _setModel('Kilo');
-      _recordProviderTrace('Selected: Kilo (повтор)');
-      return retryKilo;
+    if (retryPollinations != null) {
+      _recordProviderTrace('Selected: Pollinations (повтор)');
+      return retryPollinations;
     }
-    _cooldownUntil.remove('OVHcloud');
-    final retryOvh = await _tryProvider(
-      'OVHcloud',
-      () => _sendOvhcloud(userText, languageCode),
-      8,
-    );
-    if (retryOvh != null) {
-      _setModel('OVHcloud');
-      _recordProviderTrace('Selected: OVHcloud (повтор)');
-      return retryOvh;
-    }
+
     // Полностью высохшая цепочка: сбрасываем кулдауны, чтобы СЛЕДУЮЩЕЕ
     // сообщение снова пошло по всей цепочке, а не упало в 0 секунд.
     _cooldownUntil.clear();

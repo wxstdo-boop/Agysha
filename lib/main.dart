@@ -1547,9 +1547,25 @@ class AgyshaAppState extends State<AgyshaApp>
             ? _lightDynamic!
             : (() {
                 if (isPeach) {
-                  return ColorScheme.fromSeed(
-                    seedColor: const Color(0xFFFFAB91),
-                    brightness: Brightness.light,
+                  return const ColorScheme.light(
+                    primary: Color(0xFFD46045),
+                    onPrimary: Color(0xFFFFFFFF),
+                    primaryContainer: Color(0xFFFFDBCF),
+                    onPrimaryContainer: Color(0xFF3B0900),
+                    secondary: Color(0xFF8F4C38),
+                    onSecondary: Color(0xFFFFFFFF),
+                    secondaryContainer: Color(0xFFFFDAD2),
+                    onSecondaryContainer: Color(0xFF3A0B02),
+                    surface: Color(0xFFFFF8F6),
+                    surfaceContainerLowest: Color(0xFFFFFFFF),
+                    surfaceContainerLow: Color(0xFFFFF1ED),
+                    surfaceContainer: Color(0xFFFFECE5),
+                    surfaceContainerHigh: Color(0xFFFFE5DE),
+                    surfaceContainerHighest: Color(0xFFFFDFD7),
+                    onSurface: Color(0xFF231917),
+                    onSurfaceVariant: Color(0xFF53433F),
+                    outline: Color(0xFF85736E),
+                    outlineVariant: Color(0xFFD8C2BC),
                   );
                 }
                 if (isGrok) {
@@ -1623,11 +1639,15 @@ class AgyshaAppState extends State<AgyshaApp>
                     secondaryContainer: const Color(0xFFFFB6BF),
                     onSecondaryContainer: const Color(0xFF3A0A14),
                     surface: const Color(0xFFFFF1F2),
+                    surfaceContainerLowest: const Color(0xFFFFFFFF),
+                    surfaceContainerLow: const Color(0xFFFFF5F6),
+                    surfaceContainer: const Color(0xFFFFECEF),
+                    surfaceContainerHigh: const Color(0xFFFFE4E8),
+                    surfaceContainerHighest: const Color(0xFFFFDDE2),
                     onSurface: const Color(0xFF2A0610),
                     onSurfaceVariant: const Color(0xFF6E142D),
                     outline: const Color(0xFFE09098),
                     outlineVariant: const Color(0xFFF1C3C9),
-                    surfaceContainerHighest: const Color(0xFFFFE4E7),
                   );
                 }
                 // «Метель» — подарок 12-го дня ивента. Северное сияние по
@@ -1710,13 +1730,17 @@ class AgyshaAppState extends State<AgyshaApp>
                   secondaryContainer: Color(0xFFE8DEF8),
                   onSecondaryContainer: Color(0xFF1D192B),
                   surface: Color(0xFFFEF7FF),
+                  surfaceContainerLowest: Color(0xFFFFFFFF),
+                  surfaceContainerLow: Color(0xFFF7F2FA),
+                  surfaceContainer: Color(0xFFF3EDF7),
+                  surfaceContainerHigh: Color(0xFFECE6F0),
+                  surfaceContainerHighest: Color(0xFFE6E0E9),
                   onSurface: Color(0xFF1D1B20),
                   onSurfaceVariant: Color(
                     0xFF49454F,
                   ), // вторичный текст/иконки — контрастные
                   outline: Color(0xFF79747E),
                   outlineVariant: Color(0xFFCAC4D0),
-                  surfaceContainerHighest: Color(0xFFE7E0EC),
                 );
               })();
 
@@ -1733,6 +1757,10 @@ class AgyshaAppState extends State<AgyshaApp>
                     onSecondary: Colors.black,
                     secondaryContainer: Color(0xFF1E1F24),
                     onSecondaryContainer: Color(0xFFD6D6DF),
+                    tertiary: Color(0xFF00F0FF),
+                    onTertiary: Colors.black,
+                    tertiaryContainer: Color(0xFF00363A),
+                    onTertiaryContainer: Color(0xFF80DEEA),
                     surface: Color(0xFF000000),
                     surfaceContainerLowest: Color(0xFF000000),
                     surfaceContainerLow: Color(0xFF0D0E12),
@@ -1780,9 +1808,25 @@ class AgyshaAppState extends State<AgyshaApp>
                   );
                 }
                 if (isPeach) {
-                  return ColorScheme.fromSeed(
-                    seedColor: const Color(0xFFFFAB91),
-                    brightness: Brightness.dark,
+                  return const ColorScheme.dark(
+                    primary: Color(0xFFFFB5A0),
+                    onPrimary: Color(0xFF5F1500),
+                    primaryContainer: Color(0xFF802B15),
+                    onPrimaryContainer: Color(0xFFFFDBCF),
+                    secondary: Color(0xFFE7BDB2),
+                    onSecondary: Color(0xFF442A22),
+                    secondaryContainer: Color(0xFF5D3F37),
+                    onSecondaryContainer: Color(0xFFFFDAD2),
+                    surface: Color(0xFF1A110F),
+                    surfaceContainerLowest: Color(0xFF140C0A),
+                    surfaceContainerLow: Color(0xFF231917),
+                    surfaceContainer: Color(0xFF271D1B),
+                    surfaceContainerHigh: Color(0xFF322825),
+                    surfaceContainerHighest: Color(0xFF3E322F),
+                    onSurface: Color(0xFFF1DFDA),
+                    onSurfaceVariant: Color(0xFFD8C2BC),
+                    outline: Color(0xFFA08C87),
+                    outlineVariant: Color(0xFF53433F),
                   );
                 }
                 if (_themeKey == 'rose') {
@@ -1822,13 +1866,25 @@ class AgyshaAppState extends State<AgyshaApp>
                     surfaceContainerHighest: const Color(0xFF23252B),
                   );
                 }
-                return ColorScheme.fromSeed(
-                  seedColor: const Color(
-                    0xFF6750A4,
-                  ), // фирменный фиолетовый: даже без dynamic color
-                  // тёмная «системная» не выглядит чёрной/стальной —
-                  // поверхности и primary имеют цветовой подмес.
-                  brightness: Brightness.dark,
+                return const ColorScheme.dark(
+                  primary: Color(0xFFD0BCFF),
+                  onPrimary: Color(0xFF381E72),
+                  primaryContainer: Color(0xFF4F378B),
+                  onPrimaryContainer: Color(0xFFEADDFF),
+                  secondary: Color(0xFFCCC2DC),
+                  onSecondary: Color(0xFF332D41),
+                  secondaryContainer: Color(0xFF4A4458),
+                  onSecondaryContainer: Color(0xFFE8DEF8),
+                  surface: Color(0xFF141218),
+                  surfaceContainerLowest: Color(0xFF0F0D13),
+                  surfaceContainerLow: Color(0xFF1D1B20),
+                  surfaceContainer: Color(0xFF211F26),
+                  surfaceContainerHigh: Color(0xFF2B2930),
+                  surfaceContainerHighest: Color(0xFF36343B),
+                  onSurface: Color(0xFFE6E0E9),
+                  onSurfaceVariant: Color(0xFFCAC4D0),
+                  outline: Color(0xFF938F99),
+                  outlineVariant: Color(0xFF49454F),
                 );
               })();
 

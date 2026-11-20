@@ -1,18 +1,30 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' show Random;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 import '../utils/motion_prefs.dart';
 
+/// Режим очереди «своей музыки» профиля.
+///
+///  * [QueueMode.repeat] — текущий трек крутится по кругу (прежнее поведение
+///    приложения, «играет без остановки»);
+///  * [QueueMode.order] — по завершении идёт следующий трек подборки по
+///    порядку (конец списка зацикливается на начало);
+///  * [QueueMode.shuffle] — следующий выбирается случайно, не повторяя
+///    текущий (в подборке из одного трека сводится к повтору).
+enum QueueMode { repeat, order, shuffle }
+
 /// Проигрыватель «своей музыки» профиля — ОДИН на приложение.
 ///
 /// Раньше плеер жил внутри экрана профиля: уход с экрана (или сворачивание
 /// приложения) уничтожал `AudioPlayer` и музыка обрывалась. Теперь это
 /// синглтон-сервис: трек можно запустить в профиле, уйти на другой экран —
-/// и он продолжит играть. Зацикливание включено всегда (`ReleaseMode.loop`),
-/// так что музыка не заканчивается.
+/// и он продолжит играть. Режим очереди ([setQueueMode]) определяет, что
+/// происходит после завершения трека: тот же трек по кругу (дефолт),
+/// следующий по порядку или случайный.
 ///
 /// Старт и остановка — с плавным нарастанием/затуханием громкости: трек
 /// «вплывает», а не бьёт по ушам с первого такта, и так же мягко уходит на
@@ -34,6 +46,16 @@ class MusicService extends ChangeNotifier {
   StreamSubscription<void>? _completeSub;
   Timer? _fadeTimer;
 
+  /// Режим очереди: как вести себя после завершения текущего трека.
+  QueueMode _mode = QueueMode.repeat;
+
+  /// Очередь путей (порядок подборки). Пуста — играет только текущий трек.
+  List<String> _queue = const [];
+
+  /// Готовый случайный генератор: shuffle выбирает следующий из очереди,
+  /// не повторяя текущий (если есть хотя бы два разных).
+  final Random _rng = Random();
+
   /// Поколение рамп: растёт при каждом новом фейде/отмене. Старый таймер,
   /// увидев чужое поколение, тихо выходит и завершает свой future — раньше
   /// отменённый рамп «подвешивал» ожидающего навсегда (отсюда и лаг).
@@ -49,12 +71,16 @@ class MusicService extends ChangeNotifier {
   /// Путь к играющему треку (совпадает с `ProfileService.musicPath`).
   String? get path => _path;
 
+  /// Активный режим очереди.
+  QueueMode get mode => _mode;
+
   /// Запустить (или продолжить) трек по пути. Возвращает `false`, если файла
   /// нет или воспроизведение не удалось — вызывающий показывает ошибку.
   Future<bool> play(String path) async {
     final file = File(path);
     if (!file.existsSync() || file.lengthSync() == 0) return false;
     final player = _player ??= _createPlayer();
+    _applyReleaseMode();
     try {
       // Состояние и иконка меняются СРАЗУ, фейд идёт следом — тап по «плей»
       // отзывается мгновенно, а не через полсекунды.
@@ -77,6 +103,107 @@ class MusicService extends ChangeNotifier {
       _playing = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Установить очередь (порядок подборки). Передаётся список путей, как
+  /// они лежат в профиле. Если текущий трек в очереди — позиция отсчитана,
+  /// и `order`/`shuffle` знают, откуда двигаться дальше.
+  void setQueue(List<String> paths) {
+    _queue = List<String>.unmodifiable(paths);
+    _applyReleaseMode();
+  }
+
+  /// Сменить режим очереди. Сразу перестраивает `ReleaseMode` плеера:
+  /// `repeat` — зацикливает трек (системный loop), `order`/`shuffle` —
+  /// не зацикливает и ведёт следующий по завершении.
+  void setQueueMode(QueueMode m) {
+    if (m == _mode) return;
+    _mode = m;
+    _applyReleaseMode();
+    notifyListeners();
+  }
+
+  /// Внутренний запуск конкретного пути без изменения очереди/режима.
+  Future<void> _start(String path) async {
+    final player = _player ??= _createPlayer();
+    _applyReleaseMode();
+    _playing = true;
+    _path = path;
+    notifyListeners();
+    try {
+      await player.setVolume(0);
+      _vol = 0;
+      await player.play(DeviceFileSource(path));
+      await _rampVolume(player, 0, 1, over: _fadeIn);
+    } catch (_) {
+      _playing = false;
+      notifyListeners();
+    }
+  }
+
+  /// Следующий трек в очереди по режиму: `order` — по порядку (циклично),
+  /// `shuffle` — случайный, не повторяющий текущий. Пустая очередь или
+  /// одиночный трек — остаёмся на месте.
+  String? _nextPath() {
+    final q = _queue;
+    if (q.isEmpty) return null;
+    final cur = _path;
+    if (cur == null || !q.contains(cur)) {
+      // Текущий не в очереди — берём начало, чтобы очередь заработала.
+      return q.first;
+    }
+    if (q.length == 1) return null;
+    if (_mode == QueueMode.order) {
+      return q[(q.indexOf(cur) + 1) % q.length];
+    }
+    // shuffle
+    var next = q.first;
+    if (q.length > 1) {
+      // Не повторяем текущий: пробуем, пока не выпадет другой.
+      next = q[_rng.nextInt(q.length)];
+      var guard = 0;
+      while (next == cur && guard++ < 8) {
+        next = q[_rng.nextInt(q.length)];
+      }
+    }
+    return next == cur ? (q.length > 1 ? q.first : null) : next;
+  }
+
+  /// По завершении текущего трека — ведём следующий по режиму. Для
+  /// `repeat` системный loop уже крутит трек, поэтому advance не нужен.
+  void _onComplete() {
+    final p = _path;
+    if (p == null || !_playing) return;
+    if (_mode == QueueMode.repeat) {
+      // Loop уже повторит; страховка на случай, если система не дала loop.
+      final player = _player;
+      if (player != null) {
+        player.play(DeviceFileSource(p));
+      }
+      return;
+    }
+    final next = _nextPath();
+    if (next != null) {
+      _start(next);
+    } else {
+      // Очередь из одного трека — просто играем тот же (повтор).
+      final player = _player;
+      if (player != null && _playing) {
+        player.play(DeviceFileSource(p));
+      }
+    }
+  }
+
+  /// Подобрать `ReleaseMode` под текущий режим: `repeat` — зацикливание,
+  /// иначе — обычное воспроизведение (ведёт следующий по завершении).
+  void _applyReleaseMode() {
+    final player = _player;
+    if (player == null) return;
+    if (_mode == QueueMode.repeat) {
+      player.setReleaseMode(ReleaseMode.loop);
+    } else {
+      player.setReleaseMode(ReleaseMode.stop);
     }
   }
 
@@ -182,16 +309,12 @@ class MusicService extends ChangeNotifier {
         ),
       ),
     );
-    // Зацикливание: трек играет, пока его не остановят, — «играет без
-    // остановки». На случай, если система всё же пришлёт complete, добиваем
-    // повторным запуском (страховка поверх ReleaseMode.loop).
-    player.setReleaseMode(ReleaseMode.loop);
+    // Режим выбирается под очередь (см. [_applyReleaseMode]): «повтор» —
+    // зацикливание, «по порядку»/«случайное» — обычное воспроизведение, а
+    // завершение ведёт следующий трек (см. [_onComplete]).
+    _applyReleaseMode();
     _completeSub?.cancel();
-    _completeSub = player.onPlayerComplete.listen((_) {
-      final p = _path;
-      if (p == null || !_playing) return;
-      player.play(DeviceFileSource(p));
-    });
+    _completeSub = player.onPlayerComplete.listen((_) => _onComplete());
     return player;
   }
 
