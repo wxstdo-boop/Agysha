@@ -535,6 +535,71 @@ class _HomeScreenState extends State<HomeScreen>
 
     _pagesCount = screens.length;
 
+    final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    Widget buildAppBarButton({
+      required IconData icon,
+      required String tooltip,
+      required VoidCallback onTap,
+    }) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+        child: SmoothTooltip(
+          message: tooltip,
+          preferredAbove: false,
+          child: PressScale(
+            pressedScale: 0.92,
+            enableTilt: false,
+            duration: const Duration(milliseconds: 180),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: cs.surfaceContainerHigh.withValues(
+                  alpha: dark ? 0.65 : 0.85,
+                ),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(
+                    alpha: dark ? 0.40 : 0.55,
+                  ),
+                  width: 1.0,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: dark ? 0.14 : 0.04,
+                    ),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  splashColor: cs.primary.withValues(alpha: 0.22),
+                  highlightColor: cs.primary.withValues(alpha: 0.16),
+                  onTap: onTap,
+                  child: Center(
+                    child: Icon(
+                      icon,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     // Скругляем ВСЕ углы главного экрана (не только глобальным ClipRRect
     // на корне): на MIUI статус-бар остаётся отдельной чёрной полосой, и
     // при оттягивании крайних разделов (Будильники/РП) квадратные верхние
@@ -552,71 +617,40 @@ class _HomeScreenState extends State<HomeScreen>
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
           // Плавная отдача при зажатии у всех значков шапки (обновить,
-          // статистика, питание, настройки) — мягко вдавливаются.
-          leading: SmoothTooltip(
-            message: Translations.refreshOf(context),
-            preferredAbove: false,
-            child: PressScale(
-              pressedScale: 0.90,
-              enableTilt: false,
-              duration: const Duration(milliseconds: 200),
-              child: IconButton(
-                icon: const Icon(Icons.refresh_outlined),
-                onPressed: () => AgyshaApp.of(context).refreshApp(),
-              ),
-            ),
+          // статистика, питание, настройки) — мягко вдавливаются с круглым фоном.
+          leading: buildAppBarButton(
+            icon: Icons.refresh_outlined,
+            tooltip: Translations.refreshOf(context),
+            onTap: () => AgyshaApp.of(context).refreshApp(),
           ),
           // Тап по кружку онлайна под «K» открывает профиль.
           title: AnimatedBlurTitle(onOnlineTap: _openProfile),
           centerTitle: false,
           actions: [
-            SmoothTooltip(
-              message: Translations.t('statistics', context, 'Статистика'),
-              preferredAbove: false,
-              child: PressScale(
-                pressedScale: 0.90,
-                enableTilt: false,
-                duration: const Duration(milliseconds: 200),
-                child: IconButton(
-                  icon: const Icon(Icons.bar_chart_outlined),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const RealityCheckStatsScreen(),
-                    ),
-                  ),
+            buildAppBarButton(
+              icon: Icons.bar_chart_outlined,
+              tooltip: Translations.t('statistics', context, 'Статистика'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const RealityCheckStatsScreen(),
                 ),
               ),
             ),
-            SmoothTooltip(
-              message: Translations.t('nutrition', context, 'Питание'),
-              preferredAbove: false,
-              child: PressScale(
-                pressedScale: 0.90,
-                enableTilt: false,
-                duration: const Duration(milliseconds: 200),
-                child: IconButton(
-                  icon: const Icon(Icons.restaurant_outlined),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const NutritionScreen()),
-                  ),
-                ),
+            buildAppBarButton(
+              icon: Icons.restaurant_outlined,
+              tooltip: Translations.t('nutrition', context, 'Питание'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NutritionScreen()),
               ),
             ),
-            SmoothTooltip(
-              message: Translations.t('settings', context, 'Настройки'),
-              preferredAbove: false,
-              child: PressScale(
-                pressedScale: 0.90,
-                enableTilt: false,
-                duration: const Duration(milliseconds: 200),
-                child: IconButton(
-                  icon: const Icon(Icons.settings_outlined),
-                  onPressed: () => Navigator.of(
-                    context,
-                  ).push(slideSideRoute(const SettingsScreen())),
-                ),
-              ),
+            buildAppBarButton(
+              icon: Icons.settings_outlined,
+              tooltip: Translations.t('settings', context, 'Настройки'),
+              onTap: () => Navigator.of(
+                context,
+              ).push(slideSideRoute(const SettingsScreen())),
             ),
+            const SizedBox(width: 4),
           ],
         ),
         body: Stack(

@@ -21,6 +21,25 @@ ThemeData buildAgyshaTheme(
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
+    // Круглый фон зажатия и сочный отклик у всех кнопок и InkWell:
+    // в Flutter M3 highlightColor по умолчанию прозрачен, из-за чего
+    // при удержании кнопки не подсвечивались.
+    highlightColor: scheme.primary.withValues(alpha: isDark ? 0.18 : 0.12),
+    splashColor: scheme.primary.withValues(alpha: isDark ? 0.24 : 0.16),
+    iconButtonTheme: IconButtonThemeData(
+      style: ButtonStyle(
+        overlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.pressed)) {
+            return scheme.primary.withValues(alpha: isDark ? 0.20 : 0.14);
+          }
+          if (states.contains(WidgetState.hovered) ||
+              states.contains(WidgetState.focused)) {
+            return scheme.primary.withValues(alpha: isDark ? 0.10 : 0.06);
+          }
+          return null;
+        }),
+      ),
+    ),
     // Вибро-отклик на тап по каждой кнопке/плитке/вкладке: Flutter по
     // умолчанию не вибрирует на кнопках, а на HyperOS системная отдача
     // подавлена. Плеск = только целевое нажатие, скролл не срабатывает.

@@ -412,26 +412,31 @@ class _OrganicFabState extends State<OrganicFab>
             // Отдача «вдавливания» — на ВЕСЬУЮ плитку (0.90/200, как кнопка
             // настроек): плюс и Ада уменьшаются одинаково заметно.
             PressScale(
-              pressedScale: 0.90,
-              // Зажатие стало медленнее и мягче (260 мс вместо 200), а
-              // отпускание — заметно плавнее (360 мс), чтобы возврат не
-              // читался щелчком. Кнопка «дышит» под пальцем.
-              duration: const Duration(milliseconds: 260),
-              releaseDuration: const Duration(milliseconds: 360),
+              pressedScale: 0.92,
+              enableTilt: false,
+              duration: const Duration(milliseconds: 220),
+              releaseDuration: const Duration(milliseconds: 320),
               child: GlassFabTile(
                 size: widget.size,
                 extraLayer: BloodSpecks(v: _c.value, seed: widget.seed),
                 child: Semantics(
                   button: true,
-                  child: GestureDetector(
-                    // Opaque: без него GestureDetector ловит тап только по
-                    // самому глифу (26 px), а вся плитка 56 px остаётся
-                    // мёртвой зоной — палец бьёт мимо значка, и «плюс не
-                    // срабатывает». Теперь тапабельна ВСЯ плитка.
-                    behavior: HitTestBehavior.opaque,
-                    onLongPress: widget.onLongPress,
-                    onTap: widget.onTap,
-                    child: Icon(Icons.add, size: 26, color: cs.primary),
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(widget.size * 0.40),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(widget.size * 0.40),
+                      splashColor: cs.primary.withValues(alpha: 0.22),
+                      highlightColor: cs.primary.withValues(alpha: 0.16),
+                      onLongPress: widget.onLongPress,
+                      onTap: widget.onTap,
+                      child: Center(
+                        child: Icon(Icons.add, size: 26, color: cs.primary),
+                      ),
+                    ),
                   ),
                 ),
               ),
