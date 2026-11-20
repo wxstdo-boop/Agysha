@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import '../services/haptics.dart';
 import 'package:flutter/material.dart';
@@ -39,6 +40,12 @@ class _NutritionScreenState extends State<NutritionScreen>
   final _mealCtrl = WideDashController();
   final _waterCtrl = WideDashController();
   final Map<String, DateTime> _addedAt = {};
+
+  /// Таймеры подсветки «только что добавлено». Обязательно гасятся при уходе
+  /// с экрана: голый `Future.delayed` держал висящий таймер после dispose и
+  /// ронял тесты фреймворка (`A Timer is still pending`), а на практике мог
+  /// выстрелить уже после того, как виджета нет.
+  final Map<String, Timer> _addedTimers = <String, Timer>{};
 
   /// Приём пищи, добавленный в ПУСТУЮ историю. Такую карточку НЕ растим из
   /// нуля: пустая подпись выше, чем «заголовок дня + карточка нулевой
@@ -113,6 +120,10 @@ class _NutritionScreenState extends State<NutritionScreen>
 
   @override
   void dispose() {
+    for (final timer in _addedTimers.values) {
+      timer.cancel();
+    }
+    _addedTimers.clear();
     _enter.dispose();
     _calCtrl.dispose();
     _mealCtrl.dispose();
@@ -220,11 +231,13 @@ class _NutritionScreenState extends State<NutritionScreen>
     );
     if (_service.meals.isEmpty) _grownFromEmptyId = meal.id;
     _addedAt[meal.id] = DateTime.now();
-    // Автоматически убираем метку анимации через секунду.
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (mounted) {
-        setState(() => _addedAt.remove(meal.id));
-      }
+    // Автоматически убираем метку анимации через секунду. Таймер отменяемый —
+    // см. [_addedTimers]: висячий Future.delayed ронял тесты и мог выстрелить
+    // уже после ухода с экрана.
+    _addedTimers[meal.id] = Timer(const Duration(milliseconds: 700), () {
+      _addedAt.remove(meal.id);
+      _addedTimers.remove(meal.id);
+      if (mounted) setState(() {});
     });
     // Сохраняем стабильную высоту формы без рывка вверх: панель ввода не
     // схлопывается рывком при добавлении, а поля ввода мягко очищаются.
