@@ -134,6 +134,16 @@ ThemeData buildAgyshaTheme(
         ),
       ),
     ),
+    dividerTheme: DividerThemeData(
+      color: scheme.outlineVariant.withValues(alpha: isDark ? 0.45 : 0.60),
+      thickness: 1,
+      space: 1,
+    ),
+    listTileTheme: ListTileThemeData(
+      iconColor: scheme.onSurfaceVariant,
+      textColor: scheme.onSurface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         shape: RoundedRectangleBorder(

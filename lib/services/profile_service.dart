@@ -104,9 +104,9 @@ class MusicTrack {
   /// трек под другим именем тоже не пройдёт.
   final String fingerprint;
 
-  MusicTrack copyWith({String? title}) => MusicTrack(
+  MusicTrack copyWith({String? title, String? path}) => MusicTrack(
     id: id,
-    path: path,
+    path: path ?? this.path,
     title: title ?? this.title,
     addedAt: addedAt,
     fingerprint: fingerprint,
@@ -188,10 +188,10 @@ class ProfileService extends ChangeNotifier {
   /// Подпись первого трека.
   String? get musicTitle => firstTrack?.title;
 
-  /// Предел подборки: дальше список не принимает треки. 99 — «почти
-  /// безлимит» для личного плейлиста: подборка живёт в памяти и на
-  /// диске (JSON), а не на экране, поэтому большой список дешёвый.
-  static const int maxTracks = 99;
+  /// Предел подборки: дальше список не принимает треки. 499 — «практически
+  /// безлимит» для личного плейлиста: метаданные подборки живут в одном
+  /// лёгком JSON-файле, поэтому большой список дешёвый.
+  static const int maxTracks = 499;
 
   /// Есть ли ещё место в подборке.
   bool get canAddTrack => _tracks.length < maxTracks;

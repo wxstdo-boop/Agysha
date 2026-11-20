@@ -280,6 +280,11 @@ class _GiftCard3DState extends State<GiftCard3D>
                 final currentTilt = _resetController.isAnimating
                     ? _tiltAnimation.value
                     : _tilt;
+                final hasTilt =
+                    currentTilt.dx.abs() > 0.0005 || currentTilt.dy.abs() > 0.0005;
+                if (!hasTilt && !_resetController.isAnimating) {
+                  return child!;
+                }
 
                 final tiltX = -currentTilt.dy * 0.26;
                 final tiltY = currentTilt.dx * 0.26;

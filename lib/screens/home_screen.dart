@@ -91,6 +91,23 @@ class _HomeScreenState extends State<HomeScreen>
   // значения — не при каждом пересечении границы (иначе «скачки»).
   int _lastSettledPage = 0;
 
+  late final Widget _alarmsScreen = RepaintBoundary(
+    child: AlarmsScreen(scrollOffset: sectionScrollOffset, pillIndex: 0),
+  );
+  late final Widget _habitsScreen = RepaintBoundary(
+    child: HabitsScreen(scrollOffset: sectionScrollOffset, pillIndex: 1),
+  );
+  late final Widget _tasksScreen = RepaintBoundary(
+    child: TasksScreen(scrollOffset: sectionScrollOffset, pillIndex: 2),
+  );
+  late final Widget _rcScreen = RepaintBoundary(
+    child: RealityChecksScreen(
+      onExit: () => _onTabTap(0),
+      scrollOffset: sectionScrollOffset,
+      pillIndex: 3,
+    ),
+  );
+
   @override
   void initState() {
     super.initState();
@@ -514,25 +531,10 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final screens = <Widget>[
-      // RepaintBoundary изолирует перерисовку вкладок: свайп/анимация на
-      // одной вкладке не перерисовывает остальные (меньше работы на GPU).
-      RepaintBoundary(
-        child: AlarmsScreen(scrollOffset: sectionScrollOffset, pillIndex: 0),
-      ),
-      RepaintBoundary(
-        child: HabitsScreen(scrollOffset: sectionScrollOffset, pillIndex: 1),
-      ),
-      RepaintBoundary(
-        child: TasksScreen(scrollOffset: sectionScrollOffset, pillIndex: 2),
-      ),
-      if (rcOn)
-        RepaintBoundary(
-          child: RealityChecksScreen(
-            onExit: () => _onTabTap(0),
-            scrollOffset: sectionScrollOffset,
-            pillIndex: 3,
-          ),
-        ),
+      _alarmsScreen,
+      _habitsScreen,
+      _tasksScreen,
+      if (rcOn) _rcScreen,
     ];
 
     _pagesCount = screens.length;
@@ -724,6 +726,9 @@ class _HomeScreenState extends State<HomeScreen>
                 builder: (context, child) {
                   final offset = _animCtrl.value;
                   final absOffset = offset.abs().clamp(0.0, 320.0);
+                  if (absOffset <= 0.0001) {
+                    return child!;
+                  }
 
                   // Закругление углов: растёт с натяжением (0 → 32px).
                   // Радиус не должен исчезать в нулевой точке: при pull край

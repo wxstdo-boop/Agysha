@@ -273,10 +273,6 @@ class _SectionPillState extends State<SectionPill>
   /// доводкой раздела.
   double _lastWave = 0;
 
-  /// Предыдущая позиция камня для гладкого вычисления направления движения (в обе стороны).
-  double _lastP = 0.0;
-  double _moveDir = 0.0;
-
   @override
   void initState() {
     super.initState();
@@ -334,8 +330,6 @@ class _SectionPillState extends State<SectionPill>
     _dragPage = sectionRailPage.value
         .clamp(0.0, (count - 1).toDouble())
         .toDouble();
-    _lastP = _dragPage;
-    _moveDir = 0.0;
     // Камень стартует ровно с позиции пальца — без рывка на захват.
     // Камень занимает 1/count дорожки и стоит НЕ по центру слота, а с
     // отступами по краям: его центр при page=0 равен halfStone, при
@@ -409,13 +403,8 @@ class _SectionPillState extends State<SectionPill>
     // больше нечего. Каждый лишний слой запаздывания только отставал от
     // пальца и в конце «догонял» скачком. Экран, запертый к этому каналу
     // 1:1, едет РОВНО под пальцем без лага.
-    final oldDragPage = _dragPage;
     _dragPage = (frac * (count - 1)).clamp(0.0, (count - 1).toDouble());
     sectionDragPage.value = _dragPage;
-    final dragDelta = _dragPage - oldDragPage;
-    if (dragDelta.abs() > 0.0003) {
-      _moveDir = dragDelta > 0 ? 1.0 : -1.0;
-    }
     // Направление «резинки» НЕПРЕРЫВНОЕ (см. stretchDir в
     // _buildStoneRow): знак _edgePull — под пальцем, знак _releasePull
     // (затухающий по _edgeSettle) — в полёте.
@@ -524,7 +513,7 @@ class _SectionPillState extends State<SectionPill>
               Padding(
                 padding: const EdgeInsets.all(4),
                 child: ClipRRect(
-                  clipBehavior: Clip.none,
+                  clipBehavior: Clip.antiAlias,
                   borderRadius: BorderRadius.circular(22),
                   child: AnimatedBuilder(
                     // ЕДИНЫЙ слушатель на все каналы изменения таблетки:
@@ -596,39 +585,43 @@ class _SectionPillState extends State<SectionPill>
         ? 0.0
         : -1.0 + (2.0 * p / (count - 1));
 
-    // Обновляем направление движения карусели или полёта пружины:
-    // направление непрерывно сохраняется на всем протяжении между разделами (без перескоков в 0.5)
-    final dp = p - _lastP;
-    _lastP = p;
-    if (dp.abs() > 0.0002) {
-      final targetDir = dp > 0 ? 1.0 : -1.0;
-      _moveDir = _moveDir * 0.70 + targetDir * 0.30;
-    }
-
     final transit = (p - p.roundToDouble()).abs();
-    if (transit < 0.003 && !_dragging) {
-      _moveDir = 0.0;
-    }
     _lastWave = _waveShape(transit);
 
-    final settle = Curves.easeInOutCubic.transform(_edgeSettle.value);
+    final settle = Curves.easeOutCubic.transform(_edgeSettle.value);
     final wave = _lastWave;
-    final stretch = _dragging ? _edgePull : _releasePull * (1.0 - settle);
+    final pageOverscroll = rawPage < 0.0
+        ? rawPage
+        : (rawPage > count - 1 ? rawPage - (count - 1) : 0.0);
+    final stretch = _dragging
+        ? _edgePull
+        : (_releasePull != 0
+            ? _releasePull * (1.0 - settle)
+            : (pageOverscroll * 1.5).clamp(-0.9, 0.9));
     final edgeStretch = stretch.abs();
 
-    // Сочная, широкая и направленная в обе стороны растяжка таблетки:
-    // при движении вправо камень вытягивается вперёд вправо,
-    // при движении влево — вытягивается вперёд влево.
-    // При оттягивании за край рельса тянется в сторону натяжения.
-    final visualStretch = math.min(1.0, edgeStretch * 1.65 + 0.95 * wave);
-    final capRadius = 22.0 + 8.0 * visualStretch;
+    // Растяжение ТОЛЬКО в угол (при упоре в край дорожки):
+    // При натяжении влево (stretch < 0) правый край строго зафиксирован (якорь +1.0),
+    // камень вытягивается исключительно влево в угол без расширения вправо.
+    // При натяжении вправо (stretch > 0) левый край строго зафиксирован (якорь -1.0),
+    // камень вытягивается исключительно вправо в угол без расширения влево.
+    // При возврате (release) якорь остаётся неизменным до полного схода в 0 (без дёрганья вбок).
+    final double anchorX;
+    final double scaleX;
+    final double scaleY;
+    final double capRadius;
 
-    final pullDir = edgeStretch > 0.005
-        ? (stretch > 0 ? 1.0 : -1.0)
-        : (_moveDir.abs() > 0.01 ? (_moveDir > 0 ? 1.0 : -1.0) : 0.0);
-    // При pullDir > 0 (движение вправо) якорь слева (-0.62), расширение вправо.
-    // При pullDir < 0 (движение влево) якорь справа (+0.62), расширение влево.
-    final anchorX = -pullDir * 0.62 * visualStretch;
+    if (edgeStretch > 0.0001) {
+      anchorX = stretch < 0 ? 1.0 : -1.0;
+      scaleX = 1.0 + 0.65 * edgeStretch;
+      scaleY = 1.0 - 0.06 * edgeStretch;
+      capRadius = 22.0 + 8.0 * edgeStretch;
+    } else {
+      anchorX = 0.0;
+      scaleX = 1.0 + 0.12 * wave;
+      scaleY = 1.0 - 0.02 * wave;
+      capRadius = 22.0 + 2.0 * wave;
+    }
 
     return Stack(
       clipBehavior: Clip.none,
@@ -638,8 +631,8 @@ class _SectionPillState extends State<SectionPill>
           alignment: Alignment(indicatorAlignment, 0),
           child: Transform.scale(
             alignment: Alignment(anchorX, 0),
-            scaleX: 1.0 + 0.62 * visualStretch,
-            scaleY: 1.0 - 0.07 * visualStretch,
+            scaleX: scaleX,
+            scaleY: scaleY,
             child: FractionallySizedBox(
               widthFactor: 1.0 / count,
               heightFactor: 1,

@@ -140,14 +140,37 @@ class _MessageBubble extends StatelessWidget {
                         )
                       : BoxDecoration(
                           color: isUser
-                              ? cs.primaryContainer
-                              : cs.surfaceContainerHigh,
+                              ? cs.primaryContainer.withValues(alpha: 0.88)
+                              : cs.surfaceContainerHigh.withValues(alpha: 0.82),
                           borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(18),
-                            topRight: const Radius.circular(18),
-                            bottomLeft: Radius.circular(isUser ? 18 : 6),
-                            bottomRight: Radius.circular(isUser ? 6 : 18),
+                            topLeft: const Radius.circular(20),
+                            topRight: const Radius.circular(20),
+                            bottomLeft: Radius.circular(isUser ? 20 : 6),
+                            bottomRight: Radius.circular(isUser ? 6 : 20),
                           ),
+                          border: Border.all(
+                            color: isUser
+                                ? cs.primary.withValues(alpha: 0.25)
+                                : Colors.white.withValues(
+                                    alpha: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? 0.08
+                                        : 0.22,
+                                  ),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(
+                                alpha: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? 0.22
+                                    : 0.06,
+                              ),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -234,9 +257,13 @@ class _MessageBubble extends StatelessWidget {
         final e = Curves.easeOutCubic.transform(t);
         return Opacity(
           opacity: e,
-          child: Transform.scale(
-            scale: isUserMsg ? 1.0 : 0.985 + 0.015 * e,
-            child: child,
+          child: Transform.translate(
+            offset: Offset(0, 10.0 * (1.0 - e)),
+            child: Transform.scale(
+              scale: isUserMsg ? (0.98 + 0.02 * e) : (0.97 + 0.03 * e),
+              alignment: isUserMsg ? Alignment.bottomRight : Alignment.bottomLeft,
+              child: child,
+            ),
           ),
         );
       },
