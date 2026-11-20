@@ -168,49 +168,40 @@ class _AiGuideFloatingButtonState extends State<AiGuideFloatingButton>
   }
 
   Widget _buildFab(BuildContext context) {
-    // Та же плитка [GlassFabTile], что и у кнопки-плюса, — и та же рецептура,
-    // что у главной таблетки разделов: плоская нейтральная поверхность,
-    // тонкая кромка, мягкая тень. Раньше здесь был цветной градиент,
-    // primary-ореол и белый блик — кнопка читалась отдельным «стеклянным»
-    // островом. Размер держать ЯВНО: прежний FloatingActionButton.small сам
-    // задавал 40×40, а плитка без размера «обнимает» аватарку и схлопывается.
-    // 42×42 — чуть крупнее M3-small, мягче сидит в ряду с плюсом.
-    // Ада без «вложенной кнопки»: раньше внутри плитки лежал отдельный
-    // светлый диск со своей тенью — «кнопка-внутри-кнопки». Теперь аватарка
-    // сидит ПРЯМО на плите. Отдача «вдавливания» — на ВСЮ плитку (0.90),
-    // как у кнопки-плюса: обе уменьшаются одинаково заметно.
-    return PressScale(
-      pressedScale: 0.90,
-      // Те же 260/360, что у плюса: обе кнопки одной семьи обязаны
-      // отзываться на палец одинаково — медленно и мягко.
-      duration: const Duration(milliseconds: 260),
-      releaseDuration: const Duration(milliseconds: 360),
-      child: Listener(
-        // Пятна «кровью» — та же рецептура, что у плюса: под пальцем на плите
-        // проявляется отпечаток. Listener ловит касание, не мешая тапу.
-        onPointerDown: (_) => _specksDown(),
-        onPointerUp: (_) => _specksUp(),
-        onPointerCancel: (_) => _specksUp(),
-        child: GlassFabTile(
-          size: 42,
-          extraLayer: AnimatedBuilder(
-            animation: _specks,
-            builder: (context, _) =>
-                BloodSpecks(v: _specks.value, seed: 11.4, intensity: 0.6),
-          ),
-          child: SmoothTooltip(
-            message: Translations.t('aiGuide', context, 'AI guide'),
-            preferredAbove: true,
-            child: GestureDetector(
-              // Opaque: тапабельна вся плитка 42 px, а не только аватар 26 px.
-              // Без этого палец, попавший на стекло рядом с аватаром, не
-              // открывал чат — «кнопка не срабатывает».
-              behavior: HitTestBehavior.opaque,
-              onTap: () => showAiGuideChat(context),
-              // Монхром: значок Ады на кнопке нейтральный, как икона таблетки,
-              // а не яркий цветной кружок на плоской плите.
-              child: const Center(
-                child: LiveAdaAvatar(size: 26, monochrome: true),
+    final cs = Theme.of(context).colorScheme;
+    return SmoothTooltip(
+      message: Translations.t('aiGuide', context, 'Ада Край (Cry)'),
+      preferredAbove: true,
+      child: PressScale(
+        pressedScale: 0.92,
+        enableTilt: false,
+        duration: const Duration(milliseconds: 220),
+        releaseDuration: const Duration(milliseconds: 320),
+        child: Listener(
+          onPointerDown: (_) => _specksDown(),
+          onPointerUp: (_) => _specksUp(),
+          onPointerCancel: (_) => _specksUp(),
+          child: GlassFabTile(
+            size: 44,
+            extraLayer: AnimatedBuilder(
+              animation: _specks,
+              builder: (context, _) =>
+                  BloodSpecks(v: _specks.value, seed: 11.4, intensity: 0.6),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(44 * 0.40),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(44 * 0.40),
+                splashColor: cs.primary.withValues(alpha: 0.22),
+                highlightColor: cs.primary.withValues(alpha: 0.16),
+                onTap: () => showAiGuideChat(context),
+                child: const Center(
+                  child: LiveAdaAvatar(size: 26, monochrome: true),
+                ),
               ),
             ),
           ),
@@ -446,6 +437,10 @@ class _AiChatBodyState extends State<_AiChatBody>
   @override
   void initState() {
     super.initState();
+    final lastModel = AiGuideService.lastUsedModel;
+    if (lastModel.isNotEmpty) {
+      _modelLabel = lastModel;
+    }
     _loadHistory();
     _loadPins();
     _loadLiked();

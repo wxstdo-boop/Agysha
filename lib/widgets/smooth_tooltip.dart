@@ -13,7 +13,7 @@ const TextStyle _kTooltipTextStyle = TextStyle(
   fontWeight: FontWeight.w500,
 );
 
-const Duration _kFade = Duration(milliseconds: 420);
+const Duration _kFade = Duration(milliseconds: 240);
 const double _kRadius = 9;
 const double _kArrowW = 13;
 const double _kArrowH = 6;
@@ -477,6 +477,7 @@ class _TipShellState extends State<_TipShell>
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
   late final Animation<double> _scale;
+  late final Animation<Offset> _slide;
   Timer? _removeTimer;
   bool _leaving = false;
   bool _removed = false;
@@ -487,11 +488,15 @@ class _TipShellState extends State<_TipShell>
     _ctrl = AnimationController(vsync: this, duration: _kFade);
     final curved = CurvedAnimation(
       parent: _ctrl,
-      curve: Curves.easeInOutCubic,
-      reverseCurve: Curves.easeInOutCubic,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
     );
     _fade = curved;
-    _scale = Tween<double>(begin: 0.92, end: 1.0).animate(curved);
+    _scale = Tween<double>(begin: 0.94, end: 1.0).animate(curved);
+    _slide = Tween<Offset>(
+      begin: Offset(0, widget.above ? 0.08 : -0.08),
+      end: Offset.zero,
+    ).animate(curved);
     _ctrl.forward();
     widget.onReady(this);
   }
@@ -544,12 +549,8 @@ class _TipShellState extends State<_TipShell>
       child: IgnorePointer(
         child: FadeTransition(
           opacity: _fade,
-          child: Transform.translate(
-            // Лёгкий «подлёт» от кнопки: блок выезжает и плавно встаёт.
-            offset: Offset(
-              0,
-              (widget.above ? 1.0 : -1.0) * (1.0 - _scale.value) * 7.0,
-            ),
+          child: SlideTransition(
+            position: _slide,
             child: ScaleTransition(
               scale: _scale,
               alignment: widget.above
@@ -713,22 +714,63 @@ class _BubblePainter extends CustomPainter {
       old.accent != accent;
 }
 
-/// Стандартная кнопка «Назад» со стрелкой + тултипом со стрелкой-указателем.
+/// Стандартная кнопка «Назад» со стрелкой + тултипом со стрелкой-указателем
+/// и круглым фоном зажатия.
 class BackButtonTooltip extends StatelessWidget {
   const BackButtonTooltip({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return SmoothTooltip(
-      message: Translations.t('back', context, 'Назад'),
-      preferredAbove: false,
-      child: PressScale(
-        pressedScale: 0.90,
-        enableTilt: false,
-        duration: const Duration(milliseconds: 200),
-        child: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.of(context).pop(),
+    final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      child: SmoothTooltip(
+        message: Translations.t('back', context, 'Назад'),
+        preferredAbove: false,
+        child: PressScale(
+          pressedScale: 0.92,
+          enableTilt: false,
+          duration: const Duration(milliseconds: 180),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: cs.surfaceContainerHigh.withValues(
+                alpha: dark ? 0.65 : 0.85,
+              ),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: dark ? 0.40 : 0.55),
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: dark ? 0.14 : 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                splashColor: cs.primary.withValues(alpha: 0.22),
+                highlightColor: cs.primary.withValues(alpha: 0.16),
+                onTap: () => Navigator.of(context).maybePop(),
+                child: Center(
+                  child: Icon(
+                    Icons.arrow_back_rounded,
+                    size: 20,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

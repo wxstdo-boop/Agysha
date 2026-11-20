@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:agysha/l10n/locale_provider.dart';
+import 'package:agysha/l10n/translations.dart';
 import 'package:agysha/models/alarm.dart';
 import 'package:agysha/models/habit.dart';
 import 'package:agysha/screens/home_screen.dart';
@@ -16,7 +17,6 @@ import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/task_service.dart';
 import 'package:agysha/widgets/animated_fab_row.dart';
 import 'package:agysha/widgets/section_pill.dart';
-import 'package:agysha/widgets/icons/agysha_icons.dart';
 
 /// Таблетка разделов теперь ВСЕГДА полная: она не срезается по скроллу.
 /// Раньше ClipRect+heightFactor оставлял на середине прокрутки половину
@@ -163,7 +163,10 @@ void main() {
     await swipePage(tester, left: true);
     expect(sectionCurrentIndex.value, 1);
 
-    await tester.tap(find.byType(AgAlarmIcon).first);
+    final alarmsLabel = Translations.alarmsOf(
+      tester.element(find.byType(SectionPill).first),
+    );
+    await tester.tap(find.text(alarmsLabel).first);
     await tester.pump(const Duration(milliseconds: 700));
     await tester.pump(const Duration(milliseconds: 700));
 

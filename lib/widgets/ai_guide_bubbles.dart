@@ -556,13 +556,13 @@ class _TypingIndicator extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // «Сочиняю» — плавно появляется над точками и мягко
-                // пульсирует в такт тиканью троеточия.
+                // «Сочиняю» — плавно дышит непрерывной синусоидой без мигания
                 AnimatedBuilder(
                   animation: animation,
                   builder: (context, _) {
-                    final pulse =
-                        0.7 + 0.3 * ((animation.value * 2) % 1).clamp(0.0, 1.0);
+                    final wave =
+                        0.5 + 0.5 * math.sin(animation.value * 2 * math.pi);
+                    final pulse = 0.78 + 0.22 * wave;
                     return Opacity(
                       opacity: pulse,
                       child: Text(
@@ -583,19 +583,21 @@ class _TypingIndicator extends StatelessWidget {
                     return AnimatedBuilder(
                       animation: animation,
                       builder: (context, _) {
-                        final t = ((animation.value * 3 - i) % 3).clamp(
-                          0.0,
-                          1.0,
-                        );
-                        final scale = 0.6 + 0.6 * t;
+                        final wave = 0.5 +
+                            0.5 *
+                                math.sin(
+                                  (animation.value * 2 * math.pi) - i * 0.9,
+                                );
+                        final scale = 0.65 + 0.35 * wave;
+                        final alpha = 0.50 + 0.50 * wave;
                         return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 2.5),
                           child: Transform.scale(
                             scale: scale,
                             child: Icon(
                               Icons.circle,
                               size: 7,
-                              color: cs.onSurfaceVariant,
+                              color: cs.primary.withValues(alpha: alpha),
                             ),
                           ),
                         );

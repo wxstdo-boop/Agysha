@@ -104,9 +104,9 @@ class _PressScaleState extends State<PressScale>
     if (!widget.enableTilt || MotionPrefs.shouldReduceMotion) return;
     final size = context.size;
     if (size == null || size.width <= 0 || size.height <= 0) return;
-    // Кнопки и мелкие элементы (размером меньше 72x72) в 3D не наклоняем:
+    // Кнопки и элементы с малой стороной (меньше 72px) в 3D не наклоняем:
     // перспектива искажает координаты под пальцем и фреймворк отменяет тапы.
-    if (size.width < 72 && size.height < 72) return;
+    if (size.width < 72 || size.height < 72) return;
     final rawNx = (pos.dx / size.width - 0.5) * 2.0;
     final rawNy = (pos.dy / size.height - 0.5) * 2.0;
     final target = Offset(_softClamp(rawNx), _softClamp(rawNy));

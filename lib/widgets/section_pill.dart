@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
@@ -501,10 +501,10 @@ class _SectionPillState extends State<SectionPill>
     // элемент дерева не пересобирается даже при перестройке родителя.
     return Padding(
       // Таблетка в Home чуть выше (под AppBar), компактный отступ.
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
       child: Center(
         child: SizedBox(
-          width: 304,
+          width: 336,
           height: 54,
           child: Stack(
             fit: StackFit.expand,
@@ -514,7 +514,7 @@ class _SectionPillState extends State<SectionPill>
                 padding: const EdgeInsets.all(4),
                 child: ClipRRect(
                   clipBehavior: Clip.antiAlias,
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(21),
                   child: AnimatedBuilder(
                     // ЕДИНЫЙ слушатель на все каналы изменения таблетки:
                     // устраняет вложенный AnimatedBuilder, исключая двойную пересборку
@@ -680,15 +680,13 @@ class _SectionPillState extends State<SectionPill>
                   // лишь на смене ступени — без мерцания и без шейдерного
                   // шторма на каждый кадр.
                   final badgeT = (proximity * 48).round() / 48;
-                  // Чернила глифа: фирменный primary на нейтральном бейдже
-                  // и onPrimary на выбранном. В тёмной теме onSurfaceVariant
-                  // давал светлый глиф на светлом бейдже — контраст падал до
-                  // 2.2 и значки читались как «мыло».
-                  final iconColor = Color.lerp(
-                    cs.primary,
-                    cs.onPrimary,
+                  final textColor = Color.lerp(
+                    dark
+                        ? Colors.white.withValues(alpha: 0.42)
+                        : Colors.black.withValues(alpha: 0.45),
+                    dark ? Colors.white : cs.onSurface,
                     badgeT,
-                  );
+                  )!;
                   return Expanded(
                     // Подсказка: long-press не должен красть протяжку.
                     // Арбитр жестов, ждавший 350 мс, начинал тягу только
@@ -708,7 +706,7 @@ class _SectionPillState extends State<SectionPill>
                         child: Material(
                           type: MaterialType.transparency,
                           child: InkWell(
-                            borderRadius: BorderRadius.circular(21.5),
+                            borderRadius: BorderRadius.circular(20),
                             splashColor: Colors.transparent,
                             highlightColor: Colors.transparent,
                             // Переключение — ТОЛЬКО при ОТПУСКАНИИ пальца (onTap).
@@ -721,40 +719,25 @@ class _SectionPillState extends State<SectionPill>
                             },
                             child: Center(
                               child: PressScale(
-                                // Во время драга камня инвертируем плавное
-                                // зажатие: палец и так ведёт жёст, и
-                                // дополнительная отдача в этот момент
-                                // «сбивает» рисунок иконки под пальцем.
                                 enabled: !_dragging,
-                                pressedScale: 0.88,
+                                pressedScale: 0.95,
+                                enableTilt: false,
                                 duration: const Duration(milliseconds: 160),
                                 releaseDuration: const Duration(
                                   milliseconds: 260,
                                 ),
-                                child: _GeoBadge(
-                                  index: i,
-                                  size: 31,
-                                  dark: dark,
-                                  // Невыбранная — заметный
-                                  // фирменный оттенок (чтобы
-                                  // фигуры читались), выбранная —
-                                  // сочный градиентный «камень».
-                                  // Невыбранная — нейтральная приподнятая
-                                  // площадка (без «глины» и цветной каши),
-                                  // выбранная — сплошной primary. Обе дают
-                                  // чёткий контраст с глифом.
-                                  color: Color.lerp(
-                                    dark
-                                        ? cs.surfaceContainerHighest
-                                        : cs.surfaceContainerLowest,
-                                    cs.primary,
-                                    badgeT,
-                                  )!,
-                                  child: icons[i](
-                                    context,
-                                    size: _GeoBadge.iconSizeFor(i),
-                                    strokeWidth: 2.4,
-                                    color: iconColor,
+                                child: Text(
+                                  label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: count >= 4 ? 12.5 : 13.5,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: textColor,
+                                    letterSpacing: -0.2,
                                   ),
                                 ),
                               ),
@@ -772,13 +755,8 @@ class _SectionPillState extends State<SectionPill>
   }
 }
 
-/// Капсула разделов — плотная матовая «глина»: один градиент, тонкая
-/// фирменная обводка и мягкая тень под ней.
-///
-/// Никакого стекла, витражных пятен и бликов: они читались как грязь
-/// по центру таблетки, а в тёмной теме ещё и спорили с выбранным разделом —
-/// глаз цеплялся за пятна вместо иконок. Плоская заливка рисуется одним
-/// слоем и не перестраивается в полёте камня.
+/// Капсула разделов — полупрозрачное серое стекло с мягким размытием
+/// и тонкой деликатной кромкой.
 class _GlassCapsule extends StatelessWidget {
   final Widget child;
 
@@ -786,53 +764,47 @@ class _GlassCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    // ПЛОСКИЙ нейтральный фон: одна непрозрачная поверхность и мягкая тень.
-    // «Глиняная» лепнина (подмес primaryContainer плюс градиент) заставляла
-    // капсулу желтеть/розоветь и спорить с фигурами: значки должны читаться
-    // на спокойном фоне, а не на цветной массе.
-    final base = dark ? cs.surfaceContainerHigh : cs.surfaceContainerHighest;
+    // Полупрозрачная серая стеклянная поверхность
+    final grayBase = dark
+        ? const Color(0xFF1E2124).withValues(alpha: 0.72)
+        : const Color(0xFFE5E9EC).withValues(alpha: 0.82);
     return DecoratedBox(
-      // Тень снаружи клипа: внутри скругления она обрезается и капсула
-      // выглядит наклеенной.
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(25),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.22 : 0.10),
-            blurRadius: 12,
-            spreadRadius: -3,
+            color: Colors.black.withValues(alpha: dark ? 0.25 : 0.08),
+            blurRadius: 14,
+            spreadRadius: -2,
             offset: const Offset(0, 3),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            color: base,
-            border: Border.all(
-              // Тонкая обводка только для контура, без неоновой рамки.
-              color: cs.outlineVariant.withValues(alpha: dark ? 0.55 : 0.70),
-              width: 1.0,
+        borderRadius: BorderRadius.circular(25),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(25),
+              color: grayBase,
+              border: Border.all(
+                color: dark
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.black.withValues(alpha: 0.08),
+                width: 1.0,
+              ),
             ),
+            child: child,
           ),
-          child: child,
         ),
       ),
     );
   }
 }
 
-/// Выбранный раздел — «камень»: сплошная заливка цветом темы с мягким
-/// затемнением к низу и тенью под ним.
-///
-/// Без зеркального блика, бегущей полосы и белых капель внутри: в тёмной
-/// теме такой камень вспыхивал при каждом переключении, и глаз ловил блик,
-/// а не раздел. Движение камня — само по себе акцент, световые эффекты
-/// поверх не нужны.
+/// Выбранный раздел — полупрозрачный серый / акцентный скользящий камень.
 class _GlassStone extends StatelessWidget {
   final double capRadius;
   final Color primary;
@@ -846,26 +818,22 @@ class _GlassStone extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Камень — ОДИН тон: в светлой теме берём primary чуть приглушённый,
-    // в тёмной — primary приглушён к чёрному (иначе «горит»). Вместо
-    // двуступенчатого градиента (который на слабом железе читается как
-    // «грязное пятно» при каждом перемещении) — монохромная заливка с
-    // едва различимым затемнением к низу (0.06), чтобы объём остался.
-    final fill = dark
-        ? Color.lerp(primary, Colors.black, 0.14)!
-        : Color.lerp(primary, Colors.white, 0.06)!;
-    final shade = dark
-        ? Color.lerp(fill, Colors.black, 0.18)!
-        : Color.lerp(fill, Colors.black, 0.06)!;
+    // Полупрозрачная серая плашка-индикатор под выбранным текстом
+    final stoneBase = dark
+        ? const Color(0xFF35393E).withValues(alpha: 0.88)
+        : Colors.white.withValues(alpha: 0.94);
+    final borderCol = dark
+        ? Colors.white.withValues(alpha: 0.18)
+        : Colors.black.withValues(alpha: 0.07);
 
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(capRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.34 : 0.16),
-            blurRadius: 6,
-            spreadRadius: -2,
+            color: Colors.black.withValues(alpha: dark ? 0.28 : 0.10),
+            blurRadius: 8,
+            spreadRadius: -1.5,
             offset: const Offset(0, 1.5),
           ),
         ],
@@ -873,24 +841,12 @@ class _GlassStone extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(capRadius),
         child: DecoratedBox(
-          // Мягкое градиентное «дно» — не резкий переход двух цветов,
-          // а едва заметное углубление к низу (одна палитра).
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(capRadius),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [fill, shade],
-            ),
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(capRadius),
-              border: Border.all(
-                // Едва заметная кромка — только чтобы контур читался.
-                color: Colors.white.withValues(alpha: dark ? 0.10 : 0.16),
-                width: 1,
-              ),
+            color: stoneBase,
+            border: Border.all(
+              color: borderCol,
+              width: 1.0,
             ),
           ),
         ),
@@ -899,171 +855,3 @@ class _GlassStone extends StatelessWidget {
   }
 }
 
-/// Значок раздела: иконка сидит внутри своей «драгоценной» фигуры
-/// (круг, скруглённый квадрат, ромб, звезда). У каждого раздела свой контур.
-/// Фигура вылеплена из глины: свет сверху-слева, тень снизу-справа,
-/// мягкий рельеф по кромке — не глянец, а объём.
-class _GeoBadge extends StatelessWidget {
-  final int index;
-  final double size;
-  final Color color;
-  final bool dark;
-  final Widget child;
-
-  const _GeoBadge({
-    required this.index,
-    required this.size,
-    required this.color,
-    required this.dark,
-    required this.child,
-  });
-
-  /// Размер глифа внутри фигуры. Задаётся ОДИН раз: рисование в 17 px с
-  /// последующим вписыванием в бокс 15.5 px размывало штрих. У «колючих»
-  /// фигур (ромб, звезда) глиф мельче, чтобы не вылезать за острые края.
-  static double iconSizeFor(int index) => switch (index) {
-    2 => 18,
-    3 => 16,
-    _ => 20,
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(
-        painter: _ShapePainter(index, color, dark),
-        child: Center(child: child),
-      ),
-    );
-  }
-}
-
-/// Фигуры значков — «глиняные»: у каждой своя форма, свет лепит объём
-/// сверху-слева, снизу-справа ложится мягкая тень. Вместо глянцевого
-/// блика — матовый рельеф: тёмная кромка по контуру и светлая грань по
-/// верхней дуге.
-class _ShapePainter extends CustomPainter {
-  final int index;
-  final Color color;
-  final bool dark;
-
-  const _ShapePainter(this.index, this.color, this.dark);
-
-  /// Контуры значков зависят только от фигуры и размера — при перелистывании
-  /// разделов цвет меняется каждый кадр, а геометрия нет. Звезда и
-  /// скруглённый многоугольник считаются тригонометрией, поэтому держим их
-  /// в маленьком кэше (размеров у таблетки ровно несколько).
-  static final Map<String, Path> _shapes = {};
-
-  static Path _shapeFor(int index, Size size) {
-    final key = '$index:${size.width}x${size.height}';
-    final cached = _shapes[key];
-    if (cached != null) return cached;
-    final center = Offset(size.width / 2, size.height / 2);
-    final r = size.width / 2 - 1.0;
-    final Path shape;
-    if (index == 0) {
-      shape = Path()..addOval(Rect.fromCircle(center: center, radius: r));
-    } else if (index == 1) {
-      // Привычки — «подушка»: скруглённый квадрат с мягкими углами, как
-      // оттиск ладони в глине (скругление крупнее, чем у обычного квадрата).
-      shape = Path()
-        ..addRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromCircle(center: center, radius: r),
-            Radius.circular(r * 0.44),
-          ),
-        );
-    } else if (index == 2) {
-      // 💠 Ромб — широкий (0.96r), чтобы значок свободно помещался;
-      // острые верх/низ по-прежнему читаются как гранёный камень.
-      final pts = [
-        Offset(center.dx, center.dy - r),
-        Offset(center.dx + r * 0.96, center.dy),
-        Offset(center.dx, center.dy + r),
-        Offset(center.dx - r * 0.96, center.dy),
-      ];
-      shape = _roundedPolygon(pts, r * 0.08);
-    } else {
-      // Пятиконечная звезда: острые лучи, без скруглений.
-      shape = _star(center, r);
-    }
-    if (_shapes.length > 24) _shapes.clear();
-    _shapes[key] = shape;
-    return shape;
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Фигура: 🔵 круг, ⬜ скруглённый квадрат, 💠 ромб, ✦ звезда.
-    final shape = _shapeFor(index, size);
-
-    // ПЛОСКИЙ бейдж: одна заливка и тонкая чёткая кромка. «Глиняная»
-    // лепнина (объёмный градиент, смещённый тёмный силуэт, белая дуга и
-    // радиальный блик) в масштабе 1:1 на телефоне читалась как грязное
-    // пятно, а не фигура: значки сливались и «плыли».
-    canvas.drawPath(shape, Paint()..color = color);
-
-    // Кромка: чуть темнее заливки — держит контур, не превращаясь в рамку.
-    canvas.drawPath(
-      shape,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..color = Color.lerp(color, Colors.black, dark ? 0.22 : 0.14)!
-            .withValues(alpha: 0.35),
-    );
-  }
-
-  /// Пятиконечная звезда с центром [center] и внешним радиусом [r].
-  static Path _star(Offset center, double r) {
-    final path = Path();
-    for (var i = 0; i < 10; i++) {
-      final ang = -math.pi / 2 + i * math.pi / 5;
-      final rad = i.isEven ? r : r * 0.46;
-      final pt = Offset(
-        center.dx + rad * math.cos(ang),
-        center.dy + rad * math.sin(ang),
-      );
-      if (i == 0) {
-        path.moveTo(pt.dx, pt.dy);
-      } else {
-        path.lineTo(pt.dx, pt.dy);
-      }
-    }
-    path.close();
-    return path;
-  }
-
-  /// Скруглённый многоугольник по точкам (radius — радиус скругления углов).
-  static Path _roundedPolygon(List<Offset> points, double radius) {
-    final path = Path();
-    final n = points.length;
-    for (var i = 0; i < n; i++) {
-      final p = points[i];
-      final prev = points[(i - 1 + n) % n];
-      final next = points[(i + 1) % n];
-      final u1 = (p - prev);
-      final u2 = (next - p);
-      final rad = radius.clamp(0.0, math.min(u1.distance, u2.distance) / 2);
-      final a = p - u1 / u1.distance * rad;
-      final b = p + u2 / u2.distance * rad;
-      if (i == 0) {
-        path.moveTo(a.dx, a.dy);
-      } else {
-        path.lineTo(a.dx, a.dy);
-      }
-      path.quadraticBezierTo(p.dx, p.dy, b.dx, b.dy);
-    }
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldRepaint(covariant _ShapePainter oldDelegate) =>
-      oldDelegate.index != index ||
-      oldDelegate.color != color ||
-      oldDelegate.dark != dark;
-}
