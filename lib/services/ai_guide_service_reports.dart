@@ -148,8 +148,7 @@ part of 'ai_guide_service.dart';
       if (alarms.isNotEmpty) {
         final a = alarms.first;
         ctx.write(
-          'Будильник: ${a.time.hour.toString().padLeft(2, '0')}:'
-          '${a.time.minute.toString().padLeft(2, '0')}. ',
+          'Будильник: ${formatHmValues(a.time.hour, a.time.minute)}. ',
         );
       }
       final raw = await AiGuideService.send(
@@ -164,17 +163,16 @@ part of 'ai_guide_service.dart';
       // ИИ недоступен — ниже шаблон.
     }
     // Оффлайн-шаблон.
+    final firstAlarm = alarms.isEmpty
+        ? null
+        : formatHmValues(alarms.first.time.hour, alarms.first.time.minute);
     final parts = <String>[
       if (tasks.isNotEmpty)
         ru ? '${tasks.length} задач' : '${tasks.length} tasks',
       if (habits.isNotEmpty)
         ru ? '${habits.length} привычек' : '${habits.length} habits',
-      if (alarms.isNotEmpty)
-        ru
-            ? 'будильник ${alarms.first.time.hour.toString().padLeft(2, '0')}:'
-                  '${alarms.first.time.minute.toString().padLeft(2, '0')}'
-            : 'alarm at ${alarms.first.time.hour.toString().padLeft(2, '0')}:'
-                  '${alarms.first.time.minute.toString().padLeft(2, '0')}',
+      if (firstAlarm != null)
+        ru ? 'будильник $firstAlarm' : 'alarm at $firstAlarm',
     ];
     if (parts.isEmpty) {
       return ru

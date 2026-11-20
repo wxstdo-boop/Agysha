@@ -104,6 +104,9 @@ class _PressScaleState extends State<PressScale>
     if (!widget.enableTilt || MotionPrefs.shouldReduceMotion) return;
     final size = context.size;
     if (size == null || size.width <= 0 || size.height <= 0) return;
+    // Кнопки и мелкие элементы (размером меньше 72x72) в 3D не наклоняем:
+    // перспектива искажает координаты под пальцем и фреймворк отменяет тапы.
+    if (size.width < 72 && size.height < 72) return;
     final rawNx = (pos.dx / size.width - 0.5) * 2.0;
     final rawNy = (pos.dy / size.height - 0.5) * 2.0;
     final target = Offset(_softClamp(rawNx), _softClamp(rawNy));
@@ -172,10 +175,13 @@ class _PressScaleState extends State<PressScale>
           if (v <= 0.0001) return child!;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
 
-          final tiltActive =
-              widget.enableTilt && !MotionPrefs.shouldReduceMotion && v > 0.001;
           final currentTilt =
               _ctrl.status == AnimationStatus.reverse ? _releaseTilt : _tilt;
+          final tiltActive =
+              widget.enableTilt &&
+              !MotionPrefs.shouldReduceMotion &&
+              v > 0.001 &&
+              currentTilt != Offset.zero;
 
           final tiltX = -currentTilt.dy * widget.maxTiltAngle * v;
           final tiltY = currentTilt.dx * widget.maxTiltAngle * v;

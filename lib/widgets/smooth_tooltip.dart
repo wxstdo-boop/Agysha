@@ -719,12 +719,13 @@ class BackButtonTooltip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressScale(
-      pressedScale: 0.90,
-      duration: const Duration(milliseconds: 200),
-      child: SmoothTooltip(
-        message: Translations.t('back', context, 'Назад'),
-        preferredAbove: false,
+    return SmoothTooltip(
+      message: Translations.t('back', context, 'Назад'),
+      preferredAbove: false,
+      child: PressScale(
+        pressedScale: 0.90,
+        enableTilt: false,
+        duration: const Duration(milliseconds: 200),
         child: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.of(context).pop(),

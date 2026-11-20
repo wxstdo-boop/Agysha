@@ -439,7 +439,7 @@ extension _SettingsDevTools on _SettingsScreenState {
     final body = alarm != null
         ? (alarm.label.isNotEmpty
               ? alarm.label
-              : '${alarm.time.hour.toString().padLeft(2, '0')}:${alarm.time.minute.toString().padLeft(2, '0')}')
+              : formatHmValues(alarm.time.hour, alarm.time.minute))
         : 'Alarm test';
     await _runDiag(99999, alarmsText, body);
   }

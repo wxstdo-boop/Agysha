@@ -8,6 +8,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import '../models/alarm.dart';
 import '../models/wake_task.dart';
 import '../utils/android_settings.dart' as android_settings;
+import '../utils/time_format.dart';
 import 'alarm_black_box.dart';
 import 'alarm_scheduler.dart';
 import 'prefs.dart';
@@ -719,8 +720,7 @@ class NotificationService extends ChangeNotifier {
     } else if (alarm.taskType == WakeUpTask.memory) {
       body = 'Задача: вспомни слово';
     } else {
-      body =
-          '${alarm.time.hour.toString().padLeft(2, '0')}:${alarm.time.minute.toString().padLeft(2, '0')}';
+      body = formatHmValues(alarm.time.hour, alarm.time.minute);
     }
     final soundName = _rawSoundName(alarm);
     final customPath = alarm.soundName == 'Custom'

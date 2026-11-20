@@ -41,7 +41,7 @@ const Map<String, String> _en = {
   'profileMusicTrack': 'My track',
   'profileMusicEmpty': 'Add a track to play it in your profile',
   'profileMusicAdd': 'Add',
-  'profileMusicFull': '99 tracks already',
+  'profileMusicFull': '499 tracks already',
   'profileMusicSet': 'Music saved',
   'profileMusicFailed': 'Could not load the music',
   'profileMusicMissing': 'File not found',

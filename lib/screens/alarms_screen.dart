@@ -21,6 +21,7 @@ import '../utils/android_settings.dart' show openFullScreenNotifSettings;
 import '../utils/page_transitions.dart';
 import '../utils/markdown_text.dart' show sanitizeTextForWrap;
 import '../utils/snackbar.dart';
+import '../utils/time_format.dart';
 import '../widgets/smooth_hover.dart';
 import '../widgets/drag_proxy.dart';
 import '../widgets/animated_fab_row.dart';
@@ -482,8 +483,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       final diff = next.difference(now);
       final hours = diff.inHours;
       final minutes = diff.inMinutes % 60;
-      final timeStr =
-          '${next.hour.toString().padLeft(2, '0')}:${next.minute.toString().padLeft(2, '0')}';
+      final timeStr = formatHm(next);
 
       final String when;
       if (next.day == now.day) {

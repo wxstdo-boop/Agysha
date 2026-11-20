@@ -11,6 +11,7 @@ import '../utils/snackbar.dart';
 import '../utils/icon_map.dart';
 import '../utils/wide_dash_formatter.dart';
 import '../utils/wide_dash_controller.dart';
+import '../utils/time_format.dart';
 import '../widgets/icon_picker_sheet.dart';
 import '../widgets/manual_time_dialog.dart';
 import '../widgets/smooth_hover.dart';
@@ -247,8 +248,7 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
       type: _habitType,
       reminderTime: _reminderTime == null
           ? null
-          : '${_reminderTime!.hour.toString().padLeft(2, '0')}:'
-                '${_reminderTime!.minute.toString().padLeft(2, '0')}',
+          : formatHmValues(_reminderTime!.hour, _reminderTime!.minute),
       reminderText: _reminderText?.trim().isEmpty == true
           ? null
           : _reminderText?.trim(),
@@ -768,8 +768,10 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
                                       ),
                                     ),
                                     Text(
-                                      '${_reminderTime!.hour.toString().padLeft(2, '0')}:'
-                                      '${_reminderTime!.minute.toString().padLeft(2, '0')}',
+                                      formatHmValues(
+                                        _reminderTime!.hour,
+                                        _reminderTime!.minute,
+                                      ),
                                       style: theme.textTheme.titleLarge
                                           ?.copyWith(
                                             fontWeight: FontWeight.w800,

@@ -41,7 +41,7 @@ const Map<String, String> _ru = {
   'profileMusicTrack': 'Мой трек',
   'profileMusicEmpty': 'Добавьте свой трек — он будет играть в профиле',
   'profileMusicAdd': 'Добавить',
-  'profileMusicFull': 'Уже 99 треков',
+  'profileMusicFull': 'Уже 499 треков',
   'profileMusicSet': 'Музыка сохранена',
   'profileMusicFailed': 'Не удалось загрузить музыку',
   'profileMusicMissing': 'Файл не найден',

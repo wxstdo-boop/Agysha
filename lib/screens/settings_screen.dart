@@ -44,6 +44,7 @@ import 'forge_screen.dart';
 import '../utils/page_transitions.dart';
 import '../utils/motion_prefs.dart';
 import '../utils/snackbar.dart';
+import '../utils/time_format.dart';
 import 'changelog_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';

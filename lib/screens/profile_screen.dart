@@ -369,7 +369,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _addMusic() async {
     if (!_service.canAddTrack) {
       _toast(
-        Translations.t('profileMusicFull', context, 'Уже 99 треков'),
+        Translations.t('profileMusicFull', context, 'Уже 499 треков'),
         icon: Icons.info_outline,
       );
       return;
@@ -409,7 +409,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (!mounted) return;
       if (!added) {
         _toast(
-          Translations.t('profileMusicFull', context, 'Уже 99 треков'),
+          Translations.t('profileMusicFull', context, 'Уже 499 треков'),
           icon: Icons.info_outline,
         );
         return;
@@ -442,7 +442,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (_isSearchingHardtekk) return;
     if (!_service.canAddTrack) {
       _toast(
-        Translations.t('profileMusicFull', context, 'Уже 99 треков'),
+        Translations.t('profileMusicFull', context, 'Уже 499 треков'),
         icon: Icons.info_outline,
       );
       return;
@@ -665,7 +665,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       );
       if (!added) {
         if (!mounted) return;
-        _toast(Translations.t('profileMusicFull', context, 'Уже 99 треков'));
+        _toast(Translations.t('profileMusicFull', context, 'Уже 499 треков'));
         return;
       }
       final fresh =
@@ -2021,7 +2021,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           : Translations.t(
                               'profileMusicFull',
                               context,
-                              'Уже 99 треков',
+                              'Уже 499 треков',
                             ),
                     ),
                   ),

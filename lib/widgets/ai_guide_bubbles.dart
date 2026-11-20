@@ -824,68 +824,79 @@ class _SendButtonState extends State<_SendButton>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    // Плавное «вдавливание» при зажатии кнопки отправки.
+    // Плавное «вдавливание» и закруглённый отклик при зажатии кнопки отправки.
     return PressScale(
-      child: GestureDetector(
-        onTap: widget.busy
-            ? null
-            : () {
-                Haptics.light();
-                widget.onTap();
-              },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                cs.primary,
-                Color.lerp(cs.primary, cs.secondary, 0.6) ?? cs.secondary,
+      enableTilt: false,
+      pressedScale: 0.90,
+      duration: const Duration(milliseconds: 160),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          splashColor: Colors.white.withValues(alpha: 0.28),
+          highlightColor: Colors.white.withValues(alpha: 0.16),
+          onTap: widget.busy
+              ? null
+              : () {
+                  Haptics.light();
+                  widget.onTap();
+                },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  cs.primary,
+                  Color.lerp(cs.primary, cs.secondary, 0.6) ?? cs.secondary,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: cs.primary.withValues(alpha: 0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                  spreadRadius: 1,
+                ),
               ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: cs.primary.withValues(alpha: 0.35),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-                spreadRadius: 1,
+            // Плавный переход иконок: стрелка ↔ сплеш-спиннер.
+            // Без RotationTransition (на слабом GPU поворот при каждой смене
+            // «дёргал» переход) — мягкий scale + fade, без overshoot.
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => ScaleTransition(
+                scale: Tween<double>(begin: 0.82, end: 1).animate(animation),
+                child: FadeTransition(opacity: animation, child: child),
               ),
-            ],
-          ),
-          // Плавный переход иконок: стрелка ↔ сплеш-спиннер.
-          // Без RotationTransition (на слабом GPU поворот при каждой смене
-          // «дёргал» переход) — мягкий scale + fade, без overshoot.
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) => ScaleTransition(
-              scale: Tween<double>(begin: 0.82, end: 1).animate(animation),
-              child: FadeTransition(opacity: animation, child: child),
-            ),
-            child: widget.busy
-                ? AnimatedBuilder(
-                    key: const ValueKey('busy_splash'),
-                    animation: _spin,
-                    builder: (context, _) => Transform.rotate(
-                      angle: _spin.value * 2 * 3.14159,
-                      child: Icon(
-                        Icons.autorenew,
-                        color: cs.onPrimary,
-                        size: 26,
+              child: widget.busy
+                  ? AnimatedBuilder(
+                      key: const ValueKey('busy_splash'),
+                      animation: _spin,
+                      builder: (context, _) => Transform.rotate(
+                        angle: _spin.value * 2 * 3.14159,
+                        child: Icon(
+                          Icons.autorenew,
+                          color: cs.onPrimary,
+                          size: 26,
+                        ),
                       ),
+                    )
+                  : Icon(
+                      Icons.arrow_upward_rounded,
+                      key: const ValueKey('send_arrow'),
+                      color: cs.onPrimary,
+                      size: 24,
                     ),
-                  )
-                : Icon(
-                    Icons.arrow_upward_rounded,
-                    key: const ValueKey('send_arrow'),
-                    color: cs.onPrimary,
-                    size: 24,
-                  ),
+            ),
           ),
         ),
       ),
