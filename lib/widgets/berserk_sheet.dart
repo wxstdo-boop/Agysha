@@ -4,6 +4,7 @@ import '../services/ai_guide_service.dart';
 import '../services/prefs.dart';
 import '../services/settings_service.dart';
 import '../utils/markdown_text.dart';
+import '../utils/date_keys.dart';
 
 /// Открывает плашку «МАКСИМАЛЬНЫЙ АПГРЕЙД УРОВНЯ BERSERK».
 ///
@@ -145,10 +146,7 @@ class _BerserkContentState extends State<_BerserkContent> {
     _loadSteps();
   }
 
-  static String _dateKey() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  }
+  static String _dateKey() => localDayKey();
 
   static String _practicePrompt() =>
       'Ты — встроенный ИИ приложения Agysha. Сгенерируй 3 подробных практических шага на сегодня для режима личной силы и фокуса. Каждый шаг — конкретное действие из 1–2 предложений, с деталями: когда, что и как сделать. Без нумерации и заголовков. Ответь только самими тремя шагами, каждый с новой строки.';

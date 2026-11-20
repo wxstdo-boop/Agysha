@@ -730,6 +730,8 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                       children: [
                         VolumetricSwitch(
                           activeColor: Theme.of(context).colorScheme.primary,
+                          semanticLabel:
+                              '${Translations.t('alarms', context)} ${alarm.timeLabel}',
                           value: alarm.enabled,
                           onChanged: (v) async {
                             final ctx = context;

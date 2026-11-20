@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../utils/motion_prefs.dart';
+import '../utils/design_tokens.dart';
 
 /// «Метель» — подарочная тема 12-го дня ивента: северное сияние по снегу.
 ///
@@ -187,17 +188,11 @@ class _MetelAuroraState extends State<MetelAurora>
 /// лазурь и лаванда. Те же цвета, что и скин скважины ПИН-экрана, чтобы
 /// подарок читался одним набором. Яркче прежних: «Метель» обязана ощущаться
 /// северным сиянием, а не серой полосой.
-const List<Color> _kAurora = [
-  Color(0xFF5FD6A8), // ледяная мята
-  Color(0xFF6FB8E8), // лазурь
-  Color(0xFF9C86E8), // лаванда
-];
-
 Color _auroraAt(double x) {
-  final p = (x % 1.0) * _kAurora.length;
-  final i = p.floor() % _kAurora.length;
-  final j = (i + 1) % _kAurora.length;
-  return Color.lerp(_kAurora[i], _kAurora[j], p - p.floor())!;
+  final p = (x % 1.0) * BrandColors.aurora.length;
+  final i = p.floor() % BrandColors.aurora.length;
+  final j = (i + 1) % BrandColors.aurora.length;
+  return Color.lerp(BrandColors.aurora[i], BrandColors.aurora[j], p - p.floor())!;
 }
 
 /// Одна полоса сияния: горизонтальная подсветка (`curtain: false`) или

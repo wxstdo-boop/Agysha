@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'press_scale.dart';
 
 /// Карточка пустого состояния: иконка в круге, заголовок, подсказка, совет и
 /// кнопка действия. Вынесена отдельно от [PremiumEmptyState], потому что её
@@ -118,16 +119,20 @@ class PremiumEmptyCard extends StatelessWidget {
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: onPressed,
-                icon: const Icon(Icons.add_rounded),
-                label: Text(actionLabel),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  backgroundColor: tint,
-                  foregroundColor: cs.onPrimary,
-                  elevation: 1,
-                  shadowColor: tint.withValues(alpha: 0.25),
+              child: PressScale(
+                pressedScale: 0.97,
+                pressedOpacity: 0.94,
+                child: FilledButton.icon(
+                  onPressed: onPressed,
+                  icon: const Icon(Icons.add_rounded),
+                  label: Text(actionLabel),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: tint,
+                    foregroundColor: cs.onPrimary,
+                    elevation: 1,
+                    shadowColor: tint.withValues(alpha: 0.25),
+                  ),
                 ),
               ),
             ),

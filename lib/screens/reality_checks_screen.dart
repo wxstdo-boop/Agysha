@@ -732,6 +732,7 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                   const Spacer(),
                   VolumetricSwitch(
                     activeColor: theme.colorScheme.primary,
+                    semanticLabel: Translations.t('timeMode', context),
                     value: _service.useExactTimes,
                     onChanged: (v) {
                       _service.setUseExactTimes(v);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/translations.dart';
 import '../utils/context_menu.dart';
+import '../utils/design_tokens.dart';
 import '../widgets/canary_icon.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/smooth_char_counter.dart';
@@ -78,7 +79,7 @@ Widget devWavyTile(
       child: Stack(
         children: [
           ClipRRect(
-            borderRadius: const BorderRadius.all(Radius.circular(18.7)),
+            borderRadius: const BorderRadius.all(Radius.circular(Radii.ringInner)),
             child: ColoredBox(
               // Плотная подложка, чтобы градиент кольца не просвечивал
               // сквозь карточку посередине.
@@ -95,7 +96,7 @@ Widget devWavyTile(
                 child: CustomPaint(
                   painter: _SquigglyRingPainter(
                     color: accent.withValues(alpha: 0.60),
-                    radius: 18.7,
+                    radius: Radii.ringInner,
                     amplitude: 1.6,
                     wavelength: 9,
                     inset: 1.1,

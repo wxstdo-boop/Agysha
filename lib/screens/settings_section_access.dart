@@ -210,6 +210,7 @@ extension _SettingsSectionAccess on _SettingsScreenState {
                     },
                     trailing: VolumetricSwitch(
                       value: notificationService.enabled,
+                      semanticLabel: Translations.notificationsDescOf(context),
                       onChanged: (v) async {
                         await notificationService.setEnabled(v);
                         if (v) {
@@ -287,6 +288,7 @@ extension _SettingsSectionAccess on _SettingsScreenState {
                     },
                     trailing: VolumetricSwitch(
                       value: fsOn,
+                      semanticLabel: Translations.fullscreenNotifDescOf(context),
                       onChanged: (v) => notificationService.setFullscreen(v),
                       activeColor: theme.colorScheme.primary,
                     ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/haptics.dart';
 import '../services/profile_service.dart';
 import '../utils/motion_prefs.dart';
+import '../utils/design_tokens.dart';
 import 'press_scale.dart';
 
 /// Красный кружок онлайна: «горит» справа от последней буквы заголовка и рядом
@@ -23,9 +24,6 @@ class OnlineDot extends StatefulWidget {
   /// Публичен, чтобы вызывающие могли скомпенсировать «свес» зоны в лэйауте
   /// (она шире глифа — см. шапку профиля).
   static const double tapTarget = 30;
-
-  /// Тот же «кровавый», что у свежего релиза и сплэша.
-  static const Color _blood = Color(0xFFE53935);
 
   final VoidCallback onTap;
 
@@ -102,7 +100,7 @@ class _OnlineDotState extends State<OnlineDot> {
                   curve: Curves.easeInOutCubic,
                   decoration: BoxDecoration(
                     color: _pressed
-                        ? OnlineDot._blood.withValues(alpha: 0.14)
+                        ? BrandColors.freshRed.withValues(alpha: 0.14)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(
                       widget.pressedBorderRadius,
@@ -126,13 +124,13 @@ class _OnlineDotState extends State<OnlineDot> {
                           // середина: «пусто». Без свечения и градиента —
                           // ровная матовая заливка, ничего не «отсвечивает».
                           color: online
-                              ? OnlineDot._blood.withValues(alpha: 0.55)
+                              ? BrandColors.freshRed.withValues(alpha: 0.55)
                               : Colors.transparent,
                           // У пустого остаётся тонкое кольцо — иначе он бы
                           // просто исчез и статус читался бы как «нет данных».
                           border: Border.all(
                             color: online
-                                ? OnlineDot._blood.withValues(alpha: 0.75)
+                                ? BrandColors.freshRed.withValues(alpha: 0.75)
                                 : theme.colorScheme.outline.withValues(
                                     alpha: 0.45,
                                   ),

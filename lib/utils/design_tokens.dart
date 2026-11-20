@@ -31,6 +31,10 @@ abstract final class Radii {
   /// Капсула: полностью скруглённая кромка.
   static const double pill = 999;
 
+  /// Внутренний радиус кольца-канта: [lg] минус толщина канта 1.3.
+  /// Один рецепт для статистики, снэкбара и карточек с обводкой.
+  static const double ringInner = lg - 1.3;
+
   static const BorderRadius xsAll = BorderRadius.all(Radius.circular(xs));
   static const BorderRadius smAll = BorderRadius.all(Radius.circular(sm));
   static const BorderRadius mdAll = BorderRadius.all(Radius.circular(md));
@@ -51,6 +55,20 @@ abstract final class BrandColors {
 
   /// Фирменный алый: отлив клавиатуры, кровавые пятна, кант окна обновления.
   static const Color red = Color(0xFFE0192F);
+
+  /// «Свежий» кровавый: активная кнопка «Что нового», кружок онлайна.
+  static const Color freshRed = Color(0xFFE53935);
+
+  /// Тёмный кровавый: пятна сплэша, акцент окна ивента, пикер иконок.
+  static const Color blood = Color(0xFFB3121F);
+
+  /// Северное сияние подарка «Метель» и одноимённого оверлея: мята, лазурь,
+  /// лаванда. Оба места раньше держали копии с комментариями «те же цвета».
+  static const List<Color> aurora = <Color>[
+    Color(0xFF5FD6A8),
+    Color(0xFF6FB8E8),
+    Color(0xFF9C86E8),
+  ];
 }
 
 /// Шкала отступов, шаг 4. Держит ритм интерфейса.

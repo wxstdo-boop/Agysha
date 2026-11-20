@@ -210,6 +210,7 @@ extension _SettingsDevTools on _SettingsScreenState {
                       value: value,
                       onChanged: savePerfectionism,
                       activeColor: const Color(0xFFB39DDB),
+                      semanticLabel: Translations.t('perfectionism', routeContext),
                       // Крупнее и объёмнее — уголок разработчика.
                       scale: 1.28,
                     ),
@@ -237,6 +238,7 @@ extension _SettingsDevTools on _SettingsScreenState {
                       value: value,
                       onChanged: saveTaskNotes,
                       activeColor: const Color(0xFFD3A7FF),
+                      semanticLabel: Translations.t('taskNotesTitle', routeContext),
                       scale: 1.28,
                     ),
                   ),
@@ -263,6 +265,7 @@ extension _SettingsDevTools on _SettingsScreenState {
                       value: value,
                       onChanged: saveBerserk,
                       activeColor: const Color(0xFFFF5265),
+                      semanticLabel: Translations.t('berserkCardTitle', routeContext),
                       scale: 1.28,
                     ),
                   ),

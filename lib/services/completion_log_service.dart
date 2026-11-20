@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'habit_service.dart';
 import 'json_file.dart';
 import 'task_service.dart';
+import '../utils/date_keys.dart';
 
 /// Лог выполнения по дням (привычки + задачи). Хранит реальную историю
 /// с момента установки этой версии; для дней, которые прошли ДО лога,
@@ -50,10 +51,7 @@ class CompletionLogService extends ChangeNotifier {
   bool _loaded = false;
 
   /// 'yyyy-MM-dd' по Москве (совпадает с датами стриков).
-  static String dayKey(DateTime msk) =>
-      '${msk.year.toString().padLeft(4, '0')}-'
-      '${msk.month.toString().padLeft(2, '0')}-'
-      '${msk.day.toString().padLeft(2, '0')}';
+  static String dayKey(DateTime msk) => formatDayKey(msk);
 
   Map<String, DayCompletion> get log => Map.unmodifiable(_log);
 

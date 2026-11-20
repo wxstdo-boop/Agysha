@@ -435,6 +435,7 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
                   value: _vibrate,
                   onChanged: (v) => setState(() => _vibrate = v),
                   activeColor: theme.colorScheme.primary,
+                  semanticLabel: Translations.vibrateOf(context),
                 ),
               ),
             ),

@@ -16,6 +16,7 @@ import 'prefs.dart';
 import 'reality_check_service.dart';
 import 'score_service.dart';
 import 'settings_service.dart';
+import '../utils/date_keys.dart';
 import 'notification_service.dart';
 import 'task_service.dart';
 
@@ -902,10 +903,10 @@ class AiGuideService {
     }
   }
 
-  static String _todayKey() {
-    final now = DateTime.now().toUtc();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  }
+  /// День для дедупликации отчётов — LOCAL, как и стрик Ады. Раньше здесь был
+  /// UTC: между 00:00 и 03:00 по Москве ключ отставал на сутки, и «утренний»
+  /// отчёт мог уйти второй раз в один и тот же местный день.
+  static String _todayKey() => localDayKey();
 
   /// Совместимость со старыми элементами UI: HF больше не используется.
   static Future<int> hfRemainingToday() async => 0;
@@ -940,9 +941,7 @@ class AiGuideService {
   /// пользователем. Не отправляет уведомления и не создаёт сообщения чаще
   /// одного раза в сутки.
   static Future<void> maybeDeliverAdaNudge(String languageCode) async {
-    final now = DateTime.now();
-    final day =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final day = localDayKey();
     if (globalPrefs.getString('ada_proactive_day') == day) return;
     var text = '';
     try {
@@ -986,8 +985,7 @@ class AiGuideService {
       languageCode = await SettingsService.resolveLanguageCode();
     }
     final now = DateTime.now();
-    final today =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final today = localDayKey(now);
     final delivered = <AiMessage>[];
     _deliveringReports = true;
     try {

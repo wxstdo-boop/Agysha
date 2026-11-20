@@ -2,12 +2,6 @@
 
 part of 'ai_guide_service.dart';
 
-  String _localDayKey([DateTime? d]) {
-    final now = d ?? DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-'
-        '${now.day.toString().padLeft(2, '0')}';
-  }
-
   /// Пересчитывает стрик из сохранённого состояния: если последний раз
   /// писали сегодня или вчера — стрик жив; если был перерыв — 0.
   Future<void> _loadAdaStreakImpl() async {
@@ -18,8 +12,8 @@ part of 'ai_guide_service.dart';
         AiGuideService.adaStreak.value = 0;
         return;
       }
-      final today = _localDayKey();
-      final yesterday = _localDayKey(
+      final today = localDayKey();
+      final yesterday = localDayKey(
         DateTime.now().subtract(const Duration(days: 1)),
       );
       AiGuideService.adaStreak.value = (last == today || last == yesterday) ? count : 0;
@@ -34,7 +28,7 @@ part of 'ai_guide_service.dart';
   /// Возвращает новый стрик, если он сегодня вырос, иначе 0.
   Future<int> _bumpAdaStreakImpl() async {
     try {
-      final today = _localDayKey();
+      final today = localDayKey();
       final last = globalPrefs.getString(AiGuideService._adaStreakLastKey);
       final count = globalPrefs.getInt(AiGuideService._adaStreakKey) ?? 0;
       var newCount = count;
@@ -42,7 +36,7 @@ part of 'ai_guide_service.dart';
       if (last == today) {
         // Уже писали сегодня — стрик не растёт.
       } else if (last ==
-          _localDayKey(DateTime.now().subtract(const Duration(days: 1)))) {
+          localDayKey(DateTime.now().subtract(const Duration(days: 1)))) {
         newCount = count + 1;
         grew = true;
       } else {
