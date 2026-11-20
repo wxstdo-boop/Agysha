@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../main.dart' show preDecodedLogo;
 import '../utils/motion_prefs.dart';
+import '../utils/design_tokens.dart';
 
 class SplashScreen extends StatefulWidget {
   final VoidCallback? onDone;
@@ -443,7 +444,7 @@ class _ShineText extends StatelessWidget {
 
   /// Цвет блеска — фиксированная «кровь», не primary: фирменная подпись
   /// должна одинаково читаться во всех темах, включая grok и rose.
-  static const Color _blood = Color(0xFFB3121F);
+
 
   /// Половина ширины полосы в координатах Alignment (по горизонтали).
   static const double _half = 0.55;
@@ -452,7 +453,7 @@ class _ShineText extends StatelessWidget {
   /// вместе и так невысокой альфой делало полосу почти невидимой на светлом
   /// фоне, а полосы пользователь не видел вовсе.
   static Color _hot(double a) =>
-      Color.lerp(_blood, Colors.white, 0.30)!.withValues(alpha: a);
+      Color.lerp(BrandColors.blood, Colors.white, 0.30)!.withValues(alpha: a);
 
   @override
   Widget build(BuildContext context) {
@@ -532,11 +533,11 @@ class _ShineText extends StatelessWidget {
       begin: Alignment(cx - _half, 0),
       end: Alignment(cx + _half, 0),
       colors: [
-        _blood.withValues(alpha: 0),
-        _blood.withValues(alpha: 0.92 * a),
+        BrandColors.blood.withValues(alpha: 0),
+        BrandColors.blood.withValues(alpha: 0.92 * a),
         _hot(0.98 * a),
-        _blood.withValues(alpha: 0.92 * a),
-        _blood.withValues(alpha: 0),
+        BrandColors.blood.withValues(alpha: 0.92 * a),
+        BrandColors.blood.withValues(alpha: 0),
       ],
       stops: const [0.0, 0.26, 0.5, 0.74, 1.0],
     ).createShader(rect);
@@ -586,7 +587,7 @@ class _PaintSplatPainter extends CustomPainter {
 
   /// Цвет брызг — фирменная «кровь», та же, что у подписи POWERED BY LARAF
   /// (см. [_ShineText]): ава и текст забрызганы одним материалом.
-  static const Color _blood = Color(0xFFB3121F);
+
 
   /// Кляксы: (доля x, доля y, доля радиуса, фаза формы). Разнесены по плите
   /// и мелкие — пятна читаются ОТДЕЛЬНЫМИ брызгами от удара кистью, а не
@@ -692,7 +693,7 @@ class _PaintSplatPainter extends CustomPainter {
 
     // Полупрозрачная кровь: сквозь пятна просвечивает плита логотипа, и
     // брызги читаются как след краски, а не как глухие наклейки.
-    final paint = Paint()..color = _blood.withValues(alpha: 0.58 * env);
+    final paint = Paint()..color = BrandColors.blood.withValues(alpha: 0.58 * env);
     for (final b in _blobs) {
       final c = Offset(b.$1 * size.width, b.$2 * size.height);
       canvas.drawPath(_blob(c, short * b.$3 * grow, b.$4), paint);
@@ -702,7 +703,7 @@ class _PaintSplatPainter extends CustomPainter {
     final dropGrow =
         Curves.easeOutCubic.transform(((t - 0.12) / 0.88).clamp(0.0, 1.0)) *
         1.12;
-    final dropPaint = Paint()..color = _blood.withValues(alpha: 0.48 * env);
+    final dropPaint = Paint()..color = BrandColors.blood.withValues(alpha: 0.48 * env);
     for (final d in _drops) {
       canvas.drawCircle(
         Offset(d.$1 * size.width, d.$2 * size.height),

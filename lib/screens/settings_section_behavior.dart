@@ -52,6 +52,7 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                 },
                 trailing: VolumetricSwitch(
                   value: _experimental,
+                  semanticLabel: Translations.t('experimentalSettings', context),
                   onChanged: (v) async {
                     await SettingsService.saveExperimental(v);
                     _refresh(() => _experimental = v);
@@ -90,6 +91,7 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                 },
                 trailing: VolumetricSwitch(
                   value: _autoSave,
+                  semanticLabel: Translations.t('autoSave', context),
                   onChanged: (v) async {
                     await SettingsService.saveAutoSave(v);
                     _refresh(() => _autoSave = v);

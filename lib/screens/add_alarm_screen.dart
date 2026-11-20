@@ -775,6 +775,7 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                           value: _vibrate,
                           onChanged: (v) => setState(() => _vibrate = v),
                           activeColor: Theme.of(context).colorScheme.primary,
+                          semanticLabel: Translations.vibrateOf(context),
                         ),
                       ),
                     ),

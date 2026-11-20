@@ -7,6 +7,7 @@ import '../main.dart';
 import '../services/new_year_event_service.dart';
 import '../services/haptics.dart';
 import '../utils/design_tokens.dart';
+import '../utils/date_keys.dart';
 import '../utils/snackbar.dart';
 
 /// Компактное окно ивента «Каждый день дарят шапку». Открывается по тапу на
@@ -178,11 +179,7 @@ class _NewYearEventBannerState extends State<NewYearEventBanner>
   Future<void> _refresh() async {
     try {
       final svc = NewYearEventService();
-      final now = DateTime.now();
-      final todayKey =
-          '${now.year}-'
-          '${now.month.toString().padLeft(2, '0')}-'
-          '${now.day.toString().padLeft(2, '0')}';
+      final todayKey = localDayKey();
       final hats = await svc.hatCount();
       // Коллекция собрана → забирать больше нечего, и кнопка обязана быть
       // «Получено» даже там, где сегодня по календарю ещё не отмечено (тестовая

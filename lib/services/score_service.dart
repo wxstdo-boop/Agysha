@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'prefs.dart';
+import '../utils/date_keys.dart';
 
 /// Категория начисления очков «Agysha-рейтинга». Каждая — за реальное
 /// действие в приложении, поэтому цифра в рейтинге что-то значит, а не
@@ -135,11 +136,7 @@ class ScoreService extends ChangeNotifier {
 
   static const String _activeDayKey = 'score_active_day';
 
-  String _dayKey() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-'
-        '${now.day.toString().padLeft(2, '0')}';
-  }
+  String _dayKey() => localDayKey();
 
   /// Сбросить копилку (для тестов и «сброса статистики»).
   Future<void> reset() async {

@@ -31,9 +31,6 @@ const List<IconData> _changeIcons = [
   Icons.auto_fix_high_rounded,
 ];
 
-/// Фирменный «кровавый» акцент — тот же, что у свежего релиза и подписи.
-const Color _heartRed = Color(0xFFE53935);
-
 /// Экран «Что нового».
 ///
 /// Список берётся из живых GitHub-релизов ([UpdateService.fetchChangelog]),
@@ -170,7 +167,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                 const TextSpan(text: '  '),
                 const TextSpan(
                   text: '\u2764',
-                  style: TextStyle(color: _heartRed),
+                  style: TextStyle(color: BrandColors.freshRed),
                 ),
               ],
             ),
@@ -366,7 +363,7 @@ class _LatestVersionState extends State<_LatestVersion>
     with SingleTickerProviderStateMixin {
   /// Тот же «кровавый», что у подписи LARAF: свежий релиз помечен тем же
   /// фирменным акцентом, что и сплэш.
-  static const Color _blood = Color(0xFFB3121F);
+
 
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
@@ -405,7 +402,7 @@ class _LatestVersionState extends State<_LatestVersion>
                   child: CustomPaint(
                     painter: _WavyUnderlinePainter(
                       progress: Curves.easeOutCubic.transform(_ctrl.value),
-                      color: _blood.withValues(alpha: 0.5),
+                      color: BrandColors.blood.withValues(alpha: 0.5),
                     ),
                   ),
                 );

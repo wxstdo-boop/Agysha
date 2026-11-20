@@ -1364,18 +1364,12 @@ class _SplatHighlightPainter extends CustomPainter {
 /// Палитра подарочного скина «Метель»: северное сияние по белому снегу —
 /// ледяная мята, лазурь и лаванда. Те же цвета, что и оверлей «Метели»
 /// (см. metel_overlay.dart), чтобы подарок читался одним набором.
-const List<Color> _kAurora = [
-  Color(0xFF5FD6A8),
-  Color(0xFF6FB8E8),
-  Color(0xFF9C86E8),
-];
-
 /// Цвет сияния по позиции 0 → 1 по кругу (стык плавный: конец = начало).
 Color _auroraAt(double x) {
-  final p = (x % 1.0) * _kAurora.length;
-  final i = p.floor() % _kAurora.length;
-  final j = (i + 1) % _kAurora.length;
-  return Color.lerp(_kAurora[i], _kAurora[j], p - p.floor())!;
+  final p = (x % 1.0) * BrandColors.aurora.length;
+  final i = p.floor() % BrandColors.aurora.length;
+  final j = (i + 1) % BrandColors.aurora.length;
+  return Color.lerp(BrandColors.aurora[i], BrandColors.aurora[j], p - p.floor())!;
 }
 
 /// Эмблема ПИН-экрана вместо стандартного замка: монотонный знак кодового
@@ -1550,7 +1544,7 @@ class _MedallionPainter extends CustomPainter {
       // выражению `frost ? … : …` и ломается на `Expected an identifier`.
       frost
           ? (Paint()
-              ..color = _kAurora[1].withValues(alpha: isDark ? 0.16 : 0.12))
+              ..color = BrandColors.aurora[1].withValues(alpha: isDark ? 0.16 : 0.12))
           : _ink(isDark ? 0.15 : 0.10),
     );
     if (frost) {
@@ -1564,7 +1558,7 @@ class _MedallionPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = u(0.024)
           ..shader = SweepGradient(
-            colors: [..._kAurora, _kAurora.first],
+            colors: [...BrandColors.aurora, BrandColors.aurora.first],
           ).createShader(Rect.fromCircle(center: c, radius: outer)),
       );
     } else {
@@ -1881,7 +1875,7 @@ class _PinPrompt extends StatelessWidget {
         CustomPaint(
           size: Size(width, 12),
           painter: _WavyLinePainter(
-            color: const Color(0xFFB3121F).withValues(alpha: 0.42),
+            color: BrandColors.blood.withValues(alpha: 0.42),
           ),
         ),
       ],

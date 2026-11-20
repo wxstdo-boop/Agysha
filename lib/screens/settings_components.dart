@@ -43,7 +43,7 @@ class _RealityCheckToggleCard extends StatelessWidget {
         // AnimatedContainer: фон карточки плавно перетекает между
         // состояниями (раньше был простой Container — цвет переключался
         // мгновенно, хотя текст/бейдж анимировались — выглядело дёргано).
-        return AnimatedContainer(
+        final card = AnimatedContainer(
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
@@ -125,12 +125,20 @@ class _RealityCheckToggleCard extends StatelessWidget {
                       value: on,
                       onChanged: (v) => _toggle(context, rc, v),
                       activeColor: theme.colorScheme.primary,
+                      semanticLabel: title,
                     ),
                   ],
                 ),
               ),
             ),
           ),
+        );
+        // Крупная карточка на всю ширину: одним масштабом отдачи 1–2 % тут
+        // не увидеть, поэтому гасим ещё и плотность — как у карточек профиля.
+        return PressScale(
+          pressedScale: 0.99,
+          pressedOpacity: 0.94,
+          child: card,
         );
       },
     );

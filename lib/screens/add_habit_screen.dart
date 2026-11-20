@@ -716,6 +716,11 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
                   VolumetricSwitch(
                     value: _reminderTime != null,
                     activeColor: theme.colorScheme.primary,
+                    semanticLabel: Translations.t(
+                      'remindAll',
+                      context,
+                      'Вспомнить всё',
+                    ),
                     onChanged: (v) =>
                         v ? _enableReminder() : _disableReminder(),
                   ),

@@ -64,6 +64,7 @@ extension _SettingsSectionAda on _SettingsScreenState {
                 },
                 trailing: VolumetricSwitch(
                   value: _aiGuide,
+                  semanticLabel: Translations.t('aiGuideToggle', context),
                   onChanged: (v) async {
                     await SettingsService.saveAiGuide(v);
                     _refresh(() => _aiGuide = v);
@@ -226,6 +227,11 @@ extension _SettingsSectionAda on _SettingsScreenState {
                               onTap: () => _toggleAiTracking(!_aiTracking),
                               trailing: VolumetricSwitch(
                                 value: _aiTracking,
+                                semanticLabel: Translations.t(
+                                  'adaTracking',
+                                  context,
+                                  'Ada tracking',
+                                ),
                                 onChanged: _toggleAiTracking,
                                 activeColor: theme.colorScheme.primary,
                               ),

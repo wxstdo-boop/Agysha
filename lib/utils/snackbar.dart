@@ -2,6 +2,7 @@ import 'dart:async';
 
 
 import 'package:flutter/material.dart';
+import 'design_tokens.dart';
 
 // Глобальный дедуп и мягкая замена: пока плашка висит, новое сообщение
 // подменяет её содержимое на месте (никаких «вторых» снекбаров поверх) —
@@ -304,7 +305,7 @@ class _AnimatedSnackBarState extends State<_AnimatedSnackBar>
               child: Container(
                 padding: const EdgeInsets.all(1.3),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(19.3),
+                  borderRadius: BorderRadius.circular(Radii.lg),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -340,7 +341,7 @@ class _AnimatedSnackBarState extends State<_AnimatedSnackBar>
                     // пересобирал размытие каждый кадр и плашка «мигала».
                     color: widget.theme.colorScheme.primaryContainer
                         .withValues(alpha: dark ? 0.72 : 0.78),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(Radii.ringInner),
                   ),
                   child: Row(
                         children: [

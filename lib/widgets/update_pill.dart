@@ -286,7 +286,7 @@ class _UpdatePillState extends State<UpdatePill>
                       color: cs.onPrimaryContainer,
                       enter: _enterCurve,
                       isSpinning: _busy || update != null,
-                      period: const Duration(milliseconds: 2600),
+                      period: Motion.ambient,
                     ),
                   ),
                   const SizedBox(width: 3),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../utils/icon_map.dart';
+import '../utils/date_keys.dart';
 
 class RealityCheck {
   final String id;
@@ -30,12 +31,21 @@ class RealityCheck {
   static String todayKey() {
     // Calendar day by Moscow time (UTC+3, no DST) so streak / done-today
     // bookkeeping matches the same 00:00 boundary as HabitService.
-    final n = DateTime.now().toUtc().add(const Duration(hours: 3));
-    return '${n.year}-${n.month}-${n.day}';
+    // Раньше ключ писался БЕЗ ведущих нулей ('2026-11-2') — см. [_legacyKey]
+    // ниже: старые отметки обязаны продолжать узнаваться.
+    return mskDayKey();
+  }
+
+  /// Ключ старого формата (без паддинга), который писали эти же проверки до
+  /// перехода на общий [mskDayKey]. Читается только на совместимость.
+  static String _legacyKey(String padded) {
+    final p = padded.split('-');
+    return '${p[0]}-${int.parse(p[1])}-${int.parse(p[2])}';
   }
 
   bool get isDoneToday {
-    return lastDoneDate == todayKey();
+    final today = todayKey();
+    return lastDoneDate == today || lastDoneDate == _legacyKey(today);
   }
 
   Map<String, dynamic> toJson() => {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/translations.dart';
 import '../utils/icon_map.dart';
+import '../utils/design_tokens.dart';
 
 class IconPickerSheet extends StatelessWidget {
   final int selectedCodePoint;
@@ -42,7 +43,7 @@ class IconPickerSheet extends StatelessWidget {
               // Ручка — полупрозрачная КРАСНАЯ, а не серым и не акцентом
               // темы: на кровавой/розовой теме серая полоска выпадала из
               // палитры шита, а primary на «зелёной» теме давал не тот цвет.
-              color: const Color(0xFFB3121F).withValues(alpha: 0.45),
+              color: BrandColors.blood.withValues(alpha: 0.45),
               borderRadius: BorderRadius.circular(2),
             ),
           ),

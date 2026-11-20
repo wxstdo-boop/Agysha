@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import '../widgets/press_scale.dart';
 import '../utils/motion_prefs.dart';
+import '../utils/design_tokens.dart';
 import '../services/reality_check_service.dart';
 import '../services/habit_service.dart';
 import '../services/task_service.dart';
@@ -195,7 +196,7 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   color: theme.colorScheme.secondaryContainer,
-                  borderRadius: const BorderRadius.all(Radius.circular(18.7)),
+                  borderRadius: const BorderRadius.all(Radius.circular(Radii.ringInner)),
                 ),
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -406,7 +407,7 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
           child: Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18.7),
+              borderRadius: BorderRadius.circular(Radii.ringInner),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -590,7 +591,7 @@ class _MonthChart extends StatelessWidget {
         child: Card(
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18.7),
+            borderRadius: BorderRadius.circular(Radii.ringInner),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),

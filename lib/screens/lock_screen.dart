@@ -11,6 +11,7 @@ import '../services/pin_service.dart';
 import '../l10n/translations.dart';
 import '../utils/jank_probe.dart';
 import '../utils/motion_prefs.dart';
+import '../utils/design_tokens.dart';
 import '../widgets/brand_emblem.dart';
 
 part 'lock_screen_widgets.dart';

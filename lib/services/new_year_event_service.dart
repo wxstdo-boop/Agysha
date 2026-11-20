@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'json_file.dart';
 import 'prefs.dart';
+import '../utils/date_keys.dart';
 
 /// Новый год 2027 — каждый день дарят по одной шапке.
 /// Пользователь открывает приложение в день D и забирает шапку дня («Забрать»).
@@ -163,10 +164,7 @@ class NewYearEventService extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _todayKey() {
-    final now = DateTime.now();
-    return '${now.year}-${_pad(now.month)}-${_pad(now.day)}';
-  }
+  String _todayKey() => localDayKey();
 
   String _pad(int n) => n.toString().padLeft(2, '0');
 

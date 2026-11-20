@@ -157,6 +157,7 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
                 },
                 trailing: VolumetricSwitch(
                   value: _autoExport,
+                  semanticLabel: Translations.t('autoExport', context),
                   onChanged: (v) async {
                     await SettingsService.saveAutoExport(v);
                     _refresh(() => _autoExport = v);
