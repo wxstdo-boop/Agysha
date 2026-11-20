@@ -8,21 +8,23 @@ GitHub Actions, workflow `CI` (`.github/workflows/ci.yml`), Flutter **3.47.5**,
 ```
 flutter pub get --enforce-lockfile
 flutter analyze                 →  No issues found!
-flutter test                    →  All tests passed! (419, 6 skipped)
+flutter test --concurrency=1    →  All tests passed! (435, 3 skipped)
 ```
 
-Прогон зелёный целиком: **419 тестов в 74 файлах**, падений нет; 6 тестов
+Прогон зелёный целиком: **435 тестов в 77 файлах**, падений нет; 3 теста
 помечены `skip` — это ручные прогоны, которым нужны сеть и токен
 (`live_forge_test.dart`). В том числе проходит `exit_dialog_localization_test.dart`
 (3 теста: ru/en/fr).
 
-Число тестов берётся из итога прогона `flutter test` (419); объявлений
+Число тестов берётся из итога прогона `flutter test` (435); объявлений
 `test(` / `testWidgets(` в `test/*.dart` чуть больше, потому что часть
-проверок объявлена внутри общих хелперов. Файлов `test/*.dart` — 74.
+проверок объявлена внутри общих хелперов. Файлов `test/*.dart` — 77.
 
 Эти же команды CI выполняет на каждый pull request и на каждый push в `main`,
 поэтому состояние воспроизводимо на раннере GitHub: локальный SDK для проверки
-не нужен.
+не нужен. CI дополнительно считает lcov-покрытие и публикует его в
+Step Summary задания плюс артефактом `coverage-lcov` — только как отчёт,
+без порога-гейта.
 
 ## Что покрыто
 
@@ -34,7 +36,7 @@ flutter test                    →  All tests passed! (419, 6 skipped)
 | Будильники и уведомления | `alarm_scheduler_test`, `notification_service_test`, `remind_all_chip_test` |
 | ИИ-проводник Ада и «Кузница» | `services_test`, `forge_service_test`, `forge_screen_test`, `live_forge_test` (ручной, `skip`) |
 | Данные и миграции | `json_file_test`, `migration_test`, `move_ledger_test` |
-| Локализация и тексты | `translations_parity_test`, `exit_dialog_localization_test`, `wide_dash_test` |
+| Локализация и тексты | `translations_parity_test`, `translations_arb_sync_test` (переводы правим в `lib/l10n/app_*.arb`, генерят пересобирает `dart run tool/gen_translations.dart`), `exit_dialog_localization_test`, `wide_dash_test` |
 | Экраны (смоук) | `smoke_test`, `nutrition_interactions_test`, `stats_stretch_test`, `task_shelves_test`, `developer_corner_screen_test`, `changelog_screen_test` |
 
 ## Скриншоты для README

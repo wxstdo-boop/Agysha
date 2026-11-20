@@ -218,10 +218,13 @@ class MusicService extends ChangeNotifier {
     _playing = false;
     notifyListeners();
     if (player == null) return;
-    final gen = _rampGen;
     await _rampVolume(player, _vol, 0, over: _fadeOut);
     // За время фейда могли снова нажать «плей» — тогда паузу не делаем.
-    if (gen != _rampGen || _playing) return;
+    // Именно _playing — сигнал «был новый старт»: поколение рамп сравнивать
+    // нельзя (рамп инкрементирует его сам, проверка всегда была бы ложной),
+    // и раньше до player.pause() дело не доходило: плеер «играл» с нулевой
+    // громкостью, по завершении трека очередь продолжала накручивать его.
+    if (_playing) return;
     _vol = 0;
     await player.pause();
   }
@@ -234,9 +237,8 @@ class MusicService extends ChangeNotifier {
     _path = null;
     notifyListeners();
     if (player == null) return;
-    final gen = _rampGen;
     await _rampVolume(player, _vol, 0, over: _fadeOut);
-    if (gen != _rampGen || _playing) return;
+    if (_playing) return; // см. pause(): сигнал отмены — только новый play
     _vol = 1;
     await player.stop();
     await player.setVolume(1);

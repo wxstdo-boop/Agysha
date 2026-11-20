@@ -22,7 +22,41 @@ jobs:
 
       - run: flutter pub get --enforce-lockfile
       - run: flutter analyze
-      - run: flutter test --concurrency=1
+      - run: flutter test --concurrency=1 --coverage
+
+      - name: Итог по покрытию
+        # Покрытие — только отчёт, не гейт: доля тестов, работающих с реальным
+        # I/O и платформенными каналами, lcov считает неточно (недостижимые в
+        # тест-среде ветки нативных вызовов), поэтому порог в CI ставить рано.
+        # Считаем lcov штатными инструментами раннера (awk), без сторонних
+        # action'ов и скриптов: сумма LH/LF по всем SF-записям.
+        if: always() && hashFiles('coverage/lcov.info') != ''
+        run: |
+          set -euo pipefail
+          read -r HIT TOTAL < <(awk '
+            /^LH:/{h+=substr($0,4)}
+            /^LF:/{t+=substr($0,4)}
+            END{print h, t}' coverage/lcov.info)
+          if [ "$TOTAL" -eq 0 ]; then echo "lcov пуст: покрытие не измерено"; exit 0; fi
+          PCT=$(awk "BEGIN{printf \"%.1f\", 100*$HIT/$TOTAL}")
+          {
+            echo "### Покрытие кода тестами"
+            echo ""
+            echo "| Метрика | Значение |"
+            echo "|---|---|"
+            echo "| Покрытие строк | ${PCT}% (${HIT}/${TOTAL}) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Покрытие строк: ${PCT}% (${HIT}/${TOTAL})"
+
+      - name: Залить lcov как артефакт
+        # Артефакт на 90 дней: можно локально посчитать недостроенные области
+        # (genhtml, lcov --remove) или подключить бейдж/барадж позже.
+        if: always() && hashFiles('coverage/lcov.info') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          retention-days: 90
 
   lint-workflows:
     # Синтаксис и семантика workflow-файлов. Ловит то, что YAML-парсер не

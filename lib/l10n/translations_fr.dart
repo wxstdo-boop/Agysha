@@ -54,20 +54,20 @@ const Map<String, String> _fr = {
   'profileAddFriend': 'Ajouter un ami',
   'profileNoFriends': 'Ajoutez des amis pour comparer les progrès',
   'profileFriendsFull': 'Le classement compte déjà 50 amis',
-  'profileFriendName': "Nom de l'ami",
+  'profileFriendName': 'Nom de l\'ami',
   'profileFriendScore': 'Points de classement',
   'profileFriendScoreRandom': 'Points aléatoires',
   'profileFriendScoreHint':
-      'Les points viennent de l\'activité : habitudes, tâches, jours '
-          'dans le journal. Plus de points — plus haut dans le classement.',
+      'Les points viennent de l\'activité : habitudes, tâches, jours dans le journal. Plus de points — plus haut dans le classement.',
   'profileFriendSetScore': 'Points',
   'profilePickAvatar': 'Avatar',
   'profileAvatarFromGallery': 'La vôtre depuis la galerie',
   'profileAvatarSet': 'Avatar mis à jour',
-  'profileAvatarFailed': "Impossible de charger l'avatar",
+  'profileAvatarFailed': 'Impossible de charger l\'avatar',
   'profileMe': 'Moi',
   'scoreTitle': 'Tes points',
-  'scoreHint': 'Les points viennent de vrais gestes : habitudes, tâches, discussions avec Ada, repas et vérifications. Ils ne sont jamais retirés.',
+  'scoreHint':
+      'Les points viennent de vrais gestes : habitudes, tâches, discussions avec Ada, repas et vérifications. Ils ne sont jamais retirés.',
   'scoreHabit': 'Habitudes',
   'scoreTask': 'Tâches',
   'scoreAi': 'Discussion avec Ada',
@@ -77,8 +77,8 @@ const Map<String, String> _fr = {
   'scorePerUnit': '{n} pts chacun',
   'profileEvents': 'Événements',
   'eventNewYear': 'Événement du Nouvel An',
-  'eventNewYearDesc': "Un nouveau chapeau chaque jour jusqu'au 1er janvier",
-  'eventNewYearSoon': "L'événement n'a pas encore commencé",
+  'eventNewYearDesc': 'Un nouveau chapeau chaque jour jusqu\'au 1er janvier',
+  'eventNewYearSoon': 'L\'événement n\'a pas encore commencé',
   'eventCeramics': 'Foire de céramique',
   'eventCeramicsDesc': 'Ateliers et cuisson pour débutants',
   'eventCommunity': 'Rencontre de la communauté',
@@ -102,8 +102,7 @@ const Map<String, String> _fr = {
   'noHabits': 'Aucune habitude pour l’instant',
   'noTasks': 'Aucune tâche pour l’instant',
   'noRealityChecks': 'Aucune vérification de réalité pour l’instant',
-  'emptyAlarmHint':
-      'Créez un rythme doux pour votre journée en une minute.',
+  'emptyAlarmHint': 'Créez un rythme doux pour votre journée en une minute.',
   'emptyAlarmAdvice':
       'Commencez par une heure de réveil fiable. Le son et la routine peuvent attendre.',
   'emptyHabitHint':
@@ -130,7 +129,7 @@ const Map<String, String> _fr = {
   'peach': 'Pêche',
   'grok': 'Grok',
   'rose': 'Rose',
-  'metel': 'Metel', // Nom du thème-cadeau, non traduit
+  'metel': 'Metel',
   'followSystem': 'Langue du téléphone',
   'english': 'Anglais',
   'russian': 'Russe',
@@ -243,7 +242,7 @@ const Map<String, String> _fr = {
   'priorityHigh': 'Haute',
   'dueDate': 'Échéance',
   'dueNone': 'Sans échéance',
-  'dueToday': "Aujourd'hui",
+  'dueToday': 'Aujourd\'hui',
   'dueTomorrow': 'Demain',
   'dueIn3Days': 'Dans 3 jours',
   'dueInWeek': 'Dans une semaine',
@@ -266,15 +265,15 @@ const Map<String, String> _fr = {
   'monthChartHabits': 'Habitudes',
   'monthChartTasks': 'Tâches',
   'monthChartBest': 'meilleur jour',
-  'monthChartHint': 'Chaque barre représente un jour. Sa hauteur indique le travail accompli : habitudes en bas, tâches en haut. La colonne d’aujourd’hui est mise en évidence ; l’étoile marque le meilleur jour.',
+  'monthChartHint':
+      'Chaque barre représente un jour. Sa hauteur indique le travail accompli : habitudes en bas, tâches en haut. La colonne d’aujourd’hui est mise en évidence ; l’étoile marque le meilleur jour.',
   'monthChartDays': 'jours faits',
   'rcReset': 'Réinitialiser les stats',
-  'rcResetBody':
-      'Réinitialiser tous les compteurs de vérifications à zéro ?',
+  'rcResetBody': 'Réinitialiser tous les compteurs de vérifications à zéro ?',
   'rcExit': 'Quitter',
   'disableRcTitle': 'Désactiver les vérifications de réalité ?',
   'disableRcBody':
-      "La section va s'estomper et la bascule réapparaîtra. Les vérifications ne seront plus comptées dans les statistiques.",
+      'La section va s\'estomper et la bascule réapparaîtra. Les vérifications ne seront plus comptées dans les statistiques.',
   'disableRcLongHint': 'Appui long sur le titre pour désactiver',
   'disable': 'Désactiver',
   'rcChecksPerDay': 'Vérifications par jour',
@@ -286,11 +285,9 @@ const Map<String, String> _fr = {
   'rcText2': 'Regardez vos mains. Pouvez-vous compter les doigts ?',
   'rcText3': 'Essayez de traverser votre paume avec un doigt.',
   'rcText4': 'Lisez cette phrase deux fois. Le texte a-t-il changé ?',
-  'rcText5':
-      'Regardez autour de vous — connaissez-vous vraiment cet endroit ?',
+  'rcText5': 'Regardez autour de vous — connaissez-vous vraiment cet endroit ?',
   'rcText6': 'Que faisiez-vous il y a dix minutes ? Était-ce réel ?',
-  'rcText7':
-      'Touchez le mur le plus proche. La texture est-elle correcte ?',
+  'rcText7': 'Touchez le mur le plus proche. La texture est-elle correcte ?',
   'rcText8': 'Dites votre nom à voix haute. A-t-il sonné comme vous ?',
   'perfectionism': 'Lutte contre le perfectionnisme',
   'perfectionismHint': 'Sélection quotidienne contre le perfectionnisme',
@@ -393,11 +390,9 @@ const Map<String, String> _fr = {
   'batteryOptDesc': 'Désactiver pour des alarmes fiables',
   'batteryOpened': 'Paramètres de batterie ouverts',
   'batterySettings': 'Paramètres de batterie',
-  'batterySettingsDesc':
-      'Désactiver l’optimisation pour des alarmes fiables',
+  'batterySettingsDesc': 'Désactiver l’optimisation pour des alarmes fiables',
   'fullscreenNotif': 'Notifications plein écran',
-  'fullscreenNotifDesc':
-      'Afficher l’alarme par-dessus l’écran de verrouillage',
+  'fullscreenNotifDesc': 'Afficher l’alarme par-dessus l’écran de verrouillage',
   'fullScreenNotifTitle': 'Notifications plein écran',
   'fullScreenNotifBody':
       'Requis pour que l’alarme s’affiche par-dessus l’écran de verrouillage',
@@ -514,7 +509,8 @@ const Map<String, String> _fr = {
       'Fournisseurs gratuits : Kilo, OVHcloud, Murakumo et AI Horde. La clé Poolside est facultative.',
   'aiGuideKeyNoteProviders': 'Kilo, OVHcloud, Murakumo et AI Horde',
   'aiGuideKeyNoteTail': '',
-  'geminiKey': 'Clé Gemini (optionnelle — l’Ada la plus vive et la plus chaude)',
+  'geminiKey':
+      'Clé Gemini (optionnelle — l’Ada la plus vive et la plus chaude)',
   'geminiKeyHint': 'Colle ta clé Google AI Studio',
   'freeFallbacks': 'Solutions de secours gratuites :',
   'aiResort': 'L’IA est en vacances, attends un peu',
@@ -675,18 +671,16 @@ const Map<String, String> _fr = {
   'devPromptSaving': 'Enregistrement…',
   'devPromptSaved': 'Enregistré sur cet appareil',
   'devPromptUnsaved': 'Modifications non enregistrées',
-  'devPromptSaveError':
-      'Échec de l’enregistrement. Appuyez sur Enregistrer.',
+  'devPromptSaveError': 'Échec de l’enregistrement. Appuyez sur Enregistrer.',
   'devPromptSave': 'Enregistrer',
   'forgeTitle': 'Forge',
-  'forgeSubtitle': 'Discussion avec l’agent : pose une question ou demande une modification.',
+  'forgeSubtitle':
+      'Discussion avec l’agent : pose une question ou demande une modification.',
   'forgeTokenSection': 'ACCÈS GITHUB',
   'forgeTokenHint': 'Fine-grained : Contents, Pull requests — read and write.',
   'startupDiagTitle': 'Agysha s’est arrêtée en sécurité',
   'startupDiagBody':
-      'Agysha n’a pas pu terminer son démarrage et s’est arrêtée avant '
-      'le premier écran. Rien n’a changé sur le disque. Tu peux réessayer '
-      'ou copier/enregistrer les détails ci-dessous.',
+      'Agysha n’a pas pu terminer son démarrage et s’est arrêtée avant le premier écran. Rien n’a changé sur le disque. Tu peux réessayer ou copier/enregistrer les détails ci-dessous.',
   'startupDiagDetailsTitle': 'Détails techniques',
   'startupDiagCopy': 'Copier',
   'startupDiagSave': 'Enregistrer le log',
@@ -701,7 +695,8 @@ const Map<String, String> _fr = {
   'forgeTokenForget': 'Oublier le jeton',
   'forgeTokenOk': 'Jeton valide',
   'forgeTokenInvalid': 'GitHub a rejeté le jeton',
-  'forgeTokenReadOnly': 'Pas de droit d’écriture — l’agent ne peut pas committer',
+  'forgeTokenReadOnly':
+      'Pas de droit d’écriture — l’agent ne peut pas committer',
   'forgeTokenEmpty': 'Jeton requis',
   'forgeTokenSaveFailed':
       'Impossible d’enregistrer le jeton — stockage indisponible',
@@ -770,7 +765,8 @@ const Map<String, String> _fr = {
       'Forge fonctionne out of the box avec les fournisseurs gratuits intégrés',
   'changeForgeSection':
       'Le Coin Développeur a reçu la section Forge pour les modifications du dépôt',
-  'changeForgeEntry': 'Forge est accessible depuis les Réglages, en trois langues',
+  'changeForgeEntry':
+      'Forge est accessible depuis les Réglages, en trois langues',
   'changeCIMemory':
       'Les builds de release ne plantent plus sur le runner par manque de mémoire Gradle',
   'changeCISigning':
@@ -788,8 +784,7 @@ const Map<String, String> _fr = {
   'changeLangSmooth': 'Le changement de langue est désormais plus fluide',
   'changeEmDash':
       'Tous les tirets visibles sont devenus des tirets longs (em-dash)',
-  'changeSplashFix':
-      'L’avatar du splash ne clignote plus au démarrage à froid',
+  'changeSplashFix': 'L’avatar du splash ne clignote plus au démarrage à froid',
   'aboutAuthorTitle': 'À propos de l’auteur',
   'visitellaName': 'Visitella',
   'visitellaDesc': 'Projets, jeux, actualités',
@@ -825,15 +820,13 @@ const Map<String, String> _fr = {
   'changeGrokTheme': 'Thème Grok passé en monochrome clair/sombre',
   'changeMealCards':
       'Les cartes de nutrition utilisent désormais un set quotidien aléatoire de couleurs et d’icônes',
-  'changeDropdowns':
-      'Listes déroulantes arrondies dans paramètres et tâches',
+  'changeDropdowns': 'Listes déroulantes arrondies dans paramètres et tâches',
   'changeSnackbar': 'Animation des snackbars polie',
   'changeSwipeSnap':
       'Le balayage entre sections s’accroche désormais en douceur',
   'changeCornerSwipe': 'Coins supérieurs arrondis pendant le balayage',
   'changeRoundedTiles': 'Tuiles de paramètres désormais arrondies',
-  'changeCategoryLimit':
-      'Limite du nom de catégorie réduite à 15 caractères',
+  'changeCategoryLimit': 'Limite du nom de catégorie réduite à 15 caractères',
   'changeAuthorLinks':
       'Liens vers les applications de l’auteur ajoutés : Ataraxy et MSoc',
   'changePrev1': 'Réglages des habitudes, tâches et alarmes',
@@ -841,30 +834,40 @@ const Map<String, String> _fr = {
   'changePrev3': 'Export / import des données',
   'changePrev4': 'Module de nutrition avec historique 7 jours',
   'motivationQuote1': 'Une vie légère commence par un simple « assez ».',
-  'motivationQuote2': 'Tu n’as pas à tout caser — beaucoup de choses peuvent simplement s’en aller.',
-  'motivationQuote3': 'Respire plus profondément : la hâte n’accélère rien, elle fatigue.',
-  'motivationQuote4': 'Un petit pas sans effort dure plus longtemps qu’un sprint.',
+  'motivationQuote2':
+      'Tu n’as pas à tout caser — beaucoup de choses peuvent simplement s’en aller.',
+  'motivationQuote3':
+      'Respire plus profondément : la hâte n’accélère rien, elle fatigue.',
+  'motivationQuote4':
+      'Un petit pas sans effort dure plus longtemps qu’un sprint.',
   'motivationQuote5': 'Permets-toi de te reposer sans l’avoir mérité.',
   'motivationQuote6': 'Un matin simple allège toute la journée.',
-  'motivationQuote7': 'Tu n’as pas besoin d’être le meilleur — être vrai suffit.',
-  'motivationQuote8': 'Lâche ce qui n’est pas entre tes mains, et respirer devient plus facile.',
-  'motivationQuote9': 'Le silence n’est pas un vide — c’est une place pour toi.',
+  'motivationQuote7':
+      'Tu n’as pas besoin d’être le meilleur — être vrai suffit.',
+  'motivationQuote8':
+      'Lâche ce qui n’est pas entre tes mains, et respirer devient plus facile.',
+  'motivationQuote9':
+      'Le silence n’est pas un vide — c’est une place pour toi.',
   'motivationQuote10': 'Fais moins, mais plus calmement.',
-  'motivationQuote11': 'La légèreté n’est pas de la paresse — c’est le bon rythme.',
+  'motivationQuote11':
+      'La légèreté n’est pas de la paresse — c’est le bon rythme.',
   'motivationQuote12': 'Une bonne action suffit pour aujourd’hui.',
-  'motivationQuote13': 'Ne compare pas ton chemin à celui d’un autre : chacun a son rythme.',
+  'motivationQuote13':
+      'Ne compare pas ton chemin à celui d’un autre : chacun a son rythme.',
   'motivationQuote14': 'Permets-toi de ne pas connaître toutes les réponses.',
   'motivationQuote15': 'Un esprit calme résout plus vite qu’un esprit fatigué.',
   'motivationQuote16': 'Enlève le superflu, et la vie s’agrandit.',
   'motivationQuote17': 'Dis-toi « je gère », et cela devient plus léger.',
-  'motivationQuote18': 'Le repos fait partie du travail, ce n’est pas une récompense.',
+  'motivationQuote18':
+      'Le repos fait partie du travail, ce n’est pas une récompense.',
   'motivationQuote19': 'La douceur envers soi est plus forte que la sévérité.',
   'motivationQuote20': 'Ne cours pas après la journée — vis-la.',
   'motivationQuote21': 'Ce qui est facile n’est pas pour autant mauvais.',
   'motivationQuote22': 'Commence petit et ne précipite pas la fin.',
   'motivationQuote23': 'Ta valeur ne dépend pas de ta vitesse.',
   'motivationQuote24': 'Laisse un souci de côté aujourd’hui.',
-  'motivationQuote25': 'Vis de sorte qu’au soir tu aies envie de souffler avec un sourire.',
+  'motivationQuote25':
+      'Vis de sorte qu’au soir tu aies envie de souffler avec un sourire.',
   'motivationQuote26': 'La simplicité est le luxe le plus sous-estimé.',
   'motivationQuote27': 'Ne traîne pas hier dans un nouveau jour.',
   'motivationQuote28': 'Un sourire est le plus court chemin vers la légèreté.',
@@ -879,12 +882,16 @@ const Map<String, String> _fr = {
   'motivationQuote37': 'Une erreur est un virage, pas un échec.',
   'motivationQuote38': 'Sois aussi bienveillant envers toi qu’envers un ami.',
   'motivationQuote39': 'Ton rythme est le bon si tu t’y sens bien.',
-  'motivationQuote40': 'Le matin commence non par les tâches, mais par la respiration.',
-  'motivationQuote41': 'Ne remplis pas chaque minute — laisse une place à l’émerveillement.',
+  'motivationQuote40':
+      'Le matin commence non par les tâches, mais par la respiration.',
+  'motivationQuote41':
+      'Ne remplis pas chaque minute — laisse une place à l’émerveillement.',
   'motivationQuote42': 'La légèreté, c’est quand tu n’as rien à prouver.',
   'motivationQuote43': 'Laisse la journée être ordinaire.',
-  'motivationQuote44': 'Un « tout va bien » tranquille vaut les grandes victoires.',
-  'motivationQuote45': 'Repose-toi avant d’en avoir envie, pas après l’épuisement.',
+  'motivationQuote44':
+      'Un « tout va bien » tranquille vaut les grandes victoires.',
+  'motivationQuote45':
+      'Repose-toi avant d’en avoir envie, pas après l’épuisement.',
   'motivationQuote46': 'Un bureau clair, une tête claire.',
   'motivationQuote47': 'Lâche le contrôle là où il ne fait que fatiguer.',
   'motivationQuote48': 'Regarde le ciel au moins une fois par jour.',
@@ -902,32 +909,39 @@ const Map<String, String> _fr = {
   'motivationQuote60': 'Une chose à la fois — et le monde ne s’écroulera pas.',
   'motivationQuote61': 'Fatigué ? Repose-toi, n’abandonne pas.',
   'motivationQuote62': 'N’exige pas plus de toi que des autres.',
-  'motivationQuote63': 'La joie vit dans les petites choses, si on les remarque.',
+  'motivationQuote63':
+      'La joie vit dans les petites choses, si on les remarque.',
   'motivationQuote64': 'Plus lentement, c’est plus attentif.',
   'motivationQuote65': 'Pardonne-toi ta fatigue d’hier.',
   'motivationQuote66': 'Une vie légère est un choix, pas une chance.',
-  'motivationQuote67': 'Commence la journée par la gratitude, pas par l’angoisse.',
+  'motivationQuote67':
+      'Commence la journée par la gratitude, pas par l’angoisse.',
   'motivationQuote68': 'On est chez soi là où l’on se sent calme.',
   'motivationQuote69': 'Ne cours pas après tout — choisis ce qui est à toi.',
-  'motivationQuote70': 'Le silence devant une tasse de thé est aussi une conversation.',
-  'motivationQuote71': 'Lâche les attentes des autres — elles ne sont pas à toi.',
+  'motivationQuote70':
+      'Le silence devant une tasse de thé est aussi une conversation.',
+  'motivationQuote71':
+      'Lâche les attentes des autres — elles ne sont pas à toi.',
   'motivationQuote72': 'Un bon sommeil, c’est la moitié d’une vie légère.',
   'motivationQuote73': 'Vis de sorte de ne pas vouloir te fuir.',
   'motivationQuote74': 'Laisse dans la journée une place pour rien.',
   'motivationQuote75': 'Un simple « non » libère toute une soirée.',
-  'motivationQuote76': 'Ne compare pas ton début au milieu de quelqu’un d’autre.',
+  'motivationQuote76':
+      'Ne compare pas ton début au milieu de quelqu’un d’autre.',
   'motivationQuote77': 'La légèreté, c’est la confiance en soi.',
   'motivationQuote78': 'Fais un pas, pas un bond.',
   'motivationQuote79': 'Souris sans raison — la raison viendra.',
   'motivationQuote80': 'Tu n’as pas à tout terminer aujourd’hui.',
-  'motivationQuote81': 'La journée devient plus douce quand on ne la presse pas.',
+  'motivationQuote81':
+      'La journée devient plus douce quand on ne la presse pas.',
   'motivationQuote82': 'La tendresse envers soi n’est pas une faiblesse.',
   'motivationQuote83': 'Moins de bruit, plus de sens.',
   'motivationQuote84': 'Vis maintenant — le passé s’est déjà reposé.',
   'motivationQuote85': 'Laisse le bon venir sans effort.',
   'motivationQuote86': 'Le repos est aussi un pas en avant.',
   'motivationQuote87': 'Ton calme compte plus que l’avis des autres.',
-  'motivationQuote88': 'Chaque souffle est une nouvelle chance de commencer en douceur.',
+  'motivationQuote88':
+      'Chaque souffle est une nouvelle chance de commencer en douceur.',
   'motivationQuote89': 'Une vie légère commence par un regard léger.',
   'motivationQuote90': 'Tu es déjà assez. Sois simplement.',
   'areYouSure': 'Êtes-vous sûr ?',
@@ -968,7 +982,6 @@ const Map<String, String> _fr = {
       '📈 Transformez les erreurs en données : notées, comprises, action changée, répétée.',
   'berserkPrinciple8':
       '👑 Parlez plus précisément : ce dont vous avez besoin, pour quand, et quelle est la prochaine étape.',
-  // Nouvel An 2027 — un chapeau offert chaque jour
   'nyEventTitle': 'Un chapeau chaque jour',
   'nyEventBody': 'Chapeaux collectés : {1}',
   'nyEventFinalDay': 'Bonne année ! Les 12 chapeaux sont collectés !',
@@ -976,8 +989,7 @@ const Map<String, String> _fr = {
   'nyMarkedBtn': 'Reçu',
   'nyGiftHint': 'Le jour 12 ouvre un cadeau : le set Polaire',
   'nyPrizeDone':
-      'Cadeau ouvert : thème Metel, skin de serrure, 60 jours '
-      'd historique alimentaire et 30 catégories',
+      'Cadeau ouvert : thème Metel, skin de serrure, 60 jours d historique alimentaire et 30 catégories',
   'nyPrizeGiven': 'Cadeau ouvert : le set Polaire',
   'nyPrizeTheme': 'Nouveau thème disponible : Metel',
   'nyPrizeReverted': 'Cadeau retiré : thème Metel désactivé',
