@@ -90,8 +90,7 @@ part of 'ai_guide_service.dart';
       if (time != null) {
         try {
           await _createAlarm(time.$1, time.$2);
-          return 'Готово! Будильник на ${time.$1.toString().padLeft(2, '0')}:'
-              '${time.$2.toString().padLeft(2, '0')} создан. ⏰';
+          return 'Готово! Будильник на ${formatHmValues(time.$1, time.$2)} создан. ⏰';
         } catch (e) {
           return 'Не получилось создать будильник: $e';
         }
@@ -312,14 +311,13 @@ part of 'ai_guide_service.dart';
     if (NotificationService().isInitialized) {
       await NotificationService().scheduleAlarm(alarm);
     }
-    final hh = hour.toString().padLeft(2, '0');
-    final mm = minute.toString().padLeft(2, '0');
+    final hhmm = formatHmValues(hour, minute);
     AiGuideService._recordUndo(
       AiUndoAction(
         type: 'alarm',
         wasCreate: true,
         id: alarm.id,
-        label: 'Будильник на $hh:$mm',
+        label: 'Будильник на $hhmm',
       ),
     );
   }
@@ -467,12 +465,10 @@ part of 'ai_guide_service.dart';
             type: 'alarm',
             wasCreate: true,
             id: alarm.id,
-            label: 'Будильник на $hour:$minute',
+            label: 'Будильник на ${formatHmValues(hour, minute)}',
           ),
         );
-        final hh = alarm.time.hour.toString().padLeft(2, '0');
-        final mm = alarm.time.minute.toString().padLeft(2, '0');
-        return 'Будильник на $hh:$mm создан';
+        return 'Будильник на ${formatHmValues(alarm.time.hour, alarm.time.minute)} создан';
       case 'create_reality_check':
         final check = RealityCheck(
           id: const Uuid().v4(),

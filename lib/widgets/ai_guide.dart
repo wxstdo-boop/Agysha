@@ -892,71 +892,79 @@ class _AiChatBodyState extends State<_AiChatBody>
       waitDuration: const Duration(milliseconds: 400),
       child: PressScale(
         pressedScale: 0.90,
+        enableTilt: false,
         duration: const Duration(milliseconds: 180),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            Haptics.light();
-            setState(() {
-              _webSearch = !_webSearch;
-              try {
-                globalPrefs.setBool('ai_web_search', _webSearch);
-              } catch (_) {}
-            });
-          },
-          child: ClipOval(
-            // ClipOval: иконка при анимации НИКОГДА не вылезает за круг.
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                // «Стеклянный» круг под стать чату: выключен — полупрозрачная
-                // поверхность (сквозь неё видно размытый фон листа) с тонкой
-                // кромкой; включён — заливается фирменным градиентом.
-                shape: BoxShape.circle,
-                gradient: _webSearch
-                    ? LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          cs.primary,
-                          Color.lerp(cs.primary, cs.tertiary, 0.4)!,
-                        ],
-                      )
-                    : null,
-                color: _webSearch ? null : cs.surface.withValues(alpha: 0.55),
-                border: Border.all(
-                  color: _webSearch
-                      ? cs.primary
-                      : cs.outlineVariant.withValues(alpha: 0.65),
-                  width: 1.3,
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            splashColor: cs.primary.withValues(alpha: 0.22),
+            highlightColor: cs.primary.withValues(alpha: 0.14),
+            onTap: () {
+              Haptics.light();
+              setState(() {
+                _webSearch = !_webSearch;
+                try {
+                  globalPrefs.setBool('ai_web_search', _webSearch);
+                } catch (_) {}
+              });
+            },
+            child: ClipOval(
+              // ClipOval: иконка при анимации НИКОГДА не вылезает за круг.
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  // «Стеклянный» круг под стать чату: выключен — полупрозрачная
+                  // поверхность (сквозь неё видно размытый фон листа) с тонкой
+                  // кромкой; включён — заливается фирменным градиентом.
+                  shape: BoxShape.circle,
+                  gradient: _webSearch
+                      ? LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            cs.primary,
+                            Color.lerp(cs.primary, cs.tertiary, 0.4)!,
+                          ],
+                        )
+                      : null,
+                  color: _webSearch ? null : cs.surface.withValues(alpha: 0.55),
+                  border: Border.all(
+                    color: _webSearch
+                        ? cs.primary
+                        : cs.outlineVariant.withValues(alpha: 0.65),
+                    width: 1.3,
+                  ),
+                  boxShadow: _webSearch
+                      ? [
+                          BoxShadow(
+                            color: cs.primary.withValues(alpha: 0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]
+                      : null,
                 ),
-                boxShadow: _webSearch
-                    ? [
-                        BoxShadow(
-                          color: cs.primary.withValues(alpha: 0.35),
-                          blurRadius: 10,
-                          offset: const Offset(0, 1),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                // Только fade, БЕЗ scale: иконка не увеличивается и не
-                // «заезжает за границы» при переключении.
-                transitionBuilder: (child, animation) =>
-                    FadeTransition(opacity: animation, child: child),
-                child: Icon(
-                  _webSearch ? Icons.travel_explore : Icons.public,
-                  key: ValueKey('web_toggle_icon_$_webSearch'),
-                  size: 19,
-                  color: _webSearch ? cs.onPrimary : cs.onSurfaceVariant,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  // Только fade, БЕЗ scale: иконка не увеличивается и не
+                  // «заезжает за границы» при переключении.
+                  transitionBuilder: (child, animation) =>
+                      FadeTransition(opacity: animation, child: child),
+                  child: Icon(
+                    _webSearch ? Icons.travel_explore : Icons.public,
+                    key: ValueKey('web_toggle_icon_$_webSearch'),
+                    size: 19,
+                    color: _webSearch ? cs.onPrimary : cs.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
@@ -1024,67 +1032,75 @@ class _AiChatBodyState extends State<_AiChatBody>
       waitDuration: const Duration(milliseconds: 400),
       child: PressScale(
         pressedScale: 0.90,
+        enableTilt: false,
         duration: const Duration(milliseconds: 180),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _toggleScreenAware(context),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(17),
-              color: Colors.transparent,
-              border: Border.all(
-                color: _screenAware
-                    ? cs.primary
-                    : cs.outline.withValues(alpha: 0.45),
-                width: 1.2,
-              ),
-              boxShadow: _screenAware
-                  ? [
-                      BoxShadow(
-                        color: cs.primary.withValues(alpha: 0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Stack(
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            splashColor: cs.primary.withValues(alpha: 0.22),
+            highlightColor: cs.primary.withValues(alpha: 0.14),
+            onTap: () => _toggleScreenAware(context),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              width: 34,
+              height: 34,
               alignment: Alignment.center,
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) =>
-                      FadeTransition(opacity: animation, child: child),
-                  child: Icon(
-                    _screenAware ? Icons.visibility : Icons.visibility_outlined,
-                    key: ValueKey('screen_toggle_icon_$_screenAware'),
-                    size: 19,
-                    color: _screenAware ? cs.primary : cs.onSurfaceVariant,
-                  ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(17),
+                color: Colors.transparent,
+                border: Border.all(
+                  color: _screenAware
+                      ? cs.primary
+                      : cs.outline.withValues(alpha: 0.45),
+                  width: 1.2,
                 ),
-                // «Живая» точка: зелёная, когда контекст экрана активен.
-                if (_screenAware)
-                  Positioned(
-                    top: 2,
-                    right: 2,
-                    child: Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF4CD964),
-                        border: Border.all(color: cs.surface, width: 1),
-                      ),
+                boxShadow: _screenAware
+                    ? [
+                        BoxShadow(
+                          color: cs.primary.withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: Icon(
+                      _screenAware ? Icons.visibility : Icons.visibility_outlined,
+                      key: ValueKey('screen_toggle_icon_$_screenAware'),
+                      size: 19,
+                      color: _screenAware ? cs.primary : cs.onSurfaceVariant,
                     ),
                   ),
-              ],
+                  // «Живая» точка: зелёная, когда контекст экрана активен.
+                  if (_screenAware)
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFF4CD964),
+                          border: Border.all(color: cs.surface, width: 1),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1347,10 +1363,68 @@ class _AiChatBodyState extends State<_AiChatBody>
     }
   }
 
+  Widget _buildHeaderButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    required ColorScheme cs,
+    required bool isDark,
+  }) {
+    return SmoothTooltip(
+      message: tooltip,
+      preferredAbove: false,
+      waitDuration: const Duration(milliseconds: 300),
+      child: PressScale(
+        pressedScale: 0.88,
+        enableTilt: false,
+        duration: const Duration(milliseconds: 180),
+        child: Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh.withValues(
+              alpha: isDark ? 0.65 : 0.85,
+            ),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: isDark ? 0.40 : 0.60),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              splashColor: cs.primary.withValues(alpha: 0.22),
+              highlightColor: cs.primary.withValues(alpha: 0.14),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(7),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     // Тело чата НЕ читает viewInsets: клавиатуру обслуживает лёгкая
     // оболочка _AiChatSheet. Здесь — только содержимое, которое
     // пересобирается по собственным setState, а не при каждом кадре
@@ -1376,26 +1450,34 @@ class _AiChatBodyState extends State<_AiChatBody>
             children: [
               PressScale(
                 pressedScale: 0.90,
+                enableTilt: false,
                 duration: const Duration(milliseconds: 180),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _cycleAvatar,
-                  // Живой слушатель adaAvatarVariant: смена значка из ЛЮБОГО
-                  // места (тап по сердечку у сообщений, шапка, мини-чат)
-                  // мгновенно и плавно обновляет аватарку в шапке.
-                  child: ValueListenableBuilder<int>(
-                    valueListenable: adaAvatarVariant,
-                    builder: (context, idx, _) => AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 320),
-                      switchInCurve: Curves.easeOutBack,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: (child, animation) => ScaleTransition(
-                        scale: animation,
-                        child: FadeTransition(opacity: animation, child: child),
-                      ),
-                      child: AdaAvatar(
-                        variantIndex: idx,
-                        key: ValueKey('ada_avatar_$idx'),
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    splashColor: cs.primary.withValues(alpha: 0.25),
+                    highlightColor: cs.primary.withValues(alpha: 0.15),
+                    onTap: _cycleAvatar,
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: adaAvatarVariant,
+                        builder: (context, idx, _) => AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 320),
+                          switchInCurve: Curves.easeOutBack,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (child, animation) => ScaleTransition(
+                            scale: animation,
+                            child: FadeTransition(opacity: animation, child: child),
+                          ),
+                          child: AdaAvatar(
+                            variantIndex: idx,
+                            key: ValueKey('ada_avatar_$idx'),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1449,60 +1531,34 @@ class _AiChatBodyState extends State<_AiChatBody>
                   ),
                 ),
               ),
-              // Кнопка очистки чата с плавной отдачей
-              PressScale(
-                pressedScale: 0.88,
-                duration: const Duration(milliseconds: 180),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _clearChat,
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: Icon(
-                      Icons.delete_sweep_outlined,
-                      size: 22,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ),
+              _buildHeaderButton(
+                icon: Icons.delete_sweep_outlined,
+                tooltip: Translations.t('clearChat', context, 'Очистить чат'),
+                onTap: _clearChat,
+                cs: cs,
+                isDark: isDark,
               ),
-              // Свернуть чат в плавающее окошко с плавной отдачей
+              const SizedBox(width: 4),
+              // Свернуть чат в плавающее окошко (режим «в окне»)
               ValueListenableBuilder<bool>(
                 valueListenable: aiFloating,
-                builder: (context, floating, _) => PressScale(
-                  pressedScale: 0.88,
-                  duration: const Duration(milliseconds: 180),
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _toggleFloating,
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Icon(
-                        floating
-                            ? Icons.picture_in_picture_alt
-                            : Icons.picture_in_picture_alt_outlined,
-                        size: 22,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
+                builder: (context, floating, _) => _buildHeaderButton(
+                  icon: floating
+                      ? Icons.picture_in_picture_alt
+                      : Icons.picture_in_picture_alt_outlined,
+                  tooltip: Translations.t('aiFloatingMode', context, 'Режим в окне'),
+                  onTap: _toggleFloating,
+                  cs: cs,
+                  isDark: isDark,
                 ),
               ),
-              PressScale(
-                pressedScale: 0.88,
-                duration: const Duration(milliseconds: 180),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.pop(context),
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: Icon(
-                      Icons.close,
-                      size: 22,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ),
+              const SizedBox(width: 4),
+              _buildHeaderButton(
+                icon: Icons.close,
+                tooltip: Translations.t('close', context, 'Закрыть'),
+                onTap: () => Navigator.pop(context),
+                cs: cs,
+                isDark: isDark,
               ),
             ],
           ),

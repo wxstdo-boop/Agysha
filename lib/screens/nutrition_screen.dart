@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import '../widgets/swipe_to_delete.dart';
 import '../utils/motion_prefs.dart';
+import '../utils/time_format.dart';
 import '../services/nutrition_service.dart';
 import '../l10n/translations.dart';
 import '../widgets/smooth_char_counter.dart';
@@ -1237,8 +1238,7 @@ class _NutritionScreenState extends State<NutritionScreen>
     Color Function(DateTime) dayAccent,
   ) {
     final accent = dayAccent(meal.date);
-    final time =
-        '${meal.date.hour.toString().padLeft(2, '0')}:${meal.date.minute.toString().padLeft(2, '0')}';
+    final time = formatHm(meal.date);
     final macros = meal.macros;
     final water = meal.water;
     final subtitle = meal.isWaterOnly

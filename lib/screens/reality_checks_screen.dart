@@ -18,6 +18,7 @@ import '../widgets/manual_time_dialog.dart';
 import '../utils/markdown_text.dart' show sanitizeTextForWrap;
 import '../utils/page_transitions.dart';
 import '../utils/snackbar.dart';
+import '../utils/time_format.dart';
 import '../widgets/animated_fab_row.dart';
 import '../widgets/premium_empty_state.dart';
 import 'add_reality_check_screen.dart';
@@ -245,9 +246,7 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
   /// Long-press на любую точку включённой секции → подтверждение → секция
   /// плавно сворачивается в OFF-таблетку (AnimatedSwitcher делает кросс-фейд
   /// благодаря ValueKey).
-  String _fmtTimeOfDay(TimeOfDay t) {
-    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-  }
+  String _fmtTimeOfDay(TimeOfDay t) => formatHmValues(t.hour, t.minute);
 
   /// Открывает time-picker и добавляет новое точное время. Анимация
   /// вставки плашки в список делается через [AnimatedList.insertItem]

@@ -17,6 +17,7 @@ import 'reality_check_service.dart';
 import 'score_service.dart';
 import 'settings_service.dart';
 import '../utils/date_keys.dart';
+import '../utils/time_format.dart';
 import 'notification_service.dart';
 import 'task_service.dart';
 
@@ -271,8 +272,7 @@ class AiGuideService {
           alarms
               .map(
                 (a) =>
-                    '${a.time.hour.toString().padLeft(2, '0')}:'
-                    '${a.time.minute.toString().padLeft(2, '0')}'
+                    '${formatHmValues(a.time.hour, a.time.minute)}'
                     '${a.enabled ? '' : ' (выкл)'}',
               )
               .join('; '),
@@ -1233,9 +1233,7 @@ class AiGuideService {
         await AlarmService().load();
         final matches = AlarmService().alarms.where((x) {
           final label = x.label.trim().toLowerCase();
-          final time =
-              '${x.time.hour.toString().padLeft(2, '0')}:'
-              '${x.time.minute.toString().padLeft(2, '0')}';
+          final time = formatHmValues(x.time.hour, x.time.minute);
           return label == name || time == name;
         });
         final a = _requireUniqueDeleteMatch(matches, 'alarm');
@@ -1245,13 +1243,10 @@ class AiGuideService {
             type: 'alarm',
             wasCreate: false,
             item: a,
-            label:
-                'Будильник ${a.time.hour.toString().padLeft(2, '0')}:'
-                '${a.time.minute.toString().padLeft(2, '0')}',
+            label: 'Будильник ${formatHmValues(a.time.hour, a.time.minute)}',
           ),
         );
-        return 'будильник ${a.time.hour.toString().padLeft(2, '0')}:'
-            '${a.time.minute.toString().padLeft(2, '0')}';
+        return 'будильник ${formatHmValues(a.time.hour, a.time.minute)}';
       case 'reality_check':
         await RealityCheckService().load();
         final r = _requireUniqueDeleteMatch(

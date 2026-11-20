@@ -91,23 +91,6 @@ class _HomeScreenState extends State<HomeScreen>
   // значения — не при каждом пересечении границы (иначе «скачки»).
   int _lastSettledPage = 0;
 
-  late final Widget _alarmsScreen = RepaintBoundary(
-    child: AlarmsScreen(scrollOffset: sectionScrollOffset, pillIndex: 0),
-  );
-  late final Widget _habitsScreen = RepaintBoundary(
-    child: HabitsScreen(scrollOffset: sectionScrollOffset, pillIndex: 1),
-  );
-  late final Widget _tasksScreen = RepaintBoundary(
-    child: TasksScreen(scrollOffset: sectionScrollOffset, pillIndex: 2),
-  );
-  late final Widget _rcScreen = RepaintBoundary(
-    child: RealityChecksScreen(
-      onExit: () => _onTabTap(0),
-      scrollOffset: sectionScrollOffset,
-      pillIndex: 3,
-    ),
-  );
-
   @override
   void initState() {
     super.initState();
@@ -531,10 +514,23 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final screens = <Widget>[
-      _alarmsScreen,
-      _habitsScreen,
-      _tasksScreen,
-      if (rcOn) _rcScreen,
+      RepaintBoundary(
+        child: AlarmsScreen(scrollOffset: sectionScrollOffset, pillIndex: 0),
+      ),
+      RepaintBoundary(
+        child: HabitsScreen(scrollOffset: sectionScrollOffset, pillIndex: 1),
+      ),
+      RepaintBoundary(
+        child: TasksScreen(scrollOffset: sectionScrollOffset, pillIndex: 2),
+      ),
+      if (rcOn)
+        RepaintBoundary(
+          child: RealityChecksScreen(
+            onExit: () => _onTabTap(0),
+            scrollOffset: sectionScrollOffset,
+            pillIndex: 3,
+          ),
+        ),
     ];
 
     _pagesCount = screens.length;
@@ -557,12 +553,13 @@ class _HomeScreenState extends State<HomeScreen>
         appBar: AppBar(
           // Плавная отдача при зажатии у всех значков шапки (обновить,
           // статистика, питание, настройки) — мягко вдавливаются.
-          leading: PressScale(
-            pressedScale: 0.90,
-            duration: const Duration(milliseconds: 200),
-            child: SmoothTooltip(
-              message: Translations.refreshOf(context),
-              preferredAbove: false,
+          leading: SmoothTooltip(
+            message: Translations.refreshOf(context),
+            preferredAbove: false,
+            child: PressScale(
+              pressedScale: 0.90,
+              enableTilt: false,
+              duration: const Duration(milliseconds: 200),
               child: IconButton(
                 icon: const Icon(Icons.refresh_outlined),
                 onPressed: () => AgyshaApp.of(context).refreshApp(),
@@ -573,12 +570,13 @@ class _HomeScreenState extends State<HomeScreen>
           title: AnimatedBlurTitle(onOnlineTap: _openProfile),
           centerTitle: false,
           actions: [
-            PressScale(
-              pressedScale: 0.90,
-              duration: const Duration(milliseconds: 200),
-              child: SmoothTooltip(
-                message: Translations.t('statistics', context, 'Статистика'),
-                preferredAbove: false,
+            SmoothTooltip(
+              message: Translations.t('statistics', context, 'Статистика'),
+              preferredAbove: false,
+              child: PressScale(
+                pressedScale: 0.90,
+                enableTilt: false,
+                duration: const Duration(milliseconds: 200),
                 child: IconButton(
                   icon: const Icon(Icons.bar_chart_outlined),
                   onPressed: () => Navigator.of(context).push(
@@ -589,12 +587,13 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
             ),
-            PressScale(
-              pressedScale: 0.90,
-              duration: const Duration(milliseconds: 200),
-              child: SmoothTooltip(
-                message: Translations.t('nutrition', context, 'Питание'),
-                preferredAbove: false,
+            SmoothTooltip(
+              message: Translations.t('nutrition', context, 'Питание'),
+              preferredAbove: false,
+              child: PressScale(
+                pressedScale: 0.90,
+                enableTilt: false,
+                duration: const Duration(milliseconds: 200),
                 child: IconButton(
                   icon: const Icon(Icons.restaurant_outlined),
                   onPressed: () => Navigator.of(context).push(
@@ -603,12 +602,13 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
             ),
-            PressScale(
-              pressedScale: 0.90,
-              duration: const Duration(milliseconds: 200),
-              child: SmoothTooltip(
-                message: Translations.t('settings', context, 'Настройки'),
-                preferredAbove: false,
+            SmoothTooltip(
+              message: Translations.t('settings', context, 'Настройки'),
+              preferredAbove: false,
+              child: PressScale(
+                pressedScale: 0.90,
+                enableTilt: false,
+                duration: const Duration(milliseconds: 200),
                 child: IconButton(
                   icon: const Icon(Icons.settings_outlined),
                   onPressed: () => Navigator.of(

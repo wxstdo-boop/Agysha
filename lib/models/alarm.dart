@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'wake_task.dart';
+import '../utils/time_format.dart';
 
 class Alarm {
   final String id;
@@ -65,11 +66,7 @@ class Alarm {
     );
   }
 
-  String get timeLabel {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
+  String get timeLabel => formatHmValues(time.hour, time.minute);
 
   Map<String, dynamic> toJson() => {
     'id': id,
