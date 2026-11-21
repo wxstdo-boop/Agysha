@@ -1,0 +1,1 @@
+- fix: ada header without status line, instant history on chat open, memory digits never wrap, darker wake press glow
