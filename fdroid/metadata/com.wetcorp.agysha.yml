@@ -58,7 +58,7 @@ Repo: https://github.com/wxstdo-boop/Agysha.git
 Builds:
   - versionName: 1.6.236
     versionCode: 45308
-    commit: v1.6.236+45308
+    commit: e3108f593765604fd332fedcb3354555ccc4d5e0
     subdir: .
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
