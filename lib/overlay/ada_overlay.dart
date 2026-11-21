@@ -908,15 +908,20 @@ class _OverlayChatState extends State<_OverlayChat>
     writeAdaSyncState(avatar: next);
   }
 
-  /// Аватар с плавной сменой: fade + лёгкий scale при переключении варианта.
+  /// Аватар с плавной сменой: медленный ровный кросс-фейд (900 мс).
+  ///
+  /// Раньше здесь стоял 320-мс fade со ScaleTransition ом 0→1: медальон
+  /// буквально «вырастал» из точки, и смена читалась как перерисовка.
+  /// Теперь один рисунок просто растворяется в другом — и в том же темпе,
+  /// что и аватарки в основном чате.
   Widget _animatedAvatar(double size, int variant) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 320),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
+      duration: const Duration(milliseconds: 900),
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
       transitionBuilder: (child, anim) => FadeTransition(
-        opacity: anim,
-        child: ScaleTransition(scale: anim, child: child),
+        opacity: CurvedAnimation(parent: anim, curve: Curves.easeInOut),
+        child: child,
       ),
       child: AdaAvatar(
         key: ValueKey('av_$variant'),

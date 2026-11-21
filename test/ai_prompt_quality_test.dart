@@ -23,6 +23,25 @@ void main() {
     expect(prompt, contains('обрыв на полуслове'));
   });
 
+  test('в промпте запрещены дежурные фразы и обрубки', () {
+    final prompt = AiGuideService.systemPrompt('ru');
+    expect(prompt, contains('БЕЗ ШАБЛОНОВ'));
+    expect(prompt, contains('Ready to assist'));
+    expect(prompt, contains('с ЗАГЛАВНОЙ буквы'));
+  });
+
+  test('живая фраза со словом ready не вырезается как служебка', () {
+    final cleaned = AiGuideService.cleanAnswerText(
+      'Ready to assist — милый, я уже рядом.\n'
+      'status: ok\n'
+      'Будильник на 7 утра поставлен.',
+    );
+    // Раньше строка, начинавшаяся с «ready», исчезала целиком.
+    expect(cleaned, contains('Ready to assist'));
+    expect(cleaned, isNot(contains('status: ok')));
+    expect(cleaned, contains('Будильник на 7 утра поставлен.'));
+  });
+
   test('жёсткое требование русского языка сохранено', () {
     final prompt = AiGuideService.systemPrompt('ru');
     expect(prompt, contains('ТОЛЬКО НА РУССКОМ'));

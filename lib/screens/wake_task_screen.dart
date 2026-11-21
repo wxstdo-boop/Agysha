@@ -1616,37 +1616,51 @@ class _RedPillButton extends StatelessWidget {
     final child = AnimatedContainer(
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
+      // Компактная кнопка задачи больше не «обрубок» по центру: у неё та же
+      // кровная таблетка, что у разделов, но с собственной минимальной
+      // шириной — на узком экране она читается как полноценная кнопка.
+      constraints: BoxConstraints(minWidth: compact ? 196 : 0),
       padding: EdgeInsets.symmetric(
-        horizontal: compact ? 24 : 20,
-        vertical: compact ? 13 : 15,
+        horizontal: compact ? 26 : 20,
+        vertical: compact ? 14 : 15,
       ),
       decoration: BoxDecoration(
         borderRadius: radius,
+        // Три стопа вместо двух: у плоской «двухцветной» заливки середина
+        // выглядела грязной, а край — чёрным. Теперь мягкий верхний свет,
+        // винная глубина и тёмный низ — та же таблетка, что у разделов.
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: on
-              ? const [Color(0xFFD8202F), BrandColors.blood]
+              ? const [Color(0xFFE02436), BrandColors.blood, Color(0xFF8E0C1C)]
               : [
-                  cs.surfaceContainerHighest.withValues(alpha: 0.9),
-                  cs.surfaceContainerHigh.withValues(alpha: 0.9),
+                  cs.primary.withValues(alpha: dark ? 0.14 : 0.10),
+                  cs.primary.withValues(alpha: dark ? 0.10 : 0.07),
                 ],
+          stops: const [0.0, 0.52, 1.0],
         ),
         border: Border.all(
           color: on
-              ? Colors.white.withValues(alpha: 0.34)
-              : cs.outlineVariant.withValues(alpha: 0.5),
+              ? Colors.white.withValues(alpha: 0.36)
+              : cs.primary.withValues(alpha: 0.28),
           width: 1.1,
         ),
         boxShadow: [
-          BoxShadow(
-            color: on
-                ? BrandColors.blood.withValues(alpha: dark ? 0.45 : 0.32)
-                : Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            spreadRadius: -4,
-            offset: const Offset(0, 7),
-          ),
+          if (on)
+            BoxShadow(
+              color: BrandColors.blood.withValues(alpha: dark ? 0.45 : 0.32),
+              blurRadius: 20,
+              spreadRadius: -4,
+              offset: const Offset(0, 7),
+            )
+          else
+            BoxShadow(
+              color: cs.primary.withValues(alpha: 0.08),
+              blurRadius: 10,
+              spreadRadius: -4,
+              offset: const Offset(0, 4),
+            ),
         ],
       ),
       child: Row(
@@ -1654,14 +1668,24 @@ class _RedPillButton extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (icon != null) ...[
-            Icon(
-              icon,
-              size: 19,
-              color: on
-                  ? Colors.white
-                  : cs.onSurfaceVariant.withValues(alpha: 0.7),
+            // Значок в лёгком светлом кружке — тот же ритм, что у кружка
+            // привычки: кнопка не выглядит «текстом с иконкой сбоку».
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: on
+                    ? Colors.white.withValues(alpha: 0.18)
+                    : cs.primary.withValues(alpha: 0.12),
+              ),
+              child: Icon(
+                icon,
+                size: 16,
+                color: on ? Colors.white : cs.primary.withValues(alpha: 0.85),
+              ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 9),
           ],
           Flexible(
             child: AnimatedDefaultTextStyle(
@@ -1673,7 +1697,7 @@ class _RedPillButton extends StatelessWidget {
                 letterSpacing: 0.2,
                 color: on
                     ? Colors.white
-                    : cs.onSurfaceVariant.withValues(alpha: 0.7),
+                    : cs.onSurfaceVariant.withValues(alpha: 0.62),
                 shadows: on
                     ? [
                         Shadow(

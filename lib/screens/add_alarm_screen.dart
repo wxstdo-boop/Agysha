@@ -1227,10 +1227,14 @@ class _SoundActionChipState extends State<_SoundActionChip> {
         ],
       );
     }
-    final iconIdle = dark
+    // Значок НЕ меняет цвет при проигрывании: раньше он вспыхивал ярче и
+    // вместе с ним «подсвечивался квадрат» капсулы. Теперь единственное,
+    // что меняется, — сам значок play ⇄ stop (плавный кросс-фейд).
+    final iconColor = dark
         ? const Color(0xFFFF9AA0).withValues(alpha: 0.85)
         : const Color(0xFFF5DBDD);
-    final iconHot = dark ? const Color(0xFFFFC2C6) : const Color(0xFFFFE1E3);
+    final iconIdle = iconColor;
+    final iconHot = iconColor;
     return SmoothTooltip(
       message: widget.tooltip,
       preferredAbove: true,

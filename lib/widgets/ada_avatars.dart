@@ -243,29 +243,21 @@ class AdaAvatar extends StatelessWidget {
       // перерисовывает только этот кружок, а не строку/пузырь вокруг.
       builder: (context, idx, _) => RepaintBoundary(
         child: AnimatedSwitcher(
-          // Смена аватарки — ДОЛГИЙ кросс-фейд (1,15 с) с еле заметным
-          // «дыханием» масштаба (0.98 → 1). Быстрые 300 мс читались как
-          // «перерисовка»: градиент и глиф успевали прыгнуть на каждом кадре.
-          duration: const Duration(milliseconds: 1150),
+          // Смена аватарки — ровный МЕДЛЕННЫЙ кросс-фейд (900 мс) без
+          // масштаба: «дыхание» 0.98→1 на мелком кружке читалось как
+          // перерисовка, а не как смена. Только растворение одного
+          // медальона в другом, как было раньше, но спокойнее.
+          duration: const Duration(milliseconds: 900),
           switchInCurve: Curves.easeInOut,
           switchOutCurve: Curves.easeInOut,
           layoutBuilder: (current, previous) => Stack(
             alignment: Alignment.center,
             children: [...previous, ?current],
           ),
-          transitionBuilder: (child, anim) {
-            final curved = CurvedAnimation(
-              parent: anim,
-              curve: Curves.easeOutCubic,
-            );
-            return FadeTransition(
-              opacity: anim,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
-                child: child,
-              ),
-            );
-          },
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: CurvedAnimation(parent: anim, curve: Curves.easeInOut),
+            child: child,
+          ),
           child: KeyedSubtree(
             key: ValueKey('ada_av_$idx'),
             child: _core(context, adaVariants[idx]),

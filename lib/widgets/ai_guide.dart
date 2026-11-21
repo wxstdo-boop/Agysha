@@ -308,9 +308,12 @@ class _AiChatSheet extends StatefulWidget {
 }
 
 class _AiChatSheetState extends State<_AiChatSheet> {
+  // 10 вместо 16: стекло остаётся мягким, но размытие читается заметно
+  // дешевле — именно оно давало «ладонный» лаг в первые кадры после
+  // открытия окна на слабых телефонах.
   static final ImageFilter _backdropBlur = ImageFilter.blur(
-    sigmaX: 16,
-    sigmaY: 16,
+    sigmaX: 10,
+    sigmaY: 10,
   );
 
   @override
@@ -339,7 +342,7 @@ class _AiChatSheetState extends State<_AiChatSheet> {
         curve: Curves.easeOutCubic,
         // Уже по краям (было 10) и с большим скруглением — окно шире и
         // «мягче»; нижний отступ учитывает клавиатуру.
-        padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + keyboard),
+        padding: EdgeInsets.fromLTRB(4, 0, 4, 8 + keyboard),
         child: ClipRRect(
           // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
           borderRadius: BorderRadius.circular(32),
@@ -352,7 +355,7 @@ class _AiChatSheetState extends State<_AiChatSheet> {
               height: sheetHeight,
               decoration: BoxDecoration(
                 color: theme.scaffoldBackgroundColor.withValues(
-                  alpha: isDark ? 0.78 : 0.84,
+                  alpha: isDark ? 0.82 : 0.88,
                 ),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.35),
@@ -1038,79 +1041,76 @@ class _AiChatBodyState extends State<_AiChatBody>
         pressedScale: 0.90,
         enableTilt: false,
         duration: const Duration(milliseconds: 180),
-        child: Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            splashColor: cs.primary.withValues(alpha: 0.22),
-            highlightColor: cs.primary.withValues(alpha: 0.14),
-            onTap: () => _toggleScreenAware(context),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeOutCubic,
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(17),
-                color: _screenAware
-                    ? cs.primary.withValues(alpha: 0.12)
-                    : Colors.transparent,
-                // Включено — чёткая плотная обводка в фирменный цвет (раньше
-                // 1.2 px primary на светлом фоне почти не читалась); выключено
-                // — тихая серая. Цвет и толщина перетекают, а не щёлкают.
-                border: Border.all(
-                  color: _screenAware
-                      ? cs.primary.withValues(alpha: 0.95)
-                      : cs.outline.withValues(alpha: 0.45),
-                  width: _screenAware ? 1.6 : 1.2,
-                ),
-                boxShadow: _screenAware
-                    ? [
-                        BoxShadow(
-                          color: cs.primary.withValues(alpha: 0.35),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Stack(
+        // Растровый слой: смена заливки и кромки не перерисовывает всю
+        // строку кнопок над чатом.
+        child: RepaintBoundary(
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              splashColor: cs.primary.withValues(alpha: 0.22),
+              highlightColor: cs.primary.withValues(alpha: 0.14),
+              onTap: () => _toggleScreenAware(context),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                width: 34,
+                height: 34,
                 alignment: Alignment.center,
-                children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 240),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) =>
-                        FadeTransition(opacity: animation, child: child),
-                    child: Icon(
-                      _screenAware
-                          ? Icons.visibility
-                          : Icons.visibility_outlined,
-                      key: ValueKey('screen_toggle_icon_$_screenAware'),
-                      size: 19,
-                      color: _screenAware ? cs.primary : cs.onSurfaceVariant,
-                    ),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _screenAware
+                      ? cs.primary.withValues(alpha: 0.12)
+                      : Colors.transparent,
+                  // Включено — чёткая плотная обводка в фирменный цвет (раньше
+                  // 1.2 px primary на светлом фоне почти не читалась); выключено
+                  // — тихая серая. Цвет и толщина перетекают, а не щёлкают.
+                  border: Border.all(
+                    color: _screenAware
+                        ? cs.primary.withValues(alpha: 0.95)
+                        : cs.outline.withValues(alpha: 0.45),
+                    width: _screenAware ? 1.6 : 1.2,
                   ),
-                  // «Живая» точка: зелёная, когда контекст экрана активен.
-                  if (_screenAware)
-                    Positioned(
-                      top: 2,
-                      right: 2,
-                      child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF4CD964),
-                          border: Border.all(color: cs.surface, width: 1),
-                        ),
+                  // Тень убрана: ореол blur 10 выходил за 34 px кружка и на
+                  // светлой теме читался как «фон, вылезающий по бокам».
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 240),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) =>
+                          FadeTransition(opacity: animation, child: child),
+                      child: Icon(
+                        _screenAware
+                            ? Icons.visibility
+                            : Icons.visibility_outlined,
+                        key: ValueKey('screen_toggle_icon_$_screenAware'),
+                        size: 19,
+                        color: _screenAware ? cs.primary : cs.onSurfaceVariant,
                       ),
                     ),
-                ],
+                    // «Живая» точка: зелёная, когда контекст экрана активен.
+                    if (_screenAware)
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF4CD964),
+                            border: Border.all(color: cs.surface, width: 1),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

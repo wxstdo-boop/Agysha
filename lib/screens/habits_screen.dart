@@ -1343,7 +1343,7 @@ class _HabitsScreenState extends State<HabitsScreen>
                                 // полупрозрачный (а не просто другой оттенок):
                                 // прозрачность едет вместе с линией.
                                 struckColor: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.42),
+                                    .withValues(alpha: 0.26),
                                 strikeColor: Colors.red.shade500.withValues(
                                   alpha: 0.55,
                                 ),
