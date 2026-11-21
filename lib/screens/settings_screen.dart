@@ -406,6 +406,23 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  /// Карточки настроек получают ту же отдачу, что и карточки на остальных
+  /// экранах: мягкое вдавливание и 3D-наклон в сторону пальца, плавный
+  /// отпуск. Оборачиваем только прямых детей-`Card` — разделители
+  /// `SizedBox` и уже анимированные блоки не трогаем.
+  Widget _pressableCard(Widget item) {
+    if (item is! Card) return item;
+    return PressScale(
+      pressedScale: 0.988,
+      pressedOpacity: 0.97,
+      enableTilt: true,
+      maxTiltAngle: 0.07,
+      duration: const Duration(milliseconds: 180),
+      releaseDuration: const Duration(milliseconds: 340),
+      child: item,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = AgyshaApp.of(context);
@@ -461,7 +478,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             itemBuilder: (context, index) => StaggerIn(
               index: index,
               step: const Duration(milliseconds: 40),
-              child: settingsItems[index],
+              child: _pressableCard(settingsItems[index]),
             ),
           ),
         ),

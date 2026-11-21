@@ -11,6 +11,53 @@ import '../utils/design_tokens.dart';
 /// (другие радиусы, шрифты, тултипы).
 ///
 /// Кэш по-прежнему живёт в `AgyshaApp` — здесь только чистая сборка.
+/// Горизонтальный переход между экранами: новая страница въезжает справа,
+/// прежняя уходит влево на 22 %. Никакого масштаба и вертикального
+/// «сжатия» — поэтому возврат жестом не дёргается.
+class SlidePageTransitionsBuilder extends PageTransitionsBuilder {
+  const SlidePageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final enter = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    final exit = CurvedAnimation(
+      parent: secondaryAnimation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(1, 0),
+        end: Offset.zero,
+      ).animate(enter),
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset.zero,
+          end: const Offset(-0.22, 0),
+        ).animate(exit),
+        child: child,
+      ),
+    );
+  }
+}
+
+const PageTransitionsTheme _agyshaPageTransitions = PageTransitionsTheme(
+  builders: <TargetPlatform, PageTransitionsBuilder>{
+    TargetPlatform.android: SlidePageTransitionsBuilder(),
+    TargetPlatform.fuchsia: SlidePageTransitionsBuilder(),
+  },
+);
+
 ThemeData buildAgyshaTheme(
   ColorScheme scheme, {
   required bool isDark,
@@ -44,6 +91,10 @@ ThemeData buildAgyshaTheme(
     // умолчанию не вибрирует на кнопках, а на HyperOS системная отдача
     // подавлена. Плеск = только целевое нажатие, скролл не срабатывает.
     splashFactory: const TapHapticsSplash(InkSparkle.splashFactory),
+    // Переход между экранами — горизонтальный слайд вместо штатного зума.
+    // Зум-переход сжимал новую страницу по обеим осям: на системном жесте
+    // «назад» экран будто складывался вверх-вниз и при отпускании дёргался.
+    pageTransitionsTheme: _agyshaPageTransitions,
     // ШРИФТ ЗАДАН В САМОЙ ТЕМЕ: ThemeData(fontFamily:) задаёт его как
     // базовый для ВСЕЙ иерархии — DefaultTextStyle, Text из theme.textTheme,
     // Material-виджеты (AppBar, капсулы, кнопки) и т.д. Это гарантирует,
