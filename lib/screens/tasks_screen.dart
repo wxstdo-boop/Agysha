@@ -801,8 +801,10 @@ class _TasksScreenState extends State<TasksScreen>
             ),
             child: Row(
               children: [
-                // Drag handle слева — ReorderableDragStartListener включает
-                // перетаскивание (как в привычках).
+                // Drag handle слева — перетаскивание только по ЗАЖАТИЮ:
+                // ReorderableDelayedDragStartListener ждёт удержания, поэтому
+                // начатый на ручке скролл/свайп больше не «дёргает» карточку
+                // вместо прокрутки списка.
                 SizedBox(
                   width: 46,
                   child: Column(
@@ -881,8 +883,8 @@ class _TasksScreenState extends State<TasksScreen>
                         ],
                       ),
                       const SizedBox(height: 6),
-                      // Драг-хэндл — снизу.
-                      ReorderableDragStartListener(
+                      // Драг-хэндл — снизу, стартует по зажатию.
+                      ReorderableDelayedDragStartListener(
                         index: index,
                         child: const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 4),
@@ -930,7 +932,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 struckColor: theme.colorScheme.onSurfaceVariant
                                     .withValues(alpha: 0.42),
                                 strikeColor: Colors.red.shade500.withValues(
-                                  alpha: 0.9,
+                                  alpha: 0.55,
                                 ),
                                 // Полный текст без троеточия: заголовок
                                 // задачи всегда виден целиком, а не обрезан.

@@ -264,18 +264,19 @@ class _StrikePainter extends CustomPainter {
 
     final linePaint = Paint()
       ..color = strikeColor
-      // Было: max(1.8, fontSize*0.11). При 19.5px это 1.8 — на телефоне линия
-      // визуально сливалась с текстом и «зачёркивания не видно». 0.15 с
-      // порогом 2.6 читается уверенно, но всё ещё не режет глаз.
-      ..strokeWidth = math.max(3.0, fontSize * 0.18)
+      // Тонкая «перьевая» линия: 0.075 кегля с порогом 1.2. Прошлая (0.18,
+      // порог 3.0) на 20px давала 3.6 — жирный красный шрам поперёк
+      // строки, который резал глаз на тёмной теме. Тонкая линия читается
+      // как аккуратная пометка, а не как вычёркивание маркером.
+      ..strokeWidth = math.max(1.2, fontSize * 0.075)
       ..strokeCap = StrokeCap.round;
     // «Перо» на растущем конце рисует со blur-маской, а это каждый вызов —
     // отдельный saveLayer. Краска создаётся один раз на кадр, а не на строку.
     final Paint? dotPaint;
     if (progress < 0.999) {
       dotPaint = Paint()
-        ..color = strikeColor.withValues(alpha: 0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+        ..color = strikeColor.withValues(alpha: 0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
     } else {
       dotPaint = null;
     }
@@ -302,7 +303,7 @@ class _StrikePainter extends CustomPainter {
       if (dotPaint != null) {
         canvas.drawCircle(
           Offset(m.left + lineWidth, y),
-          m.ascent * 0.10,
+          m.ascent * 0.055,
           dotPaint,
         );
       }

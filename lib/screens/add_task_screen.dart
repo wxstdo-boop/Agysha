@@ -985,7 +985,6 @@ class _DeadlineChipState extends State<_DeadlineChip> {
     // обрывался, если палец уходил за край чипа).
     return PressScale(
       pressedScale: 0.92,
-      enableTilt: false,
       duration: const Duration(milliseconds: 160),
       releaseDuration: const Duration(milliseconds: 280),
       child: GestureDetector(

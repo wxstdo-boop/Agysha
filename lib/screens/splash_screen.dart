@@ -233,40 +233,51 @@ class _SplashScreenState extends State<SplashScreen>
                         Stack(
                           children: [
                             RepaintBoundary(
+                              // Обводка = КРОВАНОЕ КОЛЬЦО, а не волосяная
+                              // рамка с бликом: толстая градиентная кайма
+                              // (винная → алая → винная), чёткая кромка и
+                              // два ореола. Раньше поверх шли ещё тонкая
+                              // белая линия и двойная рамка — вместе с
+                              // брызгами это читалось как «дохуя чёрточек».
+                              // САМ ЛОГОТИП НЕ МЕНЯЛСЯ.
                               child: Container(
                                 width: 104,
                                 height: 104,
-                                padding: const EdgeInsets.all(4),
+                                padding: const EdgeInsets.all(3.5),
                                 decoration: BoxDecoration(
                                   // «Скруглый» (squircle) — круглее квадрата, но
                                   // НЕ круг: нижняя подпись на логотипе не
                                   // обрезается кружком и остаётся читаемой.
                                   borderRadius: BorderRadius.circular(_kRadius),
-                                  gradient: LinearGradient(
+                                  gradient: const LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                     colors: [
-                                      Colors.white.withValues(
-                                        alpha: isDark ? 0.10 : 0.92,
-                                      ),
-                                      accent.withValues(
-                                        alpha: isDark ? 0.20 : 0.12,
-                                      ),
+                                      Color(0xFF7E0A15),
+                                      BrandColors.blood,
+                                      Color(0xFFE0192F),
+                                      Color(0xFF7E0A15),
                                     ],
-                                  ),
-                                  border: Border.all(
-                                    color: accent.withValues(alpha: 0.62),
-                                    width: 3,
+                                    stops: [0.0, 0.38, 0.68, 1.0],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: accent.withValues(alpha: 0.28),
-                                      blurRadius: 30,
+                                      color: BrandColors.blood.withValues(
+                                        alpha: isDark ? 0.42 : 0.30,
+                                      ),
+                                      blurRadius: 34,
                                       spreadRadius: 2,
                                     ),
                                     BoxShadow(
+                                      color: const Color(
+                                        0xFFE0192F,
+                                      ).withValues(alpha: isDark ? 0.26 : 0.16),
+                                      blurRadius: 10,
+                                      spreadRadius: 0.5,
+                                    ),
+                                    BoxShadow(
                                       color: Colors.black.withValues(
-                                        alpha: isDark ? 0.28 : 0.08,
+                                        alpha: isDark ? 0.30 : 0.08,
                                       ),
                                       blurRadius: 18,
                                       offset: const Offset(0, 9),
@@ -274,17 +285,26 @@ class _SplashScreenState extends State<SplashScreen>
                                   ],
                                 ),
                                 child: Container(
-                                  padding: const EdgeInsets.all(2),
+                                  padding: const EdgeInsets.all(3),
                                   decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(25),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.55,
-                                      ),
+                                    borderRadius: BorderRadius.circular(
+                                      _kRadius - 4,
+                                    ),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Colors.white.withValues(
+                                          alpha: isDark ? 0.08 : 0.94,
+                                        ),
+                                        accent.withValues(
+                                          alpha: isDark ? 0.18 : 0.10,
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(23),
+                                    borderRadius: BorderRadius.circular(22),
                                     // Логотип уже декодирован в main() до
                                     // первого кадра — RawImage рисует его
                                     // мгновенно, без «мигания» на слабых
@@ -292,15 +312,15 @@ class _SplashScreenState extends State<SplashScreen>
                                     child: preDecodedLogo != null
                                         ? RawImage(
                                             image: preDecodedLogo,
-                                            width: 94,
-                                            height: 94,
+                                            width: 90,
+                                            height: 90,
                                             fit: BoxFit.contain,
                                             filterQuality: FilterQuality.high,
                                           )
                                         : Image.asset(
                                             'assets/agysha.png',
-                                            width: 94,
-                                            height: 94,
+                                            width: 90,
+                                            height: 90,
                                             cacheWidth: 512,
                                             cacheHeight: 512,
                                             filterQuality: FilterQuality.high,
@@ -600,15 +620,13 @@ class _PaintSplatPainter extends CustomPainter {
   ];
 
   /// Мелкие брызги-сателлиты вокруг клякс: (доля x, доля y, доля радиуса).
+  /// Капель стало меньше и они крупнее: восемь мелких точек по периметру
+  /// читались как случайный «мусор»/чёрточки, а не как брызги удара.
   static const List<(double, double, double)> _drops = [
-    (0.53, 0.18, 0.020),
-    (0.86, 0.24, 0.015),
-    (0.12, 0.44, 0.017),
-    (0.32, 0.82, 0.015),
-    (0.62, 0.80, 0.013),
-    (0.90, 0.64, 0.012),
-    (0.09, 0.72, 0.011),
-    (0.45, 0.62, 0.010),
+    (0.50, 0.16, 0.026),
+    (0.87, 0.30, 0.020),
+    (0.14, 0.52, 0.022),
+    (0.60, 0.82, 0.018),
   ];
 
   const _PaintSplatPainter({

@@ -40,21 +40,27 @@ class BloodSpeckPainter extends CustomPainter {
       // но ЧИТАЮТСЯ.
       final scale = (isDark ? 0.72 : 1.0) * opacity;
       final dryPaint = Paint()
-        ..color = _dry.withValues(alpha: (isDark ? 0.55 : 0.46) * density * scale);
+        ..color = _dry.withValues(
+          alpha: (isDark ? 0.55 : 0.46) * density * scale,
+        );
       canvas.drawCircle(center, r, dryPaint);
       // Подтёк вправо-вниз — «кровь растеклась».
       canvas.drawCircle(
         center + Offset(r * 1.5, r * 0.45),
         r * 0.6,
         Paint()
-          ..color = _dry.withValues(alpha: (isDark ? 0.40 : 0.34) * density * scale),
+          ..color = _dry.withValues(
+            alpha: (isDark ? 0.40 : 0.34) * density * scale,
+          ),
       );
       // Светлое мокрое ядрышко (блик на крови).
       canvas.drawCircle(
         center - Offset(r * 0.3, r * 0.34),
         r * 0.42,
         Paint()
-          ..color = _wet.withValues(alpha: (isDark ? 0.30 : 0.28) * density * scale),
+          ..color = _wet.withValues(
+            alpha: (isDark ? 0.30 : 0.28) * density * scale,
+          ),
       );
     }
   }
@@ -68,6 +74,35 @@ class BloodSpeckPainter extends CustomPainter {
 /// содержимое — ПОД пятнами. Один виджет на бейдж привычки и мелкие кнопки
 /// звука, чтобы «кровь» читалась везде одинаково.
 class BloodSpeck {
+  /// «Тихая» капсула на тёмной теме: однотонная поверхность с едва заметным
+  /// винным подтоном и тонкой кромкой БЕЗ свечения.
+  ///
+  /// Плотный [ColorScheme.errorContainer] с красной тенью читался на
+  /// системной тёмной теме как грязное пятно: слишком светлая заливка,
+  /// слишком яркая кромка, ореол вокруг. Здесь бейдж просто чуть теплее
+  /// фона — спокойно и однотонно, как остальные капсулы экрана.
+  ///
+  /// [active] — усиленная кромка (идёт воспроизведение звука).
+  static BoxDecoration quiet(ThemeData theme, {bool active = false}) {
+    final cs = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final base = dark ? cs.surfaceContainerHigh : cs.surfaceContainerHighest;
+    final fill = Color.alphaBlend(
+      const Color(0xFFB3121F).withValues(alpha: dark ? 0.10 : 0.06),
+      base,
+    );
+    return BoxDecoration(
+      borderRadius: BorderRadius.circular(999),
+      color: fill,
+      border: Border.all(
+        color: const Color(
+          0xFFFF8A90,
+        ).withValues(alpha: dark ? (active ? 0.44 : 0.24) : 0.34),
+        width: 1,
+      ),
+    );
+  }
+
   /// Винный градиент (тёмная тема — полупрозрачное «виноградное стекло»,
   /// светлая — плотная винная таблетка).
   ///
@@ -98,9 +133,7 @@ class BloodSpeck {
       ),
       borderRadius: BorderRadius.circular(999),
       border: Border.all(
-        color: (isDark
-                ? const Color(0xFFFFA2A8)
-                : const Color(0xFFE0525C))
+        color: (isDark ? const Color(0xFFFFA2A8) : const Color(0xFFE0525C))
             .withValues(alpha: (isDark ? 0.22 : 0.40) * opacity),
         width: 1,
       ),

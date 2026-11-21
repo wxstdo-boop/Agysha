@@ -26,29 +26,33 @@ class ModelLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Смена модели/провайдера — ПЛАВНО: старое имя мягко тает, новое
-    // подъезжает снизу (280 мс). Раньше текст мгновенно «прыгал», что
-    // читалось как дёрганье при переключении провайдеров.
+    // проявляется на его месте (240 мс).
+    //
+    // Выравнивание стека — СТРОГО слева, высота строки фиксирована:
+    // раньше [AnimatedSwitcher] центрировал детей и подгонял размер под
+    // самый широкий, поэтому при каждой смене текста буквы уезжали вправо
+    // и строка «скакала» туда-сюда.
     Widget labelText(String text, {bool ellipsis = false}) {
-      return AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: anim,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.25),
-              end: Offset.zero,
-            ).animate(anim),
-            child: child,
+      return SizedBox(
+        height: ellipsis ? 16 : null,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 240),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.centerLeft,
+            children: [...previous, ?current],
           ),
-        ),
-        child: Text(
-          text,
-          key: ValueKey(text),
-          style: textStyle,
-          overflow: ellipsis ? TextOverflow.ellipsis : null,
-          maxLines: ellipsis ? 1 : null,
+          transitionBuilder: (child, anim) =>
+              FadeTransition(opacity: anim, child: child),
+          child: Text(
+            text,
+            key: ValueKey(text),
+            style: textStyle,
+            overflow: ellipsis ? TextOverflow.ellipsis : null,
+            maxLines: ellipsis ? 1 : null,
+            softWrap: false,
+          ),
         ),
       );
     }

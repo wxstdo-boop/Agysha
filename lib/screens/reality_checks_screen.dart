@@ -554,7 +554,7 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                                 // текста примерно на 15 уровней серого, и на
                                 // телефоне зачёркивание не читалось совсем.
                                 strikeColor: Colors.red.shade500.withValues(
-                                  alpha: 0.9,
+                                  alpha: 0.55,
                                 ),
                                 maxLines: null,
                               ),

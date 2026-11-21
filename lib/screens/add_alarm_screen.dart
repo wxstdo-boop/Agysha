@@ -374,66 +374,66 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
             pressedScale: 0.94,
             child: TextButton(
               onPressed: () async {
-              final raw = ctrl.text.trim();
-              // Разрешаем вводить только имя: любое расширение, которое
-              // пользователь напишет, отбрасываем, чтобы формат файла
-              // оставался неизменным (исходный ext).
-              final newName = raw.contains('.')
-                  ? raw.substring(0, raw.lastIndexOf('.'))
-                  : raw;
-              if (newName.isEmpty || newName.length > 20) return;
-              // Нельзя ввести имя каталога или любые разделители.
-              if (newName.contains('/') || newName.contains('\\')) return;
-              final directory = await getApplicationDocumentsDirectory();
-              final soundsDir = Directory('${directory.path}/sounds');
-              try {
-                // Папка может не существовать — без неё rename всегда падал
-                // в «фолбэк» (имя не менялось, английский снекбар).
-                await soundsDir.create(recursive: true);
-                final oldFile = File(path);
-                final newPath = '${soundsDir.path}/$newName$ext';
-                if (newPath == path) {
-                  // Имя не изменилось — ничего копировать/переименовывать не
-                  // нужно (избегаем копирования файла на себя).
-                } else if (oldFile.existsSync() &&
-                    oldFile.parent.path == soundsDir.path) {
-                  await oldFile.rename(newPath);
-                } else if (oldFile.existsSync()) {
-                  // Файл лежит вне документов (Downloads и т.п.) — копируем
-                  // в документы приложения, чтобы имя реально сохранилось.
-                  await oldFile.copy(newPath);
+                final raw = ctrl.text.trim();
+                // Разрешаем вводить только имя: любое расширение, которое
+                // пользователь напишет, отбрасываем, чтобы формат файла
+                // оставался неизменным (исходный ext).
+                final newName = raw.contains('.')
+                    ? raw.substring(0, raw.lastIndexOf('.'))
+                    : raw;
+                if (newName.isEmpty || newName.length > 20) return;
+                // Нельзя ввести имя каталога или любые разделители.
+                if (newName.contains('/') || newName.contains('\\')) return;
+                final directory = await getApplicationDocumentsDirectory();
+                final soundsDir = Directory('${directory.path}/sounds');
+                try {
+                  // Папка может не существовать — без неё rename всегда падал
+                  // в «фолбэк» (имя не менялось, английский снекбар).
+                  await soundsDir.create(recursive: true);
+                  final oldFile = File(path);
+                  final newPath = '${soundsDir.path}/$newName$ext';
+                  if (newPath == path) {
+                    // Имя не изменилось — ничего копировать/переименовывать не
+                    // нужно (избегаем копирования файла на себя).
+                  } else if (oldFile.existsSync() &&
+                      oldFile.parent.path == soundsDir.path) {
+                    await oldFile.rename(newPath);
+                  } else if (oldFile.existsSync()) {
+                    // Файл лежит вне документов (Downloads и т.п.) — копируем
+                    // в документы приложения, чтобы имя реально сохранилось.
+                    await oldFile.copy(newPath);
+                  }
+                  if (!mounted || !ctx.mounted) return;
+                  setState(() {
+                    _customSoundPath = newPath;
+                    _soundName = 'Custom';
+                  });
+                  Navigator.pop(ctx);
+                  showBeautifulSnackBar(
+                    context,
+                    message: Translations.t(
+                      'soundRenamed',
+                      context,
+                      'Sound renamed',
+                    ),
+                  );
+                } catch (e) {
+                  if (!mounted || !ctx.mounted) return;
+                  Navigator.pop(ctx);
+                  showBeautifulSnackBar(
+                    context,
+                    message: Translations.t(
+                      'soundRenameFailed',
+                      context,
+                      'Could not rename sound',
+                    ),
+                  );
                 }
-                if (!mounted || !ctx.mounted) return;
-                setState(() {
-                  _customSoundPath = newPath;
-                  _soundName = 'Custom';
-                });
-                Navigator.pop(ctx);
-                showBeautifulSnackBar(
-                  context,
-                  message: Translations.t(
-                    'soundRenamed',
-                    context,
-                    'Sound renamed',
-                  ),
-                );
-              } catch (e) {
-                if (!mounted || !ctx.mounted) return;
-                Navigator.pop(ctx);
-                showBeautifulSnackBar(
-                  context,
-                  message: Translations.t(
-                    'soundRenameFailed',
-                    context,
-                    'Could not rename sound',
-                  ),
-                );
-              }
-            },
-            child: Text(Translations.saveOf(context)),
+              },
+              child: Text(Translations.saveOf(context)),
+            ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -528,35 +528,37 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                         highlightColor: Colors.transparent,
                       ),
                       child: ListTile(
-                      leading: const Icon(Icons.access_time),
-                      title: ClipRect(
-                        // Выбранное время в окне правки плавно «проезжает»
-                        // при смене (как ролик в пикере), а не щёлкает.
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 260),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          transitionBuilder: (child, animation) =>
-                              SlideTransition(
-                                position: Tween(
-                                  begin: const Offset(0, 0.4),
-                                  end: Offset.zero,
-                                ).animate(animation),
-                                child: FadeTransition(
-                                  opacity: animation,
-                                  child: child,
+                        leading: const Icon(Icons.access_time),
+                        title: ClipRect(
+                          // Выбранное время в окне правки плавно «проезжает»
+                          // при смене (как ролик в пикере), а не щёлкает.
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 260),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, animation) =>
+                                SlideTransition(
+                                  position: Tween(
+                                    begin: const Offset(0, 0.4),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  ),
                                 ),
+                            child: Text(
+                              _time.format(context),
+                              key: ValueKey(
+                                'alarmedit_${_time.format(context)}',
                               ),
-                          child: Text(
-                            _time.format(context),
-                            key: ValueKey('alarmedit_${_time.format(context)}'),
-                            style: theme.textTheme.headlineMedium,
+                              style: theme.textTheme.headlineMedium,
+                            ),
                           ),
                         ),
+                        subtitle: Text(Translations.tapToChangeOf(context)),
+                        onTap: _pickTime,
                       ),
-                      subtitle: Text(Translations.tapToChangeOf(context)),
-                      onTap: _pickTime,
-                    ),
                     ),
                   ),
                 ),
@@ -639,7 +641,9 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                               // Плавная отдача-«вдавливание» выбора типа задачи.
                               pressedScale: 0.97,
                               duration: const Duration(milliseconds: 160),
-                              releaseDuration: const Duration(milliseconds: 220),
+                              releaseDuration: const Duration(
+                                milliseconds: 220,
+                              ),
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(12),
                                 onTap: () => setState(() => _taskType = task),
@@ -689,10 +693,13 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                                                   'wake_selected_${task.key}',
                                                 ),
                                                 size: 20,
-                                                color: theme.colorScheme.primary,
+                                                color:
+                                                    theme.colorScheme.primary,
                                               )
                                             : const SizedBox(
-                                                key: ValueKey('wake_unselected'),
+                                                key: ValueKey(
+                                                  'wake_unselected',
+                                                ),
                                                 width: 20,
                                               ),
                                       ),
@@ -700,7 +707,7 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                                   ),
                                 ),
                               ),
-                          ),
+                            ),
                           );
                         }),
                       ],
@@ -1160,34 +1167,19 @@ class _SoundActionChipState extends State<_SoundActionChip> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
     final glowing = widget.glowing;
     // Три кнопки звука приведены к тому же виду, что бейдж «Сегодня очищено»
-    // в привычках (см. HabitsScreen._erasedBadge): на тёмной теме — плотная
-    // капсула errorContainer с чистой error-кромкой и мягкой тенью (без
-    // «грязной» кровавой подложки), на светлой — та же винная таблетка
-    // BloodSpeck. Никакого «жёсткого отсвета»: пока звук играет, кромка и
-    // тень лишь чуть плотнее — красного ореола вокруг кнопки больше нет.
+    // в привычках (см. HabitsScreen._erasedBadge): на тёмной теме — тихая
+    // однотонная капсула с винным подтоном, на светлой — винная таблетка
+    // BloodSpeck. Пока звук играет, кромка лишь чуть плотнее.
     final BoxDecoration decoration;
     final bool bloodFill;
     if (dark) {
       bloodFill = false;
-      decoration = BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: cs.errorContainer,
-        border: Border.all(
-          color: cs.error.withValues(alpha: glowing ? 0.85 : 0.55),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: cs.error.withValues(alpha: glowing ? 0.30 : 0.22),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      );
+      // Та же спокойная капсула, что и у бейджа «Сегодня очищено»:
+      // однотонная поверхность с винным подтоном, без красного ореола.
+      decoration = BloodSpeck.quiet(theme, active: glowing);
     } else {
       bloodFill = true;
       decoration = BloodSpeck.decoration(theme, opacity: 0.55).copyWith(
@@ -1210,7 +1202,9 @@ class _SoundActionChipState extends State<_SoundActionChip> {
       );
     }
     final iconColor = dark
-        ? cs.onErrorContainer
+        ? (glowing
+              ? const Color(0xFFFFC2C6)
+              : const Color(0xFFFF9AA0).withValues(alpha: 0.85))
         : (glowing ? const Color(0xFFFFE1E3) : const Color(0xFFF5DBDD));
     return SmoothTooltip(
       message: widget.tooltip,

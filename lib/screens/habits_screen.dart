@@ -919,15 +919,19 @@ class _HabitsScreenState extends State<HabitsScreen>
         Icon(
           Icons.check_circle_outline_rounded,
           size: 15,
-          color: isDark ? cs.onErrorContainer : const Color(0xFFFFE1E3),
+          color: isDark
+              ? const Color(0xFFFF9AA0).withValues(alpha: 0.92)
+              : const Color(0xFFFFE1E3),
         ),
         const SizedBox(width: 7),
         Text(
           Translations.t('todayErased', context, 'Сегодня очищено'),
           style: theme.textTheme.bodySmall?.copyWith(
-            color: isDark ? cs.onErrorContainer : const Color(0xFFFFEEF0),
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
+            color: isDark
+                ? cs.onSurface.withValues(alpha: 0.74)
+                : const Color(0xFFFFEEF0),
+            fontWeight: isDark ? FontWeight.w600 : FontWeight.w700,
+            letterSpacing: isDark ? 0.2 : 0.4,
           ),
         ),
       ],
@@ -942,21 +946,7 @@ class _HabitsScreenState extends State<HabitsScreen>
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: isDark
-              ? BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: cs.errorContainer,
-                  border: Border.all(
-                    color: cs.error.withValues(alpha: 0.55),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: cs.error.withValues(alpha: 0.22),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                )
+              ? BloodSpeck.quiet(theme)
               : BloodSpeck.decoration(theme),
           child: isDark
               ? content
@@ -1355,7 +1345,7 @@ class _HabitsScreenState extends State<HabitsScreen>
                                 struckColor: theme.colorScheme.onSurfaceVariant
                                     .withValues(alpha: 0.42),
                                 strikeColor: Colors.red.shade500.withValues(
-                                  alpha: 0.9,
+                                  alpha: 0.55,
                                 ),
                                 // Полный текст без троеточия: имя привычки
                                 // всегда видно целиком (как в задачах), а не
@@ -1553,7 +1543,8 @@ class _HabitsScreenState extends State<HabitsScreen>
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.surfaceContainerHighest,
+                                  color:
+                                      theme.colorScheme.surfaceContainerHighest,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Column(
