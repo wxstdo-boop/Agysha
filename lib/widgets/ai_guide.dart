@@ -63,19 +63,21 @@ class LiveAdaAvatar extends StatelessWidget {
   /// Монхром — для кнопки-Ады на плите: см. [AdaAvatar.monochrome].
   final bool monochrome;
 
-  const LiveAdaAvatar({super.key, required this.size, this.monochrome = false});
+  const LiveAdaAvatar({super.key, required this.size, this.monochrome = true});
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
       valueListenable: adaAvatarVariant,
+      // Смена — как у аватара в «Сообществе»: 340 мс, ровное растворение
+      // без пружины и без вырастания из нуля.
       builder: (context, idx, _) => AnimatedSwitcher(
-        duration: const Duration(milliseconds: 320),
-        switchInCurve: Curves.easeOutBack,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) => ScaleTransition(
-          scale: animation,
-          child: FadeTransition(opacity: animation, child: child),
+        duration: const Duration(milliseconds: 340),
+        switchInCurve: Curves.easeInOut,
+        switchOutCurve: Curves.easeInOut,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+          child: child,
         ),
         child: AdaAvatar(
           variantIndex: idx,
@@ -466,8 +468,10 @@ class _AiChatBodyState extends State<_AiChatBody>
     if (lastModel.isNotEmpty) {
       _modelLabel = lastModel;
     }
-    _loadHistory();
-    _loadPins();
+    // История и закреплённые читаются ПОСЛЕ въезда окна (см.
+    // _startPostTransitionWork): разбор большого JSON на каждый кадр
+    // анимации открытия и был тем «лагающим входом» — выход шёл плавно,
+    // потому что читать уже было нечего.
     _loadLiked();
     // Открытый чат слушает доставку и перечитывает историю — отчёт
     // появляется в ленте в момент доставки, без переоткрытия.
@@ -522,6 +526,8 @@ class _AiChatBodyState extends State<_AiChatBody>
   void _startPostTransitionWork() {
     if (_deferredInitStarted || !mounted) return;
     _deferredInitStarted = true;
+    _loadHistory();
+    _loadPins();
     _ensureReports();
     unawaited(AiGuideService.maybeDeliverAdaNudge('system'));
     unawaited(AiGuideService.loadAdaStreak());
@@ -1528,20 +1534,29 @@ class _AiChatBodyState extends State<_AiChatBody>
                       child: ValueListenableBuilder<int>(
                         valueListenable: adaAvatarVariant,
                         builder: (context, idx, _) => AnimatedSwitcher(
-                          // Смена аватарки в шапке — такой же ДОЛГИЙ
-                          // кросс-фейд, как у живой аватарки: без пружины
-                          // и без роста из нуля.
-                          duration: const Duration(milliseconds: 1150),
+                          // Смена аватарки в шапке — ровно как у выбора
+                          // аватара в «Сообществе»: 340 мс, мягкое
+                          // растворение с лёгким оседанием 1.0 → 0.98,
+                          // без пружины.
+                          duration: const Duration(milliseconds: 340),
                           switchInCurve: Curves.easeInOut,
                           switchOutCurve: Curves.easeInOut,
                           transitionBuilder: (child, animation) =>
-                              ScaleTransition(
-                                scale: Tween<double>(
-                                  begin: 0.98,
-                                  end: 1.0,
-                                ).animate(animation),
-                                child: FadeTransition(
-                                  opacity: animation,
+                              FadeTransition(
+                                opacity: CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeInOut,
+                                ),
+                                child: ScaleTransition(
+                                  scale: Tween<double>(
+                                    begin: 0.98,
+                                    end: 1.0,
+                                  ).animate(
+                                    CurvedAnimation(
+                                      parent: animation,
+                                      curve: Curves.easeInOut,
+                                    ),
+                                  ),
                                   child: child,
                                 ),
                               ),

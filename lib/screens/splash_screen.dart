@@ -235,12 +235,14 @@ class _SplashScreenState extends State<SplashScreen>
                               // брызгами это читалось как «дохуя чёрточек».
                               // САМ ЛОГОТИП НЕ МЕНЯЛСЯ.
                               child: Container(
-                                // Ава на сплэше чуть меньше: 104 → 92.
+                                // Ава на сплэше чуть меньше: 104 → 92 → 90.
                                 // Крупная плита перетягивала внимание с
                                 // человечка и текста «powered by».
-                                width: 92,
-                                height: 92,
-                                padding: const EdgeInsets.all(3.2),
+                                width: 90,
+                                height: 90,
+                                // Кайма тоньше (3.2 → 2.3): кольцо читается
+                                // оправой, а не толстым ободом.
+                                padding: const EdgeInsets.all(2.3),
                                 decoration: BoxDecoration(
                                   // «Скруглый» (squircle) — круглее квадрата, но
                                   // НЕ круг: нижняя подпись на логотипе не
@@ -614,6 +616,11 @@ class _BetaSplatPainter extends CustomPainter {
         Radius.circular(radius),
       ),
     );
+    // «β» чуть меньше самой плиты: буква уходит от кромки и не спорит
+    // с логотипом, оставаясь тем же знаком сборки.
+    canvas.translate(w / 2, h / 2);
+    canvas.scale(0.88);
+    canvas.translate(-w / 2, -h / 2);
 
     // Геометрия и её метрики кэшируются по размеру плиты: раньше
     // computeMetrics() и extractPath() гонялись на КАЖДОМ кадре β — это и
@@ -805,6 +812,26 @@ class _LevitationPainter extends CustomPainter {
 
   static const double _tau = math.pi * 2;
 
+  /// Силуэт человечка (голова + плащ) и «рукава» — неизменны, поэтому
+  /// считаются один раз, а не на каждом кадре.
+  static final Path _figure = Path.combine(
+    PathOperation.union,
+    Path()
+      ..addOval(Rect.fromCircle(center: const Offset(0, -9.4), radius: 3.3)),
+    Path()
+      ..moveTo(-3.6, -6.4)
+      ..quadraticBezierTo(-3.1, 1.6, -1.9, 5.0)
+      ..quadraticBezierTo(0, 6.4, 1.9, 5.0)
+      ..quadraticBezierTo(3.1, 1.6, 3.6, -6.4)
+      ..quadraticBezierTo(0, -8.0, -3.6, -6.4)
+      ..close(),
+  );
+
+  static final RRect _wing = RRect.fromRectAndRadius(
+    Rect.fromCenter(center: Offset.zero, width: 2.9, height: 7.6),
+    const Radius.circular(1.45),
+  );
+
   @override
   void paint(Canvas canvas, Size size) {
     final p = phase % 1.0;
@@ -871,17 +898,11 @@ class _LevitationPainter extends CustomPainter {
     // были тонкими штрихами и на маленьком размере рассыпались в набор
     // чёрточек. Залитый силуэт (голова + плащ + рукава) читается одной
     // чистой формой даже на бюджетнике.
-    final head = Path()
-      ..addOval(Rect.fromCircle(center: const Offset(0, -9.4), radius: 3.3));
-    final robe = Path()
-      ..moveTo(-3.6, -6.4)
-      ..quadraticBezierTo(-3.1, 1.6, -1.9, 5.0)
-      ..quadraticBezierTo(0, 6.4, 1.9, 5.0)
-      ..quadraticBezierTo(3.1, 1.6, 3.6, -6.4)
-      ..quadraticBezierTo(0, -8.0, -3.6, -6.4)
-      ..close();
-
-    final silhouette = Path.combine(PathOperation.union, head, robe);
+    //
+    // Path и Path.combine считаются ОДИН раз на процесс: раньше union
+    // пересобирался на каждом кадре левитации, и на слабом GPU кадр
+    // сплэша не успевал — человечек «дёргался».
+    final silhouette = _figure;
 
     final glowPaint = Paint()..color = color.withValues(alpha: glow * 0.22);
     final solidPaint = Paint()..color = color;
@@ -892,13 +913,7 @@ class _LevitationPainter extends CustomPainter {
         canvas.save();
         canvas.translate(dir * 4.9, -8.0);
         canvas.rotate(dir * 0.62);
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromCenter(center: Offset.zero, width: 2.9, height: 7.6),
-            const Radius.circular(1.45),
-          ),
-          paint,
-        );
+        canvas.drawRRect(_wing, paint);
         canvas.restore();
       }
     }
@@ -926,5 +941,7 @@ class _LevitationPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LevitationPainter oldDelegate) =>
-      oldDelegate.phase != phase || oldDelegate.color != color;
+      oldDelegate.phase != phase ||
+      oldDelegate.color != color ||
+      oldDelegate.glow != glow;
 }

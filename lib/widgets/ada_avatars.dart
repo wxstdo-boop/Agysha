@@ -212,7 +212,10 @@ class AdaAvatar extends StatelessWidget {
   final double size;
   final int variantIndex;
 
-  /// Монхромный вариант — только для КНОПКИ-Ады в ряду с «+».
+  /// Монхромный медальон — теперь режим по умолчанию для ВСЕХ аватарок
+  /// Ады: в ИИ-разделе цветные градиенты спорили с текстом и темой, а
+  /// смена цвета читалась как перерисовка. Форма и значок варианта
+  /// остаются, цвет — нейтральные роли темы.
   ///
   /// На нейтральной плите-таблетке цветной градиентный кружок читался
   /// «ярким островом» и спорил с плоской капсулой разделов. Монхром
@@ -224,7 +227,7 @@ class AdaAvatar extends StatelessWidget {
     super.key,
     this.size = 34,
     this.variantIndex = -1,
-    this.monochrome = false,
+    this.monochrome = true,
   });
 
   @override
@@ -247,9 +250,10 @@ class AdaAvatar extends StatelessWidget {
           // масштаба: «дыхание» 0.98→1 на мелком кружке читалось как
           // перерисовка, а не как смена. Только растворение одного
           // медальона в другом, как было раньше, но спокойнее.
-          duration: const Duration(milliseconds: 1100),
-          switchInCurve: Curves.easeInOutSine,
-          switchOutCurve: Curves.easeInOutSine,
+          // Как в «Сообществе»: 340 мс ровного кросс-фейда без масштаба.
+          duration: const Duration(milliseconds: 340),
+          switchInCurve: Curves.easeInOut,
+          switchOutCurve: Curves.easeInOut,
           layoutBuilder: (current, previous) => Stack(
             alignment: Alignment.center,
             children: [...previous, ?current],
@@ -257,7 +261,7 @@ class AdaAvatar extends StatelessWidget {
           transitionBuilder: (child, anim) => FadeTransition(
             opacity: CurvedAnimation(
               parent: anim,
-              curve: Curves.easeInOutSine,
+              curve: Curves.easeInOut,
             ),
             child: child,
           ),
@@ -287,9 +291,10 @@ class AdaAvatar extends StatelessWidget {
         // Монхром для кнопки — ровно тот же нейтральный медальон, что у
         // невыбранного значка главной таблетки: светлая площадка темы, без
         // цветного градиента. Так кнопка-Ада читается «своей» для таблетки.
+        // Мягкая однотонная растяжка той же роли: медальон не выглядит
+        // плоской наклейкой, но и не спорит цветом с темой.
         ? <Color>[
-            dark ? cs.surfaceContainerHighest : cs.surfaceContainerLowest,
-            dark ? cs.surfaceContainerHighest : cs.surfaceContainerLowest,
+            dark ? cs.surfaceContainerHigh : cs.surfaceContainerLow,
             dark ? cs.surfaceContainerHighest : cs.surfaceContainerLowest,
           ]
         : v.colors

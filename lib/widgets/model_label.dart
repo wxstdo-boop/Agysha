@@ -25,8 +25,8 @@ class ModelLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Смена модели/провайдера — ПЛАВНО: старое имя мягко тает, новое
-    // проявляется на его месте (240 мс).
+    // Смена модели/провайдера — ПЛАВНО, 340 мс: старое имя мягко тает,
+    // новое проявляется на его месте. Короче читалось как щелчок.
     //
     // Выравнивание стека — СТРОГО слева, высота строки фиксирована:
     // раньше [AnimatedSwitcher] центрировал детей и подгонял размер под
@@ -36,9 +36,9 @@ class ModelLabel extends StatelessWidget {
       return SizedBox(
         height: ellipsis ? 16 : null,
         child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 240),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
+          duration: const Duration(milliseconds: 340),
+          switchInCurve: Curves.easeInOut,
+          switchOutCurve: Curves.easeInOut,
           layoutBuilder: (current, previous) => Stack(
             alignment: Alignment.centerLeft,
             children: [...previous, ?current],

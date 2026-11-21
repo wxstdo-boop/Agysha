@@ -326,13 +326,18 @@ Future<String> _sendLlm7(
     {'role': 'user', 'content': userText},
   ];
 
-  for (final model in const ['gpt-oss:20b', 'gpt-oss']) {
+  // Три живые модели шлюза: если одна отвечает пустым content или 429,
+  // следующая обычно отвечает нормально. Без этого одно падение модели
+  // выбивало весь бесплатный слой.
+  for (final model in const ['gpt-oss:20b', 'gpt-oss', 'codestral-latest']) {
     try {
       final resp = await http
           .post(
             Uri.parse(_llm7Url),
             headers: {
               'Content-Type': 'application/json',
+              // Шлюз отдаёт анонимный ключ "unused" — с ним лимиты выше.
+              'Authorization': 'Bearer unused',
               'User-Agent':
                   'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
             },

@@ -68,6 +68,9 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
 
   void _measureChallenge() {
     if (_solved || _solvedPending || !mounted) return;
+    // Пока клавиатура на экране, высоту не пересчитываем: её появление
+    // меняло метрики карточки, и та «мигала» сменой габарита.
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) return;
     final ro = _slotKey.currentContext?.findRenderObject();
     if (ro is! RenderBox) return;
     final h = ro.size.height;
@@ -428,8 +431,16 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
                                 ),
                               ),
                               child: ConstrainedBox(
+                                // Высоту фиксируем только у задач с двумя
+                                // фазами (цифры → ввод, паттерн → проверка).
+                                // У будильника без задания мерить нечего:
+                                // запомненная высота делала карточку выше
+                                // содержимого, и фон «раскрывался вниз»
+                                // под кнопкой «Проверить».
                                 constraints: BoxConstraints(
-                                  minHeight: _challengeH ?? 0,
+                                  minHeight: widget.taskType == WakeUpTask.none
+                                      ? 0
+                                      : (_challengeH ?? 0),
                                 ),
                                 child: AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 380),
@@ -446,13 +457,19 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
                                           child: _buildSolved(context, theme),
                                         )
                                       : KeyedSubtree(
-                                          key: _slotKey,
+                                          key: widget.taskType == WakeUpTask.none
+                                              ? const ValueKey('plain')
+                                              : _slotKey,
                                           child: Builder(
                                             builder: (context) {
-                                              WidgetsBinding.instance
-                                                  .addPostFrameCallback(
-                                                    (_) => _measureChallenge(),
-                                                  );
+                                              if (widget.taskType !=
+                                                  WakeUpTask.none) {
+                                                WidgetsBinding.instance
+                                                    .addPostFrameCallback(
+                                                      (_) =>
+                                                          _measureChallenge(),
+                                                    );
+                                              }
                                               return _buildChallenge(
                                                 context,
                                                 theme,
@@ -977,9 +994,14 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
     // Плитка 48×56: в неё цифра кеглем 26 влезает с запасом по бокам.
     // Раньше было 44×52 и при кегле titleLarge цифры прижимались к кромкам
     // и визуально «не умещались» в клетку.
-    final perRow = ((gridW + 8) / 56).floor().clamp(1, _length);
-    final rows = (_length / perRow).ceil();
-    final tilesH = rows * 56.0 + (rows - 1) * 8.0;
+    //
+    // Все цифры — ВСЕГДА В ОДНУ СТРОКУ: раньше ширина плитки была жёсткой
+    // (48 + 8), и на узком экране 5–6 цифр переносились в две строки.
+    // Теперь плитка ужимается под ряд (но не меньше 34), а кегль — под неё.
+    const gap = 8.0;
+    final tileW = min(48.0, (gridW - gap * (_length - 1)) / _length);
+    final tileFont = tileW < 42 ? 21.0 : 26.0;
+    final tilesH = 56.0;
     final bodyH = tilesH + 62.0;
 
     return Padding(
@@ -1018,13 +1040,13 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
                       key: const ValueKey('show'),
                       child: Wrap(
                         alignment: WrapAlignment.center,
-                        spacing: 8,
-                        runSpacing: 8,
+                        spacing: gap,
+                        runSpacing: gap,
                         children: <Widget>[
                           ...List.generate(_numbers.length, (i) {
                             final n = _numbers[i];
                             return Container(
-                              width: 48,
+                              width: tileW,
                               height: 56,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
@@ -1066,7 +1088,7 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
                                 index: i,
                                 text: '$n',
                                 style: theme.textTheme.titleLarge?.copyWith(
-                                  fontSize: 26,
+                                  fontSize: tileFont,
                                   height: 1.0,
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
@@ -1098,7 +1120,7 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
                             children: List.generate(
                               _length,
                               (i) => SizedBox(
-                                width: 48,
+                                width: tileW,
                                 height: 56,
                                 child: Container(
                                   decoration: BoxDecoration(
@@ -1129,7 +1151,10 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
                                     child: SmoothTyping(
                                       controller: _ctrls[i],
                                       style: theme.textTheme.titleLarge
-                                          ?.copyWith(fontSize: 24, height: 1.1),
+                                          ?.copyWith(
+                                            fontSize: tileFont - 2,
+                                            height: 1.1,
+                                          ),
                                       builder: (style) => TextField(
                                         style: style,
                                         cursorOpacityAnimates: true,
@@ -1628,10 +1653,10 @@ class _RedPillButton extends StatelessWidget {
       // Компактная кнопка задачи больше не «обрубок» по центру: у неё та же
       // кровная таблетка, что у разделов, но с собственной минимальной
       // шириной — на узком экране она читается как полноценная кнопка.
-      constraints: BoxConstraints(minWidth: compact ? 196 : 0),
+      constraints: BoxConstraints(minWidth: compact ? 168 : 0),
       padding: EdgeInsets.symmetric(
-        horizontal: compact ? 26 : 20,
-        vertical: compact ? 14 : 15,
+        horizontal: compact ? 20 : 18,
+        vertical: compact ? 10 : 12,
       ),
       decoration: BoxDecoration(
         borderRadius: radius,
@@ -1666,8 +1691,8 @@ class _RedPillButton extends StatelessWidget {
             // Значок в лёгком светлом кружке — тот же ритм, что у кружка
             // привычки: кнопка не выглядит «текстом с иконкой сбоку».
             Container(
-              width: 24,
-              height: 24,
+              width: 21,
+              height: 21,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.transparent,
@@ -1680,20 +1705,22 @@ class _RedPillButton extends StatelessWidget {
               ),
               child: Icon(
                 icon,
-                size: 16,
+                size: 14,
                 color: const Color(
                   0xFFE02436,
                 ).withValues(alpha: on ? 1.0 : 0.45),
               ),
             ),
-            const SizedBox(width: 9),
+            const SizedBox(width: 8),
           ],
           Flexible(
             child: AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutCubic,
               style: TextStyle(
-                fontSize: 15,
+                // Кнопка мельче: прежние 15/14 выглядели крупной плашкой
+                // рядом с компактной карточкой.
+                fontSize: compact ? 13.5 : 14,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.2,
                 color: const Color(
@@ -1721,11 +1748,9 @@ class _RedPillButton extends StatelessWidget {
         enabled: on,
         pressedScale: 0.965,
         enableTilt: true,
-        // Красное зажатие внутри прозрачной таблетки — как у разделов:
-        // кнопка «наливается» цветом под пальцем и отпускает упруго.
-        pressTint: const Color(0xFFFF453A),
-        pressTintStrength: 0.18,
-        pressTintRadius: BorderRadius.circular(999),
+        // Внутреннего отсвета НЕТ: под пальцем кнопка только утапливается
+        // и наклоняется, как остальные таблетки. Красная заливка внутри
+        // читалась как «фонарь» под кромкой.
         duration: const Duration(milliseconds: 150),
         releaseDuration: const Duration(milliseconds: 320),
         releaseCurve: Curves.easeOutCubic,
@@ -1788,29 +1813,31 @@ class _PatternCell extends StatelessWidget {
           ];
 
     return TweenAnimationBuilder<double>(
-      // Каскад: каждая следующая клетка приходит на 40 мс позже — сетка
-      // проявляется волной, а не возникает целиком одним кадром.
+      // Каскад: каждая следующая клетка приходит на 55 мс позже — сетка
+      // проявляется мягкой волной. Медленнее прежнего (300 + 40·i): клетки
+      // успевали «щёлкнуть», а не проявиться.
       tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 300 + 40 * index),
+      duration: Duration(milliseconds: 420 + 55 * index),
       curve: Curves.easeOutCubic,
       builder: (context, v, child) => Opacity(
-        opacity: v,
-        child: Transform.scale(scale: 0.90 + 0.10 * v, child: child),
+        opacity: (v * 1.6).clamp(0.0, 1.0),
+        child: Transform.scale(scale: 0.92 + 0.08 * v, child: child),
       ),
       child: PressScale(
         pressedScale: 0.93,
-        duration: const Duration(milliseconds: 140),
-        releaseDuration: const Duration(milliseconds: 240),
+        duration: const Duration(milliseconds: 160),
+        releaseDuration: const Duration(milliseconds: 380),
+        releaseCurve: Curves.easeOutCubic,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: AnimatedScale(
-            scale: highlighted ? 1.05 : 1.0,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
+            scale: highlighted ? 1.035 : 1.0,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeInOutCubic,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeOutCubic,
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeInOutCubic,
               width: side,
               height: side,
               decoration: BoxDecoration(

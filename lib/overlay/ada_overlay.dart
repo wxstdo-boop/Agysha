@@ -918,14 +918,15 @@ class _OverlayChatState extends State<_OverlayChat>
   /// Теперь один рисунок просто растворяется в другом — и в том же темпе,
   /// что и аватарки в основном чате.
   Widget _animatedAvatar(double size, int variant) {
+    // Как в «Сообществе»: 340 мс ровного кросс-фейда.
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 1100),
-      switchInCurve: Curves.easeInOutSine,
-      switchOutCurve: Curves.easeInOutSine,
+      duration: const Duration(milliseconds: 340),
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
       transitionBuilder: (child, anim) => FadeTransition(
         opacity: CurvedAnimation(
           parent: anim,
-          curve: Curves.easeInOutSine,
+          curve: Curves.easeInOut,
         ),
         child: child,
       ),

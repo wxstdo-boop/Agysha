@@ -23,7 +23,11 @@ import '../widgets/animated_fab_row.dart';
 import '../widgets/premium_empty_state.dart';
 import '../utils/section_tints.dart';
 import '../widgets/section_pill.dart'
-    show kSectionPillSlotHeight, sectionCurrentIndex, sectionDragPage;
+    show
+        kSectionPillSlotHeight,
+        kSectionRefreshEdgeOffset,
+        sectionCurrentIndex,
+        sectionDragPage;
 import 'add_habit_screen.dart';
 import '../widgets/agysha_confirm_dialog.dart';
 
@@ -746,8 +750,10 @@ class _HabitsScreenState extends State<HabitsScreen>
 
     return RefreshIndicator(
       // Кружок выезжает из-под таблетки разделов, а не появляется за ней
-      // (поверх её) - как на экране будильников.
-      edgeOffset: kSectionPillSlotHeight,
+      // (поверх её) - как на экране будильников. kSectionRefreshEdgeOffset
+      // учитывает высоту таблетки и её отступ: на kSectionPillSlotHeight
+      // ползунок выходил из-под фона на пару пикселей выше.
+      edgeOffset: kSectionRefreshEdgeOffset,
       onRefresh: () async {
         await _service.load();
         return;

@@ -375,6 +375,15 @@ class AiGuideService {
   static bool _isRefusal(String t) {
     final s = t.trim();
     if (s.isEmpty) return true;
+    // Ответ-эхо имени («Ада», «Просто Ада», «Я — Ада») — модель не
+    // ответила, а вернула представление. Такой вариант уходит в следующий
+    // провайдер, и пользователь не видит «просто Ада».
+    if (RegExp(
+      r'^(?:я\s*[—–-]\s*)?(?:просто\s+)?(?:ада|ada)(?:[.!…]*)$',
+      caseSensitive: false,
+    ).hasMatch(s)) {
+      return true;
+    }
     if (_isOffTopicRant(s)) return true;
     // Длинный ответ с упоминанием отказа посреди текста — нормальный ответ.
     if (s.length > 300) return false;
@@ -963,6 +972,21 @@ class AiGuideService {
       return retryPollinations;
     }
 
+    // Второй полный заход по бесплатным провайдерам: короткие сбои шлюзов
+    // (429, таймаут, пустой ответ) — самая частая причина плашки «ИИ на
+    // курорте». Одна пауза и повтор убирают большинство таких ошибок без
+    // участия пользователя.
+    _cooldownUntil.clear();
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    for (final (name, send) in providers) {
+      final answer = await send();
+      if (answer != null) {
+        _recordProviderTrace('Selected: $name (повтор)');
+        commitStaged(name);
+        return answer;
+      }
+    }
+
     // Полностью высохшая цепочка: сбрасываем кулдауны, чтобы СЛЕДУЮЩЕЕ
     // сообщение снова пошло по всей цепочке, а не упало в 0 секунд.
     _cooldownUntil.clear();
@@ -1085,8 +1109,9 @@ class AiGuideService {
   static String _stagedModel = '';
 
   static void _noteModel(String label) {
+    // Только «заявка»: имя провайдера публикуется после ответа, иначе
+    // метка модели менялась, пока пользователь ещё ничего не отправил.
     _stagedModel = label;
-    _lastModel = label;
   }
 
   static void commitStaged(String fallback) {
@@ -1142,14 +1167,23 @@ class AiGuideService {
       return;
     }
     if (!_lastModel.contains('—')) return;
-    _setModel(_lastGoodModel.isNotEmpty ? _lastGoodModel : 'Ада');
+    _setModel(_restingLabel());
   }
 
   /// Гасит любую временную метку «— отвечает…», если ответ уже не готовится.
   static void endAnswering() {
     if (_lastModel.contains('—')) {
-      _setModel(_lastGoodModel.isNotEmpty ? _lastGoodModel : 'Ада');
+      _setModel(_restingLabel());
     }
+  }
+
+  /// Имя, на которое плашка возвращается без ответа. Никогда не откатываем
+  /// к голому «Ада», если уже известно рабочее имя, — иначе плашка
+  /// «прыгала» с провайдера на «просто Ада».
+  static String _restingLabel() {
+    if (_lastGoodModel.isNotEmpty) return _lastGoodModel;
+    if (_shownModel.isNotEmpty) return _shownModel;
+    return 'Ада';
   }
 
   static final ValueNotifier<int> modelLabelTick = ValueNotifier<int>(0);

@@ -684,10 +684,12 @@ class _SectionPillState extends State<SectionPill>
                     pressTintRadius: BorderRadius.circular(18),
                     enableTilt: true,
                     // Отдача как у кнопок Ады и «плюсика»: вдавливание
-                    // 240 мс, возврат 340 мс. Раньше возврат тянулся
-                    // 620 мс — под пальцем это читалось как «залипание».
+                    // 240 мс, возврат 520 мс. Возврат чуть дольше прежних
+                    // 340: при быстрых тапах фон успевал «щёлкнуть» и
+                    // исчезнуть раньше пальца — теперь он растворяется
+                    // следом, мягко.
                     duration: const Duration(milliseconds: 240),
-                    releaseDuration: const Duration(milliseconds: 340),
+                    releaseDuration: const Duration(milliseconds: 520),
                     child: Material(
                       type: MaterialType.transparency,
                       child: InkWell(
@@ -754,9 +756,11 @@ class _PillLabelState extends State<_PillLabel>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
-    // 760 мс: текст перекрашивается ровно тем же «следом», что и фон
+    // 1100 мс: текст перекрашивается ровно тем же «следом», что и фон
     // таблетки, — при быстрых тапах цвет догоняет выбор, а не щёлкает.
-    duration: const Duration(milliseconds: 760),
+    // Раньше было 760 мс: при серии быстрых переключений подсветка
+    // «догоняла» слишком резко и читалась как мигание.
+    duration: const Duration(milliseconds: 1100),
     value: 1,
   );
   late double _from = widget.glow;

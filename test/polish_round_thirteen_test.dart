@@ -322,7 +322,7 @@ void main() {
     );
   });
 
-  testWidgets('значок Ады на кнопке монхромный, в чате — цветной', (
+  testWidgets('значки Ады по умолчанию монохромные, цветной — только явно', (
     tester,
   ) async {
     late ColorScheme cs;
@@ -340,7 +340,9 @@ void main() {
               cs = Theme.of(context).colorScheme;
               return const Column(
                 children: [
-                  AdaAvatar(variantIndex: 0, size: 40, monochrome: true),
+                  // Явный цветной вариант остаётся доступным,
+                  // но по умолчанию все значки — монохромные.
+                  AdaAvatar(variantIndex: 0, size: 40, monochrome: false),
                   AdaAvatar(variantIndex: 0, size: 40),
                 ],
               );
@@ -351,8 +353,8 @@ void main() {
     );
     await tester.pump();
 
-    final mono = find.byType(AdaAvatar).at(0);
-    final color = find.byType(AdaAvatar).at(1);
+    final color = find.byType(AdaAvatar).at(0);
+    final mono = find.byType(AdaAvatar).at(1);
     BoxDecoration decoOf(Finder f) =>
         tester
                 .widget<Container>(
@@ -366,8 +368,8 @@ void main() {
     final monoGrad = decoOf(mono).gradient! as LinearGradient;
     expect(
       monoGrad.colors.toSet(),
-      {cs.surfaceContainerLowest},
-      reason: 'монхром — ровно площадка невыбранного значка таблетки',
+      {cs.surfaceContainerLow, cs.surfaceContainerLowest},
+      reason: 'монохром — две соседние ступени поверхности, без фирменных цветов',
     );
     final monoIcon = tester.widget<Icon>(
       find.descendant(of: mono, matching: find.byType(Icon)),
