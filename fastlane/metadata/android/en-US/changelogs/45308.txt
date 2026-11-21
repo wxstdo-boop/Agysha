@@ -1,0 +1,1 @@
+- polish: splash, section pill, strike, Ada avatars, AI entry, wake test, AI error snackbar
