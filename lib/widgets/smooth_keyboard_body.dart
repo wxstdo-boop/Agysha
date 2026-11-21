@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 ///
 /// Использование: у Scaffold поставить `resizeToAvoidBottomInset: false`,
 /// а body обернуть: `body: SmoothKeyboardBody(child: ...)`.
-class SmoothKeyboardBody extends StatelessWidget {
+class SmoothKeyboardBody extends StatefulWidget {
   final Widget child;
 
   /// Подложка ПОД отступом клавиатуры. По умолчанию — цвет scaffold.
@@ -29,9 +29,26 @@ class SmoothKeyboardBody extends StatelessWidget {
   const SmoothKeyboardBody({super.key, required this.child, this.background});
 
   @override
+  State<SmoothKeyboardBody> createState() => _SmoothKeyboardBodyState();
+}
+
+class _SmoothKeyboardBodyState extends State<SmoothKeyboardBody> {
+  /// Ключ держит поддерево экрана ЖИВЫМ при смене обёртки.
+  ///
+  /// Раньше при `bottom == 0` возвращался голый child, а при появлении
+  /// клавиатуры он же оказывался ВНУТРИ SingleChildScrollView. Смена
+  /// структуры дерева пересоздавала поддерево: TextField терял фокус,
+  /// клавиатура тут же закрывалась, структура возвращалась обратно — и
+  /// экран мигал «клавиатура появилась на миллисекунду и исчезла».
+  /// GlobalKey переносит поддерево между обёртками без пересоздания,
+  /// поэтому фокус и ввод переживают подъём клавиатуры.
+  final GlobalKey _contentKey = GlobalKey();
+
+  @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
-    final bg = background ?? Theme.of(context).scaffoldBackgroundColor;
+    final bg = widget.background ?? Theme.of(context).scaffoldBackgroundColor;
+    final content = KeyedSubtree(key: _contentKey, child: widget.child);
     return ColoredBox(
       color: bg,
       // Клавиатура больше НЕ сжимает содержимое: раньше здесь стоял
@@ -42,7 +59,7 @@ class SmoothKeyboardBody extends StatelessWidget {
       // доводит его само). Фон, нарисованный над этим виджетом, остаётся
       // неподвижным.
       child: bottom <= 0
-          ? child
+          ? content
           : LayoutBuilder(
               builder: (context, constraints) {
                 final height = constraints.maxHeight;
@@ -52,7 +69,7 @@ class SmoothKeyboardBody extends StatelessWidget {
                   child: SizedBox(
                     width: constraints.maxWidth,
                     height: height.isFinite ? height : null,
-                    child: child,
+                    child: content,
                   ),
                 );
               },

@@ -66,7 +66,9 @@ void main() {
 
     await gesture.up();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    // Отдача после отпускания — 760 мс (красная подложка растворяется
+    // следом), поэтому ждём дольше, чем прежние 400.
+    await tester.pump(const Duration(milliseconds: 900));
     expect(
       scaleOf(tester, pressScale),
       closeTo(1.0, 0.01),

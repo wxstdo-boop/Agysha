@@ -259,10 +259,7 @@ class AdaAvatar extends StatelessWidget {
             children: [...previous, ?current],
           ),
           transitionBuilder: (child, anim) => FadeTransition(
-            opacity: CurvedAnimation(
-              parent: anim,
-              curve: Curves.easeInOut,
-            ),
+            opacity: CurvedAnimation(parent: anim, curve: Curves.easeInOut),
             child: child,
           ),
           child: KeyedSubtree(
@@ -344,6 +341,44 @@ class AdaAvatar extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
+          // Монохромный медальон — не плоская наклейка: сверху мягкий
+          // светлый «купол», снизу едва заметная тень. Два радиальных
+          // градиента дают объём без blur-фильтров и без цветного блика,
+          // который спорил с матовой капсулой разделов.
+          if (monochrome)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    center: const Alignment(-0.35, -0.55),
+                    radius: 1.05,
+                    colors: [
+                      Colors.white.withValues(alpha: dark ? 0.10 : 0.55),
+                      Colors.white.withValues(alpha: 0.0),
+                    ],
+                    stops: const [0.0, 0.72],
+                  ),
+                ),
+              ),
+            ),
+          if (monochrome)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    center: const Alignment(0.25, 1.05),
+                    radius: 0.9,
+                    colors: [
+                      Colors.black.withValues(alpha: dark ? 0.26 : 0.10),
+                      Colors.black.withValues(alpha: 0.0),
+                    ],
+                    stops: const [0.0, 0.70],
+                  ),
+                ),
+              ),
+            ),
           // Блик — маленькое чёткое пятно света сверху-слева с мягким
           // растеканием: читается как стекло, но не «лак». В монхроме он
           // гасится: на нейтральной плите спорил с матовой капсулой разделов.
@@ -372,13 +407,20 @@ class AdaAvatar extends StatelessWidget {
           // размерах (18 px в пузырях) контур не «растворяется» в градиенте.
           Icon(
             v.icon,
-            size: size * 0.46,
+            // В монохроме глиф чуть крупнее и с лёгким свечением primary:
+            // медальон читается как печать, а не как серый значок.
+            size: size * (monochrome ? 0.50 : 0.46),
             color: iconColor,
             // Тень-подложка под глифом: на тёмной теме светлые края
             // градиента «съедали» белый значок, и аватарка читалась
             // мутным пятном. Плотная тень держит контур на любом фоне.
             shadows: monochrome
-                ? null
+                ? [
+                    Shadow(
+                      color: cs.primary.withValues(alpha: dark ? 0.34 : 0.20),
+                      blurRadius: size * 0.18,
+                    ),
+                  ]
                 : [
                     Shadow(
                       // Плотнее и шире на тёмной теме: тонкая тень не

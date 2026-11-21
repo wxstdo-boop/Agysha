@@ -1146,11 +1146,11 @@ class AiGuideService {
     });
   }
 
-  /// Ставит нейтральную метку «готовит ответ», не трогая уже стоящую.
-  static void _beginAnswering() {
-    if (_lastModel.contains('—')) return;
-    _setModel('Ада — отвечает…');
-  }
+  /// Статуса «Ада — отвечает…» БОЛЬШЕ НЕТ: пока ответ готовится, плашка
+  /// спокойно держит имя провайдера (или пустое место, если имя ещё не
+  /// известно), без живой строки, которая скакала при каждом переборе
+  /// провайдеров.
+  static void _beginAnswering() {}
 
   /// Убирает временную метку, если провайдер так и не ответил.
   ///
@@ -1183,7 +1183,9 @@ class AiGuideService {
   static String _restingLabel() {
     if (_lastGoodModel.isNotEmpty) return _lastGoodModel;
     if (_shownModel.isNotEmpty) return _shownModel;
-    return 'Ада';
+    // Никакого голого «Ада» в статусе: если имя провайдера ещё не
+    // известно, строка остаётся пустой и просто не рисуется.
+    return '';
   }
 
   static final ValueNotifier<int> modelLabelTick = ValueNotifier<int>(0);

@@ -300,211 +300,213 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
       child: DecoratedBox(
         decoration: BoxDecoration(gradient: bgGradient),
         child: Scaffold(
-        backgroundColor: Colors.transparent,
-        resizeToAvoidBottomInset: false,
-        // Градиент висит НАД подъёмом по клавиатуре, а не внутри него: тогда
-        // полоса высотой с клавиатуру, открывающаяся снизу при подъёме
-        // контента, залита тем же градиентом. Раньше её красил плоский
-        // scaffoldBackgroundColor, и над клавиатурой стояла чужеродная лента.
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Фон — ровно размер окна и НЕ зависит от клавиатуры.
-            // Раньше под minHeight подмешивался `viewInsets.bottom`: при
-            // подъёме клавиатуры градиент растягивался на её высоту, его
-            // цветовые полосы съезжали — читалось как «фон поднимается
-            // сзади». resizeToAvoidBottomInset выключен, окно не меняется,
-            // значит фон должен оставаться неподвижным.
-            // Фон уже нарисован под Scaffold (см. выше) — здесь он не
-            // дублируется, чтобы у тела и нижней кнопки не было шва.
-            const Positioned.fill(child: SizedBox.expand()),
-            SmoothKeyboardBody(
-              background: Colors.transparent,
-              child: SafeArea(
-                // БЕЗ SingleChildScrollView: авто-скролл при фокусе ввода
-                // «листал экран будильника сам». Карточка компактная и
-                // влезает; подъём над клавиатурой даёт SmoothKeyboardBody.
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 24,
-                    horizontal: 24,
-                  ),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(maxWidth: 400),
-                      padding: const EdgeInsets.all(24),
-                      // Без BackdropFilter: полноэкранный blur ронял кадры на
-                      // Redmi Note 12 и экран выглядел «мыльно» при появлении.
-                      // Полупрозрачная «стеклянная» карточка без blur — тот же
-                      // вид, но дёшево и чётко.
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.12)
-                            : Colors.white.withValues(alpha: 0.72),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
+          backgroundColor: Colors.transparent,
+          resizeToAvoidBottomInset: false,
+          // Градиент висит НАД подъёмом по клавиатуре, а не внутри него: тогда
+          // полоса высотой с клавиатуру, открывающаяся снизу при подъёме
+          // контента, залита тем же градиентом. Раньше её красил плоский
+          // scaffoldBackgroundColor, и над клавиатурой стояла чужеродная лента.
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Фон — ровно размер окна и НЕ зависит от клавиатуры.
+              // Раньше под minHeight подмешивался `viewInsets.bottom`: при
+              // подъёме клавиатуры градиент растягивался на её высоту, его
+              // цветовые полосы съезжали — читалось как «фон поднимается
+              // сзади». resizeToAvoidBottomInset выключен, окно не меняется,
+              // значит фон должен оставаться неподвижным.
+              // Фон уже нарисован под Scaffold (см. выше) — здесь он не
+              // дублируется, чтобы у тела и нижней кнопки не было шва.
+              const Positioned.fill(child: SizedBox.expand()),
+              SmoothKeyboardBody(
+                background: Colors.transparent,
+                child: SafeArea(
+                  // БЕЗ SingleChildScrollView: авто-скролл при фокусе ввода
+                  // «листал экран будильника сам». Карточка компактная и
+                  // влезает; подъём над клавиатурой даёт SmoothKeyboardBody.
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 24,
+                      horizontal: 24,
+                    ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(maxWidth: 400),
+                        padding: const EdgeInsets.all(24),
+                        // Без BackdropFilter: полноэкранный blur ронял кадры на
+                        // Redmi Note 12 и экран выглядел «мыльно» при появлении.
+                        // Полупрозрачная «стеклянная» карточка без blur — тот же
+                        // вид, но дёшево и чётко.
+                        decoration: BoxDecoration(
                           color: isDark
-                              ? Colors.white.withValues(alpha: 0.18)
-                              : Colors.white.withValues(alpha: 0.85),
-                          width: 1,
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : Colors.white.withValues(alpha: 0.72),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.18)
+                                : Colors.white.withValues(alpha: 0.85),
+                            width: 1,
+                          ),
+                          // Тень-«подложка»: карточка читается как отдельное
+                          // окно поверх градиента, а не как пятно того же фона.
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(
+                                alpha: isDark ? 0.30 : 0.08,
+                              ),
+                              blurRadius: 28,
+                              spreadRadius: -6,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
                         ),
-                        // Тень-«подложка»: карточка читается как отдельное
-                        // окно поверх градиента, а не как пятно того же фона.
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: isDark ? 0.30 : 0.08,
-                            ),
-                            blurRadius: 28,
-                            spreadRadius: -6,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      // Плавный вход: карточка мягко всплывает (fade + подъём)
-                      // при появлении экрана — раньше появлялась резко.
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (widget.isTest)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary.withValues(
-                                    alpha: isDark ? 0.22 : 0.12,
+                        // Плавный вход: карточка мягко всплывает (fade + подъём)
+                        // при появлении экрана — раньше появлялась резко.
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (widget.isTest)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 6,
                                   ),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
+                                  decoration: BoxDecoration(
                                     color: theme.colorScheme.primary.withValues(
-                                      alpha: 0.38,
+                                      alpha: isDark ? 0.22 : 0.12,
                                     ),
-                                    width: 1,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: theme.colorScheme.primary
+                                          .withValues(alpha: 0.38),
+                                      width: 1,
+                                    ),
                                   ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.notifications_active_rounded,
-                                      size: 15,
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      Translations.t(
-                                        'testAlarm',
-                                        context,
-                                        'Тестовый будильник',
-                                      ),
-                                      style: TextStyle(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.notifications_active_rounded,
+                                        size: 15,
                                         color: theme.colorScheme.primary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12.5,
-                                        letterSpacing: 0.3,
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
-                            child: TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 0, end: 1),
-                              duration: const Duration(milliseconds: 420),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, v, child) => Opacity(
-                                opacity: v,
-                                child: Transform.translate(
-                                  offset: Offset(0, 26 * (1 - v)),
-                                  child: Transform.scale(
-                                    scale: 0.96 + 0.04 * v,
-                                    child: child,
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        Translations.t(
+                                          'testAlarm',
+                                          context,
+                                          'Тестовый будильник',
+                                        ),
+                                        style: TextStyle(
+                                          color: theme.colorScheme.primary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12.5,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                              child: ConstrainedBox(
-                                // Высоту фиксируем только у задач с двумя
-                                // фазами (цифры → ввод, паттерн → проверка).
-                                // У будильника без задания мерить нечего:
-                                // запомненная высота делала карточку выше
-                                // содержимого, и фон «раскрывался вниз»
-                                // под кнопкой «Проверить».
-                                constraints: BoxConstraints(
-                                  minHeight: widget.taskType == WakeUpTask.none
-                                      ? 0
-                                      : (_challengeH ?? 0),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0, end: 1),
+                                duration: const Duration(milliseconds: 420),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, v, child) => Opacity(
+                                  opacity: v,
+                                  child: Transform.translate(
+                                    offset: Offset(0, 26 * (1 - v)),
+                                    child: Transform.scale(
+                                      scale: 0.96 + 0.04 * v,
+                                      child: child,
+                                    ),
+                                  ),
                                 ),
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 380),
-                                  switchInCurve: Curves.easeOutCubic,
-                                  switchOutCurve: Curves.easeInCubic,
-                                  transitionBuilder: (child, animation) =>
-                                      FadeTransition(
-                                        opacity: animation,
-                                        child: child,
-                                      ),
-                                  child: _solved
-                                      ? KeyedSubtree(
-                                          key: const ValueKey('solved'),
-                                          child: _buildSolved(context, theme),
-                                        )
-                                      : KeyedSubtree(
-                                          key: widget.taskType == WakeUpTask.none
-                                              ? const ValueKey('plain')
-                                              : _slotKey,
-                                          child: Builder(
-                                            builder: (context) {
-                                              if (widget.taskType !=
-                                                  WakeUpTask.none) {
-                                                WidgetsBinding.instance
-                                                    .addPostFrameCallback(
-                                                      (_) =>
-                                                          _measureChallenge(),
-                                                    );
-                                              }
-                                              return _buildChallenge(
-                                                context,
-                                                theme,
-                                              );
-                                            },
-                                          ),
+                                child: ConstrainedBox(
+                                  // Высоту фиксируем только у задач с двумя
+                                  // фазами (цифры → ввод, паттерн → проверка).
+                                  // У будильника без задания мерить нечего:
+                                  // запомненная высота делала карточку выше
+                                  // содержимого, и фон «раскрывался вниз»
+                                  // под кнопкой «Проверить».
+                                  constraints: BoxConstraints(
+                                    minHeight:
+                                        widget.taskType == WakeUpTask.none
+                                        ? 0
+                                        : (_challengeH ?? 0),
+                                  ),
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 380),
+                                    switchInCurve: Curves.easeOutCubic,
+                                    switchOutCurve: Curves.easeInCubic,
+                                    transitionBuilder: (child, animation) =>
+                                        FadeTransition(
+                                          opacity: animation,
+                                          child: child,
                                         ),
+                                    child: _solved
+                                        ? KeyedSubtree(
+                                            key: const ValueKey('solved'),
+                                            child: _buildSolved(context, theme),
+                                          )
+                                        : KeyedSubtree(
+                                            key:
+                                                widget.taskType ==
+                                                    WakeUpTask.none
+                                                ? const ValueKey('plain')
+                                                : _slotKey,
+                                            child: Builder(
+                                              builder: (context) {
+                                                if (widget.taskType !=
+                                                    WakeUpTask.none) {
+                                                  WidgetsBinding.instance
+                                                      .addPostFrameCallback(
+                                                        (_) =>
+                                                            _measureChallenge(),
+                                                      );
+                                                }
+                                                return _buildChallenge(
+                                                  context,
+                                                  theme,
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        bottomNavigationBar: widget.isTest
-            ? SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: _RedPillButton(
-                      label: Translations.t('wtDismiss', context),
-                      icon: Icons.close_rounded,
-                      onPressed: _finish,
+            ],
+          ),
+          bottomNavigationBar: widget.isTest
+              ? SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: _RedPillButton(
+                        label: Translations.t('wtDismiss', context),
+                        icon: Icons.close_rounded,
+                        onPressed: _finish,
+                      ),
                     ),
                   ),
-                ),
-              )
-            : null,
+                )
+              : null,
         ),
       ),
     );
@@ -989,18 +991,12 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
     // Высота обеих фаз считается ЗАРАНЕЕ и фиксируется: раньше AnimatedSize
     // подгонял её после смены «цифры → ввод», и весь экран «сдвигался чуть
     // и обратно». Теперь смена — чистый кроссфейд в неизменном габарите.
-    final cardW = min(400.0, MediaQuery.sizeOf(context).width - 48);
-    final gridW = cardW - 48;
     // Плитка 48×56: в неё цифра кеглем 26 влезает с запасом по бокам.
-    // Раньше было 44×52 и при кегле titleLarge цифры прижимались к кромкам
-    // и визуально «не умещались» в клетку.
-    //
-    // Все цифры — ВСЕГДА В ОДНУ СТРОКУ: раньше ширина плитки была жёсткой
-    // (48 + 8), и на узком экране 5–6 цифр переносились в две строки.
-    // Теперь плитка ужимается под ряд (но не меньше 34), а кегль — под неё.
+    // Ширина плитки считается по РЕАЛЬНОЙ ширине ряда (LayoutBuilder
+    // ниже), а не по догадке «cardW − 48»: при вложенных отступах догадка
+    // была шире настоящей, и 5–6 цифр всё равно переносились на вторую
+    // строку — ровно тот баг, который просили убрать.
     const gap = 8.0;
-    final tileW = min(48.0, (gridW - gap * (_length - 1)) / _length);
-    final tileFont = tileW < 42 ? 21.0 : 26.0;
     final tilesH = 56.0;
     final bodyH = tilesH + 62.0;
 
@@ -1024,186 +1020,208 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
           _WrongLine(show: _wrong),
           SizedBox(
             height: bodyH,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 320),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, anim) => FadeTransition(
-                opacity: anim,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.97, end: 1).animate(anim),
-                  child: child,
-                ),
-              ),
-              child: _showing
-                  ? KeyedSubtree(
-                      key: const ValueKey('show'),
-                      child: Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: gap,
-                        runSpacing: gap,
-                        children: <Widget>[
-                          ...List.generate(_numbers.length, (i) {
-                            final n = _numbers[i];
-                            return Container(
-                              width: tileW,
-                              height: 56,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                // Плитка «запомни» — ЧЕРНЕЕ: обе ступени
-                                // градиента утоплены к тёмному, блик сверху
-                                // остаётся лёгким, свечение в тон акцента.
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color.lerp(cs.primary, Colors.black, 0.30)!,
-                                    Color.lerp(
-                                      cs.tertiary,
-                                      Colors.black,
-                                      0.44,
-                                    )!,
-                                  ],
-                                ),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.26),
-                                  width: 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Color.lerp(
-                                      cs.primary,
-                                      Colors.black,
-                                      0.24,
-                                    )!.withValues(alpha: 0.40),
-                                    blurRadius: 12,
-                                    spreadRadius: -2,
-                                    offset: const Offset(0, 5),
-                                  ),
-                                ],
-                              ),
-                              child: _PopNumber(
-                                key: ValueKey('n$n#$i'),
-                                index: i,
-                                text: '$n',
-                                style: theme.textTheme.titleLarge?.copyWith(
-                                  fontSize: tileFont,
-                                  height: 1.0,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.25,
-                                      ),
-                                      blurRadius: 5,
-                                      offset: const Offset(0, 1.5),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    )
-                  : KeyedSubtree(
-                      key: const ValueKey('input'),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Wrap(
+            child: LayoutBuilder(
+              builder: (context, box) {
+                // Ряд всегда в одну строку: плитка сжимается под доступную
+                // ширину (−1.5 px запаса на субпиксельное округление Wrap),
+                // а кегль подстраивается под плитку.
+                final tileW = min(
+                  48.0,
+                  (box.maxWidth - gap * (_length - 1)) / _length - 1.5,
+                );
+                final tileFont = tileW < 42 ? 21.0 : 26.0;
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 320),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.97, end: 1).animate(anim),
+                      child: child,
+                    ),
+                  ),
+                  child: _showing
+                      ? KeyedSubtree(
+                          key: const ValueKey('show'),
+                          child: Wrap(
                             alignment: WrapAlignment.center,
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: List.generate(
-                              _length,
-                              (i) => SizedBox(
-                                width: tileW,
-                                height: 56,
-                                child: Container(
+                            spacing: gap,
+                            runSpacing: gap,
+                            children: <Widget>[
+                              ...List.generate(_numbers.length, (i) {
+                                final n = _numbers[i];
+                                return Container(
+                                  width: tileW,
+                                  height: 56,
+                                  alignment: Alignment.center,
                                   decoration: BoxDecoration(
-                                    // Тёмный вкладыш с двойной кромкой:
-                                    // нарядная обводка цвета темы + мягкая
-                                    // внутренняя тень глубины.
-                                    color: theme
-                                        .colorScheme
-                                        .surfaceContainerHighest
-                                        .withValues(alpha: 0.38),
-                                    border: Border.all(
-                                      color: theme.colorScheme.outline
-                                          .withValues(alpha: 0.7),
-                                      width: 1.2,
+                                    borderRadius: BorderRadius.circular(14),
+                                    // Плитка «запомни» — ЧЕРНЕЕ: обе ступени
+                                    // градиента утоплены к тёмному, блик сверху
+                                    // остаётся лёгким, свечение в тон акцента.
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color.lerp(
+                                          cs.primary,
+                                          Colors.black,
+                                          0.30,
+                                        )!,
+                                        Color.lerp(
+                                          cs.tertiary,
+                                          Colors.black,
+                                          0.44,
+                                        )!,
+                                      ],
                                     ),
-                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.26,
+                                      ),
+                                      width: 1,
+                                    ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.14,
-                                        ),
-                                        blurRadius: 7,
-                                        offset: const Offset(0, 3),
+                                        color: Color.lerp(
+                                          cs.primary,
+                                          Colors.black,
+                                          0.24,
+                                        )!.withValues(alpha: 0.40),
+                                        blurRadius: 12,
+                                        spreadRadius: -2,
+                                        offset: const Offset(0, 5),
                                       ),
                                     ],
                                   ),
-                                  child: Center(
-                                    child: SmoothTyping(
-                                      controller: _ctrls[i],
-                                      style: theme.textTheme.titleLarge
-                                          ?.copyWith(
-                                            fontSize: tileFont - 2,
-                                            height: 1.1,
+                                  child: _PopNumber(
+                                    key: ValueKey('n$n#$i'),
+                                    index: i,
+                                    text: '$n',
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      fontSize: tileFont,
+                                      height: 1.0,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.25,
                                           ),
-                                      builder: (style) => TextField(
-                                        style: style,
-                                        cursorOpacityAnimates: true,
-                                        magnifierConfiguration:
-                                            TextMagnifierConfiguration.disabled,
-                                        controller: _ctrls[i],
-                                        // Цифру набираем с клавиатуры: вставка и
-                                        // копирование в полях задачи запрещены.
-                                        enableInteractiveSelection: false,
-                                        contextMenuBuilder:
-                                            noContextMenuBuilder,
-                                        focusNode: _focus[i],
-                                        keyboardType: TextInputType.number,
-                                        textAlign: TextAlign.center,
-                                        textAlignVertical:
-                                            TextAlignVertical.center,
-                                        maxLength: 1,
-                                        inputFormatters: [WideDashFormatter()],
-                                        enableSuggestions: false,
-                                        autocorrect: false,
-                                        decoration: const InputDecoration(
-                                          counterText: '',
-                                          border: InputBorder.none,
-                                          contentPadding: EdgeInsets.zero,
-                                          isCollapsed: true,
+                                          blurRadius: 5,
+                                          offset: const Offset(0, 1.5),
                                         ),
-                                        onChanged: (v) {
-                                          if (v.isNotEmpty && i < _length - 1) {
-                                            _focus[i + 1].requestFocus();
-                                          } else if (v.isEmpty && i > 0) {
-                                            _focus[i - 1].requestFocus();
-                                          }
-                                        },
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        )
+                      : KeyedSubtree(
+                          key: const ValueKey('input'),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: List.generate(
+                                  _length,
+                                  (i) => SizedBox(
+                                    width: tileW,
+                                    height: 56,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        // Тёмный вкладыш с двойной кромкой:
+                                        // нарядная обводка цвета темы + мягкая
+                                        // внутренняя тень глубины.
+                                        color: theme
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.38),
+                                        border: Border.all(
+                                          color: theme.colorScheme.outline
+                                              .withValues(alpha: 0.7),
+                                          width: 1.2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.14,
+                                            ),
+                                            blurRadius: 7,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Center(
+                                        child: SmoothTyping(
+                                          controller: _ctrls[i],
+                                          style: theme.textTheme.titleLarge
+                                              ?.copyWith(
+                                                fontSize: tileFont - 2,
+                                                height: 1.1,
+                                              ),
+                                          builder: (style) => TextField(
+                                            style: style,
+                                            cursorOpacityAnimates: true,
+                                            magnifierConfiguration:
+                                                TextMagnifierConfiguration
+                                                    .disabled,
+                                            controller: _ctrls[i],
+                                            // Цифру набираем с клавиатуры: вставка и
+                                            // копирование в полях задачи запрещены.
+                                            enableInteractiveSelection: false,
+                                            contextMenuBuilder:
+                                                noContextMenuBuilder,
+                                            focusNode: _focus[i],
+                                            keyboardType: TextInputType.number,
+                                            textAlign: TextAlign.center,
+                                            textAlignVertical:
+                                                TextAlignVertical.center,
+                                            maxLength: 1,
+                                            inputFormatters: [
+                                              WideDashFormatter(),
+                                            ],
+                                            enableSuggestions: false,
+                                            autocorrect: false,
+                                            decoration: const InputDecoration(
+                                              counterText: '',
+                                              border: InputBorder.none,
+                                              contentPadding: EdgeInsets.zero,
+                                              isCollapsed: true,
+                                            ),
+                                            onChanged: (v) {
+                                              if (v.isNotEmpty &&
+                                                  i < _length - 1) {
+                                                _focus[i + 1].requestFocus();
+                                              } else if (v.isEmpty && i > 0) {
+                                                _focus[i - 1].requestFocus();
+                                              }
+                                            },
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
+                              const SizedBox(height: 16),
+                              _CheckButton(
+                                enabled: !_locked && _complete,
+                                onPressed: _check,
+                                label: Translations.t('wtCheck', context),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 16),
-                          _CheckButton(
-                            enabled: !_locked && _complete,
-                            onPressed: _check,
-                            label: Translations.t('wtCheck', context),
-                          ),
-                        ],
-                      ),
-                    ),
+                        ),
+                );
+              },
             ),
           ),
         ],
@@ -1748,11 +1766,14 @@ class _RedPillButton extends StatelessWidget {
         enabled: on,
         pressedScale: 0.965,
         enableTilt: true,
-        // Внутреннего отсвета НЕТ: под пальцем кнопка только утапливается
-        // и наклоняется, как остальные таблетки. Красная заливка внутри
-        // читалась как «фонарь» под кромкой.
-        duration: const Duration(milliseconds: 150),
-        releaseDuration: const Duration(milliseconds: 320),
+        // Красноватый отсвет ВНУТРИ фона под пальцем: слабая винная
+        // подложка заливает таблетку и плавно растворяется после отпускания
+        // (760 мс), а не гаснет рывком.
+        pressTint: const Color(0xFFE02436),
+        pressTintStrength: 0.16,
+        pressTintRadius: radius,
+        duration: const Duration(milliseconds: 160),
+        releaseDuration: const Duration(milliseconds: 760),
         releaseCurve: Curves.easeOutCubic,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,

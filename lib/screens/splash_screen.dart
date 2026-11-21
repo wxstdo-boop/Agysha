@@ -684,7 +684,8 @@ class _BetaSplatPainter extends CustomPainter {
       <String, _BetaGeometry>{};
 
   static _BetaGeometry _geometry(Size size) {
-    final key = '${size.width.toStringAsFixed(1)}x'
+    final key =
+        '${size.width.toStringAsFixed(1)}x'
         '${size.height.toStringAsFixed(1)}';
     final hit = _geometryCache[key];
     if (hit != null) return hit;
@@ -846,8 +847,12 @@ class _LevitationPainter extends CustomPainter {
     final cx = size.width / 2;
     // Амплитуда и наклон мягче: сильнее 2.4 px человечек «дёргался»
     // на коротком сплэше, читаясь как рывок, а не как дыхание.
-    final cy = size.height * 0.52 - bob * 1.5;
-    final tilt = 0.018 * math.sin(_tau * p + math.pi / 2);
+    final cy = size.height * 0.52 - bob * 1.2;
+    // Наклон — ТОТ ЖЕ ход, что и подъём (в фазе), а не со сдвигом на 90°:
+    // раньше вертикаль и покачивание шли двумя независимыми волнами, и
+    // глаз читал это как двойное дёрганье. Теперь тело живёт одним
+    // движением — поднимается и чуть наклоняется вместе.
+    final tilt = 0.010 * bob;
 
     // ── Ореол за спиной ─────────────────────────────────
     canvas.drawCircle(
