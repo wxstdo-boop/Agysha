@@ -57,8 +57,9 @@ class _NutritionScreenState extends State<NutritionScreen>
   bool _loaded = false; // Первая загрузка завершена — кнопка не «мигает»
 
   /// Приёмы пищи, чьё удаление подтверждено и уже «отыгрывается» локально:
-  /// строка растворяется и схлопывается по высоте ([_mealCollapse]), и только
-  /// после этого `confirmDismiss` возвращает true, а модель теряет запись.
+  /// строка растворяется и схлопывается по высоте ([_mealCollapse]), и ровно
+  /// в конце этой волны модель теряет запись (сам `confirmDismiss` всегда
+  /// отвечает `false`, чтобы Dismissible не запускал второе движение).
   /// Соседи подаются вверх непрерывно — собственных прыжков ни у кого нет.
   final Set<String> _removingMealIds = <String>{};
   final Set<int> _removingDayDiffs = <int>{};
@@ -419,7 +420,23 @@ class _NutritionScreenState extends State<NutritionScreen>
                   alignment: Alignment.topCenter,
                   children: [
                     if (_loaded) _buildHistory(context, theme, meals),
-                    _emptyMealsHint(visible: _loaded && meals.isEmpty),
+                    _emptyMealsHint(
+                      // Последний приём пищи «уходит» уже во время своей
+                      // анимации: подсказка проявляется ТОЙ ЖЕ волной, что и
+                      // схлопывание строки. Иначе блок сначала сжимался до
+                      // минимума, ждал удаления из модели и только потом рос
+                      // обратно на высоту подсказки — тренды приседали и
+                      // возвращались (владелец: «скачет»).
+                      visible:
+                          _loaded &&
+                          (meals.isEmpty || _isRemovingLastMeal(meals)),
+                      // Пока строка ещё схлопывается, высоту подсказки не
+                      // анимируем: в Stack высоты не складываются, и растущая
+                      // подсказка тянула бы блок вниз, пока история ещё
+                      // сжимается, — получался провал и возврат. Место держит
+                      // подсказка сразу, а высоту ведёт один AnimatedSize.
+                      reserveSpace: _isRemovingLastMeal(meals),
+                    ),
                   ],
                 ),
               ),
@@ -449,10 +466,20 @@ class _NutritionScreenState extends State<NutritionScreen>
     );
   }
 
+  /// Единственный приём пищи истории сейчас доигрывает удаление: для
+  /// раскладки он уже ушёл, хотя модель отпустит его в конце волны.
+  bool _isRemovingLastMeal(List<Meal> meals) =>
+      meals.length == 1 && _removingMealIds.contains(meals.first.id);
+
   /// Подсказка «Приёмов пищи пока нет»: раскрывается и схлопывается ПО
   /// ВЫСОТЕ, как строка трека в профиле. Живёт в общем блоке с историей,
   /// поэтому переход «пусто ↔ есть записи» идёт одной раскладкой, без рывка.
-  Widget _emptyMealsHint({required bool visible}) {
+  /// [reserveSpace] — место подсказки уже занято (см. вызов в блоке истории):
+  /// тогда меняется только прозрачность, а высоту ведёт внешний AnimatedSize.
+  Widget _emptyMealsHint({
+    required bool visible,
+    bool reserveSpace = false,
+  }) {
     final reduce = MotionPrefs.shouldReduceMotion;
     final dur = reduce ? Duration.zero : _mealCollapse;
     return SizedBox(
@@ -468,7 +495,7 @@ class _NutritionScreenState extends State<NutritionScreen>
         builder: (context, v, child) => ClipRect(
           child: Align(
             alignment: Alignment.topCenter,
-            heightFactor: v.clamp(0.0, 1.0),
+            heightFactor: reserveSpace && visible ? 1.0 : v.clamp(0.0, 1.0),
             child: Opacity(opacity: v.clamp(0.0, 1.0), child: child),
           ),
         ),
@@ -1256,6 +1283,10 @@ class _NutritionScreenState extends State<NutritionScreen>
     // свайпом читалось чужеродно, а красная плашка была другого тона, чем на
     // остальных экранах. Теперь и удаление, и закреп ведут себя как везде.
     return SwipeToDelete(
+      // Ключ по id: без него Column сопоставляла карточки по порядковому
+      // номеру, и после удаления состояние (схлопывание, закреп) уезжало на
+      // соседнюю запись — та на миг «вырастала» из нуля.
+      key: ValueKey('meal_${meal.id}'),
       dismissKey: ValueKey('meal_${meal.id}'),
       // Фон удаления = границы карточки (у неё горизонтальный margin 16), а
       // скругление — ТО ЖЕ 20, что у карточек привычек и задач.
@@ -1306,16 +1337,26 @@ class _NutritionScreenState extends State<NutritionScreen>
               _removingDayDiffs.add(diff);
             }
           });
+          // Одна волна: строка, заголовок дня и (если ушла последняя запись)
+          // подсказка пустой истории едут вместе. Модель отпускает запись
+          // ровно в конце этой волны, когда её высота уже ноль.
           await Future<void>.delayed(_mealCollapse);
-          if (mounted) {
-            setState(() {
-              _removingDayDiffs.remove(diff);
-            });
-          }
+          // Флаги снимаем в том же кадре, в котором модель теряет запись:
+          // заголовок дня к этому моменту уже схлопнут и его подхватывает
+          // «призрак», а строка уходит из дерева. setState не нужен —
+          // `_service.remove` сам уведомляет слушателей.
+          // Удаляем и при уже закрытом экране: запись не должна «воскресать».
+          _removingDayDiffs.remove(diff);
+          _removingMealIds.remove(meal.id);
+          // Не await: запись на диск идёт своим чередом (как и раньше в
+          // onDismissed), иначе диалог ждал бы файловый ввод-вывод.
+          _service.remove(meal.id);
         }
-        return ok == true;
+        // false — Dismissible не запускает своё «дожатие»: оно дало бы вторую
+        // анимацию движения и отложило удаление из модели на 450 мс после
+        // схлопывания (блок успевал присесть и снова вырасти — «скачет»).
+        return false;
       },
-      onDismissed: (_) => _service.remove(meal.id),
       child: RepaintBoundary(
         // Вросло из нуля только у только что добавленной записи:
         // соседи подаются вниз НЕПРЕРЫВНО (высота карточки растёт
