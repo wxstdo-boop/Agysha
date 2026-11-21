@@ -55,6 +55,12 @@ class _HomeScreenState extends State<HomeScreen>
   late final AnimationController _pillSnapCtrl;
   Animation<double>? _pillSnapAnimation;
   bool _pillSnapActive = false;
+  /// Раздел, выбранный ТАПОМ по таблетке и ещё не достигнутый. Пока он не
+  /// null, `_onPageChanged` не перебивает выбор промежуточными страницами
+  /// (перелёт 0 → 3 проезжает 1 и 2): иначе подсветка раздела и заголовок
+  /// мигали соседями, а тап читался как «переключился не туда».
+  int? _tapTarget;
+
   // Плавный перелёт разделов пружиной: повторный тап по другой вкладке лишь
   // МЕНЯЕТ ЦЕЛЬ, а движение продолжается с текущей скоростью. Было: каждый
   // тап заново запускал animateToPage, скорость обнулялась — при частых тапах
@@ -190,6 +196,7 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
     _pageSpring.stop();
+    _tapTarget = null;
     _dragHold ??= _pageController.position.hold(() {});
     _dragSpring.to(page, maxPage: (_pagesCount - 1).toDouble());
   }
@@ -346,6 +353,8 @@ class _HomeScreenState extends State<HomeScreen>
     }
     final page = _pageController.page;
     if (page == null || !page.isFinite) return;
+    // Палец сам ведёт камень разделов — выбор тапом отменён.
+    if (sectionDragPage.value != null) _tapTarget = null;
     if ((page - page.roundToDouble()).abs() > 0.002 &&
         sectionPillSnapTarget.value != null) {
       // Свайп/доводка между страницами отменяет snap прежнего списка;
@@ -399,11 +408,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _onSpringSettled() {
+    _tapTarget = null;
     if (!mounted || !_pageController.hasClients) return;
     final page = _pageController.page;
     if (page == null || !page.isFinite) return;
     final settled = page.round();
     _lastSettledPage = settled;
+    if (_currentIndex.value != settled) _currentIndex.value = settled;
     sectionScrollOffset.value =
         sectionPillSnapByPage[settled] ??
         sectionOffsetByPage[settled] ??
@@ -413,6 +424,14 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _onPageChanged(int index) {
+    final tapTarget = _tapTarget;
+    if (tapTarget != null) {
+      // Перелёт по тапу 0 → 3 проезжает 1 и 2. Пока цель не достигнута,
+      // промежуточные страницы не должны перебивать выбор: иначе подсветка
+      // раздела и заголовок мигают соседями.
+      if (index != tapTarget) return;
+      _tapTarget = null;
+    }
     _currentIndex.value = index;
     // Подпись раздела для jank-пробы (lib/utils/jank_probe.dart): вкладки —
     // не роуты, NavigatorObserver их не видит, а «тормозит на привычках» и
@@ -430,6 +449,8 @@ class _HomeScreenState extends State<HomeScreen>
   /// анимации) — только тогда таблетка стартует видимой. Промежуточные
   /// пересечения границ во время перелёта её не дёргают.
   bool _onPageScrollEnd(ScrollEndNotification n) {
+    // Пользователь сам провёл карусель (свайп) — выбор тапом больше не цель.
+    if (n.dragDetails != null) _tapTarget = null;
     // Если пружина ещё ведёт доводку карусели, не мешаем ей и не перезаписываем
     // состояние преждевременно: _onSpringSettled выполнит фиксацию точно в момент покоя.
     if (_pageSpring.isRunning || _dragSpring.isRunning) return false;
@@ -441,6 +462,12 @@ class _HomeScreenState extends State<HomeScreen>
         // Офсет таблетки и сохранённая вкладка — ТОЛЬКО когда карусель
         // реально доехала (порог 0.005, чтобы исключить преждевременные дерганья).
         final landed = (page - settled).abs() < 0.005;
+        if (landed && _currentIndex.value != settled) {
+          // Свайп назад на ту же страницу, с которой стартовал тап, не меняет
+          // округлённую страницу — onPageChanged не сработает, и подсветка
+          // осталась бы на выбранном тапом разделе. Синхронизируем здесь.
+          _currentIndex.value = settled;
+        }
         if (settled != _lastSettledPage && landed) {
           _lastSettledPage = settled;
           sectionScrollOffset.value =
@@ -464,9 +491,13 @@ class _HomeScreenState extends State<HomeScreen>
       // При отпускании таблетки у самого края округлённая цель иногда
       // отличалась от PageView на доли страницы. Ранний return оставлял
       // последнюю вкладку недоведённой; пусть пружина точно защёлкнет цель.
+      _tapTarget = null;
       _pageSpring.to(index.toDouble(), maxPage: (_pagesCount - 1).toDouble());
       return;
     }
+    // Выбор раздела тапом: пока карусель едет, промежуточные страницы
+    // не должны перебивать подсветку (см. _onPageChanged).
+    _tapTarget = index;
     Haptics.select();
     // Тап по разделу отменяет возможную тягу таблетки: пружина следования
     // больше не нужна, карусель доведёт тап-пружина.
@@ -722,6 +753,7 @@ class _HomeScreenState extends State<HomeScreen>
                             if (notification is ScrollStartNotification &&
                                 notification.dragDetails != null) {
                               _pageSpring.stop();
+                              _tapTarget = null;
                             }
                             if (notification is ScrollEndNotification) {
                               return _onPageScrollEnd(notification);
