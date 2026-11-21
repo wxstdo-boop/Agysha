@@ -21,18 +21,18 @@ extension _SettingsSectionLook on _SettingsScreenState {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: PressScale(
           pressedScale: 0.98,
-          enableTilt: false,
+          enableTilt: true,
           duration: const Duration(milliseconds: 140),
           releaseDuration: const Duration(milliseconds: 220),
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               color: theme.colorScheme.surfaceContainerHighest.withValues(
-                alpha: theme.brightness == Brightness.dark ? 0.35 : 0.50,
+                alpha: theme.brightness == Brightness.dark ? 0.16 : 0.22,
               ),
               border: Border.all(
                 color: theme.colorScheme.outlineVariant.withValues(
-                  alpha: theme.brightness == Brightness.dark ? 0.30 : 0.45,
+                  alpha: theme.brightness == Brightness.dark ? 0.14 : 0.20,
                 ),
                 width: 1.0,
               ),
