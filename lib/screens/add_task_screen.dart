@@ -585,34 +585,47 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
             StaggerIn(
               index: 0,
               child: Center(
-                child: GestureDetector(
-                  onTap: _pickIcon,
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(
+                // Та же отдача, что у выбора иконки в привычке: кружок
+                // мягко вдавливается под пальцем, а не «стоит» статуей.
+                child: PressScale(
+                  pressedScale: 0.92,
+                  duration: const Duration(milliseconds: 160),
+                  releaseDuration: const Duration(milliseconds: 300),
+                  child: GestureDetector(
+                    onTap: _pickIcon,
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
                         color: theme.colorScheme.primary.withValues(
-                          alpha: 0.50,
+                          alpha: 0.12,
                         ),
-                        width: 2,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.50,
+                          ),
+                          width: 2,
+                        ),
                       ),
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
-                      switchInCurve: Curves.easeOutBack,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: (child, animation) => ScaleTransition(
-                        scale: animation,
-                        child: FadeTransition(opacity: animation, child: child),
-                      ),
-                      child: Icon(
-                        iconDataForCodePoint(_iconCodePoint),
-                        key: ValueKey(_iconCodePoint),
-                        size: 32,
-                        color: theme.colorScheme.primary,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (child, animation) =>
+                            ScaleTransition(
+                              scale: animation,
+                              child: FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              ),
+                            ),
+                        child: Icon(
+                          iconDataForCodePoint(_iconCodePoint),
+                          key: ValueKey(_iconCodePoint),
+                          size: 32,
+                          color: theme.colorScheme.primary,
+                        ),
                       ),
                     ),
                   ),
@@ -623,10 +636,15 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
             StaggerIn(
               index: 1,
               child: Center(
-                child: TextButton.icon(
-                  onPressed: _pickIcon,
-                  icon: const Icon(Icons.touch_app, size: 16),
-                  label: Text(Translations.t('changeIcon', context)),
+                child: PressScale(
+                  pressedScale: 0.93,
+                  duration: const Duration(milliseconds: 190),
+                  releaseDuration: const Duration(milliseconds: 320),
+                  child: TextButton.icon(
+                    onPressed: _pickIcon,
+                    icon: const Icon(Icons.touch_app, size: 16),
+                    label: Text(Translations.t('changeIcon', context)),
+                  ),
                 ),
               ),
             ),
@@ -958,78 +976,64 @@ class _DeadlineChip extends StatefulWidget {
 }
 
 class _DeadlineChipState extends State<_DeadlineChip> {
-  /// Палец на чипе: чип заметно «вдавливается» и подсвечивается — отдача,
-  /// которой раньше не было. Listener только слушает, тап остаётся у
-  /// GestureDetector.
-  bool _pressed = false;
-
-  void _setPressed(bool v) {
-    if (_pressed == v) return;
-    setState(() => _pressed = v);
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final selected = widget.selected;
-    return Listener(
-      onPointerDown: (_) => _setPressed(true),
-      onPointerUp: (_) => _setPressed(false),
-      onPointerCancel: (_) => _setPressed(false),
+    // Отдача через общий PressScale: плавное «вдавливание» и такое же
+    // плавное возвращение (прежний AnimatedScale прыгал на 130 мс и
+    // обрывался, если палец уходил за край чипа).
+    return PressScale(
+      pressedScale: 0.92,
+      enableTilt: false,
+      duration: const Duration(milliseconds: 160),
+      releaseDuration: const Duration(milliseconds: 280),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
           Haptics.select();
           widget.onTap();
         },
-        child: AnimatedScale(
-          // Отчётливое «вдавливание» (0.92) — заметно глазу, в отличие от
-          // прежних 0.96 на мелком чипе.
-          scale: _pressed ? 0.92 : 1.0,
-          duration: const Duration(milliseconds: 130),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              // Отдача — только «вдавливание» (AnimatedScale ниже), без
-              // подсветки фона: цветовая заливка читалась как «просто фон»,
-              // а не как отклик на нажатие.
-              color: selected ? cs.primary : cs.surfaceContainerHighest,
-              border: Border.all(
-                color: selected
-                    ? cs.primary
-                    : cs.outlineVariant.withValues(alpha: 0.72),
-                width: 1.2,
-              ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            // Отдача — только «вдавливание», без подсветки фона: цветовая
+            // заливка читалась как «просто фон», а не как отклик на нажатие.
+            color: selected ? cs.primary : cs.surfaceContainerHighest,
+            border: Border.all(
+              color: selected
+                  ? cs.primary
+                  : cs.outlineVariant.withValues(alpha: 0.72),
+              width: 1.2,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (widget.icon != null) ...[
-                  Icon(
-                    widget.icon,
-                    size: 14,
-                    color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 5),
-                ],
-                Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    // Вес ПОСТОЯННЫЙ. Раньше выбранный чип становился жирнее
-                    // (w500→w700) и ШИРЕ — соседи по Wrap сдвигались вправо,
-                    // это и читалось как «дёргается вправо» при смене срока.
-                    // Выбор показываем цветом и обводкой, а не набором веса.
-                    fontWeight: FontWeight.w600,
-                    color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-                  ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.icon != null) ...[
+                Icon(
+                  widget.icon,
+                  size: 14,
+                  color: selected ? cs.onPrimary : cs.onSurfaceVariant,
                 ),
+                const SizedBox(width: 5),
               ],
-            ),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  // Вес ПОСТОЯННЫЙ. Раньше выбранный чип становился жирнее
+                  // (w500→w700) и ШИРЕ — соседи по Wrap сдвигались вправо,
+                  // это и читалось как «дёргается вправо» при смене срока.
+                  // Выбор показываем цветом и обводкой, а не набором веса.
+                  fontWeight: FontWeight.w600,
+                  color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
       ),

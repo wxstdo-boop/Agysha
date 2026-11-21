@@ -42,6 +42,18 @@ class PressScale extends StatefulWidget {
   /// выразительный, сочный, тактильный 3D-тилт.
   final double maxTiltAngle;
 
+  /// Подложка отдачи: цвет, который мягко проявляется под содержимым
+  /// вместе с нажатием (и сжимается вместе с ним). `null` — подложки нет.
+  /// Нужно «текстовым» кнопкам без своей плашки: зажатие читается не
+  /// только по уменьшению буквы, но и по мягкому пятну под ней.
+  final Color? pressTint;
+
+  /// Плотность подложки в пике нажатия (0..1).
+  final double pressTintStrength;
+
+  /// Скругление подложки отдачи.
+  final BorderRadius? pressTintRadius;
+
   const PressScale({
     super.key,
     required this.child,
@@ -53,20 +65,33 @@ class PressScale extends StatefulWidget {
     this.pressedOpacity = 1.0,
     this.enableTilt = true,
     this.maxTiltAngle = 0.13,
+    this.pressTint,
+    this.pressTintStrength = 0.12,
+    this.pressTintRadius,
   });
 
   @override
   State<PressScale> createState() => _PressScaleState();
 }
 
-class _PressScaleState extends State<PressScale>
-    with SingleTickerProviderStateMixin {
+class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _anim;
 
+  /// Гашение отдачи, пока строку смахивают на удаление: 1 — обычный вид,
+  /// 0 — отдача полностью снята. Раньше значение «сваливалось» в 0 одним
+  /// кадром, и карточка под пальцем дёргалась обратно в полный размер.
+  late final AnimationController _swipeCtrl;
+
+  /// Предыдущее состояние свайпа — дёргаем [_swipeCtrl] только на смене,
+  /// а не каждый кадр.
+  bool _swiping = false;
+
   Offset _tilt = Offset.zero;
   Offset _releaseTilt = Offset.zero;
-  final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(Offset.zero);
+  final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(
+    Offset.zero,
+  );
 
   /// Мягкое асимптотическое сглаживание к границе наклона:
   /// в пределах карточки (abs <= 0.90) угол передаётся 1:1 без срезания,
@@ -85,6 +110,11 @@ class _PressScaleState extends State<PressScale>
     super.initState();
     _ctrl = AnimationController(vsync: this, duration: widget.duration);
     _anim = CurvedAnimation(parent: _ctrl, curve: widget.curve);
+    _swipeCtrl = AnimationController(
+      vsync: this,
+      value: 1.0,
+      duration: const Duration(milliseconds: 260),
+    );
   }
 
   @override
@@ -96,6 +126,7 @@ class _PressScaleState extends State<PressScale>
   @override
   void dispose() {
     _tiltNotifier.dispose();
+    _swipeCtrl.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -162,6 +193,15 @@ class _PressScaleState extends State<PressScale>
     if (isSwiping && _ctrl.value > 0) {
       _ctrl.reverse();
     }
+    // Свайп начинается и заканчивается — гасим отдачу плавно, а не кадром.
+    if (isSwiping != _swiping) {
+      _swiping = isSwiping;
+      if (isSwiping) {
+        _swipeCtrl.reverse();
+      } else {
+        _swipeCtrl.forward();
+      }
+    }
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: _down,
@@ -169,13 +209,14 @@ class _PressScaleState extends State<PressScale>
       onPointerUp: _up,
       onPointerCancel: _cancel,
       child: AnimatedBuilder(
-        animation: Listenable.merge([_anim, _tiltNotifier]),
+        animation: Listenable.merge([_anim, _tiltNotifier, _swipeCtrl]),
         builder: (context, child) {
-          final v = isSwiping ? 0.0 : _anim.value;
+          final v = _anim.value * _swipeCtrl.value;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
 
-          final currentTilt =
-              _ctrl.status == AnimationStatus.reverse ? _releaseTilt : _tilt;
+          final currentTilt = _ctrl.status == AnimationStatus.reverse
+              ? _releaseTilt
+              : _tilt;
           final tiltActive =
               widget.enableTilt &&
               !MotionPrefs.shouldReduceMotion &&
@@ -193,6 +234,22 @@ class _PressScaleState extends State<PressScale>
           }
           matrix.scaleByDouble(s, s, 1.0, 1.0);
 
+          // Подложка отдачи живёт ВНУТРИ Transform: она проявляется и
+          // сжимается вместе с содержимым, без резкого появления фона.
+          Widget content = child!;
+          final tint = widget.pressTint;
+          if (tint != null) {
+            content = DecoratedBox(
+              decoration: BoxDecoration(
+                color: tint.withValues(
+                  alpha: (widget.pressTintStrength * v).clamp(0.0, 1.0),
+                ),
+                borderRadius: widget.pressTintRadius,
+              ),
+              child: content,
+            );
+          }
+
           // Дерево НЕ меняет форму между кадрами. Раньше в покое
           // возвращался голый child, а при нажатии — child в Transform:
           // Flutter пересоздавал поддерево вместе с распознавателями
@@ -205,7 +262,7 @@ class _PressScaleState extends State<PressScale>
               transform: matrix,
               alignment: Alignment.center,
               transformHitTests: false,
-              child: child,
+              child: content,
             ),
           );
         },

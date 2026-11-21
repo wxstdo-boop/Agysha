@@ -22,7 +22,6 @@ import '../utils/page_transitions.dart';
 import '../utils/markdown_text.dart' show sanitizeTextForWrap;
 import '../utils/snackbar.dart';
 import '../utils/time_format.dart';
-import '../widgets/smooth_hover.dart';
 import '../widgets/drag_proxy.dart';
 import '../widgets/animated_fab_row.dart';
 import '../widgets/premium_empty_state.dart';
@@ -539,10 +538,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             decoration: ShapeDecoration(
               color: pillBg,
               shape: StadiumBorder(
-                side: BorderSide(
-                  color: borderColor,
-                  width: 0.9,
-                ),
+                side: BorderSide(color: borderColor, width: 0.9),
               ),
               shadows: [
                 if (hasActive)
@@ -560,7 +556,9 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    hasActive ? Icons.alarm_on_rounded : Icons.alarm_off_rounded,
+                    hasActive
+                        ? Icons.alarm_on_rounded
+                        : Icons.alarm_off_rounded,
                     size: 16,
                     color: hasActive
                         ? theme.colorScheme.primary
@@ -590,10 +588,8 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                           ?currentChild,
                         ],
                       ),
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: child,
-                      ),
+                      transitionBuilder: (child, animation) =>
+                          FadeTransition(opacity: animation, child: child),
                       child: Text(
                         text,
                         key: ValueKey(text),
@@ -692,10 +688,15 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             await AlarmScheduler.stopRingingAlarm(alarm.id.hashCode);
             await _service.remove(alarm.id);
           },
-          child: SmoothHover(
-            // «Вдавливание» при зажатии — карточка мягко уменьшается.
-            hoverScale: 0.98,
-            duration: const Duration(milliseconds: 160),
+          child: PressScale(
+            // «Вдавливание» при зажатии + тот же 3D-наклон по направлению
+            // пальца, что у карточек привычек и задач: раньше будильники
+            // были единственным разделом без наклона, и карточка читалась
+            // «плоской» на фоне соседних экранов.
+            pressedScale: 0.975,
+            enableTilt: true,
+            duration: const Duration(milliseconds: 200),
+            releaseDuration: const Duration(milliseconds: 320),
             child: Card(
               key: ValueKey('card_${alarm.id}'),
               clipBehavior: Clip.antiAlias,
@@ -821,25 +822,31 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                             child: Container(
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                color: theme.colorScheme.primary.withValues(alpha: 0.10),
+                                                color: theme.colorScheme.primary
+                                                    .withValues(alpha: 0.10),
                                               ),
                                               child: IconButton(
-                                                onPressed: () => _testAlarm(alarm),
+                                                onPressed: () =>
+                                                    _testAlarm(alarm),
                                                 icon: Icon(
-                                                  Icons.notifications_active_outlined,
+                                                  Icons
+                                                      .notifications_active_outlined,
                                                   size: 17,
-                                                  color: theme.colorScheme.primary,
+                                                  color:
+                                                      theme.colorScheme.primary,
                                                 ),
                                                 visualDensity:
                                                     VisualDensity.compact,
                                                 padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(
-                                                  minWidth: 32,
-                                                  minHeight: 32,
-                                                ),
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      minWidth: 32,
+                                                      minHeight: 32,
+                                                    ),
                                                 style: IconButton.styleFrom(
-                                                  tapTargetSize: MaterialTapTargetSize
-                                                      .shrinkWrap,
+                                                  tapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
                                                 ),
                                               ),
                                             ),

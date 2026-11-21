@@ -296,34 +296,46 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               Center(
-                child: GestureDetector(
-                  onTap: _pickIcon,
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(
+                child: PressScale(
+                  pressedScale: 0.92,
+                  enableTilt: false,
+                  duration: const Duration(milliseconds: 160),
+                  releaseDuration: const Duration(milliseconds: 300),
+                  child: GestureDetector(
+                    onTap: _pickIcon,
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
                         color: theme.colorScheme.primary.withValues(
-                          alpha: 0.50,
+                          alpha: 0.12,
                         ),
-                        width: 2,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.50,
+                          ),
+                          width: 2,
+                        ),
                       ),
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
-                      switchInCurve: Curves.easeOutBack,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: (child, animation) => ScaleTransition(
-                        scale: animation,
-                        child: FadeTransition(opacity: animation, child: child),
-                      ),
-                      child: Icon(
-                        iconDataForCodePoint(_iconCodePoint),
-                        key: ValueKey(_iconCodePoint),
-                        size: 32,
-                        color: theme.colorScheme.primary,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (child, animation) =>
+                            ScaleTransition(
+                              scale: animation,
+                              child: FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              ),
+                            ),
+                        child: Icon(
+                          iconDataForCodePoint(_iconCodePoint),
+                          key: ValueKey(_iconCodePoint),
+                          size: 32,
+                          color: theme.colorScheme.primary,
+                        ),
                       ),
                     ),
                   ),
@@ -333,10 +345,15 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  TextButton.icon(
-                    onPressed: _pickIcon,
-                    icon: const Icon(Icons.touch_app, size: 16),
-                    label: Text(Translations.t('changeIcon', context)),
+                  PressScale(
+                    pressedScale: 0.93,
+                    duration: const Duration(milliseconds: 190),
+                    releaseDuration: const Duration(milliseconds: 320),
+                    child: TextButton.icon(
+                      onPressed: _pickIcon,
+                      icon: const Icon(Icons.touch_app, size: 16),
+                      label: Text(Translations.t('changeIcon', context)),
+                    ),
                   ),
                   // Лампочка-статус плавно появляется/исчезает при смене
                   // «полезная ↔ вредная» (fade + size), как и блок заметок
@@ -374,16 +391,23 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
                                   context,
                                 ),
                                 preferredAbove: true,
-                                child: IconButton(
-                                  onPressed: _showNotesDialog,
-                                  icon: Icon(
-                                    _statusCtrl.text.isNotEmpty
-                                        ? Icons.lightbulb
-                                        : Icons.lightbulb_outline,
-                                    size: 20,
-                                    color: _statusCtrl.text.isNotEmpty
-                                        ? theme.colorScheme.primary
-                                        : theme.colorScheme.onSurfaceVariant,
+                                child: PressScale(
+                                  pressedScale: 0.90,
+                                  duration: const Duration(milliseconds: 180),
+                                  releaseDuration: const Duration(
+                                    milliseconds: 300,
+                                  ),
+                                  child: IconButton(
+                                    onPressed: _showNotesDialog,
+                                    icon: Icon(
+                                      _statusCtrl.text.isNotEmpty
+                                          ? Icons.lightbulb
+                                          : Icons.lightbulb_outline,
+                                      size: 20,
+                                      color: _statusCtrl.text.isNotEmpty
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.onSurfaceVariant,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -582,21 +606,31 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          TextButton.icon(
-                            onPressed: () => setState(
-                              () => _activeDays = [1, 2, 3, 4, 5, 6, 7],
+                          PressScale(
+                            pressedScale: 0.93,
+                            duration: const Duration(milliseconds: 190),
+                            releaseDuration: const Duration(milliseconds: 320),
+                            child: TextButton.icon(
+                              onPressed: () => setState(
+                                () => _activeDays = [1, 2, 3, 4, 5, 6, 7],
+                              ),
+                              icon: const Icon(
+                                Icons.calendar_month_outlined,
+                                size: 18,
+                              ),
+                              label: Text(Translations.t('everyDay', context)),
                             ),
-                            icon: const Icon(
-                              Icons.calendar_month_outlined,
-                              size: 18,
-                            ),
-                            label: Text(Translations.t('everyDay', context)),
                           ),
                           const SizedBox(width: 8),
-                          TextButton.icon(
-                            onPressed: () => setState(() => _activeDays = []),
-                            icon: const Icon(Icons.block, size: 18),
-                            label: Text(Translations.t('clear', context)),
+                          PressScale(
+                            pressedScale: 0.93,
+                            duration: const Duration(milliseconds: 190),
+                            releaseDuration: const Duration(milliseconds: 320),
+                            child: TextButton.icon(
+                              onPressed: () => setState(() => _activeDays = []),
+                              icon: const Icon(Icons.block, size: 18),
+                              label: Text(Translations.t('clear', context)),
+                            ),
                           ),
                         ],
                       ),
@@ -932,56 +966,68 @@ class _DayChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        color: selected
-            ? cs.primary
-            : cs.surfaceContainerHigh.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: selected ? cs.primary : cs.outlineVariant,
-          width: 1.2,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+    // Отдача нажатия — как у остальных кнопок приложения (плавное
+    // «вдавливание» с мягким возвратом). Раньше чип отзывался только
+    // рябью InkWell — на ощупь он выпадал из общего ритма.
+    return PressScale(
+      pressedScale: 0.94,
+      enableTilt: false,
+      duration: const Duration(milliseconds: 180),
+      releaseDuration: const Duration(milliseconds: 300),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: selected
+              ? cs.primary
+              : cs.surfaceContainerHigh.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) => ScaleTransition(
-                    scale: Tween<double>(begin: 0.6, end: 1).animate(animation),
-                    child: FadeTransition(opacity: animation, child: child),
+          border: Border.all(
+            color: selected ? cs.primary : cs.outlineVariant,
+            width: 1.2,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: Tween<double>(
+                        begin: 0.6,
+                        end: 1,
+                      ).animate(animation),
+                      child: FadeTransition(opacity: animation, child: child),
+                    ),
+                    child: selected
+                        ? Icon(
+                            Icons.check,
+                            key: ValueKey('day_on_$day'),
+                            size: 14,
+                            color: cs.onPrimary,
+                          )
+                        : const SizedBox(key: ValueKey('day_off'), width: 14),
                   ),
-                  child: selected
-                      ? Icon(
-                          Icons.check,
-                          key: ValueKey('day_on_$day'),
-                          size: 14,
-                          color: cs.onPrimary,
-                        )
-                      : const SizedBox(key: ValueKey('day_off'), width: 14),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+                  const SizedBox(width: 5),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -77,7 +77,14 @@ final ValueNotifier<int> sectionTabTap = ValueNotifier<int>(0);
 final ValueNotifier<double?> sectionDragPage = ValueNotifier<double?>(null);
 
 /// Значки разделов: у каждого своя геометрическая фигура.
-final List<Widget Function(BuildContext context, {double size, Color? color, double? strokeWidth})>
+final List<
+  Widget Function(
+    BuildContext context, {
+    double size,
+    Color? color,
+    double? strokeWidth,
+  })
+>
 sectionIconBuilders = [
   (context, {size = 17, color, strokeWidth}) => AgAlarmIcon(
     size: size,
@@ -101,21 +108,32 @@ sectionIconBuilders = [
   ),
 ];
 
-/// Названия разделов (для тултипов) — те же, что строит Home: РП-раздел
-/// виден только когда проверки реальности включены в настройках.
+/// Названия разделов (для подписей и тултипов) — те же, что строит Home:
+/// раздел проверок виден только когда проверки реальности включены.
+///
+/// Четвёртая подпись — ПОЛНОЕ слово «Проверки», а не аббревиатура «РП»:
+/// аббревиатура из двух букв выглядела заметно короче соседей и ломала
+/// ровный ритм четырёх разделов.
 List<String> sectionLabels(BuildContext context) {
   final rcOn = RealityCheckService().enabled;
   return [
     Translations.alarmsOf(context),
     Translations.habitsOf(context),
     Translations.tasksOf(context),
-    if (rcOn) Translations.rcOf(context),
+    if (rcOn) Translations.rcTabOf(context),
   ];
 }
 
 /// Значки разделов с учётом настроек: при выключенных проверках реальности
 /// РП-раздел (и его значок) не должен быть виден вообще.
-List<Widget Function(BuildContext context, {double size, Color? color, double? strokeWidth})>
+List<
+  Widget Function(
+    BuildContext context, {
+    double size,
+    Color? color,
+    double? strokeWidth,
+  })
+>
 sectionIconsFor(BuildContext context) {
   final count = sectionLabels(context).length;
   return sectionIconBuilders.sublist(0, count);
@@ -299,7 +317,6 @@ class _SectionPillState extends State<SectionPill>
         });
   }
 
-
   @override
   void dispose() {
     _landingCtrl.dispose();
@@ -453,7 +470,6 @@ class _SectionPillState extends State<SectionPill>
     sectionDragPage.value = null;
   }
 
-
   /// Форма «резинки-волны» от смещения [transit] (в долях секции, 0..0.5).
   ///
   /// Квадратичная кривая `1-(1-t)^2` — как была: у неё ненулевой наклон в
@@ -523,8 +539,7 @@ class _SectionPillState extends State<SectionPill>
                   final dragPage = sectionDragPage.value;
                   final page = sectionRailPage.value;
                   final cs = Theme.of(context).colorScheme;
-                  final dark =
-                      Theme.of(context).brightness == Brightness.dark;
+                  final dark = Theme.of(context).brightness == Brightness.dark;
                   double rawPage;
                   if (_dragging && dragPage != null) {
                     rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
@@ -563,7 +578,12 @@ class _SectionPillState extends State<SectionPill>
     required double rawPage,
     required int count,
     required List<
-      Widget Function(BuildContext context, {double size, Color? color, double? strokeWidth})
+      Widget Function(
+        BuildContext context, {
+        double size,
+        Color? color,
+        double? strokeWidth,
+      })
     >
     icons,
     required List<String> labels,
@@ -585,8 +605,8 @@ class _SectionPillState extends State<SectionPill>
     final stretch = _dragging
         ? _edgePull
         : (_releasePull != 0
-            ? _releasePull * (1.0 - settle)
-            : (pageOverscroll * 1.5).clamp(-0.9, 0.9));
+              ? _releasePull * (1.0 - settle)
+              : (pageOverscroll * 1.5).clamp(-0.9, 0.9));
     final edgeStretch = stretch.abs();
 
     // Растяжение ТОЛЬКО в угол (при упоре в край дорожки):
@@ -625,11 +645,7 @@ class _SectionPillState extends State<SectionPill>
             child: FractionallySizedBox(
               widthFactor: 1.0 / count,
               heightFactor: 0.90,
-              child: RepaintBoundary(
-                child: _GlassStone(
-                  capRadius: capRadius,
-                ),
-              ),
+              child: RepaintBoundary(child: _GlassStone(capRadius: capRadius)),
             ),
           ),
         ),
@@ -646,11 +662,16 @@ class _SectionPillState extends State<SectionPill>
               final proximity = (1.0 - (p - i).abs()).clamp(0.0, 1.0);
               final isSelected = selectedIndex == i;
               final badgeT = (proximity * 48).round() / 48;
+              // Обычный текст — заметно полупрозрачный, чтобы читался как
+              // тихий фон, а не как конкурирующие с контентом подписи.
+              // Выделение — мягкий красный той же «тихой» насыщенности:
+              // полный 0xFFFF453A на мелком кегле резал глаза, особенно
+              // вечером, поэтому цвет спокойнее и без свечения-блика.
               final textColor = Color.lerp(
                 dark
-                    ? Colors.white.withValues(alpha: 0.38)
-                    : Colors.black.withValues(alpha: 0.42),
-                const Color(0xFFFF453A),
+                    ? Colors.white.withValues(alpha: 0.30)
+                    : Colors.black.withValues(alpha: 0.32),
+                const Color(0xFFFF453A).withValues(alpha: 0.66),
                 badgeT,
               )!;
               return Expanded(
@@ -658,49 +679,54 @@ class _SectionPillState extends State<SectionPill>
                   button: true,
                   selected: isSelected,
                   label: label,
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      splashColor: const Color(0xFFFF453A).withValues(alpha: 0.16),
-                      highlightColor: const Color(0xFFFF453A).withValues(alpha: 0.10),
-                      onTap: () {
-                        if (!mounted) return;
-                        Haptics.select();
-                        sectionCurrentIndex.value = i;
-                        sectionTabTap.value++;
-                      },
-                      child: Center(
-                        child: PressScale(
-                          enabled: !_dragging,
-                          pressedScale: 0.95,
-                          enableTilt: true,
-                          duration: const Duration(milliseconds: 140),
-                          releaseDuration: const Duration(
-                            milliseconds: 220,
-                          ),
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: count >= 4 ? 13.0 : 14.0,
-                              fontWeight: isSelected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: textColor,
-                              letterSpacing: -0.2,
-                              shadows: badgeT > 0.05
-                                  ? [
-                                      Shadow(
-                                        color: const Color(0xFFFF453A).withValues(
-                                          alpha: 0.45 * badgeT,
-                                        ),
-                                        blurRadius: 8 * badgeT,
-                                      ),
-                                    ]
-                                  : null,
+                  // Отдача оборачивает ВСЮ ячейку раздела, а не один текст:
+                  // под пальцем мягко сжимается и фоновая подсветка (рябь
+                  // InkWell + подложка отдачи), а не только буквы. Раньше
+                  // фон оставался на месте и нажатие читалось «наполовину».
+                  child: PressScale(
+                    enabled: !_dragging,
+                    pressedScale: 0.94,
+                    pressTint: const Color(0xFFFF453A),
+                    pressTintStrength: 0.10,
+                    pressTintRadius: BorderRadius.circular(18),
+                    enableTilt: true,
+                    duration: const Duration(milliseconds: 190),
+                    releaseDuration: const Duration(milliseconds: 320),
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        splashColor: const Color(
+                          0xFFFF453A,
+                        ).withValues(alpha: 0.10),
+                        highlightColor: const Color(
+                          0xFFFF453A,
+                        ).withValues(alpha: 0.06),
+                        onTap: () {
+                          if (!mounted) return;
+                          Haptics.select();
+                          sectionCurrentIndex.value = i;
+                          sectionTabTap.value++;
+                        },
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: count >= 4 ? 12.5 : 14.0,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                color: textColor,
+                                letterSpacing: -0.2,
+                              ),
                             ),
                           ),
                         ),
@@ -722,13 +748,10 @@ class _SectionPillState extends State<SectionPill>
 class _GlassStone extends StatelessWidget {
   final double capRadius;
 
-  const _GlassStone({
-    required this.capRadius,
-  });
+  const _GlassStone({required this.capRadius});
 
   @override
   Widget build(BuildContext context) {
     return const SizedBox.expand();
   }
 }
-

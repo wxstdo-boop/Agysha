@@ -93,6 +93,7 @@ class AiGuideService {
         _recordProviderTrace(
           '$name: \u043e\u0442\u043a\u0430\u0437 \u0444\u0438\u043b\u044c\u0442\u0440\u0430 \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438',
         );
+        _resetAnswering(name);
         return null;
       }
       if (result.trim().isEmpty) {
@@ -100,6 +101,7 @@ class AiGuideService {
         _recordProviderTrace(
           '$name: \u043f\u0443\u0441\u0442\u043e\u0439 \u043e\u0442\u0432\u0435\u0442',
         );
+        _resetAnswering(name);
         return null;
       }
       _recordProviderTrace(
@@ -109,10 +111,12 @@ class AiGuideService {
     } on TimeoutException {
       _markCooldown(name);
       _recordProviderTrace('$name: \u0442\u0430\u0439\u043c\u0430\u0443\u0442');
+      _resetAnswering(name);
       return null;
     } catch (error) {
       _markCooldown(name);
       _recordProviderTrace('$name: ${_providerFailureReason(error)}');
+      _resetAnswering(name);
       return null;
     }
   }
@@ -738,7 +742,6 @@ class AiGuideService {
   static Future<String> webSearch(String query, String languageCode) =>
       _webSearchImpl(query, languageCode);
 
-
   static Future<String> _sendChain(
     String userText,
     List<AiMessage> history,
@@ -759,9 +762,7 @@ class AiGuideService {
         return answer;
       }
     } else {
-      _recordProviderTrace(
-        'Poolside: пропущен, ключ не задан',
-      );
+      _recordProviderTrace('Poolside: пропущен, ключ не задан');
     }
 
     final agnesKey = await SettingsService.loadAgnesKey();
@@ -776,9 +777,7 @@ class AiGuideService {
         return answer;
       }
     } else {
-      _recordProviderTrace(
-        'Agnes AI: пропущен, ключ не задан',
-      );
+      _recordProviderTrace('Agnes AI: пропущен, ключ не задан');
     }
 
     final zenKey = await SettingsService.loadZenKey();
@@ -793,9 +792,7 @@ class AiGuideService {
         return answer;
       }
     } else {
-      _recordProviderTrace(
-        'Zen: пропущен, ключ не задан',
-      );
+      _recordProviderTrace('Zen: пропущен, ключ не задан');
     }
 
     // Бесплатные провайдеры без ключа (Pollinations AI + AI Horde)
@@ -912,10 +909,23 @@ class AiGuideService {
   static Future<int> hfRemainingToday() async => 0;
 
   static String _lastModel = '';
+
+  /// Последний УСПЕШНЫЙ провайдер: живые метки вида «AI Horde — отвечает…»
+  /// временные и сюда не попадают. По нему плашка модели возвращается,
+  /// если провайдер упал — иначе «отвечает…» залипало навсегда.
+  static String _lastGoodModel = '';
   static String get lastUsedModel => _lastModel;
   static void _setModel(String label) {
     _lastModel = label;
+    if (!label.contains('—')) _lastGoodModel = label;
     modelLabelTick.value++;
+  }
+
+  /// Убирает временную метку провайдера, если он так и не ответил.
+  static void _resetAnswering(String name) {
+    if (_lastModel.startsWith('$name ')) {
+      _setModel(_lastGoodModel.isNotEmpty ? _lastGoodModel : 'Ада');
+    }
   }
 
   static final ValueNotifier<int> modelLabelTick = ValueNotifier<int>(0);
@@ -1295,5 +1305,4 @@ class AiGuideService {
   /// Иконка по имени: тело в ai_guide_service_commands.dart.
   static int iconCodePointForName(String? name) =>
       _iconCodePointForNameImpl(name);
-
 }

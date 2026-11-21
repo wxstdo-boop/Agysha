@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -16,7 +17,13 @@ class AdaVariant {
   /// с близким оттенком, чтобы аватарка не «дублировалась» похожими
   /// градиентами подряд.
   final double hue;
-  const AdaVariant(this.colors, this.icon, {this.hue = 0});
+
+  /// Направление градиента в радианах (куда смотрит светлый край). Разные
+  /// варианты с похожим набором цветов различаются ещё и направлением —
+  /// аватарки не читаются «одной и той же заливкой».
+  final double angle;
+
+  const AdaVariant(this.colors, this.icon, {this.hue = 0, this.angle = 3.927});
 }
 
 /// Все варианты Ады: 6 авторских + 114 сгенерированных = 120 уникальных
@@ -122,7 +129,12 @@ List<AdaVariant> _buildAdaVariants() {
       (light - 0.20).clamp(0.0, 1.0),
     ).toColor();
     generated.add(
-      AdaVariant([c1, c2, c3], icons[i % icons.length], hue: hue.toDouble()),
+      AdaVariant(
+        [c1, c2, c3],
+        icons[i % icons.length],
+        hue: hue.toDouble(),
+        angle: (3.927 + i * 0.57) % (math.pi * 2),
+      ),
     );
   }
   return [...specials, ...generated];
@@ -228,21 +240,29 @@ class AdaAvatar extends StatelessWidget {
     return ValueListenableBuilder<int>(
       valueListenable: adaAvatarVariant,
       builder: (context, idx, _) => AnimatedSwitcher(
-        // Чуть дольше и с мягкой пружинкой: смена аватарки читается как
-        // «живой» поворот значка, а не резкий щелчок.
-        duration: const Duration(milliseconds: 400),
-        switchInCurve: Curves.easeOutBack,
+        // Смена аватарки — мягкий «поворот» значка: новая иконка
+        // доворачивается на малый угол и всплывает, старая тихо уходит.
+        // Без пружинного отскока (easeOutBack): на мелких аватарках в
+        // пузырях он читался дёрганьем.
+        duration: const Duration(milliseconds: 420),
+        switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: anim,
-          child: ScaleTransition(
-            scale: Tween<double>(
-              begin: 0.72,
-              end: 1.0,
-            ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutBack)),
-            child: child,
-          ),
-        ),
+        transitionBuilder: (child, anim) {
+          final curved = CurvedAnimation(
+            parent: anim,
+            curve: Curves.easeOutCubic,
+          );
+          return FadeTransition(
+            opacity: anim,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.86, end: 1.0).animate(curved),
+              child: RotationTransition(
+                turns: Tween<double>(begin: -0.035, end: 0.0).animate(curved),
+                child: child,
+              ),
+            ),
+          );
+        },
         child: KeyedSubtree(
           key: ValueKey('ada_av_$idx'),
           child: _core(context, adaVariants[idx]),
@@ -272,14 +292,18 @@ class AdaAvatar extends StatelessWidget {
     final iconColor = monochrome
         ? cs.primary
         : Colors.white.withValues(alpha: 0.95);
+    // Направление градиента у каждого варианта своё (v.angle) — варианты с
+    // близкими цветами всё равно читаются разными аватарками.
+    final gx = math.cos(v.angle);
+    final gy = math.sin(v.angle);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment(gx, gy),
+          end: Alignment(-gx, -gy),
           colors: ramp,
         ),
         // Тонкое адаптивное кольцо: полупрозрачная, почти чёрная обводка
@@ -288,8 +312,8 @@ class AdaAvatar extends StatelessWidget {
         border: Border.all(
           color: monochrome
               ? cs.outlineVariant.withValues(alpha: dark ? 0.55 : 0.70)
-              : Colors.black.withValues(alpha: dark ? 0.22 : 0.26),
-          width: 1.0,
+              : Colors.black.withValues(alpha: dark ? 0.30 : 0.32),
+          width: 1.1,
         ),
         // Без тени: в мини-окошке blur-тень обрезается прямоугольной
         // границей окна и выглядит как «квадрат» за круглой аватаркой.
@@ -297,31 +321,46 @@ class AdaAvatar extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Блик сверху — «стеклянный» объём. В монхроме он гасится: на
-          // нейтральной плите белый блик читался «лаком» и спорил с матовой
-          // капсулой разделов.
+          // Блик — маленькое чёткое пятно света сверху-слева с мягким
+          // растеканием: читается как стекло, но не «лак». В монхроме он
+          // гасится: на нейтральной плите спорил с матовой капсулой разделов.
           if (!monochrome)
             Positioned(
-              top: size * 0.06,
-              left: size * 0.16,
+              top: size * 0.05,
+              left: size * 0.14,
               child: Container(
-                width: size * 0.42,
-                height: size * 0.24,
+                width: size * 0.46,
+                height: size * 0.26,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(size),
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.white.withValues(alpha: dark ? 0.30 : 0.55),
+                      Colors.white.withValues(alpha: dark ? 0.34 : 0.60),
                       Colors.white.withValues(alpha: 0.0),
                     ],
+                    stops: const [0.0, 1.0],
                   ),
                 ),
               ),
             ),
-          // Значок Ады.
-          Icon(v.icon, size: size * 0.42, color: iconColor),
+          // Значок Ады: чуть крупнее и с мягкой тенью — на маленьких
+          // размерах (18 px в пузырях) контур не «растворяется» в градиенте.
+          Icon(
+            v.icon,
+            size: size * 0.44,
+            color: iconColor,
+            shadows: monochrome
+                ? null
+                : [
+                    Shadow(
+                      color: Colors.black.withValues(alpha: 0.22),
+                      blurRadius: size * 0.08,
+                      offset: Offset(0, size * 0.02),
+                    ),
+                  ],
+          ),
         ],
       ),
     );

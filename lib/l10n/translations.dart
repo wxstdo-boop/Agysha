@@ -117,6 +117,10 @@ class Translations {
       _lookup('pinDescription', context);
   static String pinLockOf(BuildContext context) => _lookup('pinLock', context);
   static String rcOf(BuildContext context) => _lookup('rc', context);
+
+  /// Подпись вкладки проверок в таблетке разделов: полное слово, а не
+  /// аббревиатура — иначе четыре раздела смотрятся неровно.
+  static String rcTabOf(BuildContext context) => _lookup('rcTab', context);
   static String realityChecksOf(BuildContext context) =>
       _lookup('realityChecks', context);
   static String refreshOf(BuildContext context) => _lookup('refresh', context);
