@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show PathMetric;
 import 'package:flutter/material.dart';
 import '../main.dart' show preDecodedLogo;
 import '../utils/design_tokens.dart';
@@ -39,7 +40,7 @@ class _SplashScreenState extends State<SplashScreen>
   Timer? _splashTimer;
 
   /// Радиус скругления «стекла» — тот же, что у карточки-сквайркла.
-  static const double _kRadius = 30;
+  static const double _kRadius = 26;
 
   /// Сколько сплэш виден до ухода на главную. Единый источник правды:
   /// от него считаются все окна анимаций, поэтому ни одна фаза не
@@ -234,9 +235,12 @@ class _SplashScreenState extends State<SplashScreen>
                               // брызгами это читалось как «дохуя чёрточек».
                               // САМ ЛОГОТИП НЕ МЕНЯЛСЯ.
                               child: Container(
-                                width: 104,
-                                height: 104,
-                                padding: const EdgeInsets.all(3.5),
+                                // Ава на сплэше чуть меньше: 104 → 92.
+                                // Крупная плита перетягивала внимание с
+                                // человечка и текста «powered by».
+                                width: 92,
+                                height: 92,
+                                padding: const EdgeInsets.all(3.2),
                                 decoration: BoxDecoration(
                                   // «Скруглый» (squircle) — круглее квадрата, но
                                   // НЕ круг: нижняя подпись на логотипе не
@@ -287,15 +291,15 @@ class _SplashScreenState extends State<SplashScreen>
                                     child: preDecodedLogo != null
                                         ? RawImage(
                                             image: preDecodedLogo,
-                                            width: 90,
-                                            height: 90,
+                                            width: 74,
+                                            height: 74,
                                             fit: BoxFit.contain,
                                             filterQuality: FilterQuality.high,
                                           )
                                         : Image.asset(
                                             'assets/agysha.png',
-                                            width: 90,
-                                            height: 90,
+                                            width: 74,
+                                            height: 74,
                                             cacheWidth: 512,
                                             cacheHeight: 512,
                                             filterQuality: FilterQuality.high,
@@ -611,19 +615,11 @@ class _BetaSplatPainter extends CustomPainter {
       ),
     );
 
-    // Осевая линия «B»: стойка + две чаши. Толщина от короткой стороны:
-    // на 104-пиксельной плите буква занимает почти всю высоту и читается
-    // даже на бюджетнике.
-    final spine = Path()
-      ..moveTo(w * 0.34, h * 0.17)
-      ..lineTo(w * 0.34, h * 0.83);
-    final bowls = Path()
-      ..moveTo(w * 0.34, h * 0.21)
-      ..cubicTo(w * 0.57, h * 0.15, w * 0.73, h * 0.24, w * 0.73, h * 0.37)
-      ..cubicTo(w * 0.73, h * 0.48, w * 0.58, h * 0.52, w * 0.34, h * 0.52)
-      ..moveTo(w * 0.34, h * 0.52)
-      ..cubicTo(w * 0.63, h * 0.50, w * 0.81, h * 0.58, w * 0.81, h * 0.68)
-      ..cubicTo(w * 0.81, h * 0.79, w * 0.64, h * 0.86, w * 0.34, h * 0.83);
+    // Геометрия и её метрики кэшируются по размеру плиты: раньше
+    // computeMetrics() и extractPath() гонялись на КАЖДОМ кадре β — это и
+    // было главной причиной дёрганья сплэша (РЛ с человечком в том числе:
+    // кадр не успевал). Пат и метрики стабильны между кадрами.
+    final geo = _geometry(size);
 
     // Волна прорисовки: сначала стойка, затем чаши — как рука с кистью.
     final spineDraw = (progress / 0.34).clamp(0.0, 1.0);
@@ -638,13 +634,26 @@ class _BetaSplatPainter extends CustomPainter {
       ..color = BrandColors.blood.withValues(alpha: 0.92 * alpha * env);
 
     final drawn = Path()
-      ..addPath(_trim(spine, spineDraw), Offset.zero)
-      ..addPath(_trim(bowls, bowlDraw), Offset.zero);
+      ..addPath(
+        _trimCached(geo.spineMetrics, geo.spineLength, spineDraw),
+        Offset.zero,
+      )
+      ..addPath(
+        _trimCached(geo.bowlMetrics, geo.bowlLength, bowlDraw),
+        Offset.zero,
+      );
 
-    // Мягкий ореол — кровь «мокрая», а не наклейка.
+    // Мягкий ореол — кровь «мокрая», а не наклейка. Вместо MaskFilter.blur
+    // (пересчитывался каждый кадр вычерчивания β и подтормаживал сплэш) —
+    // широкий полупрозрачный штрих тем же путём.
     canvas.drawPath(
       drawn,
-      stroke(0.34)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth * 4.2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = BrandColors.blood.withValues(alpha: 0.10 * env),
     );
     canvas.drawPath(drawn, stroke(1.0));
 
@@ -663,16 +672,53 @@ class _BetaSplatPainter extends CustomPainter {
     canvas.restore();
   }
 
-  /// Отрезает от пути его первые [progress] длины: буква «дорисовывается»
-  /// по ходу анимации, а не проявляется целиком одним кадром.
-  Path _trim(Path src, double progress) {
+  /// Кэш геометрии β по размеру плиты.
+  static final Map<String, _BetaGeometry> _geometryCache =
+      <String, _BetaGeometry>{};
+
+  static _BetaGeometry _geometry(Size size) {
+    final key = '${size.width.toStringAsFixed(1)}x'
+        '${size.height.toStringAsFixed(1)}';
+    final hit = _geometryCache[key];
+    if (hit != null) return hit;
+    final w = size.width;
+    final h = size.height;
+    final spine = Path()
+      ..moveTo(w * 0.34, h * 0.17)
+      ..lineTo(w * 0.34, h * 0.83);
+    final bowls = Path()
+      ..moveTo(w * 0.34, h * 0.21)
+      ..cubicTo(w * 0.57, h * 0.15, w * 0.73, h * 0.24, w * 0.73, h * 0.37)
+      ..cubicTo(w * 0.73, h * 0.48, w * 0.58, h * 0.52, w * 0.34, h * 0.52)
+      ..moveTo(w * 0.34, h * 0.52)
+      ..cubicTo(w * 0.63, h * 0.50, w * 0.81, h * 0.58, w * 0.81, h * 0.68)
+      ..cubicTo(w * 0.81, h * 0.79, w * 0.64, h * 0.86, w * 0.34, h * 0.83);
+    final spineMetrics = spine.computeMetrics().toList(growable: false);
+    final bowlMetrics = bowls.computeMetrics().toList(growable: false);
+    final geo = _BetaGeometry(
+      spineMetrics: spineMetrics,
+      bowlMetrics: bowlMetrics,
+      spineLength: spineMetrics.fold<double>(0, (a, m) => a + m.length),
+      bowlLength: bowlMetrics.fold<double>(0, (a, m) => a + m.length),
+    );
+    // Плита одна, кэш не растёт: ограничение на всякий случай.
+    if (_geometryCache.length > 4) _geometryCache.clear();
+    _geometryCache[key] = geo;
+    return geo;
+  }
+
+  /// Отрезает от пути его первые [progress] длины по ГОТОВЫМ метрикам:
+  /// буква «дорисовывается» по ходу анимации, а computeMetrics не
+  /// пересчитывается на каждом кадре.
+  Path _trimCached(
+    List<PathMetric> metrics,
+    double totalLength,
+    double progress,
+  ) {
     if (progress <= 0) return Path();
-    if (progress >= 1) return src;
+    var left = totalLength * progress;
     final out = Path();
-    var left =
-        src.computeMetrics().fold<double>(0, (sum, m) => sum + m.length) *
-        progress;
-    for (final m in src.computeMetrics()) {
+    for (final m in metrics) {
       if (left <= 0) break;
       final take = math.min(left, m.length);
       out.addPath(m.extractPath(0, take), Offset.zero);
@@ -729,6 +775,20 @@ class _LevitationBadge extends StatelessWidget {
   }
 }
 
+class _BetaGeometry {
+  final List<PathMetric> spineMetrics;
+  final List<PathMetric> bowlMetrics;
+  final double spineLength;
+  final double bowlLength;
+
+  const _BetaGeometry({
+    required this.spineMetrics,
+    required this.bowlMetrics,
+    required this.spineLength,
+    required this.bowlLength,
+  });
+}
+
 class _LevitationPainter extends CustomPainter {
   final double phase;
   final Color color;
@@ -780,16 +840,26 @@ class _LevitationPainter extends CustomPainter {
     // Размытое пятно вместо тонкого кольца: одиночная обводка в 1.4 px на
     // 30-пиксельном бейдже читалась как лишняя чёрточка-артефакт, а не как
     // тень. Пятно гаснет и сжимается, когда человечек выше.
+    // Тень — радиальный ГРАДИЕНТ, а не Paint с MaskFilter.blur: размытие
+    // масочным фильтром пересчитывалось на каждом кадре левитации и было
+    // главной причиной «дёрганья» человечка на слабых GPU. Градиент
+    // рисуется тем же овалом, но без попиксельного размытия.
     final shadowRx = 8.4 - 3.2 * rise;
+    final shadowRect = Rect.fromCenter(
+      center: Offset(cx, size.height * 0.88),
+      width: shadowRx * 2.4,
+      height: shadowRx * 1.5,
+    );
     canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(cx, size.height * 0.88),
-        width: shadowRx * 2,
-        height: shadowRx * 0.62,
-      ),
+      shadowRect,
       Paint()
-        ..color = color.withValues(alpha: 0.20 - 0.13 * rise)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.2),
+        ..shader = RadialGradient(
+          colors: [
+            color.withValues(alpha: 0.20 - 0.13 * rise),
+            color.withValues(alpha: 0),
+          ],
+          stops: const [0.0, 1.0],
+        ).createShader(shadowRect),
     );
 
     // ── Фигура ──────────────────────────────────────────
@@ -813,9 +883,7 @@ class _LevitationPainter extends CustomPainter {
 
     final silhouette = Path.combine(PathOperation.union, head, robe);
 
-    final glowPaint = Paint()
-      ..color = color.withValues(alpha: glow * 0.55)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.6);
+    final glowPaint = Paint()..color = color.withValues(alpha: glow * 0.22);
     final solidPaint = Paint()..color = color;
 
     // Рукава — два скруглённых «крыла» вверх-в стороны.
@@ -837,8 +905,13 @@ class _LevitationPainter extends CustomPainter {
 
     // Свечение вокруг силуэта — мягкая подложка, чтобы фигура не «резала»
     // фон острым краем.
+    // Ореол — та же фигура чуть крупнее и прозрачнее (без blur-фильтра):
+    // читается как свечение, но не размывает кадр попиксельно.
+    canvas.save();
+    canvas.scale(1.30);
     canvas.drawPath(silhouette, glowPaint);
     paintWings(glowPaint);
+    canvas.restore();
     canvas.drawPath(silhouette, solidPaint);
     paintWings(solidPaint);
     // Лёгкий блик сверху головы: фигура читается объёмной, а не плоским

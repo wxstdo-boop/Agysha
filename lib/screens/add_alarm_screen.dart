@@ -491,6 +491,12 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
       id: widget.existing?.id ?? const Uuid().v4(),
       time: _time,
       repeatDays: _repeatDays,
+      // Редактирование НЕ включает будильник само: раньше конструктор
+      // по умолчанию ставил `enabled: true`, и любой выключенный будильник
+      // после правки времени начинал звонить. Сохраняем прошлое состояние.
+      enabled: widget.existing?.enabled ?? true,
+      pinned: widget.existing?.pinned ?? false,
+      notes: widget.existing?.notes ?? '',
       label: _labelCtrl.text.trim(),
       taskType: _taskType,
       vibrate: _vibrate,
@@ -1009,16 +1015,20 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                                   tooltip: Translations.soundOf(context),
                                   glowing: _playingSound == _soundName,
                                   onPressed: () => _previewSound(_soundName),
+                                  // Смена значка play ⇄ stop — медленнее и
+                                  // без «прыжка»: кросс-фейд 340 мс с
+                                  // минимальным масштабом вместо резкой
+                                  // подмены 250 мс с 0.75.
                                   child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 250),
-                                    switchInCurve: Curves.easeOutCubic,
-                                    switchOutCurve: Curves.easeInCubic,
+                                    duration: const Duration(milliseconds: 340),
+                                    switchInCurve: Curves.easeInOutCubic,
+                                    switchOutCurve: Curves.easeInOutCubic,
                                     transitionBuilder: (child, animation) =>
                                         FadeTransition(
                                           opacity: animation,
                                           child: ScaleTransition(
                                             scale: Tween<double>(
-                                              begin: 0.75,
+                                              begin: 0.92,
                                               end: 1.0,
                                             ).animate(animation),
                                             child: child,
@@ -1231,7 +1241,7 @@ class _SoundActionChipState extends State<_SoundActionChip> {
     // вместе с ним «подсвечивался квадрат» капсулы. Теперь единственное,
     // что меняется, — сам значок play ⇄ stop (плавный кросс-фейд).
     final iconColor = dark
-        ? const Color(0xFFFF9AA0).withValues(alpha: 0.85)
+        ? const Color(0xFFFF9AA0).withValues(alpha: 0.96)
         : const Color(0xFFF5DBDD);
     final iconIdle = iconColor;
     final iconHot = iconColor;

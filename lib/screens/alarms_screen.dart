@@ -821,8 +821,38 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                           child: Container(
                                             decoration: BoxDecoration(
                                               shape: BoxShape.circle,
-                                              color: theme.colorScheme.primary
-                                                  .withValues(alpha: 0.10),
+                                              // Как «напоминания» в
+                                              // привычках: спокойная
+                                              // тональная подложка и
+                                              // тонкая кромка. На тёмной
+                                              // теме плотная заливка 0.20 и
+                                              // яркая кромка 0.55 делали
+                                              // значок «грязным» — теперь
+                                              // подложка тональная, а
+                                              // кромка мягкая.
+                                              color: theme
+                                                  .colorScheme
+                                                  .primaryContainer
+                                                  .withValues(
+                                                    alpha:
+                                                        theme.brightness ==
+                                                            Brightness.dark
+                                                        ? 0.26
+                                                        : 0.18,
+                                                  ),
+                                              border: Border.all(
+                                                color: theme
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(
+                                                      alpha:
+                                                          theme.brightness ==
+                                                              Brightness.dark
+                                                          ? 0.38
+                                                          : 0.28,
+                                                    ),
+                                                width: 1,
+                                              ),
                                             ),
                                             child: IconButton(
                                               onPressed: () =>
@@ -831,8 +861,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                                 Icons
                                                     .notifications_active_outlined,
                                                 size: 17,
-                                                color:
-                                                    theme.colorScheme.primary,
+                                                color: theme
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.95),
                                               ),
                                               visualDensity:
                                                   VisualDensity.compact,

@@ -491,7 +491,75 @@ class AiGuideService {
     if (s.length < 30 && !RegExp(r'[\p{L}\p{N}]', unicode: true).hasMatch(s)) {
       return '';
     }
-    return s;
+    return _fixCapitalization(_closeDanglingWord(s));
+  }
+
+  /// Провайдер обрывает ответ по лимиту токенов — часто ПОСРЕДИ слова
+  /// («…и тогда получит»). Обрезаем недописанное слово и ставим многоточие,
+  /// чтобы в чате не висело «получитс».
+  static String _closeDanglingWord(String input) {
+    final s = input.trimRight();
+    if (s.length < 120) return s;
+    if (RegExp(r'[.!?…:;»)"\]]$').hasMatch(s)) return s;
+    final last = s.runes.last;
+    final isLetter =
+        (last >= 0x61 && last <= 0x7A) ||
+        (last >= 0x41 && last <= 0x5A) ||
+        (last >= 0x430 && last <= 0x44F) ||
+        (last >= 0x410 && last <= 0x42F) ||
+        last == 0x451 ||
+        last == 0x401;
+    if (!isLetter) {
+      // Оборвано на запятой/тире: если до последней целой фразы остаётся
+      // хотя бы половина текста, режем по ней — в чате не висит «и тогда,».
+      final lastStop = _lastSentenceEnd(s);
+      if (lastStop > s.length * 0.5) return s.substring(0, lastStop).trimRight();
+      return s;
+    }
+    final cut = s.lastIndexOf(RegExp(r'\s'));
+    if (cut < 60) return s;
+    final head = s.substring(0, cut).trimRight();
+    final lastStop = _lastSentenceEnd(head);
+    if (lastStop > head.length * 0.5) return head.substring(0, lastStop);
+    return '$head…';
+  }
+
+  /// Индекс сразу ПОСЛЕ последнего знака конца предложения (0 — не найден).
+  static int _lastSentenceEnd(String s) {
+    for (var i = s.length - 1; i >= 0; i--) {
+      final ch = s[i];
+      if (ch == '.' || ch == '!' || ch == '?' || ch == '…') {
+        // Точка в «т.д.»/числе не считается концом фразы.
+        if (ch == '.' && i + 1 < s.length && s[i + 1] != ' ') continue;
+        return i + 1;
+      }
+    }
+    return 0;
+  }
+
+  /// Мелкие модели часто отдают ответ со строчной буквы («готов помочь…»)
+  /// и после точки тоже. Правим первую букву ответа и каждого предложения,
+  /// не трогая остальной текст и markdown-разметку.
+  static String _fixCapitalization(String text) {
+    final chars = text.runes.toList();
+    var startOfSentence = true;
+    for (var i = 0; i < chars.length; i++) {
+      final c = chars[i];
+      if (c <= 0x20) continue; // пробелы/переводы строк — ждём букву
+      final ch = String.fromCharCode(c);
+      // Маркеры списка и кавычки не отменяют начало предложения.
+      if (ch == '-' || ch == '•' || ch == '*' || ch == '"' || ch == '«' ||
+          ch == '>' || ch == '(') {
+        continue;
+      }
+      final lower =
+          (c >= 0x61 && c <= 0x7A) || (c >= 0x430 && c <= 0x44F) || c == 0x451;
+      if (startOfSentence && lower) {
+        chars[i] = String.fromCharCode(c).toUpperCase().runes.first;
+      }
+      startOfSentence = ch == '.' || ch == '!' || ch == '?' || ch == '…';
+    }
+    return String.fromCharCodes(chars);
   }
 
   /// Ответ почти целиком на латинице (английский) — мелкие модели
@@ -673,6 +741,7 @@ class AiGuideService {
       throw Exception('timeout');
     } finally {
       // «Отвечает…» живёт ровно столько, сколько идёт подготовка ответа.
+      _inChain = false;
       endAnswering();
     }
   }
@@ -797,6 +866,7 @@ class AiGuideService {
     bool useHf = true,
   }) async {
     providerTrace.value = <String>[];
+    _inChain = true;
 
     final poolsideKey = await SettingsService.loadAiKey();
     if (poolsideKey.isNotEmpty) {
@@ -875,6 +945,7 @@ class AiGuideService {
       final answer = await send();
       if (answer != null) {
         _recordProviderTrace('Selected: $name');
+        commitStaged(name);
         return answer;
       }
     }
@@ -888,6 +959,7 @@ class AiGuideService {
     );
     if (retryPollinations != null) {
       _recordProviderTrace('Selected: Pollinations (повтор)');
+      commitStaged('Pollinations');
       return retryPollinations;
     }
 
@@ -967,15 +1039,86 @@ class AiGuideService {
 
   static String _lastModel = '';
 
+  /// Цепочка провайдеров идёт прямо сейчас. Пока она идёт, метка модели не
+  /// откатывается к прошлому имени на каждой неудаче: иначе при старте
+  /// плашка мигала «Ада → AI Horde → Ада → AI Zen». Откат происходит один
+  /// раз — когда цепочка закончилась.
+  static bool _inChain = false;
+
   /// Последний УСПЕШНЫЙ провайдер: живые метки вида «AI Horde — отвечает…»
   /// временные и сюда не попадают. По нему плашка модели возвращается,
   /// если провайдер упал — иначе «отвечает…» залипало навсегда.
   static String _lastGoodModel = '';
   static String get lastUsedModel => _lastModel;
+
+  /// Ключ, по которому имя последнего провайдера переживает перезапуск.
+  static const _modelPrefKey = 'ada_last_model';
+
+  /// Показанная метка отстаёт от реальной на [_labelDebounce]: за время
+  /// цепочки провайдеров имя может смениться два-три раза подряд, и плашка
+  /// «моргала» Ада → AI Horde → AI Zen прямо на глазах. Теперь рисуется
+  /// только то имя, что продержалось дольше паузы.
+  static const _labelDebounce = Duration(milliseconds: 900);
+  static Timer? _labelTimer;
+  static String _shownModel = '';
+
+  /// Восстанавливает метку из prefs на старте: без этого первый кадр
+  /// показывал «ada-0.0.3», затем плашка прыгала на имя провайдера.
+  static void restoreModelLabel() {
+    try {
+      final saved = globalPrefs.getString(_modelPrefKey);
+      if (saved != null && saved.trim().isNotEmpty) {
+        _lastModel = saved;
+        _lastGoodModel = saved;
+        _shownModel = saved;
+        modelLabelTick.value++;
+      }
+    } catch (_) {}
+  }
+
+  /// Имя провайдера, который только ПОПРОБУЕТ ответить.
+  ///
+  /// Раньше провайдеры звали [_setModel] ДО запроса, и при каждом старте
+  /// или отправке плашка проматывала всю цепочку («Ада», «AI Horde · …»,
+  /// «AI Zen»…) — статус скакал. Теперь имя запоминается здесь и
+  /// публикуется только после реального ответа (см. [commitStaged]).
+  static String _stagedModel = '';
+
+  static void _noteModel(String label) {
+    _stagedModel = label;
+    _lastModel = label;
+  }
+
+  static void commitStaged(String fallback) {
+    final label = _stagedModel.isNotEmpty ? _stagedModel : fallback;
+    _stagedModel = '';
+    if (label.isNotEmpty) _setModel(label);
+  }
+
   static void _setModel(String label) {
     _lastModel = label;
-    if (!label.contains('—')) _lastGoodModel = label;
-    modelLabelTick.value++;
+    final transient = label.contains('—');
+    if (!transient) _lastGoodModel = label;
+    if (transient) {
+      // «отвечает…» — живой статус, он должен появляться сразу.
+      _labelTimer?.cancel();
+      _shownModel = label;
+      modelLabelTick.value++;
+      return;
+    }
+    if (label == _shownModel) {
+      _labelTimer?.cancel();
+      return;
+    }
+    _labelTimer?.cancel();
+    _labelTimer = Timer(_labelDebounce, () {
+      if (_lastModel != label) return;
+      _shownModel = label;
+      try {
+        globalPrefs.setString(_modelPrefKey, label);
+      } catch (_) {}
+      modelLabelTick.value++;
+    });
   }
 
   /// Ставит нейтральную метку «готовит ответ», не трогая уже стоящую.
@@ -990,6 +1133,10 @@ class AiGuideService {
   /// цепочки, и старый вариант залипал — статус «отвечает…» висел в
   /// плашке ещё долго после того, как пользователь ничего не писал.
   static void _resetAnswering(String name, {bool toName = false}) {
+    // Внутри цепочки неудача НЕ трогает метку: держим одно «Ада —
+    // отвечает…» до первого успеха. Иначе каждый упавший провайдер
+    // возвращал старое имя и статус скакал.
+    if (_inChain && !toName) return;
     if (toName) {
       _setModel(name);
       return;
@@ -1011,7 +1158,7 @@ class AiGuideService {
   );
   static void recordModelUsed(String label) => _setModel(label);
 
-  static Future<String> currentModelLabel() async => _lastModel;
+  static Future<String> currentModelLabel() async => _shownModel;
 
   // ---- Ада-трекинг: утренний отчёт и вечерний разбор прямо в ЧАТ ----
 

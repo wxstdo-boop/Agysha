@@ -31,7 +31,7 @@ Future<String> _sendAgnes(
         body: jsonEncode({
           'model': _agnesModel,
           'messages': messages,
-          'max_tokens': 500,
+          'max_tokens': 1200,
         }),
       )
       .timeout(const Duration(seconds: 14));
@@ -49,7 +49,7 @@ Future<String> _sendAgnes(
   }
   final cleaned = AiGuideService._cleanText(text);
   if (AiGuideService._isRefusal(cleaned)) throw Exception('Agnes refusal');
-  AiGuideService._setModel('Agnes AI');
+  AiGuideService._noteModel('Agnes AI');
   return cleaned;
 }
 
@@ -86,7 +86,7 @@ Future<String> _sendZen(
             body: jsonEncode({
               'model': model,
               'messages': messages,
-              'max_tokens': 500,
+              'max_tokens': 1200,
             }),
           )
           .timeout(const Duration(seconds: 14));
@@ -114,7 +114,7 @@ Future<String> _sendZen(
         lastErr = 'Zen refusal';
         continue;
       }
-      AiGuideService._setModel('Zen');
+      AiGuideService._noteModel('Zen');
       return cleaned;
     } catch (e) {
       lastErr = e.toString();
@@ -184,7 +184,7 @@ Future<Object> _poolsideRound(
           'model': model,
           'messages': messages,
           'tools': AiGuideService._tools(),
-          'max_tokens': 500,
+          'max_tokens': 1200,
         }),
       )
       // Короткий таймаут: при недоступности своего ключа быстро
@@ -342,7 +342,7 @@ Future<String> _sendLlm7(
               'temperature': 0.6,
               // Щедрый лимит: часть токенов модель тратит на reasoning,
               // и при маленьком лимите content приходит обрезанным.
-              'max_tokens': 900,
+              'max_tokens': 1200,
               'stream': false,
             }),
           )
@@ -360,7 +360,7 @@ Future<String> _sendLlm7(
       final cleaned = AiGuideService._cleanText(raw);
       if (cleaned.length < 2) continue;
       if (AiGuideService._isRefusal(cleaned)) continue;
-      AiGuideService._setModel('LLM7 · $model');
+      AiGuideService._noteModel('LLM7 · $model');
       return cleaned;
     } catch (_) {}
   }
@@ -417,7 +417,7 @@ Future<String> _sendPollinations(
         if (!body.startsWith('<')) {
           final cleaned = AiGuideService._cleanText(body);
           if (cleaned.isNotEmpty && !AiGuideService._isRefusal(cleaned)) {
-            AiGuideService._setModel('Pollinations · $model');
+            AiGuideService._noteModel('Pollinations · $model');
             return cleaned;
           }
         }
@@ -445,7 +445,7 @@ Future<String> _sendPollinations(
     if (!body.startsWith('<')) {
       final cleaned = AiGuideService._cleanText(body);
       if (cleaned.isNotEmpty && !AiGuideService._isRefusal(cleaned)) {
-        AiGuideService._setModel('Pollinations · GPT');
+        AiGuideService._noteModel('Pollinations · GPT');
         return cleaned;
       }
     }
@@ -518,7 +518,7 @@ Future<String> _sendHorde(String userText, String languageCode) async {
         final modelName = first['model'] != null
             ? '${first['model']}'.split('/').last
             : 'text';
-        AiGuideService._setModel('AI Horde · $modelName');
+        AiGuideService._noteModel('AI Horde · $modelName');
         final body = text.startsWith(prompt)
             ? text.substring(prompt.length)
             : text;

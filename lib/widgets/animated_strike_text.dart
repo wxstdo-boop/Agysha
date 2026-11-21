@@ -294,15 +294,28 @@ class _StrikePainter extends CustomPainter {
       // 0.38 от верха (ascent), ближе к визуальной середине букв
       // (раньше 0.42/0.45 уходили к верху строки).
       final y = m.baseline - m.ascent * 0.38;
-      canvas.drawLine(
-        Offset(m.left, y),
-        Offset(m.left + lineWidth, y),
-        linePaint,
-      );
+      // ИЗВИЛИСТАЯ линия, а не линейка: рука ведёт перо неровно.
+      // Амплитуда ~0.06 кегля (на 20px это 1.2 px), период ~0.55 кегля —
+      // волна заметная, но не превращает текст в зебру.
+      final amp = math.max(0.7, fontSize * 0.055);
+      final period = math.max(5.0, fontSize * 0.55);
+      final path = Path();
+      const step = 2.0;
+      var lastY = y;
+      for (var x = 0.0; x <= lineWidth; x += step) {
+        final yy = y + math.sin(x / period * 2 * math.pi) * amp;
+        if (x == 0) {
+          path.moveTo(m.left, yy);
+        } else {
+          path.lineTo(m.left + x, yy);
+        }
+        lastY = yy;
+      }
+      canvas.drawPath(path, linePaint);
       // Мягкое «перо» на растущем конце — линия выглядит живой.
       if (dotPaint != null) {
         canvas.drawCircle(
-          Offset(m.left + lineWidth, y),
+          Offset(m.left + lineWidth, lastY),
           m.ascent * 0.055,
           dotPaint,
         );

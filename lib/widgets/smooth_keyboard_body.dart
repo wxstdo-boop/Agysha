@@ -34,10 +34,29 @@ class SmoothKeyboardBody extends StatelessWidget {
     final bg = background ?? Theme.of(context).scaffoldBackgroundColor;
     return ColoredBox(
       color: bg,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottom),
-        child: child,
-      ),
+      // Клавиатура больше НЕ сжимает содержимое: раньше здесь стоял
+      // `Padding(bottom: bottom)`, и карточка экрана теряла высоту —
+      // пример задачи и кнопки «скукоживались», а фон-градиент за ними
+      // ехал. Теперь содержимое сохраняет ПОЛНУЮ высоту окна и лишь
+      // прокручивается вверх ровно на высоту клавиатуры (фокус поля
+      // доводит его само). Фон, нарисованный над этим виджетом, остаётся
+      // неподвижным.
+      child: bottom <= 0
+          ? child
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final height = constraints.maxHeight;
+                return SingleChildScrollView(
+                  padding: EdgeInsets.only(bottom: bottom),
+                  physics: const ClampingScrollPhysics(),
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    height: height.isFinite ? height : null,
+                    child: child,
+                  ),
+                );
+              },
+            ),
     );
   }
 }
