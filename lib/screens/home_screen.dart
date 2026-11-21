@@ -544,17 +544,18 @@ class _HomeScreenState extends State<HomeScreen>
       required VoidCallback onTap,
     }) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
         child: SmoothTooltip(
           message: tooltip,
           preferredAbove: false,
           child: PressScale(
-            pressedScale: 0.92,
+            pressedScale: 0.95,
             enableTilt: false,
-            duration: const Duration(milliseconds: 180),
+            duration: const Duration(milliseconds: 140),
+            releaseDuration: const Duration(milliseconds: 220),
             child: Container(
-              width: 40,
-              height: 40,
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: cs.surfaceContainerHigh.withValues(
