@@ -69,6 +69,10 @@ class SettingsService {
         return 'rose';
       case 'peach':
         return 'peach';
+      // Светлый вариант «Cyberpunk 2077» — это отдельный ключ; без него
+      // выбор после перезапуска молча откатывался на системную тему.
+      case 'cyberpunkLight':
+        return 'cyberpunkLight';
       // «Метель» — подарок 12-го дня ивента. Право на неё уходит вместе с
       // подарком: после сброса события тема на диске ещё могла остаться, и
       // без проверки здесь она переживала бы сброс до первой смены темы.
@@ -82,10 +86,18 @@ class SettingsService {
     }
   }
 
-  static Future<void> saveThemeMode(String mode) async {
-    final map = await _loadSettings();
-    map[_keyTheme] = mode;
-    await _saveSettings(map);
+  /// Запись темы идёт в очередь: быстрый перебор тем вызывал несколько
+  /// параллельных read-modify-write одного и того же JSON, и последняя
+  /// запись могла затереть свежую старой копией карты.
+  static Future<void> _themeWrites = Future<void>.value();
+
+  static Future<void> saveThemeMode(String mode) {
+    _themeWrites = _themeWrites.then((_) async {
+      final map = await _loadSettings();
+      map[_keyTheme] = mode;
+      await _saveSettings(map);
+    });
+    return _themeWrites;
   }
 
   static Future<String> loadFontFamily() async {

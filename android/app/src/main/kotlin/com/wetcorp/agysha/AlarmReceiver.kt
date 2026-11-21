@@ -131,21 +131,32 @@ class AlarmReceiver : BroadcastReceiver() {
                     // остановка (удаление/выключение будильника во время
                     // звонка) гасит именно этот звонок.
                     ringCode = id,
+                    fullscreen = fullscreen,
                 )
                 logToFile(context, "RING START id=$id started=$ringStarted")
             }
 
-            showNotification(
-                context, id, shownTitle, shownBody, channelName, soundName,
-                vibrate, payload, fullscreen, customPath,
-                isRealityCheck,
-                // Сервис — основной звонок. Если система отказала ему в
-                // старте (ограничения фоновых сервисов Android 12+), звук
-                // должен остаться хотя бы в самом уведомлении — тишина
-                // вместо будильника недопустима. Тогда идём на отдельный
-                // канал под конкретный звук (см. createChannel).
-                fallbackSound = !isRealityCheck && !ringStarted,
-            )
+            // Одна карточка на будильник. Если сервис звонка стартовал, всю
+            // карточку (кнопки, full-screen intent, id будильника) рисует он;
+            // второй notify() из приёмника давал в шторке ДУБЛЬ — «Будильник»
+            // и «Звонок будильника». Приёмник показывает уведомление только
+            // когда сервис не поднялся (звук в уведомлении — запасной путь)
+            // и для проверок реальности.
+            if (!isRealityCheck && ringStarted) {
+                logToFile(context, "NOTIFICATION OWNED BY SERVICE id=$id")
+            } else {
+                showNotification(
+                    context, id, shownTitle, shownBody, channelName, soundName,
+                    vibrate, payload, fullscreen, customPath,
+                    isRealityCheck,
+                    // Сервис — основной звонок. Если система отказала ему в
+                    // старте (ограничения фоновых сервисов Android 12+), звук
+                    // должен остаться хотя бы в самом уведомлении — тишина
+                    // вместо будильника недопустима. Тогда идём на отдельный
+                    // канал под конкретный звук (см. createChannel).
+                    fallbackSound = !isRealityCheck && !ringStarted,
+                )
+            }
 
             // Стартуем Activity ТОЛЬКО для payload-будильников (не rc).
             // FIX (другой путь на экран): всегда вызываем, а не только

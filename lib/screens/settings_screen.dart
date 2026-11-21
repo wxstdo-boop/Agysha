@@ -2,6 +2,7 @@ import 'dart:async';
 import '../services/haptics.dart';
 import '../services/sounds.dart';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -146,8 +147,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _permissionWarningDismissed = false;
   bool _grantPressed = false; // Состояние зажатия кнопки «Выдать»
   bool? _notificationsEnabled; // Кэш статуса уведомлений
-  // Карусель тем: листается по горизонтали, текущая тема по центру.
-  PageController? _themePageCtrl;
 
   late AnimationController _perfController;
   late Animation<double> _perfScale;
@@ -241,7 +240,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     _perfController.dispose();
     _keyPulse.dispose();
     _aiKeyController.dispose();
-    _themePageCtrl?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     notificationService.removeListener(_onNotificationChanged);
     super.dispose();

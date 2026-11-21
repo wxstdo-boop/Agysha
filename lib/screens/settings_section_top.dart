@@ -28,10 +28,6 @@ extension _SettingsSectionTop on _SettingsScreenState {
             ),
             const SizedBox(height: 12),
             _buildThemeCarousel(context),
-            // Значок Flutter ПОД каруселью тем, внутри той же карточки:
-            // аккуратный фирменный акцент внизу секции.
-            const SizedBox(height: 14),
-            const Center(child: _FlutterBadge()),
           ],
         ),
       ),

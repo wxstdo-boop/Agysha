@@ -284,6 +284,21 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // Системные экраны, которым нужна нативная цепочка: на realme/ColorOS
+        // `android_intent_plus` то молча ничего не открывает, то уводит в
+        // настройки уведомлений вместо батареи. Здесь пробуем по порядку и
+        // возвращаем строкой, что именно открылось (для snackbar/логов).
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.wetcorp.agysha/system_settings",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openBatterySettings" -> result.success(openBatterySettings())
+                "isIgnoringBatteryOptimizations" -> result.success(isIgnoringBatteryOptimizations())
+                else -> result.notImplemented()
+            }
+        }
+
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -543,6 +558,69 @@ class MainActivity : FlutterActivity() {
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                 .setData(Uri.fromParts("package", packageName, null)),
         )
+    }
+
+    /** Уже исключено из оптимизации батареи (Android сам это знает). */
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        return try {
+            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+            pm.isIgnoringBatteryOptimizations(packageName)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Открывает экран «оптимизация батареи» для нашего приложения.
+     *
+     * Порядок важен: на realme/ColorOS общий системный intent
+     * `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` либо ничего не делает (если
+     * приложение уже в белом списке), либо перехватывается прошивкой и
+     * уводит в настройки уведомлений. Поэтому сначала системный диалог
+     * «разрешить работу в фоне», затем родные страницы прошивки, затем
+     * ОБЩИЙ список «Оптимизация батареи» (он есть на любом Android и
+     * работает без спецразрешений), и только потом карточка приложения.
+     */
+    private fun openBatterySettings(): String {
+        if (!isIgnoringBatteryOptimizations()) {
+            val request = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.fromParts("package", packageName, null),
+            )
+            if (tryStart(request)) return "request"
+        }
+
+        // Родные страницы realme UI / ColorOS. Неверный component просто не
+        // запустится (tryStart вернёт false) — идём дальше по цепочке.
+        val oemComponents = listOf(
+            ComponentName("com.oplus.battery", "com.oplus.powermanager.fuelgaue.PowerUsageModelActivity"),
+            ComponentName("com.oplus.battery", "com.oplus.powermanager.fuelgaue.HighPowerConsumptionActivity"),
+            ComponentName("com.coloros.oppoguardelf", "com.coloros.powermanager.fuelgaue.PowerUsageModelActivity"),
+            ComponentName("com.coloros.oppoguardelf", "com.coloros.powermanager.fuelgaue.HighPowerConsumptionActivity"),
+        )
+        for (cn in oemComponents) {
+            val i = Intent().apply {
+                component = cn
+                putExtra("package_name", packageName)
+                putExtra("pkg_name", packageName)
+            }
+            if (tryStart(i)) return "oem"
+        }
+
+        // Общий список «Оптимизация батареи» — без разрешений, на всех Android.
+        if (tryStart(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))) {
+            return "list"
+        }
+
+        return if (tryStart(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(Uri.fromParts("package", packageName, null)),
+            )
+        ) {
+            "info"
+        } else {
+            "failed"
+        }
     }
 
     /** Запускает экран настроек с FLAG_ACTIVITY_NEW_TASK; true если открылся. */
