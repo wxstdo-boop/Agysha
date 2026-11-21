@@ -80,12 +80,21 @@ class PageSpring {
       stop();
       return;
     }
-    // Шаг ограничен сверху: при просадке кадров интеграция не «взрывается».
-    final dt = ((elapsed - _last).inMicroseconds / 1e6).clamp(0.001, 0.032);
+    // Длинный кадр (просадка, возврат из фона) интегрируем МЕЛКИМИ шагами,
+    // а не обрезаем до 32 мс: иначе анимация отстаёт от реального времени
+    // и после редкого кадра ещё секунду «доползает» до цели. Суммарный
+    // отрезок ограничен 1 с, чтобы после долгой паузы не проскочить цель.
+    final dt = ((elapsed - _last).inMicroseconds / 1e6).clamp(0.0, 1.0);
     _last = elapsed;
-    final a = _stiffness * (_target - _pos) - _damping * _vel;
-    _vel += a * dt;
-    _pos += _vel * dt;
+    const h = 0.004;
+    var left = dt;
+    while (left > 0) {
+      final step = left < h ? left : h;
+      final a = _stiffness * (_target - _pos) - _damping * _vel;
+      _vel += a * step;
+      _pos += _vel * step;
+      left -= step;
+    }
     if (_pos < 0) {
       _pos = 0;
       if (_vel < 0) _vel = 0;
@@ -105,9 +114,9 @@ class PageSpring {
   /// Ставит позицию карусели ровно на «страницу» пружины (по приращению от
   /// текущей — так не нужно знать внутренние пиксели страницы).
   ///
-  /// После прыжка сразу берём позицию «на удержание»: иначе собственная
-  /// баллистика страницы каждый кадр тянула бы карусель к ближайшей странице
-  /// и спорила с пружиной.
+  /// jumpTo переводит ScrollPosition в idle и отменяет прежнюю баллистику,
+  /// поэтому следующий кадр пружины снова двигает карусель, а не спорит с
+  /// доводкой страницы.
   void _follow() {
     final pos = controller.position;
     final current = controller.page;
@@ -117,9 +126,6 @@ class PageSpring {
     final delta = (_pos - current) * perPage;
     if (delta.abs() < 0.01) return;
     pos.jumpTo(pos.pixels + delta);
-    // jumpTo сам переводит ScrollPosition в idle и отменяет прежнюю
-    // баллистику. Повторный hold на каждом кадре создавал новый ScrollHold
-    // и лишние уведомления, из-за которых дальняя доводка могла подрагивать.
   }
 
   void dispose() {
