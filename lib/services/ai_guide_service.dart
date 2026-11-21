@@ -509,9 +509,19 @@ class AiGuideService {
   /// «пишет не до конца» — половина ответа пропадала. Теперь текст НЕ
   /// режется: максимум добавляем многоточие, если он оборван.
   static String _closeDanglingWord(String input) {
-    final s = input.trimRight();
+    var s = input.trimRight();
     if (s.length < 120) return s;
     if (RegExp(r'[.!?…:;»)"\]]$').hasMatch(s)) return s;
+    // Оборванное на полуслове окончание («…ключевой моме») выглядело как
+    // «ИИ режет слова». Срезаем последний недописанный токен и ставим
+    // многоточие: лучше короткий чистый хвост, чем половина слова.
+    final tail = RegExp(r'(\s+)(\S+)$').firstMatch(s);
+    if (tail != null) {
+      final last = tail.group(2)!;
+      if (RegExp(r'[\p{L}\p{N}]$', unicode: true).hasMatch(last)) {
+        s = s.substring(0, tail.start).trimRight();
+      }
+    }
     return '$s…';
   }
 

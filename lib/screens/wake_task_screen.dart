@@ -1608,7 +1608,6 @@ class _CheckButtonState extends State<_CheckButton> {
     return _RedPillButton(
       label: widget.label,
       onPressed: widget.enabled ? widget.onPressed : null,
-      compact: true,
     );
   }
 }
@@ -1659,14 +1658,10 @@ class _RedPillButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final IconData? icon;
 
-  /// Чуть плотнее и ниже: кнопка задачи не должна растягивать карточку.
-  final bool compact;
-
   const _RedPillButton({
     required this.label,
     required this.onPressed,
     this.icon,
-    this.compact = false,
   });
 
   @override
@@ -1680,11 +1675,7 @@ class _RedPillButton extends StatelessWidget {
       // Компактная кнопка задачи больше не «обрубок» по центру: у неё та же
       // кровная таблетка, что у разделов, но с собственной минимальной
       // шириной — на узком экране она читается как полноценная кнопка.
-      constraints: BoxConstraints(minWidth: compact ? 168 : 0),
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 20 : 18,
-        vertical: compact ? 10 : 12,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: radius,
         // ПРОЗРАЧНЫЙ фон внутри: та самая «пиздатая» кнопка, которую
@@ -1693,7 +1684,13 @@ class _RedPillButton extends StatelessWidget {
         // плашкой, а серые полосы градиента «вылезали» по краям.
         // Теперь — только красная кромка и красный текст; зажатие
         // подкрашивает внутренность мягким красным через PressScale.
-        color: Colors.transparent,
+        // Прозрачный фон при отключённой кнопке и ЛЁГКИЙ красный отсвет
+        // внутри, когда она доступна. Переход в обе стороны анимирует
+        // AnimatedContainer 260 мс: заполнение цифр включает отсвет плавно,
+        // а стирание так же мягко его убирает — без «вспышки» кадром.
+        color: on
+            ? const Color(0xFFE02436).withValues(alpha: dark ? 0.12 : 0.09)
+            : Colors.transparent,
         border: Border.all(
           color: on
               ? const Color(0xFFE02436).withValues(alpha: dark ? 0.92 : 0.88)
@@ -1747,7 +1744,7 @@ class _RedPillButton extends StatelessWidget {
               style: TextStyle(
                 // Кнопка мельче: прежние 15/14 выглядели крупной плашкой
                 // рядом с компактной карточкой.
-                fontSize: compact ? 13.5 : 14,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.2,
                 color: const Color(
@@ -1777,28 +1774,13 @@ class _RedPillButton extends StatelessWidget {
         enableTilt: true,
         // Красноватый отсвет ВНУТРИ фона под пальцем: винная подложка
         // заливает таблетку и плавно растворяется после отпускания
-        // (760 мс), а не гаснет рывком. Плотность вернули к заметной
-        // (0.16 владелец читал как «отсвет убрали»).
+        // (760 мс), а не гаснет рывком.
+        // Отсвет ВНУТРИ — только мягкий красноватый тон под пальцем.
+        // Радиальный «кровавый» слой убран: он «окровавливал» фон всей
+        // таблетки, и владелец просил вернуть прежний вид.
         pressTint: const Color(0xFFE02436),
-        pressTintStrength: 0.30,
+        pressTintStrength: 0.16,
         pressTintRadius: radius,
-        // Второй слой — свет ИЗ-ПОД кромки: центр таблетки остаётся
-        // прозрачным, а к краям зажатие наливается кровью. Так «отсвет
-        // внутри» читается даже на сплошной заливке.
-        pressOverlay: (context, progress) => DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            gradient: RadialGradient(
-              center: Alignment.center,
-              radius: 1.1,
-              colors: [
-                const Color(0xFFE02436).withValues(alpha: 0.06 * progress),
-                const Color(0xFFE02436).withValues(alpha: 0.34 * progress),
-              ],
-              stops: const [0.0, 1.0],
-            ),
-          ),
-        ),
         duration: const Duration(milliseconds: 160),
         releaseDuration: const Duration(milliseconds: 760),
         releaseCurve: Curves.easeOutCubic,

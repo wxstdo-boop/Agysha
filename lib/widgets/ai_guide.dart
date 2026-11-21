@@ -750,7 +750,7 @@ class _AiChatBodyState extends State<_AiChatBody>
   Future<void> _saveHistory() async {
     try {
       final value = jsonEncode(_messages.map((m) => m.toJson()).toList());
-      final resolved = await JsonFile.writeWithSnapshot(
+      final resolved = await JsonFile.writeWithSnapshotRetrying(
         _historyKey,
         value,
         _historySnapshot,
@@ -787,7 +787,7 @@ class _AiChatBodyState extends State<_AiChatBody>
   Future<void> _savePins() async {
     try {
       final value = jsonEncode(_pinned.map((m) => m.toJson()).toList());
-      final resolved = await JsonFile.writeWithSnapshot(
+      final resolved = await JsonFile.writeWithSnapshotRetrying(
         _pinsKey,
         value,
         _pinsSnapshot,
@@ -1595,27 +1595,29 @@ class _AiChatBodyState extends State<_AiChatBody>
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _cycleAvatar,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Заголовок: «Ада Край (Cry)»
-                      Text(
-                        'Ада Край (Cry)',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                // Имя — БЕЗ тапа: раньше значок Ады менялся и по нажатию на
+                // подпись, что владелец считал багом. Теперь меняются только
+                // аватарки: здесь и слева от сообщений.
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Заголовок: «Ада Край (Cry)»
+                    Text(
+                      'Ада Край (Cry)',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      // Строки статуса («провайдер · модель», «Ада
-                      // отвечает…») больше НЕТ: она мелькала при открытии,
-                      // менялась на каждом переборе провайдера и читалась
-                      // владельцем как «скачущий статус». В шапке — только
-                      // имя.
-                    ],
-                  ),
+                    ),
+                    // Строка статуса: «Ада отвечает…» — только пока идёт
+                    // ответ, и «провайдер · модель» — когда она молчит.
+                    // Меняется мягким кросс-фейдом, без скачков высоты.
+                    _AdaStatusLine(
+                      busy: _busy,
+                      model: _modelLabel,
+                      style: theme.textTheme.labelSmall ?? const TextStyle(),
+                    ),
+                  ],
                 ),
               ),
               _buildHeaderButton(
@@ -2119,3 +2121,52 @@ class _AiChatBodyState extends State<_AiChatBody>
 /// Подсказка в пустом чате: ПО ЦЕНТРУ, две строки жирным, с переводом.
 /// Под текстом — горячий стрик общения с Адой (мелкий огонёк с числом
 /// дней подряд): не мусорит в шапке, живёт только в пустом чате.
+
+/// Строка статуса под именем Ады.
+///
+/// Пока идёт ответ — «Ада отвечает…»; когда она молчит — «провайдер ·
+/// модель». Высота фиксирована, поэтому шапка не прыгает при смене строки,
+/// а сама смена идёт кросс-фейдом: без «скачущего статуса», на который
+/// владелец жаловался в прошлых сборках.
+class _AdaStatusLine extends StatelessWidget {
+  final bool busy;
+  final String model;
+  final TextStyle style;
+
+  const _AdaStatusLine({
+    required this.busy,
+    required this.model,
+    required this.style,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = busy ? 'Ада отвечает…' : model;
+    return SizedBox(
+      height: 16,
+      child: ClipRect(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          child: text.isEmpty
+              ? const SizedBox.shrink(key: ValueKey('ada_status_empty'))
+              : Align(
+                  key: ValueKey('$busy|$text'),
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: style.copyWith(
+                      fontSize: 11,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}

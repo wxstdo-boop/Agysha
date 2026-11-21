@@ -6,13 +6,13 @@ import '../services/haptics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
-import '../services/new_year_event_service.dart';
 import '../services/pin_service.dart';
 import '../l10n/translations.dart';
 import '../utils/jank_probe.dart';
 import '../utils/motion_prefs.dart';
 import '../utils/design_tokens.dart';
 import '../widgets/brand_emblem.dart';
+import '../widgets/press_scale.dart';
 
 part 'lock_screen_widgets.dart';
 

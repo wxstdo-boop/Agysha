@@ -129,7 +129,10 @@ class JsonFile {
         '${documents.path}/keramika_recovery_$generation',
       ).exists(),
     );
-    _recoverySecureStorage = _recoveryStorageFor(generation, location.namespace);
+    _recoverySecureStorage = _recoveryStorageFor(
+      generation,
+      location.namespace,
+    );
     _dir = Directory(location.path);
     _activeSecureStorage = _recoverySecureStorage;
   }
@@ -149,7 +152,8 @@ class JsonFile {
   }) {
     final useLegacy = !currentExists && legacyExists;
     return (
-      path: '$documentsPath/${useLegacy ? 'keramika' : 'agysha'}_recovery_'
+      path:
+          '$documentsPath/${useLegacy ? 'keramika' : 'agysha'}_recovery_'
           '$generation',
       namespace: useLegacy ? 'keramika' : 'agysha',
     );
@@ -158,15 +162,14 @@ class JsonFile {
   static FlutterSecureStorage _recoveryStorageFor(
     String generation, [
     String namespace = 'agysha',
-  ]) =>
-      FlutterSecureStorage(
-        aOptions: AndroidOptions(
-          storageNamespace: '${namespace}_recovery_$generation',
-          resetOnError: false,
-          migrateOnAlgorithmChange: true,
-          migrateWithBackup: true,
-        ),
-      );
+  ]) => FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      storageNamespace: '${namespace}_recovery_$generation',
+      resetOnError: false,
+      migrateOnAlgorithmChange: true,
+      migrateWithBackup: true,
+    ),
+  );
 
   @visibleForTesting
   static void useEncryptionKeyForTesting(List<int> key) {
@@ -322,6 +325,24 @@ class JsonFile {
     String? base,
   ) => _write(key, value, base: base, hasBase: true, updateObserved: false);
 
+  /// Как [writeWithSnapshot], но переживает гонку писателей: если файл уже
+  /// создан другим виджетом (например, история чата пишется и из основного
+  /// чата, и из плавающего окошка), снимок перечитывается и запись
+  /// повторяется один раз вместо ошибки «не удалось сохранить локальные
+  /// данные» на экране.
+  static Future<String> writeWithSnapshotRetrying(
+    String key,
+    String value,
+    String? base,
+  ) async {
+    try {
+      return await writeWithSnapshot(key, value, base);
+    } on JsonFileConflictException {
+      final fresh = await read(key);
+      return writeWithSnapshot(key, value, fresh);
+    }
+  }
+
   static Future<String> _write(
     String key,
     String value, {
@@ -394,8 +415,7 @@ class JsonFile {
     }
 
     if (parsed is Map &&
-        (parsed['format'] == _format ||
-            parsed['format'] == _legacyFormat)) {
+        (parsed['format'] == _format || parsed['format'] == _legacyFormat)) {
       try {
         final box = SecretBox(
           base64Decode(parsed['ciphertext'] as String),

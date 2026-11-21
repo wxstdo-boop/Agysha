@@ -758,7 +758,10 @@ class _SectionPillState extends State<SectionPill>
   /// разделы — поэтому тексты всегда выровнены между собой.
   double _fittedFontSize(List<String> labels, int count, double width) {
     if (labels.isEmpty || count <= 0 || width <= 0) return 14.0;
-    final cell = (width - 8) / count;
+    // Внутри ячейки ещё по 4 px отступа слева и справа (padding у подписи),
+    // и раньше они вычитались ОДИН раз на всю строку — при четырёх разделах
+    // самой длинной подписи не хватало пары пикселей, и она уходила в «…».
+    final cell = width / count - 8;
     for (final size in const [
       14.0,
       13.5,
@@ -770,6 +773,8 @@ class _SectionPillState extends State<SectionPill>
       10.5,
       10.0,
       9.5,
+      9.0,
+      8.5,
     ]) {
       final style = TextStyle(
         fontSize: size,
@@ -873,30 +878,37 @@ class _PillLabelState extends State<_PillLabel>
       color: const Color(0xFFFF453A).withValues(alpha: 0.66),
     );
     return RepaintBoundary(
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Text(
-            widget.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: baseStyle,
-          ),
-          AnimatedBuilder(
-            animation: _ctrl,
-            builder: (context, _) => Opacity(
-              opacity: _value.clamp(0.0, 1.0),
-              child: Text(
-                widget.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: activeStyle,
+      // Страховка кегля: если подпись всё-таки на пару пикселей шире ячейки
+      // (крупный системный шрифт, узкий экран), она мягко уменьшается ЦЕЛИКОМ,
+      // а не превращается в «Будиль…». Оба слоя — одна и та же строка, так
+      // что масштаб у них общий и кросс-фейд не «прыгает».
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: baseStyle,
+            ),
+            AnimatedBuilder(
+              animation: _ctrl,
+              builder: (context, _) => Opacity(
+                opacity: _value.clamp(0.0, 1.0),
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: activeStyle,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
