@@ -503,47 +503,16 @@ class AiGuideService {
     return _fixCapitalization(_closeDanglingWord(s));
   }
 
-  /// Провайдер обрывает ответ по лимиту токенов — часто ПОСРЕДИ слова
-  /// («…и тогда получит»). Обрезаем недописанное слово и ставим многоточие,
-  /// чтобы в чате не висело «получитс».
+  /// Провайдер может оборвать ответ по лимиту токенов. Раньше здесь
+  /// отрезались «хвосты»: последнее слово или всё после последней точки,
+  /// если она стояла во второй половине текста. Владелец читал это как
+  /// «пишет не до конца» — половина ответа пропадала. Теперь текст НЕ
+  /// режется: максимум добавляем многоточие, если он оборван.
   static String _closeDanglingWord(String input) {
     final s = input.trimRight();
     if (s.length < 120) return s;
     if (RegExp(r'[.!?…:;»)"\]]$').hasMatch(s)) return s;
-    final last = s.runes.last;
-    final isLetter =
-        (last >= 0x61 && last <= 0x7A) ||
-        (last >= 0x41 && last <= 0x5A) ||
-        (last >= 0x430 && last <= 0x44F) ||
-        (last >= 0x410 && last <= 0x42F) ||
-        last == 0x451 ||
-        last == 0x401;
-    if (!isLetter) {
-      // Оборвано на запятой/тире: если до последней целой фразы остаётся
-      // хотя бы половина текста, режем по ней — в чате не висит «и тогда,».
-      final lastStop = _lastSentenceEnd(s);
-      if (lastStop > s.length * 0.5) return s.substring(0, lastStop).trimRight();
-      return s;
-    }
-    final cut = s.lastIndexOf(RegExp(r'\s'));
-    if (cut < 60) return s;
-    final head = s.substring(0, cut).trimRight();
-    final lastStop = _lastSentenceEnd(head);
-    if (lastStop > head.length * 0.5) return head.substring(0, lastStop);
-    return '$head…';
-  }
-
-  /// Индекс сразу ПОСЛЕ последнего знака конца предложения (0 — не найден).
-  static int _lastSentenceEnd(String s) {
-    for (var i = s.length - 1; i >= 0; i--) {
-      final ch = s[i];
-      if (ch == '.' || ch == '!' || ch == '?' || ch == '…') {
-        // Точка в «т.д.»/числе не считается концом фразы.
-        if (ch == '.' && i + 1 < s.length && s[i + 1] != ' ') continue;
-        return i + 1;
-      }
-    }
-    return 0;
+    return '$s…';
   }
 
   /// Мелкие модели часто отдают ответ со строчной буквы («готов помочь…»)
@@ -557,8 +526,13 @@ class AiGuideService {
       if (c <= 0x20) continue; // пробелы/переводы строк — ждём букву
       final ch = String.fromCharCode(c);
       // Маркеры списка и кавычки не отменяют начало предложения.
-      if (ch == '-' || ch == '•' || ch == '*' || ch == '"' || ch == '«' ||
-          ch == '>' || ch == '(') {
+      if (ch == '-' ||
+          ch == '•' ||
+          ch == '*' ||
+          ch == '"' ||
+          ch == '«' ||
+          ch == '>' ||
+          ch == '(') {
         continue;
       }
       final lower =

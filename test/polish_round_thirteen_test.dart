@@ -371,22 +371,34 @@ void main() {
       {cs.surfaceContainerLow, cs.surfaceContainerLowest},
       reason: 'монохром — две соседние ступени поверхности, без фирменных цветов',
     );
-    final monoIcon = tester.widget<Icon>(
-      find.descendant(of: mono, matching: find.byType(Icon)),
+    // В монохроме глиф лежит в двух слоях: подложка-тень (цвета primary
+    // с прозрачностью) и сам значок под ShaderMask (белый, перекрашенный
+    // градиентом). Проверяем подложку: её RGB — фирменный primary.
+    final monoIcons = tester
+        .widgetList<Icon>(find.descendant(of: mono, matching: find.byType(Icon)))
+        .toList();
+    expect(monoIcons.length, 2, reason: 'тень + глиф');
+    expect(
+      monoIcons.first.color!.withValues(alpha: 1),
+      cs.primary,
+      reason: 'тень глифа — фирменного цвета',
     );
-    expect(monoIcon.color, cs.primary, reason: 'чернила глифа — как у иконок');
 
     // В цветном режиме градиент фирменный, значок белый — кнопка отличается.
     final colorGrad = decoOf(color).gradient! as LinearGradient;
     expect(colorGrad.colors.toSet().length, greaterThan(1));
     final colorIcon = tester.widget<Icon>(
-      find.descendant(of: color, matching: find.byType(Icon)),
+      find.descendant(of: color, matching: find.byType(Icon)).first,
     );
     expect(colorIcon.color, isNot(cs.primary));
 
-    // У монхрома блик погашен: внутри ровно один Container (медальон),
-    // у цветного — медальон плюс стеклянный блик.
-    expect(find.descendant(of: mono, matching: find.byType(Container)), findsOneWidget);
+    // У монохрома блик погашен: медальон плюс мягкое свечение под глифом.
+    // У цветного — медальон плюс стеклянный блик. Ни там, ни там нет
+    // лишних слоёв-«наклеек».
+    expect(
+      find.descendant(of: mono, matching: find.byType(Container)),
+      findsNWidgets(2),
+    );
     expect(
       find.descendant(of: color, matching: find.byType(Container)),
       findsNWidgets(2),

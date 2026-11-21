@@ -301,13 +301,6 @@ class AdaAvatar extends StatelessWidget {
                 (c) => dark ? Color.lerp(c, const Color(0xFF1A1114), 0.10)! : c,
               )
               .toList();
-    // Чернила глифа — фирменный primary, как у иконок таблетки; в цветном
-    // режиме — белый поверх градиента.
-    final iconColor = monochrome
-        ? cs.primary
-        // На тёмной теме глиф — чистый белый: полупрозрачный «молоко»
-        // (0.95) на приглушённом градиенте читался мутным пятном.
-        : (dark ? Colors.white : Colors.white.withValues(alpha: 0.95));
     // Направление градиента у каждого варианта своё (v.angle) — варианты с
     // близкими цветами всё равно читаются разными аватарками.
     final gx = math.cos(v.angle);
@@ -403,36 +396,93 @@ class AdaAvatar extends StatelessWidget {
                 ),
               ),
             ),
+          // Внутреннее тонкое кольцо: медальон читается чеканной печатью,
+          // а не плоской заливкой. Даёт «дорогой» край без цвета и без blur.
+          if (monochrome)
+            Positioned.fill(
+              child: Padding(
+                padding: EdgeInsets.all(size * 0.07),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: cs.primary.withValues(alpha: dark ? 0.26 : 0.16),
+                      width: 1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          // Мягкое свечение под глифом: объём без blur-фильтра.
+          if (monochrome)
+            Container(
+              width: size * 0.72,
+              height: size * 0.72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    cs.primary.withValues(alpha: dark ? 0.26 : 0.16),
+                    cs.primary.withValues(alpha: 0),
+                  ],
+                  stops: const [0.0, 1.0],
+                ),
+              ),
+            ),
           // Значок Ады: чуть крупнее и с мягкой тенью — на маленьких
           // размерах (18 px в пузырях) контур не «растворяется» в градиенте.
-          Icon(
-            v.icon,
-            // В монохроме глиф чуть крупнее и с лёгким свечением primary:
-            // медальон читается как печать, а не как серый значок.
-            size: size * (monochrome ? 0.50 : 0.46),
-            color: iconColor,
-            // Тень-подложка под глифом: на тёмной теме светлые края
-            // градиента «съедали» белый значок, и аватарка читалась
-            // мутным пятном. Плотная тень держит контур на любом фоне.
-            shadows: monochrome
-                ? [
-                    Shadow(
-                      color: cs.primary.withValues(alpha: dark ? 0.34 : 0.20),
-                      blurRadius: size * 0.18,
-                    ),
-                  ]
-                : [
-                    Shadow(
-                      // Плотнее и шире на тёмной теме: тонкая тень не
-                      // держала контур, и значки аватарок «плыли».
-                      color: Colors.black.withValues(alpha: dark ? 0.62 : 0.28),
-                      blurRadius: size * (dark ? 0.16 : 0.10),
-                      offset: Offset(0, size * 0.02),
-                    ),
-                  ],
-          ),
+          _iconGlyph(v, cs, monochrome: monochrome, dark: dark),
         ],
       ),
+    );
+  }
+
+  /// Глиф медальона. В монохроме — с мягким двухцветным градиентом
+  /// (primary → primary/tertiary), за счёт ShaderMask: свечение то же, но
+  /// значок выглядит «литым», а не однотонной заливкой. Тень под глифом
+  /// остаётся отдельным слоем, чтобы не перекрашивалась маской.
+  Widget _iconGlyph(
+    AdaVariant v,
+    ColorScheme cs, {
+    required bool monochrome,
+    required bool dark,
+  }) {
+    final glow = Shadow(
+      color: cs.primary.withValues(alpha: dark ? 0.34 : 0.20),
+      blurRadius: size * 0.18,
+    );
+    final icon = ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (rect) => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: monochrome
+            ? [
+                Color.lerp(cs.primary, Colors.white, dark ? 0.55 : 0.35)!,
+                cs.primary,
+                Color.lerp(cs.primary, cs.tertiary, 0.55)!,
+              ]
+            : [Colors.white, Colors.white.withValues(alpha: 0.92)],
+      ).createShader(rect),
+      child: Icon(
+        v.icon,
+        size: size * (monochrome ? 0.52 : 0.46),
+        color: Colors.white,
+      ),
+    );
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Тень — под маской, поэтому не перекрашивается и держит контур.
+        if (monochrome)
+          Icon(
+            v.icon,
+            size: size * 0.52,
+            color: cs.primary.withValues(alpha: dark ? 0.30 : 0.16),
+            shadows: [glow],
+          ),
+        icon,
+      ],
     );
   }
 }
