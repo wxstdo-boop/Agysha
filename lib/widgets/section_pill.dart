@@ -1,5 +1,3 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 
@@ -9,7 +7,6 @@ import '../services/reality_check_service.dart';
 import '../widgets/animated_fab_row.dart' show sectionPillVisible;
 import '../widgets/icons/agysha_icons.dart';
 import '../widgets/press_scale.dart';
-import '../widgets/smooth_tooltip.dart';
 
 /// Занимаемая таблеткой высота (отступы 4 + капсула 54 + отступ 6).
 /// Таблетка лежит в Stack НАД PageView, поэтому каждый экран-раздел
@@ -495,10 +492,8 @@ class _SectionPillState extends State<SectionPill>
     final count = iconBuilders.length;
     if (count == 0) return const SizedBox.shrink();
 
-    // КАПСУЛА (заливка, обводка, тень) не зависит от положения индикатора,
-    // поэтому лежит отдельным НЕПОДВИЖНЫМ слоем под движущимся: пока камень
-    // едет, капсула не перестраивается вообще. Экземпляр капсулы — const:
-    // элемент дерева не пересобирается даже при перестройке родителя.
+    // Таблетка разделов без фонов: полупрозрачные тексты разделов
+    // и плавно скользящая яркая красная плашка-индикатор выбранного раздела.
     return Padding(
       // Таблетка в Home чуть выше (под AppBar), компактный отступ.
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
@@ -506,60 +501,54 @@ class _SectionPillState extends State<SectionPill>
         child: SizedBox(
           width: 336,
           height: 54,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              const _GlassCapsule(child: SizedBox.expand()),
-              Padding(
-                padding: const EdgeInsets.all(4),
-                child: ClipRRect(
-                  clipBehavior: Clip.antiAlias,
-                  borderRadius: BorderRadius.circular(21),
-                  child: AnimatedBuilder(
-                    // ЕДИНЫЙ слушатель на все каналы изменения таблетки:
-                    // устраняет вложенный AnimatedBuilder, исключая двойную пересборку
-                    // дерева на каждый тик (нет микрофризов и дёрганий).
-                    animation: Listenable.merge([
-                      _edgeSettle,
-                      _landingCtrl,
-                      _edgePullNotifier,
-                      sectionCurrentIndex,
-                      sectionDragPage,
-                      sectionRailPage,
-                    ]),
-                    builder: (context, _) {
-                      final current = sectionCurrentIndex.value;
-                      final dragPage = sectionDragPage.value;
-                      final page = sectionRailPage.value;
-                      final cs = Theme.of(context).colorScheme;
-                      final dark =
-                          Theme.of(context).brightness == Brightness.dark;
-                      double rawPage;
-                      if (_dragging && dragPage != null) {
-                        rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
-                      } else if (_landingCtrl.isAnimating) {
-                        final t = Curves.easeOutCubic.transform(_landingCtrl.value);
-                        final base = page.isFinite ? page : current.toDouble();
-                        rawPage = _landingFrom + (base - _landingFrom) * t;
-                      } else {
-                        // Непрерывное следование за каруселью без ступенчатых мертвых зон
-                        rawPage = page.isFinite ? page : current.toDouble();
-                      }
-                      return _buildStoneRow(
-                        context: context,
-                        cs: cs,
-                        dark: dark,
-                        current: current,
-                        rawPage: rawPage,
-                        count: count,
-                        icons: iconBuilders,
-                        labels: labels,
-                      );
-                    },
-                  ),
-                ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: ClipRRect(
+              clipBehavior: Clip.antiAlias,
+              borderRadius: BorderRadius.circular(21),
+              child: AnimatedBuilder(
+                // ЕДИНЫЙ слушатель на все каналы изменения таблетки:
+                // устраняет вложенный AnimatedBuilder, исключая двойную пересборку
+                // дерева на каждый тик (нет микрофризов и дёрганий).
+                animation: Listenable.merge([
+                  _edgeSettle,
+                  _landingCtrl,
+                  _edgePullNotifier,
+                  sectionCurrentIndex,
+                  sectionDragPage,
+                  sectionRailPage,
+                ]),
+                builder: (context, _) {
+                  final current = sectionCurrentIndex.value;
+                  final dragPage = sectionDragPage.value;
+                  final page = sectionRailPage.value;
+                  final cs = Theme.of(context).colorScheme;
+                  final dark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  double rawPage;
+                  if (_dragging && dragPage != null) {
+                    rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
+                  } else if (_landingCtrl.isAnimating) {
+                    final t = Curves.easeOutCubic.transform(_landingCtrl.value);
+                    final base = page.isFinite ? page : current.toDouble();
+                    rawPage = _landingFrom + (base - _landingFrom) * t;
+                  } else {
+                    // Непрерывное следование за каруселью без ступенчатых мертвых зон
+                    rawPage = page.isFinite ? page : current.toDouble();
+                  }
+                  return _buildStoneRow(
+                    context: context,
+                    cs: cs,
+                    dark: dark,
+                    current: current,
+                    rawPage: rawPage,
+                    count: count,
+                    icons: iconBuilders,
+                    labels: labels,
+                  );
+                },
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -615,12 +604,12 @@ class _SectionPillState extends State<SectionPill>
       anchorX = stretch < 0 ? 1.0 : -1.0;
       scaleX = 1.0 + 0.65 * edgeStretch;
       scaleY = 1.0 - 0.06 * edgeStretch;
-      capRadius = 22.0 + 8.0 * edgeStretch;
+      capRadius = 20.0 + 6.0 * edgeStretch;
     } else {
       anchorX = 0.0;
       scaleX = 1.0 + 0.12 * wave;
       scaleY = 1.0 - 0.02 * wave;
-      capRadius = 22.0 + 2.0 * wave;
+      capRadius = 20.0 + 2.0 * wave;
     }
 
     return Stack(
@@ -635,221 +624,119 @@ class _SectionPillState extends State<SectionPill>
             scaleY: scaleY,
             child: FractionallySizedBox(
               widthFactor: 1.0 / count,
-              heightFactor: 1,
+              heightFactor: 0.90,
               child: RepaintBoundary(
                 child: _GlassStone(
                   capRadius: capRadius,
-                  primary: cs.primary,
-                  dark: dark,
                 ),
               ),
             ),
           ),
         ),
-            // Тяга пальцем: как в выборе приоритета — камень
-            // едет за пальцем, а отпускание доводит его до
-            // ближайшего раздела пружиной Home. Тап по иконке
-            // при этом остаётся тапом: арбитр жестов отдаёт
-            // победу перетаскиванию при сдвиге, а при
-            // отпускании без движения — тапу.
-            //
-            // DragStartBehavior.start — точка старта берётся в момент
-            // РАСПОЗНАВАНИЯ жеста (после touch-slop), а не в момент касания:
-            // иначе первый же update приносил позицию «касание + slop», и
-            // камень прыгал на ~18 px в первом кадре — тот самый скачок при
-            // лёгкой тяге. Дальше камень едет за пальцем 1:1.
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              dragStartBehavior: DragStartBehavior.start,
-              onHorizontalDragStart: (d) => _dragStart(d, count),
-              onHorizontalDragUpdate: (d) => _dragUpdate(d, count),
-              onHorizontalDragEnd: (_) => _dragEnd(count),
-              onHorizontalDragCancel: _dragCancel,
-              child: Row(
-                children: List.generate(count, (i) {
-                  final label = i < labels.length ? labels[i] : '';
-                  final proximity = (1.0 - (p - i).abs()).clamp(0.0, 1.0);
-                  final isSelected = selectedIndex == i;
-                  // Фигура и иконка квантуются ОДНИМ числом (48 ступеней).
-                  // Фигура по 12 ступеням, а иконка непрерывно — два слоя
-                  // меняли цвет в разном темпе и «проскальзывали» друг
-                  // относительно друга: это и было мерцание при перетяжке.
-                  // Одна сетка ступеней у обоих: смена цвета дискретная, но
-                  // 48 ступеней на секцию глазом не отделяются от
-                  // непрерывности (шаг ≈ 2 %), а CustomPaint перерисовывается
-                  // лишь на смене ступени — без мерцания и без шейдерного
-                  // шторма на каждый кадр.
-                  final badgeT = (proximity * 48).round() / 48;
-                  final textColor = Color.lerp(
-                    dark
-                        ? Colors.white.withValues(alpha: 0.42)
-                        : Colors.black.withValues(alpha: 0.45),
-                    dark ? Colors.white : cs.onSurface,
-                    badgeT,
-                  )!;
-                  return Expanded(
-                    // Подсказка: long-press не должен красть протяжку.
-                    // Арбитр жестов, ждавший 350 мс, начинал тягу только
-                    // после зависания, поэтому жест стартует сразу от касания
-                    // (DragStartBehavior.down), а ожидание тултипа длиннее
-                    // (500 мс) — на быстром «зажал и повёл» выигрывает
-                    // протяжка. Пока палец удерживается без движения, тултип
-                    // по-прежнему покажется.
-                    child: SmoothTooltip(
-                      message: label,
-                      waitDuration: const Duration(milliseconds: 500),
-                      preferredAbove: true,
-                      child: Semantics(
-                        button: true,
-                        selected: isSelected,
-                        label: label,
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(20),
-                            splashColor: Colors.transparent,
-                            highlightColor: Colors.transparent,
-                            // Переключение — ТОЛЬКО при ОТПУСКАНИИ пальца (onTap).
-                            // Касание/свайп по таблетке не меняет активный раздел «на лету».
-                            onTap: () {
-                              if (!mounted) return;
-                              Haptics.select();
-                              sectionCurrentIndex.value = i;
-                              sectionTabTap.value++;
-                            },
-                            child: Center(
-                              child: PressScale(
-                                enabled: !_dragging,
-                                pressedScale: 0.95,
-                                enableTilt: false,
-                                duration: const Duration(milliseconds: 160),
-                                releaseDuration: const Duration(
-                                  milliseconds: 260,
-                                ),
-                                child: Text(
-                                  label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: count >= 4 ? 12.5 : 13.5,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: textColor,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                              ),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          dragStartBehavior: DragStartBehavior.start,
+          onHorizontalDragStart: (d) => _dragStart(d, count),
+          onHorizontalDragUpdate: (d) => _dragUpdate(d, count),
+          onHorizontalDragEnd: (_) => _dragEnd(count),
+          onHorizontalDragCancel: _dragCancel,
+          child: Row(
+            children: List.generate(count, (i) {
+              final label = i < labels.length ? labels[i] : '';
+              final proximity = (1.0 - (p - i).abs()).clamp(0.0, 1.0);
+              final isSelected = selectedIndex == i;
+              final badgeT = (proximity * 48).round() / 48;
+              final textColor = Color.lerp(
+                dark
+                    ? Colors.white.withValues(alpha: 0.38)
+                    : Colors.black.withValues(alpha: 0.42),
+                Colors.white,
+                badgeT,
+              )!;
+              return Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: isSelected,
+                  label: label,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      splashColor: Colors.white.withValues(alpha: 0.16),
+                      highlightColor: Colors.white.withValues(alpha: 0.10),
+                      onTap: () {
+                        if (!mounted) return;
+                        Haptics.select();
+                        sectionCurrentIndex.value = i;
+                        sectionTabTap.value++;
+                      },
+                      child: Center(
+                        child: PressScale(
+                          enabled: !_dragging,
+                          pressedScale: 0.95,
+                          enableTilt: false,
+                          duration: const Duration(milliseconds: 140),
+                          releaseDuration: const Duration(
+                            milliseconds: 220,
+                          ),
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: count >= 4 ? 12.5 : 13.5,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: textColor,
+                              letterSpacing: -0.2,
                             ),
                           ),
                         ),
                       ),
                     ),
-                  );
-                }),
-              ),
-            ),
-          ],
-        );
-  }
-}
-
-/// Капсула разделов — полупрозрачное серое стекло с мягким размытием
-/// и тонкой деликатной кромкой.
-class _GlassCapsule extends StatelessWidget {
-  final Widget child;
-
-  const _GlassCapsule({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    // Полупрозрачная серая стеклянная поверхность
-    final grayBase = dark
-        ? const Color(0xFF1E2124).withValues(alpha: 0.72)
-        : const Color(0xFFE5E9EC).withValues(alpha: 0.82);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.25 : 0.08),
-            blurRadius: 14,
-            spreadRadius: -2,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(25),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(25),
-              color: grayBase,
-              border: Border.all(
-                color: dark
-                    ? Colors.white.withValues(alpha: 0.12)
-                    : Colors.black.withValues(alpha: 0.08),
-                width: 1.0,
-              ),
-            ),
-            child: child,
+                  ),
+                ),
+              );
+            }),
           ),
         ),
-      ),
+      ],
     );
   }
 }
 
-/// Выбранный раздел — полупрозрачный серый / акцентный скользящий камень.
+/// Выбранный раздел — плавно скользящая яркая красная плашка-индикатор.
 class _GlassStone extends StatelessWidget {
   final double capRadius;
-  final Color primary;
-  final bool dark;
 
   const _GlassStone({
     required this.capRadius,
-    required this.primary,
-    required this.dark,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Полупрозрачная серая плашка-индикатор под выбранным текстом
-    final stoneBase = dark
-        ? const Color(0xFF35393E).withValues(alpha: 0.88)
-        : Colors.white.withValues(alpha: 0.94);
-    final borderCol = dark
-        ? Colors.white.withValues(alpha: 0.18)
-        : Colors.black.withValues(alpha: 0.07);
-
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(capRadius),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFF453A),
+            Color(0xFFE53935),
+            Color(0xFFC62828),
+          ],
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.28 : 0.10),
-            blurRadius: 8,
-            spreadRadius: -1.5,
-            offset: const Offset(0, 1.5),
+            color: const Color(0xFFE53935).withValues(alpha: 0.42),
+            blurRadius: 10,
+            spreadRadius: -1,
+            offset: const Offset(0, 2),
           ),
         ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(capRadius),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(capRadius),
-            color: stoneBase,
-            border: Border.all(
-              color: borderCol,
-              width: 1.0,
-            ),
-          ),
-        ),
       ),
     );
   }

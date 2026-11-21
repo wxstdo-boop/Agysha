@@ -7,7 +7,82 @@ extension _SettingsSectionLook on _SettingsScreenState {
     BuildContext context,
     AgyshaAppState appState,
     ThemeData theme,
-  ) => <Widget>[
+  ) {
+    // Плашки карточки «О приложении» (Заметки о патче, GitHub,
+    // GitFlic, GitLab) с круглыми фонами, мягким зажатием и моментальным откликом.
+    Widget buildLinkTile({
+      required IconData icon,
+      required String label,
+      required VoidCallback onTap,
+      bool isUnderline = true,
+      Widget? trailing,
+    }) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: PressScale(
+          pressedScale: 0.98,
+          enableTilt: false,
+          duration: const Duration(milliseconds: 140),
+          releaseDuration: const Duration(milliseconds: 220),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.35 : 0.50,
+              ),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.30 : 0.45,
+                ),
+                width: 1.0,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                splashColor: theme.colorScheme.primary.withValues(alpha: 0.20),
+                highlightColor: theme.colorScheme.primary.withValues(alpha: 0.14),
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 11,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        icon,
+                        size: 19,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w600,
+                            decoration: isUnderline
+                                ? TextDecoration.underline
+                                : null,
+                          ),
+                        ),
+                      ),
+                      ?trailing,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return <Widget>[
     const SizedBox(height: 8),
     Card(
       shape: RoundedRectangleBorder(
@@ -82,205 +157,94 @@ extension _SettingsSectionLook on _SettingsScreenState {
               ],
             ),
             const SizedBox(height: 16),
-            // Плашки карточки «О приложении» (Заметки о патче, GitHub,
-            // GitFlic, GitLab) отдают нажатие ТАК ЖЕ плавно, как значки
-            // шапки: мягкое вдавливание при зажатии и плавный возврат,
-            // а не мгновенный InkWell-ripple.
-            PressScale(
-              pressedScale: 0.96,
-              duration: const Duration(milliseconds: 220),
-              releaseDuration: const Duration(milliseconds: 320),
-              child: InkWell(
-                onTap: _openChangelog,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.history_outlined,
-                        size: 18,
-                        color: theme.colorScheme.primary,
+            buildLinkTile(
+              icon: Icons.history_outlined,
+              label: Translations.t('patchNotes', context),
+              onTap: _openChangelog,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: theme.colorScheme.primary,
+                  ),
+                  if (kSelfUpdateEnabled) ...[
+                    const SizedBox(width: 8),
+                    const UpdatePill(),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 2),
+            buildLinkTile(
+              icon: Icons.code,
+              label: 'GitHub',
+              onTap: () => _openGitHub(),
+              trailing: Container(
+                padding: const EdgeInsets.all(1),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      theme.colorScheme.primary.withValues(
+                        alpha: theme.brightness == Brightness.dark
+                            ? 0.60
+                            : 0.45,
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          Translations.t('patchNotes', context),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w400,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
+                      theme.colorScheme.primary.withValues(
+                        alpha: theme.brightness == Brightness.dark
+                            ? 0.12
+                            : 0.10,
                       ),
-                      Icon(
-                        Icons.chevron_right,
-                        size: 18,
-                        color: theme.colorScheme.primary,
+                      theme.colorScheme.tertiary.withValues(
+                        alpha: theme.brightness == Brightness.dark
+                            ? 0.48
+                            : 0.30,
                       ),
-                      const SizedBox(width: 8),
-                      // В F-Droid-сборке самообновление выключено (магазин
-                      // переподписывает APK своим ключом) — таблетку не показываем.
-                      if (kSelfUpdateEnabled) const UpdatePill(),
                     ],
+                    stops: const [0, 0.55, 1],
+                  ),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer
+                        .withValues(
+                          alpha: theme.brightness == Brightness.dark
+                              ? 0.72
+                              : 0.78,
+                        ),
+                    borderRadius: BorderRadius.circular(998),
+                  ),
+                  child: Text(
+                    'Recommended',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            PressScale(
-              pressedScale: 0.96,
-              duration: const Duration(milliseconds: 220),
-              releaseDuration: const Duration(milliseconds: 320),
-              child: InkWell(
-                onTap: () => _openGitHub(),
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.code,
-                        size: 20,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'GitHub',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w600,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                      // Бейдж «Recommended» — в том же виде, что таблетка
-                      // обновления рядом: тонкое градиентное кольцо и
-                      // полупрозрачная подложка. Плоская кайма «разливалась»
-                      // и выбивалась из ряда.
-                      Container(
-                        padding: const EdgeInsets.all(1),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(999),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              theme.colorScheme.primary.withValues(
-                                alpha: theme.brightness == Brightness.dark
-                                    ? 0.60
-                                    : 0.45,
-                              ),
-                              theme.colorScheme.primary.withValues(
-                                alpha: theme.brightness == Brightness.dark
-                                    ? 0.12
-                                    : 0.10,
-                              ),
-                              theme.colorScheme.tertiary.withValues(
-                                alpha: theme.brightness == Brightness.dark
-                                    ? 0.48
-                                    : 0.30,
-                              ),
-                            ],
-                            stops: const [0, 0.55, 1],
-                          ),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primaryContainer
-                                .withValues(
-                                  alpha: theme.brightness == Brightness.dark
-                                      ? 0.72
-                                      : 0.78,
-                                ),
-                            borderRadius: BorderRadius.circular(998),
-                          ),
-                          child: Text(
-                            'Recommended',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+            const SizedBox(height: 2),
+            buildLinkTile(
+              icon: Icons.account_tree,
+              label: 'GitFlic',
+              onTap: () => _openLink(
+                'https://gitflic.ru/project/wetcorporation/agysha',
               ),
             ),
-            const SizedBox(height: 12),
-            PressScale(
-              pressedScale: 0.96,
-              duration: const Duration(milliseconds: 220),
-              releaseDuration: const Duration(milliseconds: 320),
-              child: InkWell(
-                onTap: () => _openLink(
-                  'https://gitflic.ru/project/wetcorporation/agysha',
-                ),
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.account_tree,
-                        size: 20,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'GitFlic',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w600,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            PressScale(
-              pressedScale: 0.96,
-              duration: const Duration(milliseconds: 220),
-              releaseDuration: const Duration(milliseconds: 320),
-              child: InkWell(
-                onTap: _openGitLab,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.merge,
-                        size: 20,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'GitLab',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w600,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            const SizedBox(height: 2),
+            buildLinkTile(
+              icon: Icons.merge,
+              label: 'GitLab',
+              onTap: _openGitLab,
             ),
           ],
         ),
@@ -429,4 +393,5 @@ extension _SettingsSectionLook on _SettingsScreenState {
       ),
     ),
   ];
+  }
 }
