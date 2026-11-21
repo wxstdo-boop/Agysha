@@ -172,7 +172,6 @@ class _PressScaleState extends State<PressScale>
         animation: Listenable.merge([_anim, _tiltNotifier]),
         builder: (context, child) {
           final v = isSwiping ? 0.0 : _anim.value;
-          if (v <= 0.0001) return child!;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
 
           final currentTilt =
@@ -194,20 +193,20 @@ class _PressScaleState extends State<PressScale>
           }
           matrix.scaleByDouble(s, s, 1.0, 1.0);
 
-          final transformed = Transform(
-            transform: matrix,
-            alignment: Alignment.center,
-            transformHitTests: false,
-            child: child,
-          );
-
-          if (widget.pressedOpacity >= 1.0) return transformed;
-          // Прозрачность — только пока палец реально вдавил (v > 0): при
-          // отпускании она возвращается к 1 вместе с масштабом. В покое
-          // Opacity 1.0 рисуется fast-path'ом без слоя.
+          // Дерево НЕ меняет форму между кадрами. Раньше в покое
+          // возвращался голый child, а при нажатии — child в Transform:
+          // Flutter пересоздавал поддерево вместе с распознавателями
+          // жестов, и нажатие, начатое до первого кадра анимации, терялось
+          // (кнопка «не нажималась с первого раза»). В покое единичная
+          // матрица и Opacity 1.0 не создают лишних слоёв.
           return Opacity(
             opacity: 1.0 - (1.0 - widget.pressedOpacity) * v,
-            child: transformed,
+            child: Transform(
+              transform: matrix,
+              alignment: Alignment.center,
+              transformHitTests: false,
+              child: child,
+            ),
           );
         },
         child: RepaintBoundary(child: widget.child),

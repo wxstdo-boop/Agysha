@@ -18,8 +18,9 @@ void main() {
   /// Масштаб по X. `getMaxScaleOnAxis()` не годится: у `Transform.scale` ось Z
   /// остаётся единичной, и максимум всегда равен 1.0.
   ///
-  /// В покое `PressScale` использует fast-path без `Transform` (`v <= 0.0001`),
-  /// поэтому отсутствие `Transform'а` означает масштаб ровно 1.0.
+  /// `PressScale` держит `Transform` в дереве всегда (стабильная структура
+  /// не рвёт распознаватели жестов), поэтому в покое берём единичную
+  /// матрицу из первого `Transform`.
   double scaleOf(WidgetTester tester, Finder pressScale) {
     final transforms = find.descendant(
       of: pressScale,
