@@ -19,4 +19,8 @@
 # повод для вызывающей стороны подставить запасной текст.
 set -uo pipefail
 
-grep -vE '^- (F-Droid|fdroid|ship|release|Документация|Переименование|docs|chore|ci|style|test|build|refactor)(\([^)]*\))?(:|$)' || true
+# Служебные префиксы, плюс отдельно вычищаем зависимости: строки dependabot
+# и «Bump x from a to b» — это не изменения приложения, и в заметках они
+# выглядели как мусор из чужого бота.
+grep -vE '^- (F-Droid|fdroid|ship|release|Документация|Переименование|docs|chore|ci|style|test|build|refactor|deps)(\([^)]*\))?(:|$)' \
+  | grep -viE 'dependabot|^- bump[ (:]|^- bump$' || true

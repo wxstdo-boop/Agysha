@@ -7,6 +7,7 @@ import 'package:audioplayers/audioplayers.dart';
 import '../models/wake_task.dart';
 import '../l10n/translations.dart';
 import '../utils/context_menu.dart';
+import '../utils/design_tokens.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/smooth_keyboard_body.dart';
@@ -298,22 +299,15 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // Фон прибит к ПОЛНОЙ высоте окна: `adjustResize` сжимает
-            // поверхность при подъёме клавиатуры, и непригвождённый градиент
-            // вслед за окном «опускался сзади». Полная высота = текущая
-            // высота + инсет клавиатуры, поэтому при её подъёме фон остаётся
-            // на месте, а не уезжает вверх вместе с контентом.
-            OverflowBox(
-              alignment: Alignment.topCenter,
-              minHeight:
-                  MediaQuery.sizeOf(context).height +
-                  MediaQuery.viewInsetsOf(context).bottom,
-              maxHeight:
-                  MediaQuery.sizeOf(context).height +
-                  MediaQuery.viewInsetsOf(context).bottom,
+            // Фон — ровно размер окна и НЕ зависит от клавиатуры.
+            // Раньше под minHeight подмешивался `viewInsets.bottom`: при
+            // подъёме клавиатуры градиент растягивался на её высоту, его
+            // цветовые полосы съезжали — читалось как «фон поднимается
+            // сзади». resizeToAvoidBottomInset выключен, окно не меняется,
+            // значит фон должен оставаться неподвижным.
+            Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(gradient: bgGradient),
-                child: const SizedBox.expand(),
               ),
             ),
             SmoothKeyboardBody(
@@ -480,39 +474,10 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                   child: SizedBox(
                     width: double.infinity,
-                    child: PressScale(
-                      pressedScale: 0.97,
-                      duration: const Duration(milliseconds: 160),
-                      releaseDuration: const Duration(milliseconds: 240),
-                      child: OutlinedButton.icon(
-                        onPressed: _finish,
-                        icon: const Icon(Icons.close_rounded, size: 20),
-                        label: Text(
-                          Translations.t('wtDismiss', context),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: isDark
-                              ? const Color(0xFF2E1920)
-                              : const Color(0xFFFFECEF),
-                          foregroundColor: theme.colorScheme.error,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          side: BorderSide(
-                            color: theme.colorScheme.error.withValues(
-                              alpha: isDark ? 0.35 : 0.45,
-                            ),
-                            width: 1.2,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                        ),
-                      ),
+                    child: _RedPillButton(
+                      label: Translations.t('wtDismiss', context),
+                      icon: Icons.close_rounded,
+                      onPressed: _finish,
                     ),
                   ),
                 ),
@@ -539,14 +504,9 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
         ),
         const SizedBox(height: 24),
         if (widget.isTest)
-          PressScale(
-            pressedScale: 0.96,
-            duration: const Duration(milliseconds: 160),
-            releaseDuration: const Duration(milliseconds: 220),
-            child: FilledButton(
-              onPressed: _finish,
-              child: Text(Translations.t('wtDismiss', context)),
-            ),
+          _RedPillButton(
+            label: Translations.t('wtDismiss', context),
+            onPressed: _finish,
           ),
       ],
     );
@@ -565,15 +525,11 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.alarm, size: 80, color: theme.colorScheme.primary),
-            const SizedBox(height: 16),
-            PressScale(
-              pressedScale: 0.96,
-              duration: const Duration(milliseconds: 160),
-              releaseDuration: const Duration(milliseconds: 220),
-              child: FilledButton(
-                onPressed: _finish,
-                child: Text(Translations.t('wtDismiss', context)),
-              ),
+            const SizedBox(height: 20),
+            _RedPillButton(
+              label: Translations.t('wtDismiss', context),
+              icon: Icons.alarm_off_rounded,
+              onPressed: _finish,
             ),
           ],
         );
@@ -861,69 +817,32 @@ class _PatternChallengeState extends State<_PatternChallenge> {
           ),
           _WrongLine(show: _wrong),
           const SizedBox(height: 16),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: _gridSize,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-            ),
-            itemCount: _gridSize * _gridSize,
-            itemBuilder: (context, i) {
-              final isHighlighted = highlightIdx.contains(i);
-              return PressScale(
-                // Клетка «запоминалки» тоже отдаёт вдавливанием.
-                pressedScale: 0.92,
-                duration: const Duration(milliseconds: 140),
-                releaseDuration: const Duration(milliseconds: 200),
-                child: GestureDetector(
-                  onTap: () => _tap(i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      // Квадраты — «камни»: объёмный градиент, светлая
-                      // верхняя кромка и глубокая тень. Подсвеченный —
-                      // горит цветом темы, введённый — мягкий след.
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isHighlighted
-                            ? [
-                                Color.lerp(cs.primary, Colors.white, 0.18)!,
-                                Color.lerp(cs.primary, Colors.black, 0.22)!,
-                              ]
-                            : _userInput.contains(i)
-                            ? [
-                                cs.primary.withValues(alpha: 0.36),
-                                cs.primary.withValues(alpha: 0.18),
-                              ]
-                            : [
-                                cs.surfaceContainerHigh,
-                                cs.surfaceContainerHighest,
-                              ],
-                      ),
-                      border: Border.all(
-                        color: isHighlighted
-                            ? Colors.white.withValues(alpha: 0.62)
-                            : cs.outline.withValues(alpha: 0.75),
-                        width: isHighlighted ? 1.8 : 1.1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isHighlighted
-                              ? cs.primary.withValues(alpha: 0.45)
-                              : Colors.black.withValues(alpha: 0.06),
-                          blurRadius: isHighlighted ? 12 : 5,
-                          spreadRadius: isHighlighted ? -2 : 0,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // Клетки — фиксированные квадраты с равными зазорами: сетка
+              // не «пляшет» от длины текста и не растягивается на всю
+              // ширину карточки (GridView это делал).
+              const gap = 10.0;
+              final side = ((constraints.maxWidth - gap * 2) / _gridSize).clamp(
+                56.0,
+                96.0,
+              );
+              return Wrap(
+                alignment: WrapAlignment.center,
+                spacing: gap,
+                runSpacing: gap,
+                children: List.generate(_gridSize * _gridSize, (i) {
+                  return _PatternCell(
+                    // Свой ключ: при перегенерации клетки не переиспользуют
+                    // чужое состояние подсветки.
+                    key: ValueKey('pattern_cell_$i'),
+                    index: i,
+                    side: side,
+                    highlighted: highlightIdx.contains(i),
+                    entered: _userInput.contains(i),
+                    onTap: () => _tap(i),
+                  );
+                }),
               );
             },
           ),
@@ -1045,9 +964,12 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
     // и обратно». Теперь смена — чистый кроссфейд в неизменном габарите.
     final cardW = min(400.0, MediaQuery.sizeOf(context).width - 48);
     final gridW = cardW - 48;
-    final perRow = ((gridW + 8) / 52).floor().clamp(1, _length);
+    // Плитка 48×56: в неё цифра кеглем 26 влезает с запасом по бокам.
+    // Раньше было 44×52 и при кегле titleLarge цифры прижимались к кромкам
+    // и визуально «не умещались» в клетку.
+    final perRow = ((gridW + 8) / 56).floor().clamp(1, _length);
     final rows = (_length / perRow).ceil();
-    final tilesH = rows * 52.0 + (rows - 1) * 8.0;
+    final tilesH = rows * 56.0 + (rows - 1) * 8.0;
     final bodyH = tilesH + 62.0;
 
     return Padding(
@@ -1092,11 +1014,11 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
                           ...List.generate(_numbers.length, (i) {
                             final n = _numbers[i];
                             return Container(
-                              width: 44,
-                              height: 52,
+                              width: 48,
+                              height: 56,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(14),
                                 // Плитка «запомни» — ЧЕРНЕЕ: обе ступени
                                 // градиента утоплены к тёмному, блик сверху
                                 // остаётся лёгким, свечение в тон акцента.
@@ -1134,6 +1056,8 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
                                 index: i,
                                 text: '$n',
                                 style: theme.textTheme.titleLarge?.copyWith(
+                                  fontSize: 26,
+                                  height: 1.0,
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
                                   shadows: [
@@ -1164,8 +1088,8 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
                             children: List.generate(
                               _length,
                               (i) => SizedBox(
-                                width: 44,
-                                height: 52,
+                                width: 48,
+                                height: 56,
                                 child: Container(
                                   decoration: BoxDecoration(
                                     // Тёмный вкладыш с двойной кромкой:
@@ -1194,7 +1118,8 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
                                   child: Center(
                                     child: SmoothTyping(
                                       controller: _ctrls[i],
-                                      style: theme.textTheme.titleLarge,
+                                      style: theme.textTheme.titleLarge
+                                          ?.copyWith(fontSize: 24, height: 1.1),
                                       builder: (style) => TextField(
                                         style: style,
                                         cursorOpacityAnimates: true,
@@ -1426,10 +1351,7 @@ class _TaskTypeBadgeState extends State<_TaskTypeBadge>
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      widget.a,
-                      widget.b,
-                    ],
+                    colors: [widget.a, widget.b],
                   ),
                   // Верхний зеркальный блик + светлая нижняя грань.
                   border: Border.all(
@@ -1619,77 +1541,12 @@ class _CheckButton extends StatefulWidget {
 }
 
 class _CheckButtonState extends State<_CheckButton> {
-  bool _pressed = false;
-
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final on = widget.enabled;
-    return Semantics(
-      button: true,
-      enabled: on,
+    return _RedPillButton(
       label: widget.label,
-      child: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) => setState(() => _pressed = true),
-        onPointerUp: (_) => setState(() => _pressed = false),
-        onPointerCancel: (_) => setState(() => _pressed = false),
-        child: GestureDetector(
-          // Нажатие «в пустоту» при недоступной кнопке не должно отдавать
-          // ложной обратной связи.
-          onTap: on ? widget.onPressed : null,
-          child: AnimatedScale(
-            scale: (_pressed && on) ? 0.95 : 1.0,
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOutCubic,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: on
-                      ? [
-                          cs.primary,
-                          Color.lerp(cs.primary, cs.tertiary, 0.65)!,
-                        ]
-                      : [cs.surfaceContainerHighest, cs.surfaceContainerHigh],
-                ),
-                border: Border.all(
-                  color: on
-                      ? Colors.white.withValues(alpha: 0.45)
-                      : cs.outlineVariant.withValues(alpha: 0.5),
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: cs.primary.withValues(alpha: on ? 0.38 : 0.0),
-                    blurRadius: 18,
-                    spreadRadius: -1,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.3,
-                  color: on
-                      ? cs.onPrimary
-                      : cs.onSurfaceVariant.withValues(alpha: 0.7),
-                ),
-                child: Text(widget.label),
-              ),
-            ),
-          ),
-        ),
-      ),
+      onPressed: widget.enabled ? widget.onPressed : null,
+      compact: true,
     );
   }
 }
@@ -1724,6 +1581,246 @@ class _PopNumber extends StatelessWidget {
         child: Transform.scale(scale: 0.5 + 0.5 * v, child: child),
       ),
       child: Text(text, style: style),
+    );
+  }
+}
+
+/// Красная «таблетка» экрана будильника: «Отключить будильник» и «Проверить».
+///
+/// Раньше это были штатные FilledButton/OutlinedButton — плоские, с резким
+/// отключением и без тактильного отклика, на фоне остального приложения они
+/// читались чужими. Теперь это та же стеклянная кровавая таблетка, что у
+/// разделов: постоянная форма, винный градиент, верхний блик, мягкая тень,
+/// 3D-наклон по пальцу и плавная отдача уменьшения (PressScale).
+class _RedPillButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+
+  /// Чуть плотнее и ниже: кнопка задачи не должна растягивать карточку.
+  final bool compact;
+
+  const _RedPillButton({
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final on = onPressed != null;
+    final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final radius = BorderRadius.circular(999);
+    final child = AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 24 : 20,
+        vertical: compact ? 13 : 15,
+      ),
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: on
+              ? const [Color(0xFFD8202F), BrandColors.blood]
+              : [
+                  cs.surfaceContainerHighest.withValues(alpha: 0.9),
+                  cs.surfaceContainerHigh.withValues(alpha: 0.9),
+                ],
+        ),
+        border: Border.all(
+          color: on
+              ? Colors.white.withValues(alpha: 0.34)
+              : cs.outlineVariant.withValues(alpha: 0.5),
+          width: 1.1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: on
+                ? BrandColors.blood.withValues(alpha: dark ? 0.45 : 0.32)
+                : Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            spreadRadius: -4,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (icon != null) ...[
+            Icon(
+              icon,
+              size: 19,
+              color: on
+                  ? Colors.white
+                  : cs.onSurfaceVariant.withValues(alpha: 0.7),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+                color: on
+                    ? Colors.white
+                    : cs.onSurfaceVariant.withValues(alpha: 0.7),
+                shadows: on
+                    ? [
+                        Shadow(
+                          color: Colors.black.withValues(alpha: 0.22),
+                          blurRadius: 6,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Semantics(
+      button: true,
+      enabled: on,
+      label: label,
+      child: PressScale(
+        enabled: on,
+        pressedScale: 0.965,
+        enableTilt: true,
+        duration: const Duration(milliseconds: 150),
+        releaseDuration: const Duration(milliseconds: 420),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          // Нажатие по недоступной кнопке не должно давать отклика.
+          onTap: onPressed,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Клетка «Запомнить паттерн».
+///
+/// Раньше это был AnimatedContainer внутри GridView: сетка пересчитывалась
+/// от ширины карточки, клетки «прыгали» при появлении, а подсветка
+/// переключалась градиентом почти кадром. Теперь квадрат живёт в Wrap с
+/// фиксированной стороной, появляется каскадом (fade + мягкий масштаб),
+/// подсветка перетекает цветом и лёгким «вдохом» масштаба, а нажатие
+/// отдаёт тем же вдавливанием, что и остальные кнопки приложения.
+class _PatternCell extends StatelessWidget {
+  final int index;
+  final double side;
+  final bool highlighted;
+  final bool entered;
+  final VoidCallback onTap;
+
+  const _PatternCell({
+    super.key,
+    required this.index,
+    required this.side,
+    required this.highlighted,
+    required this.entered,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final borderColor = highlighted
+        ? Colors.white.withValues(alpha: 0.55)
+        : entered
+        ? cs.primary.withValues(alpha: 0.55)
+        : cs.outline.withValues(alpha: 0.42);
+    final fill = highlighted
+        ? [
+            Color.lerp(cs.primary, Colors.white, 0.22)!,
+            Color.lerp(cs.primary, Colors.black, 0.16)!,
+          ]
+        : entered
+        ? [
+            cs.primary.withValues(alpha: 0.40),
+            cs.primary.withValues(alpha: 0.22),
+          ]
+        : [
+            cs.surfaceContainerHigh,
+            cs.surfaceContainerHighest.withValues(alpha: 0.85),
+          ];
+
+    return TweenAnimationBuilder<double>(
+      // Каскад: каждая следующая клетка приходит на 40 мс позже — сетка
+      // проявляется волной, а не возникает целиком одним кадром.
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 300 + 40 * index),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, child) => Opacity(
+        opacity: v,
+        child: Transform.scale(scale: 0.90 + 0.10 * v, child: child),
+      ),
+      child: PressScale(
+        pressedScale: 0.93,
+        duration: const Duration(milliseconds: 140),
+        releaseDuration: const Duration(milliseconds: 240),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AnimatedScale(
+            scale: highlighted ? 1.05 : 1.0,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              width: side,
+              height: side,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: fill,
+                ),
+                border: Border.all(
+                  color: borderColor,
+                  width: highlighted ? 1.6 : 1.1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: highlighted
+                        ? cs.primary.withValues(alpha: 0.40)
+                        : Colors.black.withValues(
+                            alpha:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? 0.20
+                                : 0.07,
+                          ),
+                    blurRadius: highlighted ? 16 : 6,
+                    spreadRadius: highlighted ? -2 : 0,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

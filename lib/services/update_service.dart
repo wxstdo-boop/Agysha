@@ -17,9 +17,11 @@ const String kUpdateRepoName = 'agysha';
 /// Включено ли самообновление. F-Droid/IzzyOnDroid переподписывают APK своим
 /// ключом, поэтому GitHub-APK поверх такой сборки не встанет — в этих сборках
 /// самообновление выключено через `--dart-define=AGYSHA_NO_SELF_UPDATE=true`.
-const bool kSelfUpdateEnabled = !bool.fromEnvironment(
-  'AGYSHA_NO_SELF_UPDATE',
-);
+const bool kSelfUpdateEnabled = !bool.fromEnvironment('AGYSHA_NO_SELF_UPDATE');
+
+/// Пункт журнала для выпуска, из которого нечего показать. Заменяет прежнее
+/// «Обновление 1.6.231» — строка без смысла, читавшаяся как «заметки нет».
+const String kQuietReleaseNote = 'Полировка интерфейса и стабильность';
 
 /// Описание доступного обновления из последнего GitHub-релиза.
 class UpdateInfo {
@@ -238,9 +240,7 @@ class UpdateService {
       }
       if (entries.isEmpty) return null;
       // Свежие сверху: имена версий сравниваем по числам, а не строками.
-      entries.sort(
-        (a, b) => compareVersionNames(b.version, a.version),
-      );
+      entries.sort((a, b) => compareVersionNames(b.version, a.version));
       _changelogCache = entries;
       _changelogCacheAt = now;
       return entries;
@@ -284,7 +284,10 @@ class UpdateService {
               : (published.length >= 16 ? published.substring(11, 16) : ''));
     final changes = parseReleaseNotes((json['body'] as String?) ?? '');
     if (changes.isEmpty) {
-      changes.add('Обновление $version');
+      // Раньше здесь стояло «Обновление 1.6.231» — пункт без содержания,
+      // который читался как «заметки нет». Если разобрать нечего, честно
+      // говорим, что выпуск про полировку, а не оставляем пустоту.
+      changes.add(kQuietReleaseNote);
     }
     return ChangelogEntry(
       version: version,
@@ -315,15 +318,14 @@ class UpdateService {
       if (line.isEmpty) continue;
       // Заголовки, таблицы SHA, служебные строки — не пункты.
       if (line.startsWith('#') || line.startsWith('|')) continue;
+      // Авто-заметки зависимостей (dependabot) — служебный шум.
+      if (line.toLowerCase().contains('dependabot')) continue;
       if (line.toLowerCase().startsWith('**full changelog**')) continue;
       final bullet = RegExp(r'^[*-]\s+').firstMatch(line);
       if (bullet == null) continue;
       var text = line.substring(bullet.end).trim();
       // «… by @user in https://…» → «…»
-      text = text.replaceFirst(
-        RegExp(r'\s+by\s+@[\w-]+(\s+in\s+\S+)?$'),
-        '',
-      );
+      text = text.replaceFirst(RegExp(r'\s+by\s+@[\w-]+(\s+in\s+\S+)?$'), '');
       // [текст](url) → текст
       text = text.replaceAllMapped(
         RegExp(r'\[([^\]]+)\]\([^)]*\)'),
@@ -346,18 +348,33 @@ class UpdateService {
       // метка для истории, а не то, что человеку важно в «Что нового».
       // Оставленный, он читается ровно как «иишный» сырой git log.
       //
+      // Пустая авто-заметка «Обновление» / «Обновление 1.6.231» — заглушка
+      // из CI, а не изменение. Отбрасываем её, чтобы журнал показывал
+      // человеческий текст (см. kQuietReleaseNote). Только точная форма: («Обновление», «Обновление 1.6.231»):
+      // настоящие заметки вроде «Обновление из приложения ставится…»
+      // начинаются так же и должны остаться.
+      if (RegExp(
+        r'^обновление(\s+v?\d+(?:\.\d+)*(?:\+\d+)?)?\.?$',
+        caseSensitive: false,
+      ).hasMatch(text)) {
+        continue;
+      }
+      // «Bump foo from 1.0 to 1.1» — зависимость, а не изменение приложения.
+      if (RegExp(r'^bump\b', caseSensitive: false).hasMatch(text)) continue;
       // Служебные типы (`ci:`, `chore(deps):`, `release:`, …) отсеиваем ДО
       // снятия префикса: после снятия от метки ничего не остаётся, и коммит
       // выглядел бы полезной заметкой.
       if (_isInternalNote(text)) continue;
-      text = text.replaceFirst(
-        RegExp(
-          r'^(feat|fix|perf|refactor|style|docs|chore|build|ci|test|'
-          r'polish|improve|tweak)(\([^)]*\))?!?:\s+',
-          caseSensitive: false,
-        ),
-        '',
-      ).trim();
+      text = text
+          .replaceFirst(
+            RegExp(
+              r'^(feat|fix|perf|refactor|style|docs|chore|build|ci|test|'
+              r'polish|improve|tweak)(\([^)]*\))?!?:\s+',
+              caseSensitive: false,
+            ),
+            '',
+          )
+          .trim();
       // Хвостовая точка/запятая/точка с запятой в списке лишняя.
       text = text.replaceAll(RegExp(r'[.;,]+$'), '').trim();
       if (text.isEmpty) continue;

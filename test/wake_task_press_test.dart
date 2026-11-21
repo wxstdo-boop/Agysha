@@ -40,10 +40,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    final pressScale = find.ancestor(
-      of: find.byType(FilledButton),
-      matching: find.byType(PressScale),
-    );
+    // Кнопка окна пробуждения — красная таблетка (как таблетки разделов):
+    // её видно по тексту, а отдачу даёт PressScale вокруг неё.
+    final label = find.text('Отключить будильник');
+    expect(label, findsWidgets);
+    final pressScale = find
+        .ancestor(of: label.first, matching: find.byType(PressScale))
+        .first;
     expect(
       pressScale,
       findsOneWidget,
@@ -52,9 +55,7 @@ void main() {
 
     expect(scaleOf(tester, pressScale), closeTo(1.0, 0.001));
 
-    final gesture = await tester.startGesture(
-      tester.getCenter(pressScale),
-    );
+    final gesture = await tester.startGesture(tester.getCenter(pressScale));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
     expect(

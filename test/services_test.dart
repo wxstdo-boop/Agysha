@@ -699,31 +699,35 @@ void main() {
       ]);
     });
 
-    test('срезает технический хвост в скобках — пункт читается живой фразой',
-        () {
-      const body = '''
+    test(
+      'срезает технический хвост в скобках — пункт читается живой фразой',
+      () {
+        const body = '''
 * fdroid: рецепт на v1.6.122+45194 и его changelog (вне рамок правки)
 * Самообновление: тихий путь владельца обновлений вместо диалога (без обещаний про Play Protect)
 ''';
-      expect(UpdateService.parseReleaseNotes(body), [
-        'Fdroid: рецепт на v1.6.122+45194 и его changelog',
-        'Самообновление: тихий путь владельца обновлений вместо диалога',
-      ]);
-    });
+        expect(UpdateService.parseReleaseNotes(body), [
+          'Fdroid: рецепт на v1.6.122+45194 и его changelog',
+          'Самообновление: тихий путь владельца обновлений вместо диалога',
+        ]);
+      },
+    );
 
-    test('срезает префикс conventional-commit — пункт читается по-человечески',
-        () {
-      const body = '''
+    test(
+      'срезает префикс conventional-commit — пункт читается по-человечески',
+      () {
+        const body = '''
 * feat: профиль, шапка с именем и человечные заметки
 * fix(alarm): будильники звонят, даже если уведомления выключены
 * perf!: ускорил холодный старт
 ''';
-      expect(UpdateService.parseReleaseNotes(body), [
-        'Профиль, шапка с именем и человечные заметки',
-        'Будильники звонят, даже если уведомления выключены',
-        'Ускорил холодный старт',
-      ]);
-    });
+        expect(UpdateService.parseReleaseNotes(body), [
+          'Профиль, шапка с именем и человечные заметки',
+          'Будильники звонят, даже если уведомления выключены',
+          'Ускорил холодный старт',
+        ]);
+      },
+    );
 
     test('служебные коммиты не попадают в заметки', () {
       const body = '''
@@ -733,7 +737,9 @@ void main() {
 * chore(deps): bump actions/checkout
 * Плавность экрана привычек
 ''';
-      expect(UpdateService.parseReleaseNotes(body), ['Плавность экрана привычек']);
+      expect(UpdateService.parseReleaseNotes(body), [
+        'Плавность экрана привычек',
+      ]);
     });
 
     test('дубликаты пунктов схлопываются', () {
@@ -748,19 +754,26 @@ void main() {
       final entry = UpdateService.parseRelease({
         'tag_name': 'v1.6.104+45176',
         'published_at': '2026-11-08T12:34:56Z',
-        'body': "* Add a live changelog by @wxstdo-boop in https://x/y/pull/9\n",
+        'body':
+            "* Add a live changelog by @wxstdo-boop in https://x/y/pull/9\n",
       });
       expect(entry, isNotNull);
       expect(entry!.version, '1.6.104');
       // Дата и время — в ЛОКАЛЬНОЙ зоне (GitHub отдаёт UTC). Сверяем с
       // тем же пересчётом, чтобы тест не зависел от зоны машины.
       final local = DateTime.parse('2026-11-08T12:34:56Z').toLocal();
-      expect(entry.date, '${local.year.toString().padLeft(4, '0')}-'
-          '${local.month.toString().padLeft(2, '0')}-'
-          '${local.day.toString().padLeft(2, '0')}');
-      expect(entry.time, '${local.hour.toString().padLeft(2, '0')}:'
-          '${local.minute.toString().padLeft(2, '0')}:'
-          '${local.second.toString().padLeft(2, '0')}');
+      expect(
+        entry.date,
+        '${local.year.toString().padLeft(4, '0')}-'
+        '${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')}',
+      );
+      expect(
+        entry.time,
+        '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}:'
+        '${local.second.toString().padLeft(2, '0')}',
+      );
       expect(entry.changes, ['Add a live changelog']);
     });
 
@@ -770,7 +783,7 @@ void main() {
         'published_at': '2026-11-08T00:00:00Z',
         'body': '## SHA-256 суммы\n\n| Файл | SHA-256 |\n',
       });
-      expect(entry!.changes, ['Обновление 1.6.104']);
+      expect(entry!.changes, [kQuietReleaseNote]);
     });
 
     test('первая буква пункта — заглавная', () {
@@ -834,26 +847,29 @@ void main() {
       await AlarmService().load();
     }
 
-    test('прозвеневший одноразовый гасится, повторяющийся не трогаем', () async {
-      await seed([
-        alarmJson(id: 'once', repeatDays: const []),
-        alarmJson(id: 'daily', repeatDays: const [1, 2, 3, 4, 5, 6, 7]),
-      ]);
+    test(
+      'прозвеневший одноразовый гасится, повторяющийся не трогаем',
+      () async {
+        await seed([
+          alarmJson(id: 'once', repeatDays: const []),
+          alarmJson(id: 'daily', repeatDays: const [1, 2, 3, 4, 5, 6, 7]),
+        ]);
 
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(schedulerChannel, (call) async {
-            if (call.method == 'consumeFiredOneShots') {
-              return <int>['once'.hashCode];
-            }
-            return true;
-          });
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(schedulerChannel, (call) async {
+              if (call.method == 'consumeFiredOneShots') {
+                return <int>['once'.hashCode];
+              }
+              return true;
+            });
 
-      final disarmed = await AlarmService().disarmFiredOneShots();
+        final disarmed = await AlarmService().disarmFiredOneShots();
 
-      expect(disarmed, 1);
-      expect(AlarmService().getById('once')!.enabled, isFalse);
-      expect(AlarmService().getById('daily')!.enabled, isTrue);
-    });
+        expect(disarmed, 1);
+        expect(AlarmService().getById('once')!.enabled, isFalse);
+        expect(AlarmService().getById('daily')!.enabled, isTrue);
+      },
+    );
 
     test('повторный вызов не гасит будильник, включённый заново', () async {
       await seed([alarmJson(id: 'once', repeatDays: const [])]);
