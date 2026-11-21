@@ -51,6 +51,11 @@ class AlarmForegroundService : Service() {
     /// только если звонит именно он, а не любой другой.
     private var ringingCode: Int = -1
 
+    /// id уведомления текущего звонка (совпадает с id будильника). Нужен,
+    /// чтобы убрать карточку прошлого звонка, если в ту же минуту звенит
+    /// второй будильник, и чтобы не оставить карточку после остановки.
+    private var currentNotificationId: Int = 0
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -109,7 +114,6 @@ class AlarmForegroundService : Service() {
         // Запоминаем, чей это звонок: по нему адресная остановка решает,
         // гасить ли текущий звук (см. StopReceiver / stopFor).
         ringingCode = intent?.getIntExtra("ring_code", -1) ?: -1
-
         val soundName = intent?.getStringExtra("sound_name") ?: "alarm_default"
         val customPath = intent?.getStringExtra("custom_sound_path")
         val vibrate = intent?.getBooleanExtra("vibrate", true) ?: true
@@ -181,23 +185,30 @@ class AlarmForegroundService : Service() {
         } catch (_: Exception) {}
     }
 
+    /**
+     * ЕДИНАЯ карточка звонящего будильника.
+     *
+     * Раньше в шторке висели две: эта (FGS, «Звонок будильника») и вторая из
+     * [AlarmReceiver.showNotification] с кнопками. Пользователь видел дубль.
+     * Теперь карточку рисует только сервис — с теми же кнопками
+     * «Отключить»/«Открыть», full-screen intent и id будильника, поэтому
+     * отмена/свайп/остановка работают по тому же id, что и раньше.
+     */
     private fun startRingingForeground(intent: Intent?) {
         val title = intent?.getStringExtra("title") ?: "Будильник"
         val body = intent?.getStringExtra("body") ?: ""
         val payload = intent?.getStringExtra("payload") ?: ""
+        val fullscreen = intent?.getBooleanExtra("fullscreen", true) ?: true
+        val ringId = intent?.getIntExtra("ring_code", 0) ?: 0
 
-        // Низкая важность: это НЕ второе «всплывающее» уведомление, а
-        // табличка, держащая сервис живым. Звук — у MediaPlayer ниже.
+        // Канал обязан быть важным: на MIN Android не показывает кнопки и не
+        // даёт поднять экран по full-screen intent. Звука у канала нет —
+        // звенит MediaPlayer сервиса, вибрацию тоже держит сервис.
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(
-                // FIX (дубли в шторке): канал FGS держит сервис звонка живым,
-                // но LOW + ongoing делает вторую карточку («Звонок будильника»)
-                // рядом с основной (из AlarmReceiver). MIN убирает badge и
-                // звук у FGS-таблички — сервис и звук MediaPlayer от этого
-                // не зависят.
-                NotificationChannel(CHANNEL, "Звонок будильника", NotificationManager.IMPORTANCE_MIN).apply {
-                    description = "Непрерывный сигнал будильника"
+                NotificationChannel(CHANNEL, "Будильник", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Звонящий будильник: отключить или открыть"
                     setSound(null, null)
                     enableVibration(false)
                     lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
@@ -205,31 +216,63 @@ class AlarmForegroundService : Service() {
             )
         }
 
-        val tap = PendingIntent.getActivity(
+        val tapIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_NO_ANIMATION
+            putExtra("payload", payload)
+            putExtra("alarm_launch", true)
+            putExtra("alarm_fullscreen", fullscreen)
+        }
+        val piFlags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val tap = PendingIntent.getActivity(this, ringId, tapIntent, piFlags)
+
+        val dismissIntent = Intent(this, AlarmReceiver::class.java).apply {
+            action = AlarmReceiver.ACTION_DISMISS
+            putExtra("alarm_id", ringId)
+        }
+        val dismiss = PendingIntent.getBroadcast(
             this,
-            0,
-            Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("payload", payload)
-            },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            ringId + 2000,
+            dismissIntent,
+            piFlags,
         )
 
+        // id = id будильника (alarm.id.hashCode). По нему же его гасят
+        // удаление/выключение и кнопка «Отключить», так что карточка ровно
+        // одна и живёт ровно столько, сколько звенит.
+        val notifId = if (ringId == 0) NOTIFICATION_ID else ringId
         val notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(tap)
+            .setFullScreenIntent(tap, true)
             .setOngoing(true)
+            .setAutoCancel(false)
+            .setShowWhen(true)
+            .setWhen(System.currentTimeMillis())
+            .setColor(0xFFFDF2F6.toInt())
+            .addAction(R.drawable.ic_notification, "Отключить", dismiss)
+            .addAction(R.drawable.ic_notification, "Открыть", tap)
             .build()
+
+        // Второй будильник в ту же минуту переиспользует сервис: убираем
+        // карточку прошлого, чтобы не копились две.
+        if (currentNotificationId != 0 && currentNotificationId != notifId) {
+            try {
+                nm.cancel(currentNotificationId)
+            } catch (_: Exception) {}
+        }
+        currentNotificationId = notifId
 
         try {
             ServiceCompat.startForeground(
                 this,
-                NOTIFICATION_ID,
+                notifId,
                 notification,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
@@ -239,7 +282,7 @@ class AlarmForegroundService : Service() {
             // На некоторых прошивках specialUse-тип недоступен: звук всё
             // равно нужен, поэтому пробуем без типа.
             try {
-                startForeground(NOTIFICATION_ID, notification)
+                startForeground(notifId, notification)
             } catch (e2: Exception) {
                 AlarmLog.write(this, "RING FGS FAILED error=${e2.javaClass.simpleName}")
             }
@@ -427,6 +470,15 @@ class AlarmForegroundService : Service() {
         try {
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         } catch (_: Exception) {}
+        // stopForeground снимает только «свою» карточку; на всякий случай
+        // гасим по id — иначе после таймаута остаётся висящая табличка.
+        if (currentNotificationId != 0) {
+            try {
+                val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                nm.cancel(currentNotificationId)
+            } catch (_: Exception) {}
+            currentNotificationId = 0
+        }
         stopSelf()
     }
 
@@ -439,7 +491,10 @@ class AlarmForegroundService : Service() {
     }
 
     companion object {
-        private const val CHANNEL = "agysha_alarm_ring"
+        // v2: прежний канал был IMPORTANCE_MIN («Звонок будильника») — на нём
+        // Android не показывает кнопки. Важность канала не меняется после
+        // создания, поэтому это НОВЫЙ канал, а не правка старого.
+        private const val CHANNEL = "agysha_alarm_ring_v2"
         private const val NOTIFICATION_ID = 66667
 
         /** Долже звонить, чем «проспать», но и не вечно. */
@@ -470,6 +525,7 @@ class AlarmForegroundService : Service() {
             body: String,
             payload: String,
             ringCode: Int = -1,
+            fullscreen: Boolean = true,
         ): Boolean {
             val i = Intent(ctx, AlarmForegroundService::class.java).apply {
                 putExtra("sound_name", soundName)
@@ -478,6 +534,7 @@ class AlarmForegroundService : Service() {
                 putExtra("body", body)
                 putExtra("payload", payload)
                 putExtra("ring_code", ringCode)
+                putExtra("fullscreen", fullscreen)
                 if (!customPath.isNullOrEmpty()) putExtra("custom_sound_path", customPath)
             }
             return try {
