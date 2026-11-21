@@ -424,7 +424,7 @@ class ProfileAvatar extends StatelessWidget {
       border: Border.all(
         // На тёмной теме обводка шара тоже мягче — плотный кант светился
         // вокруг круга.
-        color: color.withValues(alpha: dark ? 0.46 : 0.70),
+        color: color.withValues(alpha: dark ? 0.58 : 0.70),
         width: 2,
       ),
     );
@@ -480,8 +480,20 @@ class ProfileAvatar extends StatelessWidget {
                     Center(
                       child: Icon(
                         profileAvatarIcon(index),
-                        size: size * 0.44,
-                        color: Colors.white.withValues(alpha: 0.92),
+                        size: size * 0.46,
+                        color: Colors.white.withValues(alpha: 0.98),
+                        // Тень под глифом: верхняя часть шара почти белая,
+                        // и белый значок в ней растворялся — особенно
+                        // заметно на тёмной теме.
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withValues(
+                              alpha: dark ? 0.48 : 0.30,
+                            ),
+                            blurRadius: size * 0.10,
+                            offset: Offset(0, size * 0.02),
+                          ),
+                        ],
                       ),
                     ),
                   // Блестящие пятна: яркий «зайчик» и вторичный, слабее —

@@ -288,9 +288,16 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
             ],
     );
 
+    // Градиент — на весь экран ПОД Scaffold: прозрачный Scaffold пропускает
+    // его и в тело, и в зону bottomNavigationBar. Раньше нижняя полоса под
+    // кнопкой красилась плоским scaffoldBackgroundColor — та самая «серая
+    // хуйня», вылезавшая под красной таблеткой.
     return PopScope(
       canPop: _allowPop,
-      child: Scaffold(
+      child: DecoratedBox(
+        decoration: BoxDecoration(gradient: bgGradient),
+        child: Scaffold(
+        backgroundColor: Colors.transparent,
         resizeToAvoidBottomInset: false,
         // Градиент висит НАД подъёмом по клавиатуре, а не внутри него: тогда
         // полоса высотой с клавиатуру, открывающаяся снизу при подъёме
@@ -305,11 +312,9 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
             // цветовые полосы съезжали — читалось как «фон поднимается
             // сзади». resizeToAvoidBottomInset выключен, окно не меняется,
             // значит фон должен оставаться неподвижным.
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(gradient: bgGradient),
-              ),
-            ),
+            // Фон уже нарисован под Scaffold (см. выше) — здесь он не
+            // дублируется, чтобы у тела и нижней кнопки не было шва.
+            const Positioned.fill(child: SizedBox.expand()),
             SmoothKeyboardBody(
               background: Colors.transparent,
               child: SafeArea(
@@ -483,6 +488,7 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
                 ),
               )
             : null,
+        ),
       ),
     );
   }
@@ -506,6 +512,10 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
         if (widget.isTest)
           _RedPillButton(
             label: Translations.t('wtDismiss', context),
+            // Значок тот же, что у «Отключить будильник» на экране
+            // будильника: кнопка на «Отлично! Ты проснулся!» раньше была
+            // голым текстом и выглядела чужой.
+            icon: Icons.alarm_off_rounded,
             onPressed: _finish,
           ),
       ],
@@ -1610,7 +1620,6 @@ class _RedPillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final on = onPressed != null;
-    final cs = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final radius = BorderRadius.circular(999);
     final child = AnimatedContainer(
@@ -1626,40 +1635,26 @@ class _RedPillButton extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         borderRadius: radius,
-        // Три стопа вместо двух: у плоской «двухцветной» заливки середина
-        // выглядела грязной, а край — чёрным. Теперь мягкий верхний свет,
-        // винная глубина и тёмный низ — та же таблетка, что у разделов.
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: on
-              ? const [Color(0xFFE02436), BrandColors.blood, Color(0xFF8E0C1C)]
-              : [
-                  cs.primary.withValues(alpha: dark ? 0.14 : 0.10),
-                  cs.primary.withValues(alpha: dark ? 0.10 : 0.07),
-                ],
-          stops: const [0.0, 0.52, 1.0],
-        ),
+        // ПРОЗРАЧНЫЙ фон внутри: та самая «пиздатая» кнопка, которую
+        // пользователь просил вернуть. Раньше здесь лежал плотный винный
+        // градиент, и на светлой теме кнопка читалась тяжёлой серой
+        // плашкой, а серые полосы градиента «вылезали» по краям.
+        // Теперь — только красная кромка и красный текст; зажатие
+        // подкрашивает внутренность мягким красным через PressScale.
+        color: Colors.transparent,
         border: Border.all(
           color: on
-              ? Colors.white.withValues(alpha: 0.36)
-              : cs.primary.withValues(alpha: 0.28),
-          width: 1.1,
+              ? const Color(0xFFE02436).withValues(alpha: dark ? 0.92 : 0.88)
+              : const Color(0xFFE02436).withValues(alpha: dark ? 0.30 : 0.26),
+          width: 1.5,
         ),
         boxShadow: [
           if (on)
             BoxShadow(
-              color: BrandColors.blood.withValues(alpha: dark ? 0.45 : 0.32),
-              blurRadius: 20,
-              spreadRadius: -4,
-              offset: const Offset(0, 7),
-            )
-          else
-            BoxShadow(
-              color: cs.primary.withValues(alpha: 0.08),
-              blurRadius: 10,
-              spreadRadius: -4,
-              offset: const Offset(0, 4),
+              color: BrandColors.blood.withValues(alpha: dark ? 0.24 : 0.16),
+              blurRadius: 16,
+              spreadRadius: -6,
+              offset: const Offset(0, 5),
             ),
         ],
       ),
@@ -1675,14 +1670,20 @@ class _RedPillButton extends StatelessWidget {
               height: 24,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: on
-                    ? Colors.white.withValues(alpha: 0.18)
-                    : cs.primary.withValues(alpha: 0.12),
+                color: Colors.transparent,
+                border: Border.all(
+                  color: const Color(
+                    0xFFE02436,
+                  ).withValues(alpha: on ? 0.75 : 0.35),
+                  width: 1.1,
+                ),
               ),
               child: Icon(
                 icon,
                 size: 16,
-                color: on ? Colors.white : cs.primary.withValues(alpha: 0.85),
+                color: const Color(
+                  0xFFE02436,
+                ).withValues(alpha: on ? 1.0 : 0.45),
               ),
             ),
             const SizedBox(width: 9),
@@ -1695,18 +1696,10 @@ class _RedPillButton extends StatelessWidget {
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.2,
-                color: on
-                    ? Colors.white
-                    : cs.onSurfaceVariant.withValues(alpha: 0.62),
-                shadows: on
-                    ? [
-                        Shadow(
-                          color: Colors.black.withValues(alpha: 0.22),
-                          blurRadius: 6,
-                          offset: const Offset(0, 1),
-                        ),
-                      ]
-                    : null,
+                color: const Color(
+                  0xFFE02436,
+                ).withValues(alpha: on ? 1.0 : 0.45),
+                shadows: null,
               ),
               child: Text(
                 label,
@@ -1728,8 +1721,14 @@ class _RedPillButton extends StatelessWidget {
         enabled: on,
         pressedScale: 0.965,
         enableTilt: true,
+        // Красное зажатие внутри прозрачной таблетки — как у разделов:
+        // кнопка «наливается» цветом под пальцем и отпускает упруго.
+        pressTint: const Color(0xFFFF453A),
+        pressTintStrength: 0.18,
+        pressTintRadius: BorderRadius.circular(999),
         duration: const Duration(milliseconds: 150),
-        releaseDuration: const Duration(milliseconds: 420),
+        releaseDuration: const Duration(milliseconds: 320),
+        releaseCurve: Curves.easeOutCubic,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           // Нажатие по недоступной кнопке не должно давать отклика.

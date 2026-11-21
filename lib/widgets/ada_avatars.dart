@@ -247,15 +247,18 @@ class AdaAvatar extends StatelessWidget {
           // масштаба: «дыхание» 0.98→1 на мелком кружке читалось как
           // перерисовка, а не как смена. Только растворение одного
           // медальона в другом, как было раньше, но спокойнее.
-          duration: const Duration(milliseconds: 900),
-          switchInCurve: Curves.easeInOut,
-          switchOutCurve: Curves.easeInOut,
+          duration: const Duration(milliseconds: 1100),
+          switchInCurve: Curves.easeInOutSine,
+          switchOutCurve: Curves.easeInOutSine,
           layoutBuilder: (current, previous) => Stack(
             alignment: Alignment.center,
             children: [...previous, ?current],
           ),
           transitionBuilder: (child, anim) => FadeTransition(
-            opacity: CurvedAnimation(parent: anim, curve: Curves.easeInOut),
+            opacity: CurvedAnimation(
+              parent: anim,
+              curve: Curves.easeInOutSine,
+            ),
             child: child,
           ),
           child: KeyedSubtree(
@@ -273,6 +276,13 @@ class AdaAvatar extends StatelessWidget {
     // Монохромная тональная гамма из ТЕКУЩЕЙ темы: аватарка автоматически
     // подстраивается под смену темы (primary → secondary → tertiary),
     // а не остаётся ярким цветным кружком в любой теме.
+    // Цветной медальон — СОБСТВЕННЫЙ градиент варианта (v.colors), а не
+    // primary/tertiary темы. Раньше здесь стояла тематическая рампа, и все
+    // 120 вариантов отличались только направлением и значком: на тёмной
+    // теме они сливались в одинаковые тусклые кружки, а смена аватарки
+    // выглядела как «перерисовка», а не как новый медальон.
+    // В тёмной теме градиент чуть приглушаем (не выжигает глаз ночью),
+    // но оттенок и рисунок варианта остаются узнаваемыми.
     final ramp = monochrome
         // Монхром для кнопки — ровно тот же нейтральный медальон, что у
         // невыбранного значка главной таблетки: светлая площадка темы, без
@@ -282,12 +292,20 @@ class AdaAvatar extends StatelessWidget {
             dark ? cs.surfaceContainerHighest : cs.surfaceContainerLowest,
             dark ? cs.surfaceContainerHighest : cs.surfaceContainerLowest,
           ]
-        : themeAdaColors(context);
+        : v.colors
+              .map(
+                // 0.10 вместо 0.18: на тёмной теме заливка «садилась» так
+                // плотно, что белый глиф терялся на ней.
+                (c) => dark ? Color.lerp(c, const Color(0xFF1A1114), 0.10)! : c,
+              )
+              .toList();
     // Чернила глифа — фирменный primary, как у иконок таблетки; в цветном
     // режиме — белый поверх градиента.
     final iconColor = monochrome
         ? cs.primary
-        : Colors.white.withValues(alpha: 0.95);
+        // На тёмной теме глиф — чистый белый: полупрозрачный «молоко»
+        // (0.95) на приглушённом градиенте читался мутным пятном.
+        : (dark ? Colors.white : Colors.white.withValues(alpha: 0.95));
     // Направление градиента у каждого варианта своё (v.angle) — варианты с
     // близкими цветами всё равно читаются разными аватарками.
     final gx = math.cos(v.angle);
@@ -311,9 +329,9 @@ class AdaAvatar extends StatelessWidget {
           color: monochrome
               ? cs.outlineVariant.withValues(alpha: dark ? 0.55 : 0.70)
               : (dark
-                    ? Colors.white.withValues(alpha: 0.24)
+                    ? Colors.white.withValues(alpha: 0.52)
                     : Colors.black.withValues(alpha: 0.32)),
-          width: dark ? 1.2 : 1.1,
+          width: dark ? 1.3 : 1.1,
         ),
         // Без тени: в мини-окошке blur-тень обрезается прямоугольной
         // границей окна и выглядит как «квадрат» за круглой аватаркой.
@@ -349,14 +367,19 @@ class AdaAvatar extends StatelessWidget {
           // размерах (18 px в пузырях) контур не «растворяется» в градиенте.
           Icon(
             v.icon,
-            size: size * 0.44,
+            size: size * 0.46,
             color: iconColor,
+            // Тень-подложка под глифом: на тёмной теме светлые края
+            // градиента «съедали» белый значок, и аватарка читалась
+            // мутным пятном. Плотная тень держит контур на любом фоне.
             shadows: monochrome
                 ? null
                 : [
                     Shadow(
-                      color: Colors.black.withValues(alpha: 0.22),
-                      blurRadius: size * 0.08,
+                      // Плотнее и шире на тёмной теме: тонкая тень не
+                      // держала контур, и значки аватарок «плыли».
+                      color: Colors.black.withValues(alpha: dark ? 0.62 : 0.28),
+                      blurRadius: size * (dark ? 0.16 : 0.10),
                       offset: Offset(0, size * 0.02),
                     ),
                   ],

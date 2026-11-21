@@ -683,12 +683,11 @@ class _SectionPillState extends State<SectionPill>
                     pressTintStrength: 0.13,
                     pressTintRadius: BorderRadius.circular(18),
                     enableTilt: true,
-                    // Подсветка не «вспыхивает»: она проявляется мягко, а
-                    // гаснет долго (620 мс), поэтому при быстрых тапах не
-                    // мигает, а тянется за пальцем как след. Вдавливание
-                    // тоже спокойнее — 210 мс вместо резких 190.
-                    duration: const Duration(milliseconds: 210),
-                    releaseDuration: const Duration(milliseconds: 620),
+                    // Отдача как у кнопок Ады и «плюсика»: вдавливание
+                    // 240 мс, возврат 340 мс. Раньше возврат тянулся
+                    // 620 мс — под пальцем это читалось как «залипание».
+                    duration: const Duration(milliseconds: 240),
+                    releaseDuration: const Duration(milliseconds: 340),
                     child: Material(
                       type: MaterialType.transparency,
                       child: InkWell(
@@ -755,7 +754,9 @@ class _PillLabelState extends State<_PillLabel>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 480),
+    // 760 мс: текст перекрашивается ровно тем же «следом», что и фон
+    // таблетки, — при быстрых тапах цвет догоняет выбор, а не щёлкает.
+    duration: const Duration(milliseconds: 760),
     value: 1,
   );
   late double _from = widget.glow;
@@ -764,7 +765,10 @@ class _PillLabelState extends State<_PillLabel>
   @override
   void didUpdateWidget(covariant _PillLabel old) {
     super.didUpdateWidget(old);
-    if ((old.glow - widget.glow).abs() < 0.001) return;
+    // Порог 0.02: при драге glow приходит каждый кадр, и раньше каждая
+    // такая мелочь перезапускала анимацию — цвет «дрожал» и догонял
+    // рывками. Теперь стартуем только на заметном шаге.
+    if ((old.glow - widget.glow).abs() < 0.02) return;
     _from = _value;
     _to = widget.glow;
     _ctrl.forward(from: 0);
@@ -783,30 +787,48 @@ class _PillLabelState extends State<_PillLabel>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, _) {
-        final v = _value.clamp(0.0, 1.0);
-        final color = Color.lerp(
-          widget.dark
-              ? Colors.white.withValues(alpha: 0.30)
-              : Colors.black.withValues(alpha: 0.32),
-          const Color(0xFFFF453A).withValues(alpha: 0.66),
-          v,
-        )!;
-        return Text(
-          widget.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: widget.fontSize,
-            fontWeight: FontWeight.lerp(FontWeight.w500, FontWeight.w600, v),
-            color: color,
-            letterSpacing: -0.2,
+    // ДВА статичных Text друг над другом и кросс-фейд прозрачностью.
+    // Раньше цвет и начертание интерполировались в кадре, и каждый кадр
+    // создавал новый TextStyle — Flutter пере-раскладывал текст всех пяти
+    // подписей, из-за чего переключение «лагало», а цвет шёл рывками.
+    // Здесь раскладка постоянна: анимируется только альфа верхнего слоя.
+    final baseStyle = TextStyle(
+      fontSize: widget.fontSize,
+      fontWeight: FontWeight.w600,
+      color: widget.dark
+          ? Colors.white.withValues(alpha: 0.30)
+          : Colors.black.withValues(alpha: 0.32),
+      letterSpacing: -0.2,
+    );
+    final activeStyle = baseStyle.copyWith(
+      color: const Color(0xFFFF453A).withValues(alpha: 0.66),
+    );
+    return RepaintBoundary(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Text(
+            widget.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: baseStyle,
           ),
-        );
-      },
+          AnimatedBuilder(
+            animation: _ctrl,
+            builder: (context, _) => Opacity(
+              opacity: _value.clamp(0.0, 1.0),
+              child: Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: activeStyle,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

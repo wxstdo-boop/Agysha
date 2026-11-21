@@ -69,10 +69,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
   }
 
+  // Подпись раздела состоит из двух слоёв (базовая и подсвеченная) ради
+  // плавного кросс-фейда — для тапа берём первый, они точно совпадают.
   Finder pillLabel(String text) => find.descendant(
     of: find.byType(SectionPill),
     matching: find.text(text),
-  );
+  ).first;
 
   /// Кадры как в жизни: один pump(900ms) — это ОДИН кадр, и тикер пружины
   /// на нём ещё не успевает сдвинуться. Для реальной динамики нужны кадры.

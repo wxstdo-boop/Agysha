@@ -633,6 +633,9 @@ Future<void> _predecodeSplashLogo() async {
 Future<_StartupState> _loadStartupState() async {
   // Инициализируем SharedPreferences ОДИН раз ДО всего.
   await initPrefs();
+  // Метка «кто отвечает» доступна с первого кадра: иначе плашка начинала
+  // с «ada-0.0.3» и прыгала на имя провайдера.
+  AiGuideService.restoreModelLabel();
   await JsonFile.initialize();
   // Режим плавающего окошка Ады переживает перезапуск приложения.
   // Окошко — внутренний пузырь (одинаково на web и Android): он рисуется

@@ -147,8 +147,13 @@ class _InlineKeyboardState extends State<InlineKeyboard>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      // Просторнее по краям: клавиши не липнут к скруглённым углам листа.
-      padding: const EdgeInsets.fromLTRB(6, 10, 6, 12),
+      // Бока — минимальные: 11 клавиш в ряду на узком экране упирались
+      // в скруглённые углы листа (владелец: «по бокам не влезает»).
+      // Вертикаль оставляем воздушной.
+      // Бока поджаты до нуля: на узких экранах 11 клавиш упирались в
+      // скругления листа, и крайние «й»/«ъ» заедали. Поля клавиш и зазоры
+      // дают нужный воздух без панельных отступов.
+      padding: const EdgeInsets.fromLTRB(0, 9, 0, 11),
       decoration: BoxDecoration(
         // Полупрозрачная панель с ЯВНЫМ КРАСНЫМ отливом: сквозь клавиатуру
         // просвечивает лист, а алый тон привязывает её к остальным
@@ -195,7 +200,7 @@ class _InlineKeyboardState extends State<InlineKeyboard>
                   onTap: widget.onSpace,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 2),
               Expanded(
                 flex: 2,
                 child: _Key(
@@ -209,7 +214,7 @@ class _InlineKeyboardState extends State<InlineKeyboard>
                 ),
               ),
               if (widget.actionLabel != null) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: 2),
                 Expanded(
                   flex: 3,
                   child: _Key(
@@ -359,7 +364,7 @@ class _KeyState extends State<_Key> {
             cs.surfaceContainerHighest.withValues(alpha: 0.66),
           );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
       child: PressScale(
         // Отдача клавиши — заметно медленнее и мягче прежних 90/180 мс:
         // на быстром наборе клавиша «щёлкала» кадром и не читалась как

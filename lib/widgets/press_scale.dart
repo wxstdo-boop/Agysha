@@ -24,6 +24,11 @@ class PressScale extends StatefulWidget {
   /// читается как щелчок. `null` — тот же [duration], как было раньше.
   final Duration? releaseDuration;
 
+  /// Кривая ОТДАЧИ. Нажатие и возврат — разные ощущения: вдавливание
+  /// делаем плавным ([curve]), а возврат — пружинисто-быстрым, как у
+  /// кнопки «+» и Ады, иначе фон «тает» слишком вяло.
+  final Curve? releaseCurve;
+
   final Curve curve;
 
   /// Отключённое «вдавливание» (например, когда палец ушёл на перетаскивание
@@ -60,6 +65,7 @@ class PressScale extends StatefulWidget {
     this.pressedScale = 0.975,
     this.duration = const Duration(milliseconds: 240),
     this.releaseDuration = const Duration(milliseconds: 360),
+    this.releaseCurve,
     this.curve = Curves.easeOutCubic,
     this.enabled = true,
     this.pressedOpacity = 1.0,
@@ -76,7 +82,6 @@ class PressScale extends StatefulWidget {
 
 class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   late final AnimationController _ctrl;
-  late final Animation<double> _anim;
 
   /// Гашение отдачи, пока строку смахивают на удаление: 1 — обычный вид,
   /// 0 — отдача полностью снята. Раньше значение «сваливалось» в 0 одним
@@ -120,7 +125,6 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _ctrl = AnimationController(vsync: this, duration: widget.duration);
-    _anim = CurvedAnimation(parent: _ctrl, curve: widget.curve);
     _swipeCtrl = AnimationController(
       vsync: this,
       value: 1.0,
@@ -134,7 +138,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     _tiltFade = AnimationController(
       vsync: this,
       value: 1.0,
-      duration: const Duration(milliseconds: 320),
+      // 460 мс: наклон уходит и возвращается заметно мягче — при свайпе
+      // удаления карточка больше не «щёлкает» из наклона в плоскость.
+      duration: const Duration(milliseconds: 460),
     )..addStatusListener((status) {
       if (status != AnimationStatus.dismissed) return;
       // Наклон уже невидим (сила 0) — можно обнулить углы без рывка.
@@ -184,6 +190,8 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     if (!mounted || !widget.enabled) return;
     if (SwipeToDeleteScope.of(context)) return;
     if (_swipeCtrl.value < 1.0) _swipeCtrl.forward();
+    // Наклон включается своим каналом — и гаснет он тоже плавно.
+    _tiltFade.forward();
     _updateTilt(e.localPosition, smooth: false);
     // Длительность переключаем ДО старта: контроллер живёт один, и без этого
     // после первого же нажатия он запомнил бы длину отпускания.
@@ -215,6 +223,10 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     _releaseTilt = _tilt;
     _ctrl.duration = widget.releaseDuration ?? widget.duration;
     _ctrl.reverse();
+    // Наклон гаснет СВОИМ каналом: раньше он был привязан к прогрессу
+    // нажатия и вместе с ним обнулялся кадром — карточка «прыгала» в
+    // плоскость.
+    _tiltFade.reverse();
   }
 
   void _cancel(PointerCancelEvent _) {
@@ -222,6 +234,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     _releaseTilt = _tilt;
     _ctrl.duration = widget.releaseDuration ?? widget.duration;
     _ctrl.reverse();
+    _tiltFade.reverse();
   }
 
   @override
@@ -239,7 +252,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         _tiltFade.reverse();
         _swipeCtrl.reverse();
       } else {
-        _tiltFade.forward();
+        // Возврат наклона только если палец всё ещё на карточке: после
+        // отпускания карточка должна остаться плоской.
+        if (_ctrl.value > 0) _tiltFade.forward();
         _swipeCtrl.forward();
       }
     }
@@ -251,13 +266,19 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       onPointerCancel: _cancel,
       child: AnimatedBuilder(
         animation: Listenable.merge([
-          _anim,
+          _ctrl,
           _tiltNotifier,
           _swipeAnim,
           _tiltFade,
         ]),
         builder: (context, child) {
-          final v = _anim.value * _swipeAnim.value;
+          // В покое и нажатии — плавная кривая, при возврате — своя,
+          // если задана: отдача читается «пружинкой», а не вялым спадом.
+          final curve =
+              (_ctrl.status == AnimationStatus.reverse
+                  ? (widget.releaseCurve ?? widget.curve)
+                  : widget.curve);
+          final v = curve.transform(_ctrl.value) * _swipeAnim.value;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
 
           final currentTilt = _ctrl.status == AnimationStatus.reverse
@@ -267,13 +288,13 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
           final tiltActive =
               widget.enableTilt &&
               !MotionPrefs.shouldReduceMotion &&
-              v > 0.001 &&
               tiltFade > 0.001 &&
               currentTilt != Offset.zero;
 
-          final tiltX =
-              -currentTilt.dy * widget.maxTiltAngle * v * tiltFade;
-          final tiltY = currentTilt.dx * widget.maxTiltAngle * v * tiltFade;
+          // Угол зависит ТОЛЬКО от силы наклона (tiltFade), а не от прогресса
+          // нажатия: свайп гасит нажатие мгновенно, но наклон уходит плавно.
+          final tiltX = -currentTilt.dy * widget.maxTiltAngle * tiltFade;
+          final tiltY = currentTilt.dx * widget.maxTiltAngle * tiltFade;
 
           final matrix = Matrix4.identity();
           if (tiltActive) {

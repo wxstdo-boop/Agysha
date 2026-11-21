@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import '../services/haptics.dart';
 import 'dart:math' as math;
-import 'dart:ui' show FontFeature, ImageFilter;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -308,14 +307,6 @@ class _AiChatSheet extends StatefulWidget {
 }
 
 class _AiChatSheetState extends State<_AiChatSheet> {
-  // 10 вместо 16: стекло остаётся мягким, но размытие читается заметно
-  // дешевле — именно оно давало «ладонный» лаг в первые кадры после
-  // открытия окна на слабых телефонах.
-  static final ImageFilter _backdropBlur = ImageFilter.blur(
-    sigmaX: 10,
-    sigmaY: 10,
-  );
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -346,16 +337,29 @@ class _AiChatSheetState extends State<_AiChatSheet> {
         child: ClipRRect(
           // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
           borderRadius: BorderRadius.circular(32),
-          child: BackdropFilter(
-            filter: _backdropBlur,
-            blendMode: BlendMode.src,
-            child: AnimatedContainer(
+          // БЕЗ BackdropFilter: размытие фона пересчитывалось на КАЖДОМ
+          // кадре выезда/ухода листа и было главной причиной «лаг при входе
+          // и выходе». Почти непрозрачная заливка с тонкой светлой кромкой
+          // читается тем же «стеклом», но кадр стоит как обычный контейнер.
+          child: AnimatedContainer(
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutCubic,
               height: sheetHeight,
               decoration: BoxDecoration(
                 color: theme.scaffoldBackgroundColor.withValues(
-                  alpha: isDark ? 0.82 : 0.88,
+                  alpha: isDark ? 0.965 : 0.975,
+                ),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    theme.scaffoldBackgroundColor.withValues(
+                      alpha: isDark ? 0.97 : 0.98,
+                    ),
+                    theme.colorScheme.surfaceContainerLow.withValues(
+                      alpha: isDark ? 0.94 : 0.97,
+                    ),
+                  ],
                 ),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.35),
@@ -368,7 +372,6 @@ class _AiChatSheetState extends State<_AiChatSheet> {
                 removeBottom: true,
                 child: const _AiChatBody(),
               ),
-            ),
           ),
         ),
       ),
@@ -1032,15 +1035,19 @@ class _AiChatBodyState extends State<_AiChatBody>
   /// (если разрешение доступно), выключено — нейтральное.
   Widget _buildScreenToggle(BuildContext context, ThemeData theme) {
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     return SmoothTooltip(
       message: _screenAware
           ? 'Контекст экрана: включён — Ада видит текст на экране'
           : 'Контекст экрана: выключен — Ада не читает экран',
       waitDuration: const Duration(milliseconds: 400),
       child: PressScale(
-        pressedScale: 0.90,
-        enableTilt: false,
-        duration: const Duration(milliseconds: 180),
+        // Ровно та же отдача, что у кнопки веб-поиска: соседние кнопки
+        // должны ощущаться одинаково.
+        pressedScale: 0.95,
+        enableTilt: true,
+        duration: const Duration(milliseconds: 140),
+        releaseDuration: const Duration(milliseconds: 220),
         // Растровый слой: смена заливки и кромки не перерисовывает всю
         // строку кнопок над чатом.
         child: RepaintBoundary(
@@ -1056,25 +1063,30 @@ class _AiChatBodyState extends State<_AiChatBody>
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 240),
                 curve: Curves.easeOutCubic,
-                width: 34,
-                height: 34,
+                // Размер и кромка — ОДИН В ОДИН как у кнопки веб-поиска
+                // (40×40, 1.5/1.0 px, те же альфы): раньше «глаз» был
+                // меньше (34) и с более плотной рамкой, и пара кнопок
+                // выглядела из разных наборов.
+                width: 40,
+                height: 40,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: _screenAware
-                      ? cs.primary.withValues(alpha: 0.12)
-                      : Colors.transparent,
-                  // Включено — чёткая плотная обводка в фирменный цвет (раньше
-                  // 1.2 px primary на светлом фоне почти не читалась); выключено
-                  // — тихая серая. Цвет и толщина перетекают, а не щёлкают.
+                      ? cs.primary.withValues(alpha: isDark ? 0.24 : 0.16)
+                      : cs.surfaceContainerHigh.withValues(
+                          alpha: isDark ? 0.32 : 0.42,
+                        ),
                   border: Border.all(
                     color: _screenAware
-                        ? cs.primary.withValues(alpha: 0.95)
-                        : cs.outline.withValues(alpha: 0.45),
-                    width: _screenAware ? 1.6 : 1.2,
+                        ? cs.primary.withValues(alpha: 0.85)
+                        : cs.outlineVariant.withValues(
+                            alpha: isDark ? 0.22 : 0.30,
+                          ),
+                    width: _screenAware ? 1.5 : 1.0,
                   ),
-                  // Тень убрана: ореол blur 10 выходил за 34 px кружка и на
-                  // светлой теме читался как «фон, вылезающий по бокам».
+                  // Тень убрана: ореол blur выходил за кружок и читался как
+                  // «фон, вылезающий по бокам».
                 ),
                 child: Stack(
                   alignment: Alignment.center,
@@ -1090,7 +1102,7 @@ class _AiChatBodyState extends State<_AiChatBody>
                             ? Icons.visibility
                             : Icons.visibility_outlined,
                         key: ValueKey('screen_toggle_icon_$_screenAware'),
-                        size: 19,
+                        size: 20,
                         color: _screenAware ? cs.primary : cs.onSurfaceVariant,
                       ),
                     ),

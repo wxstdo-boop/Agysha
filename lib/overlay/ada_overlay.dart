@@ -74,6 +74,9 @@ class _AdaOverlayAppState extends State<AdaOverlayApp> {
 
   Future<void> _init() async {
     await initPrefs();
+    // То же восстановление в движке мини-окошка — иначе первые кадры
+    // показывают пустую метку и она скачет.
+    AiGuideService.restoreModelLabel();
     await JsonFile.initialize();
     final lang = await SettingsService.resolveLanguageCode();
     if (!mounted) return;
@@ -916,11 +919,14 @@ class _OverlayChatState extends State<_OverlayChat>
   /// что и аватарки в основном чате.
   Widget _animatedAvatar(double size, int variant) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 900),
-      switchInCurve: Curves.easeInOut,
-      switchOutCurve: Curves.easeInOut,
+      duration: const Duration(milliseconds: 1100),
+      switchInCurve: Curves.easeInOutSine,
+      switchOutCurve: Curves.easeInOutSine,
       transitionBuilder: (child, anim) => FadeTransition(
-        opacity: CurvedAnimation(parent: anim, curve: Curves.easeInOut),
+        opacity: CurvedAnimation(
+          parent: anim,
+          curve: Curves.easeInOutSine,
+        ),
         child: child,
       ),
       child: AdaAvatar(
