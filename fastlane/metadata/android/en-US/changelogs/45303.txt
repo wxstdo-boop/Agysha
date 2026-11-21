@@ -1,1 +1,3 @@
-- perf+ui: LLM7 в Аде, промпт без воды, монотонная кровь, сплеш-бета, плавные статусы и клавиатура
+- Ada: new free model provider, shorter and clearer system prompt
+- Smoother status messages and keyboard handling in Ada's window
+- Splash screen no longer flickers; "beta" is shown as a quiet label

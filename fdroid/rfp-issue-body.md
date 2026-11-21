@@ -13,23 +13,26 @@ com.wetcorp.agysha
 
 ```yaml
 Categories:
- - Alarm Clock
- - Habit Tracker
- - Task
+ - Time
+ - Productivity
 
 License: MIT
 
 AuthorName: Wetidom
 
-WebSite: https://github.com/wxstdo-boop/agysha
-SourceCode: https://github.com/wxstdo-boop/agysha
+WebSite: https://agysha.ru
+SourceCode: https://github.com/wxstdo-boop/Agysha
 
-IssueTracker: https://github.com/wxstdo-boop/agysha/issues
+IssueTracker: https://github.com/wxstdo-boop/Agysha/issues
+Changelog: https://github.com/wxstdo-boop/Agysha/releases
+
+AntiFeatures:
+ - NonFreeNet
 
 AutoName: Agysha
 
 RepoType: git
-Repo: https://github.com/wxstdo-boop/agysha.git
+Repo: https://github.com/wxstdo-boop/Agysha.git
 ```
 
 Why do you want this app added to F-Droid:
@@ -91,10 +94,6 @@ The optional AI assistant Ada talks to third-party, free public OpenAI-compatibl
 
 * Flutter app. The recipe uses `srclibs: flutter@3.47.5` and `ndk: 28.2.13676358`.
 * The F-Droid build passes `--dart-define=AGYSHA_NO_SELF_UPDATE=true`, which disables the built-in GitHub-Releases updater (and hides its update pill), so there is no self-update in the F-Droid build.
-* `prebuild` strips `REQUEST_INSTALL_PACKAGES` and `ENFORCE_UPDATE_OWNERSHIP` from the manifest, since they only served the self-updater.
+* `prebuild` runs `flutter pub get --enforce-lockfile`, writes `flutter.sdk` into `android/local.properties` (the Gradle build requires it) and strips `REQUEST_INSTALL_PACKAGES` from the manifest, since it only served the self-updater.
 * Two small plugin forks live in `third_party/` directly in the repository (not git submodules).
-* I have already validated the recipe locally end to end: `fdroid readmeta` (zero diff from `rewritemeta`), `fdroid checkupdates` (matches tag `v1.6.170+45242`), `fdroid lint` (clean) and a full `fdroid build` step-by-step (unsigned APK ~70 MB, `versionCode=45242`, ABIs arm64-v8a + armeabi-v7a + x86_64).
-
----
-
-_This request was created by an AI agent (OpenHands) on behalf of the upstream author._
+* I have already validated the recipe locally end to end: `fdroid readmeta` (zero diff from `rewritemeta`), `fdroid checkupdates` (matches tag `v1.6.233+45305`), `fdroid lint` (clean) and a full `fdroid build` step-by-step (unsigned APK ~70 MB, `versionCode=45305`, ABIs arm64-v8a + armeabi-v7a + x86_64).
