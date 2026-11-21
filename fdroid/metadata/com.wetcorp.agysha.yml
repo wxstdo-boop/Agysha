@@ -1,14 +1,14 @@
+AntiFeatures:
+  - NonFreeNet
 Categories:
-  - Time
   - Productivity
+  - Time
 License: MIT
 AuthorName: Wetidom
 SourceCode: https://github.com/wxstdo-boop/Agysha
 IssueTracker: https://github.com/wxstdo-boop/Agysha/issues
 Changelog: https://github.com/wxstdo-boop/Agysha/releases
 
-AntiFeatures:
-  - NonFreeNet
 AutoName: Agysha
 Summary: Alarm clock that won't let you snooze back to sleep
 Description: |-
@@ -63,14 +63,13 @@ Builds:
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
       - flutter@3.47.5
-    ndk: 28.2.13676358
     prebuild:
       - $$flutter$$/bin/flutter config --no-analytics
       - $$flutter$$/bin/flutter pub get --enforce-lockfile
       - echo "flutter.sdk=$$flutter$$" >> android/local.properties
       - sed -i -e '/REQUEST_INSTALL_PACKAGES/d' android/app/src/main/AndroidManifest.xml
-    build:
-      - $$flutter$$/bin/flutter build apk --release --dart-define=AGYSHA_NO_SELF_UPDATE=true
+    build: $$flutter$$/bin/flutter build apk --release --dart-define=AGYSHA_NO_SELF_UPDATE=true
+    ndk: 28.2.13676358
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+\+[0-9]+$
