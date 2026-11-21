@@ -300,13 +300,23 @@ extension _SettingsSectionLook on _SettingsScreenState {
               _CtaButton(
                 label: Translations.t('visitellaName', context, 'Visitella'),
                 icon: Icons.rocket_launch_outlined,
-                // Оригинальный вид Visitella: тёмный градиент + чёрное свечение.
-                gradient: const [
-                  Color(0xFF4A4D54),
-                  Color(0xFF232428),
-                  Color(0xFF101013),
-                ],
-                glow: Colors.black,
+                // Вид Visitella: графитовый градиент. В тёмной теме он
+                // осветлён и светится холодным серым — иначе почти чёрная
+                // кнопка сливалась с фоном карточки.
+                gradient: theme.brightness == Brightness.dark
+                    ? const [
+                        Color(0xFF7C8494),
+                        Color(0xFF3B3E46),
+                        Color(0xFF1B1C21),
+                      ]
+                    : const [
+                        Color(0xFF4A4D54),
+                        Color(0xFF232428),
+                        Color(0xFF101013),
+                      ],
+                glow: theme.brightness == Brightness.dark
+                    ? const Color(0xFF8E97A8)
+                    : Colors.black,
                 onTap: () => _openLink('https://mutilated.pages.dev/#top'),
               ),
               const SizedBox(height: 8),

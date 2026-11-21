@@ -146,8 +146,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _permissionWarningDismissed = false;
   bool _grantPressed = false; // Состояние зажатия кнопки «Выдать»
   bool? _notificationsEnabled; // Кэш статуса уведомлений
-  // Карусель тем: листается по горизонтали, текущая тема по центру.
-  PageController? _themePageCtrl;
 
   late AnimationController _perfController;
   late Animation<double> _perfScale;
@@ -241,7 +239,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     _perfController.dispose();
     _keyPulse.dispose();
     _aiKeyController.dispose();
-    _themePageCtrl?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     notificationService.removeListener(_onNotificationChanged);
     super.dispose();

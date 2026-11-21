@@ -37,27 +37,16 @@ class _RealityCheckToggleCard extends StatelessWidget {
         final badgeBg = on
             ? theme.colorScheme.primary.withValues(alpha: 0.15)
             : theme.colorScheme.surface;
-        final badgeFg = on
-            ? theme.colorScheme.primary
-            : theme.colorScheme.onSurfaceVariant;
-        // AnimatedContainer: фон карточки плавно перетекает между
-        // состояниями (раньше был простой Container — цвет переключался
-        // мгновенно, хотя текст/бейдж анимировались — выглядело дёргано).
-        final card = AnimatedContainer(
-          duration: const Duration(milliseconds: 280),
+
+        // Внутренняя карточка: плавно перетекают фон, радиус и цвет текста.
+        // Обводку-кольцо рисует родитель (см. ниже) — она ОДНА и совпадает
+        // по стилю с кольцом на карточке нормы питания.
+        final inner = AnimatedContainer(
+          duration: const Duration(milliseconds: 320),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              // blurRadius 4: большие размытые тени на карточках стоят
-              // дорого при каждом кадре скролла на средних GPU.
-              BoxShadow(
-                color: theme.shadowColor.withValues(alpha: on ? 0.07 : 0.03),
-                blurRadius: 4,
-                offset: const Offset(0, 3),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(22.7),
           ),
           clipBehavior: Clip.antiAlias,
           child: Material(
@@ -69,9 +58,13 @@ class _RealityCheckToggleCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Бейдж иконки — плавная смена цвета.
+                    // Бейдж иконки: фон, цвет и масштаб значка идут одной
+                    // кривой 320 мс. Раньше тут стоял AnimatedSwitcher с
+                    // ОДНОЙ и той же иконкой (key менялся) — он гасил и
+                    // заново проявлял значок, из-за чего переключение
+                    // выглядело дёрганым.
                     AnimatedContainer(
-                      duration: const Duration(milliseconds: 280),
+                      duration: const Duration(milliseconds: 320),
                       curve: Curves.easeOutCubic,
                       width: 46,
                       height: 46,
@@ -80,17 +73,21 @@ class _RealityCheckToggleCard extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        transitionBuilder: (c, a) => ScaleTransition(
-                          scale: Tween<double>(begin: 0.7, end: 1.0).animate(a),
-                          child: FadeTransition(opacity: a, child: c),
-                        ),
-                        child: Icon(
-                          Icons.psychology_outlined,
-                          key: ValueKey(on),
-                          size: 26,
-                          color: badgeFg,
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween<double>(begin: on ? 1 : 0, end: on ? 1 : 0),
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, t, _) => Transform.scale(
+                          scale: 0.92 + 0.08 * t,
+                          child: Icon(
+                            Icons.psychology_outlined,
+                            size: 26,
+                            color: Color.lerp(
+                              theme.colorScheme.onSurfaceVariant,
+                              theme.colorScheme.primary,
+                              t,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -132,6 +129,45 @@ class _RealityCheckToggleCard extends StatelessWidget {
               ),
             ),
           ),
+        );
+
+        // Кольцо-обводка как у карточки нормы в питании: тонкий градиент
+        // «акцент → третичный». Градиент не анимируется напрямую, поэтому
+        // плавно меняем его цвет от нейтрального к акцентному.
+        final card = TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: on ? 1 : 0, end: on ? 1 : 0),
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, child) {
+            final cs = theme.colorScheme;
+            final accent = Color.lerp(cs.outlineVariant, cs.primary, t)!;
+            return Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: <Color>[
+                    accent.withValues(alpha: 0.42 + 0.18 * t),
+                    accent.withValues(alpha: 0.10 + 0.02 * t),
+                    cs.tertiary.withValues(alpha: 0.22 + 0.06 * t),
+                  ],
+                  stops: const <double>[0, 0.55, 1],
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: on ? 0.10 : 0.05),
+                    blurRadius: 10,
+                    spreadRadius: -6,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(1.3),
+              child: child,
+            );
+          },
+          child: inner,
         );
         // Крупная карточка на всю ширину: одним масштабом отдачи 1–2 % тут
         // не увидеть, поэтому гасим ещё и плотность — как у карточек профиля.
@@ -383,6 +419,17 @@ class _CtaButtonState extends State<_CtaButton> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Обводка строится ИЗ цвета самой кнопки, а не из белой плёнки: на
+    // тёмной теме белая рамка 40 % выглядела грязно-серой, а на почти
+    // чёрной Visitella кнопка вообще сливалась с фоном.
+    final rimLight = Color.lerp(
+      widget.gradient.first,
+      Colors.white,
+      dark ? 0.45 : 0.65,
+    )!;
+    final rimDark = Color.lerp(widget.gradient.last, Colors.black, 0.20)!;
+    final iconInk = Color.lerp(widget.gradient.last, Colors.black, 0.15)!;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) {
@@ -395,80 +442,117 @@ class _CtaButtonState extends State<_CtaButton> {
         widget.onTap?.call();
       },
       onTapCancel: () => _setPressed(false),
-      child: AnimatedContainer(
-        // Зажатие визителлы — медленное и мягкое: кнопка «тонет» заметно
-        // дольше (340 мс вместо 170) и без резкого отдачи-скачка.
-        duration: const Duration(milliseconds: 340),
-        curve: Curves.easeInOutCubic,
-        width: double.infinity,
-        height: _pressed ? 51 : 54,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: widget.glow.withValues(alpha: _pressed ? 0.22 : 0.38),
-              blurRadius: _pressed ? 5 : 14,
-              offset: Offset(0, _pressed ? 1 : 4),
+      // Масштаб вместо анимации height: высота тянула за собой перестройку
+      // текста и «подпрыгивала», а scale даёт ровное мягкое вдавливание.
+      child: AnimatedScale(
+        scale: _pressed ? 0.975 : 1,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          width: double.infinity,
+          height: 54,
+          padding: const EdgeInsets.all(1.3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[rimLight, rimDark],
             ),
-          ],
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: widget.gradient,
-          ),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.40),
-            width: 1.2,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.24),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.45),
-                  width: 1,
-                ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: widget.glow.withValues(alpha: _pressed ? 0.18 : 0.34),
+                blurRadius: _pressed ? 6 : 16,
+                spreadRadius: _pressed ? -2 : -1,
+                offset: Offset(0, _pressed ? 1 : 5),
               ),
-              child: Icon(widget.icon, color: Colors.white, size: 16),
+            ],
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16.7),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: widget.gradient,
+              ),
             ),
-            const SizedBox(width: 11),
-            Flexible(
-              // Длинные подписи («Угостить автора», «Offrir un café») не
-              // влезали в кнопку и обрезались многоточием — выглядело как
-              // обрубок. Даём тексту ужаться на узких экранах вместо обрезки.
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: Text(
-                  widget.label,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16.5,
-                    letterSpacing: 0.4,
-                    shadows: [
-                      // Тёмная подложка под текстом + едва заметный
-                      // кровавый ободок — буквы «стоят» на кнопке и
-                      // сливаются с багровым градиентом.
-                      Shadow(
-                        color: Color(0x59000000),
-                        blurRadius: 5,
-                        offset: Offset(0, 2),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: <Widget>[
+                // Верхний блик: объём без «пластикового» глянца, читается
+                // и на светлой, и на тёмной теме.
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: <Color>[
+                          Colors.white.withValues(alpha: dark ? 0.14 : 0.22),
+                          Colors.white.withValues(alpha: 0.02),
+                          Colors.black.withValues(alpha: dark ? 0.10 : 0.05),
+                        ],
+                        stops: const <double>[0, 0.55, 1],
                       ),
-                      Shadow(color: Color(0x665C0014), blurRadius: 10),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.94),
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.18),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Icon(widget.icon, color: iconInk, size: 16),
+                      ),
+                      const SizedBox(width: 11),
+                      Flexible(
+                        // Длинные подписи («Угостить автора», «Offrir un
+                        // café») ужимаются на узких экранах, а не обрезаются.
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.center,
+                          child: Text(
+                            widget.label,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16.5,
+                              letterSpacing: 0.4,
+                              shadows: <Shadow>[
+                                Shadow(
+                                  color: Color(0x66000000),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -488,108 +572,4 @@ class _ThemeEntry {
     this.icon, {
     this.specialMutilated = false,
   });
-}
-
-/// Едва заметные кровавые пятна для карточки BERSERK.
-/// Статичный слой: рисуется один раз на размер карточки, без анимации.
-class _FlutterBadge extends StatelessWidget {
-  const _FlutterBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final bg = Color.lerp(cs.surfaceContainerHighest, cs.primary, 0.06)!;
-    return Container(
-      width: 26,
-      height: 26,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [bg, cs.surfaceContainerHighest],
-        ),
-        border: Border.all(color: cs.primary.withValues(alpha: 0.25), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: 0.18),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(5),
-      child: CustomPaint(
-        size: const Size.square(16),
-        painter: _FlutterLogoPainter(
-          // Ступеньки в цвет текущей темы: светлый/средний/тёмный оттенки
-          // primary вместо фирменных синих — значок подстраивается под
-          // каждую тему.
-          light: Color.lerp(cs.primary, Colors.white, 0.72)!,
-          mid: Color.lerp(cs.primary, Colors.black, 0.05)!,
-          dark: Color.lerp(cs.primary, Colors.black, 0.30)!,
-        ),
-      ),
-    );
-  }
-}
-
-class _FlutterLogoPainter extends CustomPainter {
-  final Color light;
-  final Color mid;
-  final Color dark;
-
-  const _FlutterLogoPainter({
-    required this.light,
-    required this.mid,
-    required this.dark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final lightPaint = Paint()..color = light;
-    final midPaint = Paint()..color = mid;
-    final darkPaint = Paint()..color = dark;
-
-    final step = w / 3.0;
-    // Верхняя ступенька: полная ширина, правый край скошен.
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, 0)
-        ..lineTo(w, 0)
-        ..lineTo(w - step, h / 3)
-        ..lineTo(0, h / 3)
-        ..close(),
-      lightPaint,
-    );
-    // Средняя ступенька: правая граница уходит дальше влево.
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, h / 3)
-        ..lineTo(w - step, h / 3)
-        ..lineTo(w - 2 * step, 2 * h / 3)
-        ..lineTo(0, 2 * h / 3)
-        ..close(),
-      midPaint,
-    );
-    // Нижняя ступенька: самая узкая.
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, 2 * h / 3)
-        ..lineTo(w - 2 * step, 2 * h / 3)
-        ..lineTo(w - 3 * step, h)
-        ..lineTo(0, h)
-        ..close(),
-      darkPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _FlutterLogoPainter oldDelegate) =>
-      oldDelegate.light != light ||
-      oldDelegate.mid != mid ||
-      oldDelegate.dark != dark;
 }
