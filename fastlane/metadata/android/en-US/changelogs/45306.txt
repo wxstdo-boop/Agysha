@@ -1,1 +1,3 @@
-- fix(ui): плавная таблетка и сплэш, клавиатура в Аде, фон экрана проверки и кнопки будильника
+- Smoother splash and section switching
+- The keyboard no longer covers the input field in Ada's window
+- Wake-up check: tidier background, steadier buttons on alarm cards

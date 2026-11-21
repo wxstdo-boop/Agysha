@@ -1,0 +1,7 @@
+- L'écran de démarrage ne saccade plus : contour plus fin, formes mises en cache
+- L'en-tête de section s'efface au lieu de clignoter lors d'un changement rapide d'onglet
+- Le texte barré des tâches terminées est plus marqué
+- Ada a des avatars monochromes avec un fondu doux
+- Les erreurs de l'assistant apparaissent dans une petite barre aux couleurs du thème
+- Test de réveil : carte plus stable pendant la saisie, cases du motif plus fluides, chiffres sur une seule ligne
+- Les cartes de réveil perdent leur halo interne, boutons plus compacts

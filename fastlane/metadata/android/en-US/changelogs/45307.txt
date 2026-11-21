@@ -1,2 +1,2 @@
-- В README больше нет скриншотов и битой ссылки на сайт, текст переписан по-человечески
-- F-Droid-рецепт и метаданные приведены к одному виду
+- README: screenshots and the dead site link are gone, the text is written in plain language
+- F-Droid recipe and store metadata now match each other

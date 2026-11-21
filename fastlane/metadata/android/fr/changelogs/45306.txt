@@ -1,0 +1,3 @@
+- Écran de démarrage et changement de section plus fluides
+- Le clavier ne masque plus le champ de saisie dans la fenêtre d'Ada
+- Test de réveil : fond plus propre, boutons plus stables sur les cartes de réveil

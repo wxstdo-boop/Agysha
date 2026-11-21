@@ -1,0 +1,2 @@
+- README : plus de captures d'écran ni de lien mort vers le site, texte réécrit simplement
+- Recette F-Droid et métadonnées du magasin désormais cohérentes

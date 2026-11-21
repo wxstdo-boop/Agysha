@@ -1,1 +1,7 @@
-- polish: splash, section pill, strike, Ada avatars, AI entry, wake test, AI error snackbar
+- Splash no longer stutters: lighter outline, cached shapes
+- Section header fades out instead of blinking when you switch tabs quickly
+- Strikethrough on finished tasks is bolder and more lively
+- Ada gets monochrome avatars with a smooth cross-fade
+- Assistant errors show as a small snackbar in theme colours
+- Wake-up check: steadier card while typing, cleaner pattern squares, memory digits on one line
+- Alarm cards lost the inner glow, buttons are more compact
