@@ -279,9 +279,11 @@ Future<void> showAiGuideChat(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    // Повторный тап по значку Ады (или рядом) НЕ закрывает чат: он закрывается
-    // крестиком в шапке, свайпом вниз или системной кнопкой «назад».
+    // Чат закрывается ТОЛЬКО крестиком в шапке: ни повторный тап по значку
+    // Ады, ни свайп вниз, ни системная «назад» его не сбрасывают (см.
+    // PopScope ниже) — случайные жесты больше не выкидывают из чата.
     isDismissible: false,
+    enableDrag: false,
     // Плавный выезд и мягкое закрытие с естественным затуханием (easeOutCubic / easeInCubic)
     sheetAnimationStyle: AnimationStyle(
       curve: Curves.easeOutCubic,
@@ -327,23 +329,27 @@ class _AiChatSheetState extends State<_AiChatSheet> {
         .clamp(math.min(300.0, maxH), maxH)
         .toDouble();
 
-    return RepaintBoundary(
-      // Поднятие клавиатуры анимируется вместе с высотой окна: без этого
-      // окно прыгало на новую высоту за один кадр.
-      child: AnimatedPadding(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        // Уже по краям (было 10) и с большим скруглением — окно шире и
-        // «мягче»; нижний отступ учитывает клавиатуру.
-        padding: EdgeInsets.fromLTRB(4, 0, 4, 8 + keyboard),
-        child: ClipRRect(
-          // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
-          borderRadius: BorderRadius.circular(32),
-          // БЕЗ BackdropFilter: размытие фона пересчитывалось на КАЖДОМ
-          // кадре выезда/ухода листа и было главной причиной «лаг при входе
-          // и выходе». Почти непрозрачная заливка с тонкой светлой кромкой
-          // читается тем же «стеклом», но кадр стоит как обычный контейнер.
-          child: AnimatedContainer(
+    return PopScope(
+      // Системная кнопка «назад» не закрывает чат: только крестик.
+      // Navigator.pop из крестика работает и при canPop: false.
+      canPop: false,
+      child: RepaintBoundary(
+        // Поднятие клавиатуры анимируется вместе с высотой окна: без этого
+        // окно прыгало на новую высоту за один кадр.
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          // Уже по краям (было 10) и с большим скруглением — окно шире и
+          // «мягче»; нижний отступ учитывает клавиатуру.
+          padding: EdgeInsets.fromLTRB(4, 0, 4, 8 + keyboard),
+          child: ClipRRect(
+            // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
+            borderRadius: BorderRadius.circular(32),
+            // БЕЗ BackdropFilter: размытие фона пересчитывалось на КАЖДОМ
+            // кадре выезда/ухода листа и было главной причиной «лаг при входе
+            // и выходе». Почти непрозрачная заливка с тонкой светлой кромкой
+            // читается тем же «стеклом», но кадр стоит как обычный контейнер.
+            child: AnimatedContainer(
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutCubic,
               height: sheetHeight,
@@ -374,6 +380,7 @@ class _AiChatSheetState extends State<_AiChatSheet> {
                 removeBottom: true,
                 child: const _AiChatBody(),
               ),
+            ),
           ),
         ),
       ),
@@ -425,18 +432,18 @@ class _AiChatBodyState extends State<_AiChatBody>
   // открытии последние 3 сообщения истории «всплывали» прямо во время
   // выезда листа, и появление чата казалось дёрганым.
   int _openedCount = 0;
+
+  /// История прочитана: до этого пустую подсказку не показываем, иначе
+  /// при открытии на кадр мелькал «пустой Ада».
+  bool _historyLoaded = false;
   String _lang = 'en';
   int _quotaLeft = 0;
   String _modelLabel = 'Pollinations · GPT';
 
-  /// «X — отвечает…» показываем только пока ответ реально готовится.
-  /// Иначе (ошибка, кулдаун, ответ уже пришёл) в шапке остаётся просто имя
-  /// провайдера — статус не залипает, когда пользователь ничего не пишет.
-  String get _displayModelLabel {
-    if (_busy) return _modelLabel;
-    final i = _modelLabel.indexOf('\u2014');
-    return i > 0 ? _modelLabel.substring(0, i).trim() : _modelLabel;
-  }
+  /// В шапке — только имя провайдера. Живого статуса «отвечает…» нет:
+  /// он скакал на каждом переборе провайдеров, а порой залипал, когда
+  /// пользователь уже ничего не писал.
+  String get _displayModelLabel => _modelLabel;
 
   // Плавная очистка чата: список гаснет, потом стирается.
   late final AnimationController _clearCtrl = AnimationController(
@@ -720,6 +727,7 @@ class _AiChatBodyState extends State<_AiChatBody>
     } catch (error, stackTrace) {
       _reportStorageFailure(error, stackTrace);
     }
+    if (mounted) setState(() => _historyLoaded = true);
   }
 
   Future<void> _saveHistory() async {
@@ -1548,15 +1556,13 @@ class _AiChatBodyState extends State<_AiChatBody>
                                   curve: Curves.easeInOut,
                                 ),
                                 child: ScaleTransition(
-                                  scale: Tween<double>(
-                                    begin: 0.98,
-                                    end: 1.0,
-                                  ).animate(
-                                    CurvedAnimation(
-                                      parent: animation,
-                                      curve: Curves.easeInOut,
-                                    ),
-                                  ),
+                                  scale: Tween<double>(begin: 0.98, end: 1.0)
+                                      .animate(
+                                        CurvedAnimation(
+                                          parent: animation,
+                                          curve: Curves.easeInOut,
+                                        ),
+                                      ),
                                   child: child,
                                 ),
                               ),
@@ -1799,10 +1805,16 @@ class _AiChatBodyState extends State<_AiChatBody>
                             mi + 1 < _messages.length &&
                             !_messages[mi + 1].isUser;
                         final readAt = read ? _messages[mi + 1].ts : null;
+                        // Ключ по самому сообщению: индексы сдвигаются при
+                        // каждой вставке, и раньше все пузыри
+                        // пересоздавались — вход нового читался рывком.
+                        final bubbleKey = ValueKey(
+                          'msg_${m.ts}_${m.text.hashCode}_${m.isUser}',
+                        );
                         return RepaintBoundary(
-                          key: ValueKey('msg_layer_$mi'),
+                          key: bubbleKey,
                           child: _MessageBubble(
-                            key: ValueKey('msg_$mi'),
+                            key: bubbleKey,
                             message: m,
                             firstInGroup:
                                 above == null || above.isUser != m.isUser,
@@ -1824,11 +1836,14 @@ class _AiChatBodyState extends State<_AiChatBody>
                     // Подсказка пустого чата: плавно появляется, когда
                     // сообщений нет, и гаснет при первом сообщении.
                     AnimatedOpacity(
-                      opacity: _messages.isEmpty && !_busy ? 1.0 : 0.0,
+                      opacity: _historyLoaded && _messages.isEmpty && !_busy
+                          ? 1.0
+                          : 0.0,
                       duration: const Duration(milliseconds: 320),
                       curve: Curves.easeOutCubic,
                       child: IgnorePointer(
-                        ignoring: !(_messages.isEmpty && !_busy),
+                        ignoring:
+                            !(_historyLoaded && _messages.isEmpty && !_busy),
                         child: const _EmptyChatPlaceholder(),
                       ),
                     ),

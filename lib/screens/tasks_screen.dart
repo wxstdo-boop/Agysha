@@ -1139,7 +1139,7 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   /// Плашка заметки «Вспомнил, что использую…»: лавандовый градиент под
-  /// тему, иконка-лампочка и ВЕСЬ текст заметки (до 150 символов) —
+  /// тему, иконка-лампочка и ВЕСЬ текст заметки (до 1000 символов) —
   /// без обрезки: длинная заметка просто растягивает карточку.
   Widget _noteChip(String note, ThemeData theme, BuildContext context) {
     final lavender = Color.lerp(
@@ -1182,7 +1182,7 @@ class _TasksScreenState extends State<TasksScreen>
             child: Text(
               sanitizeTextForWrap(note),
               // ВЕСЬ текст заметки всегда виден: без maxLines длинная
-              // заметка (до 150 символов) переносится целиком, а карточка
+              // заметка (до 1000 символов) переносится целиком, а карточка
               // плавно растёт под неё.
               // NBSP/невидимые символы из копипасты вычищаем, иначе
               // слова «слипаются» и длинное слово сползает на новую
@@ -1202,7 +1202,7 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   /// Меню быстрого списка «Вспомнил, что использую…»: красивое статичное
-  /// окно по центру с полем заметки до 150 символов (весь текст виден).
+  /// окно по центру с полем заметки до 1000 символов (весь текст виден).
   /// Открывается долгим зажатием задачи (3 секунды), когда режим включён.
   void _showTaskNote(Task task) {
     Haptics.medium();
@@ -1293,7 +1293,7 @@ class _TaskHoldNoteState extends State<_TaskHoldNote> {
   }
 }
 
-/// Красивое окно заметки «Вспомнил, что использую…» (до 150 символов).
+/// Красивое окно заметки «Вспомнил, что использую…» (до 1000 символов).
 class _TaskNoteSheet extends StatefulWidget {
   final Task task;
   final TaskService service;
@@ -1473,7 +1473,9 @@ class _TaskNoteSheetState extends State<_TaskNoteSheet> {
                   cursorOpacityAnimates: true,
                   controller: _ctrl,
                   focusNode: _focus,
-                  maxLength: 150,
+                  // Заметка «вспомнил, что использую»: лимит поднят со 150
+                  // до 1000 — в 150 символов не влезала настоящая мысль.
+                  maxLength: 1000,
                   inputFormatters: [WideDashFormatter()],
                   enableSuggestions: false,
                   autocorrect: false,

@@ -224,6 +224,11 @@ class _OverlayChatState extends State<_OverlayChat>
   // иначе при появлении окошка вся история «вспыхивала» поверх.
   int _openedCount = 0;
 
+  /// История прочитана с диска. До этого момента НЕ показываем пустое
+  /// состояние: иначе при открытии на кадр мелькал «пустой Ада», а следом
+  /// появлялась история — читалось как мигание.
+  bool _historyLoaded = false;
+
   late final AnimationController _appearCtrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 350),
@@ -534,6 +539,7 @@ class _OverlayChatState extends State<_OverlayChat>
     } catch (error, stackTrace) {
       _reportStorageFailure(error, stackTrace);
     }
+    if (mounted) setState(() => _historyLoaded = true);
     // Чат всегда открывается нижней панелью, а не там, где его в прошлый
     // раз бросили: это больше не свободно плавающее окно.
     if (!_collapsed && mounted) {
@@ -924,10 +930,7 @@ class _OverlayChatState extends State<_OverlayChat>
       switchInCurve: Curves.easeInOut,
       switchOutCurve: Curves.easeInOut,
       transitionBuilder: (child, anim) => FadeTransition(
-        opacity: CurvedAnimation(
-          parent: anim,
-          curve: Curves.easeInOut,
-        ),
+        opacity: CurvedAnimation(parent: anim, curve: Curves.easeInOut),
         child: child,
       ),
       child: AdaAvatar(
@@ -1105,7 +1108,24 @@ class _OverlayChatState extends State<_OverlayChat>
               _buildHeader(cs),
               const Divider(height: 1),
               Expanded(
-                child: _messages.isEmpty ? _buildEmpty(cs) : _buildMessages(cs),
+                // Пустое состояние показываем ТОЛЬКО после чтения истории
+                // (иначе на кадр мелькал «пустой Ада»), и появляемся мягко.
+                child: !_historyLoaded
+                    ? const SizedBox.expand()
+                    : AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: _messages.isEmpty
+                            ? KeyedSubtree(
+                                key: const ValueKey('empty'),
+                                child: _buildEmpty(cs),
+                              )
+                            : KeyedSubtree(
+                                key: const ValueKey('list'),
+                                child: _buildMessages(cs),
+                              ),
+                      ),
               ),
               _buildInput(cs),
             ],
@@ -1256,15 +1276,24 @@ class _OverlayChatState extends State<_OverlayChat>
         final isNew = i >= _openedCount;
         final last3 = i >= _messages.length - 3;
         final animate = isNew && last3;
+        // Ключ по САМОМУ сообщению, а не по индексу: иначе каждое
+        // добавление сдвигало индексы, все пузыри пересоздавались и вход
+        // нового читался рывком.
         return TweenAnimationBuilder<double>(
-          key: ValueKey('mini_bubble_$i'),
+          key: ValueKey('mini_${m.ts}_${m.text.hashCode}_${m.isUser}'),
           tween: Tween(begin: 0.0, end: 1.0),
-          duration: Duration(milliseconds: animate ? 300 : 1),
-          curve: Curves.easeOutCubic,
-          builder: (context, t, child) => Opacity(
-            opacity: t,
-            child: Transform.scale(scale: 0.97 + 0.03 * t, child: child),
-          ),
+          duration: Duration(milliseconds: animate ? 420 : 1),
+          curve: Curves.easeOutQuart,
+          builder: (context, t, child) {
+            final e = Curves.easeOutQuart.transform(t);
+            return Opacity(
+              opacity: e,
+              child: Transform.translate(
+                offset: Offset(0, 10 * (1 - e)),
+                child: Transform.scale(scale: 0.97 + 0.03 * e, child: child),
+              ),
+            );
+          },
           child: _MiniBubble(
             message: m,
             avatar: _avatarVariant,

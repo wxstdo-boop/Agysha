@@ -656,76 +656,127 @@ class _SectionPillState extends State<SectionPill>
           onHorizontalDragUpdate: (d) => _dragUpdate(d, count),
           onHorizontalDragEnd: (_) => _dragEnd(count),
           onHorizontalDragCancel: _dragCancel,
-          child: Row(
-            children: List.generate(count, (i) {
-              final label = i < labels.length ? labels[i] : '';
-              final proximity = (1.0 - (p - i).abs()).clamp(0.0, 1.0);
-              final isSelected = selectedIndex == i;
-              final badgeT = (proximity * 48).round() / 48;
-              // Обычный текст — заметно полупрозрачный, чтобы читался как
-              // тихий фон, а не как конкурирующие с контентом подписи.
-              // Выделение — мягкий красный той же «тихой» насыщенности:
-              // полный 0xFFFF453A на мелком кегле резал глаза, особенно
-              // вечером, поэтому цвет спокойнее и без свечения-блика.
-              return Expanded(
-                child: Semantics(
-                  button: true,
-                  selected: isSelected,
-                  label: label,
-                  // Отдача оборачивает ВСЮ ячейку раздела, а не один текст:
-                  // под пальцем мягко сжимается и фоновая подсветка (рябь
-                  // InkWell + подложка отдачи), а не только буквы. Раньше
-                  // фон оставался на месте и нажатие читалось «наполовину».
-                  child: PressScale(
-                    enabled: !_dragging,
-                    pressedScale: 0.94,
-                    pressTint: const Color(0xFFFF453A),
-                    pressTintStrength: 0.13,
-                    pressTintRadius: BorderRadius.circular(18),
-                    enableTilt: true,
-                    // Отдача как у кнопок Ады и «плюсика»: вдавливание
-                    // 240 мс, возврат 520 мс. Возврат чуть дольше прежних
-                    // 340: при быстрых тапах фон успевал «щёлкнуть» и
-                    // исчезнуть раньше пальца — теперь он растворяется
-                    // следом, мягко.
-                    duration: const Duration(milliseconds: 240),
-                    releaseDuration: const Duration(milliseconds: 520),
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        splashColor: Colors.transparent,
-                        highlightColor: Colors.transparent,
-                        onTap: () {
-                          if (!mounted) return;
-                          Haptics.select();
-                          sectionCurrentIndex.value = i;
-                          sectionTabTap.value++;
-                        },
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 6,
-                            ),
-                            child: _PillLabel(
-                              label: label,
-                              glow: badgeT,
-                              dark: dark,
-                              fontSize: count >= 4 ? 12.5 : 14.0,
+          child: LayoutBuilder(
+            builder: (context, box) {
+              // Кегль ОДИН на все разделы и подобран под самый длинный
+              // текст: при четырёх разделах («Будильники», «Привычки»,
+              // «Задачи», «Проверки») прежние 12.5 не влезали в ячейку,
+              // и подписи обрезались многоточием каждая по-своему —
+              // выглядело как «тексты не выровнены». Теперь подписи
+              // ужимаются целиком и стоят ровно.
+              final fontSize = _fittedFontSize(labels, count, box.maxWidth);
+              return Row(
+                children: List.generate(count, (i) {
+                  final label = i < labels.length ? labels[i] : '';
+                  final proximity = (1.0 - (p - i).abs()).clamp(0.0, 1.0);
+                  final isSelected = selectedIndex == i;
+                  final badgeT = (proximity * 48).round() / 48;
+                  // Обычный текст — заметно полупрозрачный, чтобы читался как
+                  // тихий фон, а не как конкурирующие с контентом подписи.
+                  // Выделение — мягкий красный той же «тихой» насыщенности:
+                  // полный 0xFFFF453A на мелком кегле резал глаза, особенно
+                  // вечером, поэтому цвет спокойнее и без свечения-блика.
+                  return Expanded(
+                    child: Semantics(
+                      button: true,
+                      selected: isSelected,
+                      label: label,
+                      // Отдача оборачивает ВСЮ ячейку раздела, а не один текст:
+                      // под пальцем мягко сжимается и фоновая подсветка (рябь
+                      // InkWell + подложка отдачи), а не только буквы. Раньше
+                      // фон оставался на месте и нажатие читалось «наполовину».
+                      child: PressScale(
+                        enabled: !_dragging,
+                        pressedScale: 0.94,
+                        pressTint: const Color(0xFFFF453A),
+                        pressTintStrength: 0.13,
+                        pressTintRadius: BorderRadius.circular(18),
+                        enableTilt: true,
+                        // Отдача как у кнопок Ады и «плюсика»: вдавливание
+                        // 200 мс, возврат 760 мс. Возврат заметно длиннее:
+                        // красноватая подложка при тапе должна растворяться
+                        // следом, а не исчезать за долю секунды.
+                        duration: const Duration(milliseconds: 200),
+                        releaseDuration: const Duration(milliseconds: 760),
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            splashColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            onTap: () {
+                              if (!mounted) return;
+                              Haptics.select();
+                              sectionCurrentIndex.value = i;
+                              sectionTabTap.value++;
+                            },
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 6,
+                                ),
+                                child: _PillLabel(
+                                  label: label,
+                                  glow: badgeT,
+                                  dark: dark,
+                                  fontSize: fontSize,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }),
               );
-            }),
+            },
           ),
         ),
       ],
     );
+  }
+
+  /// Самый крупный кегль (шаг 0.5 от 14 вниз до 9.5), при котором САМАЯ
+  /// длинная подпись целиком влезает в свою ячейку. Один размер на все
+  /// разделы — поэтому тексты всегда выровнены между собой.
+  double _fittedFontSize(List<String> labels, int count, double width) {
+    if (labels.isEmpty || count <= 0 || width <= 0) return 14.0;
+    final cell = (width - 8) / count;
+    for (final size in const [
+      14.0,
+      13.5,
+      13.0,
+      12.5,
+      12.0,
+      11.5,
+      11.0,
+      10.5,
+      10.0,
+      9.5,
+    ]) {
+      final style = TextStyle(
+        fontSize: size,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.2,
+      );
+      var fits = true;
+      for (final label in labels) {
+        final tp = TextPainter(
+          text: TextSpan(text: label, style: style),
+          maxLines: 1,
+          textDirection: TextDirection.ltr,
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout();
+        if (tp.width > cell) {
+          fits = false;
+          break;
+        }
+      }
+      if (fits) return size;
+    }
+    return 9.5;
   }
 }
 
@@ -756,11 +807,10 @@ class _PillLabelState extends State<_PillLabel>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
-    // 1100 мс: текст перекрашивается ровно тем же «следом», что и фон
-    // таблетки, — при быстрых тапах цвет догоняет выбор, а не щёлкает.
-    // Раньше было 760 мс: при серии быстрых переключений подсветка
-    // «догоняла» слишком резко и читалась как мигание.
-    duration: const Duration(milliseconds: 1100),
+    // 400 мс: переключение текста отзывается сразу («чуть быстрее»), но
+    // всё ещё кросс-фейдом, а не кадром — 640/1100 мс читались как
+    // «текст думает».
+    duration: const Duration(milliseconds: 400),
     value: 1,
   );
   late double _from = widget.glow;
@@ -779,7 +829,7 @@ class _PillLabelState extends State<_PillLabel>
   }
 
   double get _value {
-    final t = Curves.easeInOutCubic.transform(_ctrl.value);
+    final t = Curves.easeOutCubic.transform(_ctrl.value);
     return _from + (_to - _from) * t;
   }
 

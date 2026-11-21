@@ -164,7 +164,16 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _onRcChanged() {
     if (!mounted) return;
+    final on = RealityCheckService().enabled;
     setState(() {});
+    // Выключили РП, стоя на его разделе: раздел исчез из карусели, и без
+    // переезда Home остался бы «между» страницами. Мягко уезжаем на
+    // «Задачи» — визуально раздел уходит так же плавно, как появляется.
+    if (!on && _currentIndex.value >= 3) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pagesCount > 0) _onTabTap(_pagesCount - 1);
+      });
+    }
   }
 
   /// Тап по разделу в таблетке (она внутри скролл-контента экранов).
@@ -556,10 +565,14 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       if (rcOn)
         RepaintBoundary(
-          child: RealityChecksScreen(
-            onExit: () => _onTabTap(0),
-            scrollOffset: sectionScrollOffset,
-            pillIndex: 3,
+          // Появление раздела после включения РП в настройках: мягкое
+          // проявление вместо кадра «пусто → готовый экран».
+          child: _SectionReveal(
+            child: RealityChecksScreen(
+              onExit: () => _onTabTap(0),
+              scrollOffset: sectionScrollOffset,
+              pillIndex: 3,
+            ),
           ),
         ),
     ];
@@ -889,5 +902,46 @@ class _HomeScreenState extends State<HomeScreen>
     // builder (main.dart) — поверх Navigator, включая drag-прокси при
     // перетаскивании. Здесь Splatter больше не нужен (избегаем двойных пятен).
     return content;
+  }
+}
+
+/// Плавное появление только что созданного раздела (сейчас — РП после
+/// включения в настройках): короткий fade + едва заметный подъём, без
+/// влияния на габарит и на жесты страницы.
+class _SectionReveal extends StatefulWidget {
+  final Widget child;
+  const _SectionReveal({required this.child});
+
+  @override
+  State<_SectionReveal> createState() => _SectionRevealState();
+}
+
+class _SectionRevealState extends State<_SectionReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    value: 0,
+  )..forward();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final curved = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.012),
+          end: Offset.zero,
+        ).animate(curved),
+        child: widget.child,
+      ),
+    );
   }
 }
