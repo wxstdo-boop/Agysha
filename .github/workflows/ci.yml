@@ -86,7 +86,7 @@ jobs:
       pull-requests: read
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/dependency-review-action@v5
         with:
           # Пока только комментируем, не блокируем: у проекта транзитивные
           # зависимости от Flutter-пакетов, и hard-fail на первом же
