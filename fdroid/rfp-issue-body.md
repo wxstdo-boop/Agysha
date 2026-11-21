@@ -20,7 +20,6 @@ License: MIT
 
 AuthorName: Wetidom
 
-WebSite: https://agysha.ru
 SourceCode: https://github.com/wxstdo-boop/Agysha
 
 IssueTracker: https://github.com/wxstdo-boop/Agysha/issues
