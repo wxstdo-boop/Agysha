@@ -256,6 +256,25 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
     }
   }
 
+  /// Имя файла без служебных символов, которыми нельзя назвать файл.
+  /// Пробелы и юникод (в т.ч. кириллица) сохраняются: пользователь должен
+  /// узнать свой трек по имени.
+  static String _safeSoundFileName(String raw) {
+    final cleaned = raw
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final name = cleaned.isEmpty ? 'sound' : cleaned;
+    return name.length > 40 ? name.substring(0, 40).trim() : name;
+  }
+
+  /// Видимое имя своего звука — имя файла без расширения.
+  static String _displaySoundName(String path) {
+    final file = path.split('/').last;
+    final dot = file.lastIndexOf('.');
+    return dot > 0 ? file.substring(0, dot) : file;
+  }
+
   Source? _builtinSource(String name) {
     switch (name) {
       case 'Default':
@@ -297,8 +316,18 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
       final ext = picked.extension?.isNotEmpty == true
           ? picked.extension!
           : 'wav';
-      final newPath =
-          '${soundsDir.path}/custom_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      // Имя файла берём из имени выбранного файла, а не из служебного
+      // `custom_<timestamp>`: в карусели звук показывается по имени файла,
+      // и раньше там стояло что-то вроде «custom_1732…» — читалось как
+      // случайное имя. Одинаковые имена не перетираем: добавляем _2, _3.
+      final rawName = picked.name.replaceAll(RegExp(r'\.[^.]*$'), '').trim();
+      final baseName = _safeSoundFileName(rawName);
+      var newPath = '${soundsDir.path}/$baseName.$ext';
+      var attempt = 2;
+      while (File(newPath).existsSync()) {
+        newPath = '${soundsDir.path}/${baseName}_$attempt.$ext';
+        attempt++;
+      }
       await File(srcPath).copy(newPath);
       if (mounted) {
         setState(() {
@@ -842,10 +871,7 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                               final isCustom = s == 'Custom';
                               final displayName =
                                   isCustom && _customSoundPath != null
-                                  ? _customSoundPath!
-                                        .split('/')
-                                        .last
-                                        .replaceAll('.wav', '')
+                                  ? _displaySoundName(_customSoundPath!)
                                   : (isCustom
                                         ? Translations.t('customSound', context)
                                         : s);
@@ -1172,23 +1198,23 @@ class _SoundActionChipState extends State<_SoundActionChip> {
     // Три кнопки звука приведены к тому же виду, что бейдж «Сегодня очищено»
     // в привычках (см. HabitsScreen._erasedBadge): на тёмной теме — тихая
     // однотонная капсула с винным подтоном, на светлой — винная таблетка
-    // BloodSpeck. Пока звук играет, кромка лишь чуть плотнее.
+    // BloodSpeck. Поверхность капсулы ПОСТОЯННА: при проигрывании меняется
+    // только сам значок (плавно, 260 мс), а не подложка под ним — раньше
+    // фон кнопки вспыхивал и гас, и это читалось как мигание.
     final BoxDecoration decoration;
     final bool bloodFill;
     if (dark) {
       bloodFill = false;
       // Та же спокойная капсула, что и у бейджа «Сегодня очищено»:
       // однотонная поверхность с винным подтоном, без красного ореола.
-      decoration = BloodSpeck.quiet(theme, active: glowing);
+      decoration = BloodSpeck.quiet(theme);
     } else {
       bloodFill = true;
       decoration = BloodSpeck.decoration(theme, opacity: 0.55).copyWith(
         // Круглая, а не скруглённая (жалоба «округлее»).
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: const Color(
-            0xFFE0525C,
-          ).withValues(alpha: glowing ? 0.70 : 0.45),
+          color: const Color(0xFFE0525C).withValues(alpha: 0.45),
           width: 1.0,
         ),
         boxShadow: [
@@ -1201,11 +1227,10 @@ class _SoundActionChipState extends State<_SoundActionChip> {
         ],
       );
     }
-    final iconColor = dark
-        ? (glowing
-              ? const Color(0xFFFFC2C6)
-              : const Color(0xFFFF9AA0).withValues(alpha: 0.85))
-        : (glowing ? const Color(0xFFFFE1E3) : const Color(0xFFF5DBDD));
+    final iconIdle = dark
+        ? const Color(0xFFFF9AA0).withValues(alpha: 0.85)
+        : const Color(0xFFF5DBDD);
+    final iconHot = dark ? const Color(0xFFFFC2C6) : const Color(0xFFFFE1E3);
     return SmoothTooltip(
       message: widget.tooltip,
       preferredAbove: true,
@@ -1230,22 +1255,24 @@ class _SoundActionChipState extends State<_SoundActionChip> {
                   decoration: decoration,
                   // На светлой теме под винной таблеткой — те же размашистые
                   // пятна, что у бейджа привычки; на тёмной подложка чистая.
-                  child: bloodFill
-                      ? CustomPaint(
-                          painter: const BloodSpeckPainter(opacity: 0.65),
-                          child: Center(
-                            child: IconTheme(
-                              data: IconThemeData(color: iconColor, size: 16),
-                              child: widget.child,
-                            ),
-                          ),
-                        )
-                      : Center(
-                          child: IconTheme(
-                            data: IconThemeData(color: iconColor, size: 16),
-                            child: widget.child,
-                          ),
-                        ),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: glowing ? 1.0 : 0.0),
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, v, child) => IconTheme(
+                      data: IconThemeData(
+                        color: Color.lerp(iconIdle, iconHot, v),
+                        size: 16,
+                      ),
+                      child: child!,
+                    ),
+                    child: bloodFill
+                        ? CustomPaint(
+                            painter: const BloodSpeckPainter(opacity: 0.65),
+                            child: Center(child: widget.child),
+                          )
+                        : Center(child: widget.child),
+                  ),
                 ),
               ),
             ),

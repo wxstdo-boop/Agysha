@@ -14,6 +14,7 @@ import 'package:agysha/services/timer_service.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/widgets/press_scale.dart';
+import 'package:agysha/widgets/volumetric_switch.dart';
 
 void main() {
   late Directory tmpDir;
@@ -63,71 +64,83 @@ void main() {
     } catch (_) {}
   });
 
-  test('AlarmService.reorder корректно перемещает элементы в конец и начало', () async {
-    final service = AlarmService();
-    await service.load();
+  test(
+    'AlarmService.reorder корректно перемещает элементы в конец и начало',
+    () async {
+      final service = AlarmService();
+      await service.load();
 
-    expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2']);
+      expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2']);
 
-    // Добавляем третий для проверки перестановок
-    final a3 = Alarm(id: 'a3', time: const TimeOfDay(hour: 9, minute: 0));
-    await service.add(a3);
-    expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
+      // Добавляем третий для проверки перестановок
+      final a3 = Alarm(id: 'a3', time: const TimeOfDay(hour: 9, minute: 0));
+      await service.add(a3);
+      expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
 
-    // Перемещение первого элемента в самый конец (длина 3)
-    await service.reorder(0, 3);
-    expect(service.alarms.map((a) => a.id).toList(), ['a2', 'a3', 'a1']);
+      // Перемещение первого элемента в самый конец (длина 3)
+      await service.reorder(0, 3);
+      expect(service.alarms.map((a) => a.id).toList(), ['a2', 'a3', 'a1']);
 
-    // Перемещение последнего обратно на первое место
-    await service.reorder(2, 0);
-    expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
+      // Перемещение последнего обратно на первое место
+      await service.reorder(2, 0);
+      expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
 
-    // Недопустимые индексы не ломают список
-    await service.reorder(-1, 2);
-    expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
+      // Недопустимые индексы не ломают список
+      await service.reorder(-1, 2);
+      expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
 
-    await service.reorder(0, -1);
-    expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
+      await service.reorder(0, -1);
+      expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
 
-    // Перемещение в ту же позицию не меняет ничего
-    await service.reorder(1, 1);
-    expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
-  });
+      // Перемещение в ту же позицию не меняет ничего
+      await service.reorder(1, 1);
+      expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
 
-  testWidgets('в AddAlarmScreen PressScale оборачивает Card времени и вибрации', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
+      // Соседний обмен — ровно тот случай, который ломался от двойной
+      // поправки индекса: элемент «возвращался» на место.
+      await service.reorder(0, 1);
+      expect(service.alarms.map((a) => a.id).toList(), ['a2', 'a1', 'a3']);
 
-    await tester.pumpWidget(
-      LocaleProvider(
-        locale: const Locale('ru'),
-        child: const MaterialApp(home: AddAlarmScreen()),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+      await service.reorder(1, 0);
+      expect(service.alarms.map((a) => a.id).toList(), ['a1', 'a2', 'a3']);
+    },
+  );
 
-    // Находим PressScale, у которого внутри лежит Card
-    final pressScalesWithCard = find.descendant(
-      of: find.byType(PressScale),
-      matching: find.byType(Card),
-    );
+  testWidgets(
+    'в AddAlarmScreen PressScale оборачивает Card времени и вибрации',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
-    // Должно быть как минимум 2 таких виджета (плитка времени и вибрация)
-    expect(
-      pressScalesWithCard,
-      findsAtLeastNWidgets(2),
-      reason: 'PressScale должен оборачивать саму Card (время и вибрация)',
-    );
-  });
+      await tester.pumpWidget(
+        LocaleProvider(
+          locale: const Locale('ru'),
+          child: const MaterialApp(home: AddAlarmScreen()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
 
-  testWidgets('в AlarmsScreen только первый будильник содержит кнопку теста', (
+      // Находим PressScale, у которого внутри лежит Card
+      final pressScalesWithCard = find.descendant(
+        of: find.byType(PressScale),
+        matching: find.byType(Card),
+      );
+
+      // Должно быть как минимум 2 таких виджета (плитка времени и вибрация)
+      expect(
+        pressScalesWithCard,
+        findsAtLeastNWidgets(2),
+        reason: 'PressScale должен оборачивать саму Card (время и вибрация)',
+      );
+    },
+  );
+
+  testWidgets('в AlarmsScreen кнопка теста есть у каждого будильника', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -140,12 +153,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 600));
 
-    // Ровно один значок теста будильника
+    // Значок теста — на КАЖДОЙ карточке: раньше он стоял только на первой,
+    // и проверить остальные будильники было нечем.
+    final cards = find.byType(VolumetricSwitch);
     final testBell = find.byIcon(Icons.notifications_active_outlined);
+    expect(cards.evaluate().length, greaterThanOrEqualTo(2));
     expect(
-      testBell,
-      findsOneWidget,
-      reason: 'Кнопка теста должна отображаться ровно на первом будильнике',
+      testBell.evaluate().length,
+      cards.evaluate().length,
+      reason: 'Кнопка теста должна быть у каждого будильника',
     );
   });
 }

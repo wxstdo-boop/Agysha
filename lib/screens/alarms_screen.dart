@@ -783,8 +783,8 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Время и название будильника в центре;
-                            // тестовый будильник — маленький значок только
-                            // на ПЕРВОМ будильнике (не на всех карточках).
+                            // значок тестового будильника есть у КАЖДОЙ
+                            // карточки и запускает именно этот будильник.
                             Row(
                               children: [
                                 Expanded(
@@ -794,61 +794,57 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                     theme: theme,
                                   ),
                                 ),
-                                // Тестовый будильник — значок ТОЛЬКО на первом
-                                // будильнике, и только вне перетаскивания.
-                                // На время драга значок гаснет мгновенно и не
-                                // мешает перетаскиванию. При нажатии всегда
-                                // берётся актуальный первый будильник из сервиса.
-                                if (i == 0)
-                                  IgnorePointer(
-                                    ignoring: _draggingAlarm,
-                                    child: SizedBox(
-                                      width: 32,
-                                      height: 32,
-                                      child: AnimatedOpacity(
-                                        duration: const Duration(
-                                          milliseconds: 180,
+                                // Тест доступен у всех будильников: раньше
+                                // значок стоял только на первом, и проверить
+                                // любой другой было нельзя. На время драга
+                                // значок гаснет, чтобы не мешать переносу.
+                                IgnorePointer(
+                                  ignoring: _draggingAlarm,
+                                  child: SizedBox(
+                                    width: 32,
+                                    height: 32,
+                                    child: AnimatedOpacity(
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      curve: Curves.easeOutCubic,
+                                      opacity: _draggingAlarm ? 0.0 : 1.0,
+                                      child: SmoothTooltip(
+                                        message: Translations.t(
+                                          'testAlarm',
+                                          context,
+                                          'Тест будильника',
                                         ),
-                                        curve: Curves.easeOutCubic,
-                                        opacity: _draggingAlarm ? 0.0 : 1.0,
-                                        child: SmoothTooltip(
-                                          message: Translations.t(
-                                            'testAlarm',
-                                            context,
-                                            'Тест будильника',
-                                          ),
-                                          preferredAbove: true,
-                                          child: PressScale(
-                                            pressedScale: 0.88,
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: theme.colorScheme.primary
-                                                    .withValues(alpha: 0.10),
+                                        preferredAbove: true,
+                                        child: PressScale(
+                                          pressedScale: 0.88,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: theme.colorScheme.primary
+                                                  .withValues(alpha: 0.10),
+                                            ),
+                                            child: IconButton(
+                                              onPressed: () =>
+                                                  _testAlarm(alarm),
+                                              icon: Icon(
+                                                Icons
+                                                    .notifications_active_outlined,
+                                                size: 17,
+                                                color:
+                                                    theme.colorScheme.primary,
                                               ),
-                                              child: IconButton(
-                                                onPressed: () =>
-                                                    _testAlarm(alarm),
-                                                icon: Icon(
-                                                  Icons
-                                                      .notifications_active_outlined,
-                                                  size: 17,
-                                                  color:
-                                                      theme.colorScheme.primary,
-                                                ),
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                padding: EdgeInsets.zero,
-                                                constraints:
-                                                    const BoxConstraints(
-                                                      minWidth: 32,
-                                                      minHeight: 32,
-                                                    ),
-                                                style: IconButton.styleFrom(
-                                                  tapTargetSize:
-                                                      MaterialTapTargetSize
-                                                          .shrinkWrap,
-                                                ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(
+                                                minWidth: 32,
+                                                minHeight: 32,
+                                              ),
+                                              style: IconButton.styleFrom(
+                                                tapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
                                               ),
                                             ),
                                           ),
@@ -856,6 +852,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                       ),
                                     ),
                                   ),
+                                ),
                               ],
                             ),
                             // Метка будильника (если есть)

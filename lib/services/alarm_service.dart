@@ -117,15 +117,15 @@ class AlarmService extends ChangeNotifier {
 
   Future<void> reorder(int oldIndex, int newIndex) async {
     if (oldIndex < 0 || oldIndex >= _alarms.length) return;
-    if (newIndex < 0) return;
-    var target = newIndex;
-    if (oldIndex < target) {
-      target -= 1;
-    }
+    if (newIndex < 0 || newIndex > _alarms.length) return;
+    // UI отдаёт индекс из `onReorderItem`, то есть уже БЕЗ сдвига на
+    // удаление. Раньше сервис дополнительно вычитал единицу при
+    // `oldIndex < newIndex` — двойная поправка возвращала элемент почти
+    // на место, и перетаскивание двух соседних будильников не работало.
+    final target = newIndex.clamp(0, _alarms.length - 1);
     if (oldIndex == target) return;
     final item = _alarms.removeAt(oldIndex);
-    final targetIndex = target.clamp(0, _alarms.length);
-    _alarms.insert(targetIndex, item);
+    _alarms.insert(target.clamp(0, _alarms.length), item);
     notifyListeners();
     await _save();
   }
