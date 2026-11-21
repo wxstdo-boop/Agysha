@@ -1,217 +1,190 @@
 <div align="center">
-  <img src="assets/agysha.png" alt="Agysha" width="128" height="128" />
+  <img src="assets/agysha.png" alt="Agysha" width="112" height="112" />
 
   <h1>Agysha</h1>
 
-  <p><strong>Будильник, который не даёт уснуть обратно.</strong><br />
-  Задачи, привычки, питание и ИИ-ассистент Ада — в одном приложении.</p>
+  <p><strong>Будильник, задачи, привычки и еда — в одном приложении.</strong><br />
+  Плюс Ада: ей можно просто сказать, что нужно сделать.</p>
 
   <p>
-    <a href="https://github.com/wxstdo-boop/agysha/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/wxstdo-boop/agysha/ci.yml?label=CI&color=%232ea44f" /></a>
-    <a href="https://github.com/wxstdo-boop/agysha/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/wxstdo-boop/agysha?label=%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C&color=%23c2185b" /></a>
-    <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-2ea44f" /></a>
-    <img alt="Flutter" src="https://img.shields.io/badge/Flutter-3.47.5-02569a?logo=flutter&logoColor=white" />
-    <img alt="Dart" src="https://img.shields.io/badge/Dart-3.13-0175C2?logo=dart&logoColor=white" />
-    <img alt="Android" src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" />
+    <a href="https://github.com/wxstdo-boop/Agysha/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/wxstdo-boop/Agysha/ci.yml?branch=main&label=CI&color=2ea44f" /></a>
+    <a href="https://github.com/wxstdo-boop/Agysha/releases/latest"><img alt="Последний релиз" src="https://img.shields.io/github/v/release/wxstdo-boop/Agysha?label=%D1%80%D0%B5%D0%BB%D0%B8%D0%B7&color=c2185b" /></a>
+    <a href="LICENSE"><img alt="Лицензия MIT" src="https://img.shields.io/badge/license-MIT-2ea44f" /></a>
+    <img alt="Flutter 3.47.5" src="https://img.shields.io/badge/Flutter-3.47.5-02569a?logo=flutter&logoColor=white" />
+    <img alt="Dart 3.12+" src="https://img.shields.io/badge/Dart-3.12%2B-0175C2?logo=dart&logoColor=white" />
+    <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" />
+  </p>
+
+  <p>
+    <a href="https://github.com/wxstdo-boop/Agysha/releases/latest"><strong>Скачать APK</strong></a>
+    &nbsp;·&nbsp;
+    <a href="docs/BUILD.md">Собрать самому</a>
+    &nbsp;·&nbsp;
+    <a href="docs/ARCHITECTURE.md">Как устроено</a>
+    &nbsp;·&nbsp;
+    <a href="CONTRIBUTING.md">Помочь</a>
   </p>
 </div>
 
 ---
 
-## 📸 Скриншоты
+Agysha — бесплатное Android-приложение. Без рекламы, без аккаунтов, без
+облака: всё лежит на телефоне, в обычных JSON-файлах, зашифрованных AES-256-GCM.
+Работает офлайн. В сеть ходит только за обновлениями с GitHub и к тому
+ИИ-провайдеру, которого ты сам выберешь в настройках.
 
-> [!NOTE]
-> Галерея собрана из реальных экранов с демо-данными (без личных записей).
-> Снимки воспроизводимы: `flutter test tool/screenshots/render_screenshots.dart`
-> кладёт PNG в [`docs/screenshots/`](docs/screenshots/).
+## Что умеет
 
-<div align="center">
-  <table>
-    <tr>
-      <td width="50%"><img src="docs/screenshots/alarms.png" width="260" alt="Будильники" /></td>
-      <td width="50%"><img src="docs/screenshots/habits.png" width="260" alt="Привычки со стриками" /></td>
-    </tr>
-    <tr>
-      <td align="center"><sub>Будильники</sub></td>
-      <td align="center"><sub>Привычки со стриками</sub></td>
-    </tr>
-    <tr>
-      <td width="50%"><img src="docs/screenshots/tasks.png" width="260" alt="Задачи" /></td>
-      <td width="50%"><img src="docs/screenshots/stats.png" width="260" alt="Статистика" /></td>
-    </tr>
-    <tr>
-      <td align="center"><sub>Задачи с приоритетами</sub></td>
-      <td align="center"><sub>Статистика РП</sub></td>
-    </tr>
-  </table>
-</div>
+### Будильники
 
----
+- Срабатывают точно и не теряются после перезагрузки телефона.
+- **Wake-task**: чтобы выключить звонок, нужно выполнить задание. Просто
+  нажать «стоп» спросонья не получится.
+- Полноэкранное окно поверх блокировки.
+- Пять мелодий: classic, default, digital, gentle, nature.
+- Лог срабатываний — если будильник когда-нибудь подведёт, будет видно, почему.
 
-## ✨ Что умеет
+### Задачи и привычки
 
-### ⏰ Будильники
-- Точное срабатывание: `SCHEDULE_EXACT_ALARM` + `USE_EXACT_ALARM`, foreground-сервис
-  держит процесс живым, `WAKE_LOCK` будит CPU
-- **Wake-task** — к каждому будильнику можно привязать задание, которое надо
-  выполнить, чтобы выключить звонок
-- Переживает перезагрузку телефона (`RECEIVE_BOOT_COMPLETED` + ресивер
-  перепланировывает всё заново)
-- Полноэкранный интент, чтобы будильник вылез поверх блокировки
-- Пять мелодий: classic, default, digital, gentle, nature
+- Задачи с приоритетом, дедлайном и повтором.
+- Привычки со стриками и нормами на день и на всё время.
+- **Проверки реальности** — короткие честные вопросы самому себе.
+- Свайпы, перетаскивание, пружинные анимации.
 
-### ✅ Задачи и привычки
-- Задачи с приоритетом, дедлайном и повторением
-- Привычки со стриками, дневными и суммарными нормами
-- **Reality checks** — честная проверка «а не врёшь ли ты себе»
-- Свайп-по-жесту для удаления, перетаскивание, отложенные анимации
+### Еда и статистика
 
-### 🍎 Питание
-- Приёмы пищи, нормы по БЖУ, тренды за 30 дней
-- Кольцевой прогресс по каждой норме
+- Приёмы пищи, нормы по БЖУ, тренды за 30 дней.
+- Кольца прогресса и общая сводка.
 
-### 🔒 Приватность
-- PIN-защита и экран блокировки приложения
-- Экспорт своих данных одним файлом
+### Приватность
 
-### 🤖 Ада — ИИ-ассистент
-Ада живёт прямо в приложении и понимает обычную речь:
+- PIN и экран блокировки приложения.
+- Ключ шифрования хранится в системном хранилище.
+- Экспорт всех данных одним файлом.
+
+### Ада
+
+Ада — помощник внутри приложения. Понимает обычную речь:
 
 > «поставь будильник на 7 утра на рабочие»
 > «завтра в 18:30 напомни купить молоко»
-> «посчитай сколько я съел»
+> «посчитай, сколько я съел»
 
-- Создаёт, меняет и удаляет будильники, задачи, привычки, проверки и приёмы пищи
-- **Умеет отменять**: «Отменить» откатывает последнее действие («Привычка X удалена»)
-- Работает в **окошке поверх других приложений** — можно говорить с Адой, не
-  открывая приложение
-- Несколько провайдеров на выбор (OpenRouter, Kilo, OVHcloud, Agnes и другие),
-  ключ хранится только на устройстве
-- Аккуратно переживает ошибки сети и 4xx от провайдера
+- Заводит и правит будильники, задачи, привычки, проверки и приёмы пищи.
+- Последнее действие можно отменить одной кнопкой.
+- Работает в окошке поверх других приложений.
+- Провайдера ИИ выбираешь сам; ключ остаётся на телефоне.
 
-### 🛠 Система
-- **Автообновление** прямо из приложения: проверяет GitHub Releases, спрашивает
-  подтверждение, сверяет SHA-256 и ставит APK поверх старого — данные (PIN,
-  будильники) сохраняются. Установку выполняет ОБЫЧНЫЙ системный установщик
-  (`Intent.ACTION_VIEW` через FileProvider): система сама показывает свой экран
-  «Установить обновление?» с проверкой Play Protect, а пользователь
-  подтверждает. Сессию `PackageInstaller`, объявление себя владельцем обновлений
-  (`ENFORCE_UPDATE_OWNERSHIP`) и тихий путь без подтверждения
-  (`UPDATE_PACKAGES_WITHOUT_USER_ACTION`) мы сознательно НЕ используем: этот
-  набор Play Protect помечает как поведение вредоносного ПО и блокирует
-  установку
-- **«Что нового»** тянется из живых релизов, а не из зашитого списка: экран
-  никогда не отстаёт от установленной версии
-- Material You: цвета тянутся из системной темы, есть тёмная тема
-- Плавные анимации: пружинные переходы, инерционный ввод, мягкие тултипы
-- Тумблеры **вибрации** и **«убрать анимации»**: декоративные петли гаснут,
-  система «упростить движение» уважается всегда
-- Локализация: **русский / English / Français**
+### Мелочи, которые заметны
 
----
+- **Автообновление** из GitHub Releases: подтверждение, проверка SHA-256,
+  установка поверх старой версии. Данные не пропадают.
+- «Что нового» берётся из настоящих релизов, а не из зашитого списка.
+- Material You: цвета под системную тему, тёмная тема.
+- Отдельные переключатели вибрации и анимаций; системное «упростить движение»
+  учитывается всегда.
+- Русский, English, Français.
 
-## 🚀 Установка
+## Установка
 
-### Готовый APK
-1. Открой [Releases](https://github.com/wxstdo-boop/agysha/releases/latest)
-2. Скачай `Agysha-<версия>-<abi>.apk` под свой процессор
-   (`arm64-v8a` — почти все современные телефоны, `armeabi-v7a` — старые,
-   `x86_64` — эмуляторы)
-3. Разреши установку из этого источника, если попросит
-4. При обновлении данные не пропадут — APK ставится поверх старого
+### APK
 
-> Требуется Android 8.0 (API 26) или новее.
+1. Открой [Releases](https://github.com/wxstdo-boop/Agysha/releases/latest).
+2. Скачай файл под свой процессор:
+   `arm64-v8a` — почти все современные телефоны, `armeabi-v7a` — старые,
+   `x86_64` — эмуляторы.
+3. Разреши установку из этого источника, если система спросит.
+4. При обновлении ставь APK поверх старого — данные останутся.
 
-> **Play Protect может предупредить об установке.** APK распространяется не
-> через Google Play, поэтому система иногда показывает «требуется проверка»
-> или «вредоносное приложение». Это не означает, что в приложении есть
-> что-то плохое — так Play Protect ведёт себя с любым сайдлоадом. Нажми
-> «Всё равно установить», а если система заблокировала установку — открой
-> Настройки → Безопасность (Play Protect) и разреши установку для Agysha:
-> в приложении есть кнопка, ведущая прямо туда.
+Нужен Android 8.0 (API 26) или новее.
 
-### Автообновление через Obtainium
+> Play Protect иногда ругается на APK не из Google Play. Это нормально:
+> жми «Всё равно установить». Если установка заблокирована, разреши её для
+> Agysha в Настройки → Безопасность → Play Protect. В приложении есть кнопка,
+> которая ведёт туда же.
 
-[Obtainium](https://github.com/ImranR98/Obtainium) следит за GitHub Releases и
-сам предлагает обновления, сверяя APK по SHA-256. Добавь в приложении ссылку:
+### Obtainium
+
+[Obtainium](https://github.com/ImranR98/Obtainium) сам следит за релизами на
+GitHub и сверяет APK по SHA-256. Достаточно добавить ссылку:
 
 ```
-https://github.com/wxstdo-boop/agysha
+https://github.com/wxstdo-boop/Agysha
 ```
-
-Obtainium подхватит нужный ABI и будет ставить новые версии поверх — данные
-(PIN, будильники, задачи) сохранятся.
 
 ### F-Droid
 
-Приложение готовится к публикации в F-Droid. После приёма его можно будет
-установить из любого F-Droid-клиента (Neo Store, Droid-ify и др.). Сборка для
-F-Droid собирается из исходников без встроенного автообновления — обновления
-приходят через F-Droid.
-
-Готовый рецепт сборки и инструкция по подаче — в
-[docs/publishing-fdroid.md](docs/publishing-fdroid.md).
+Приложение готовится к публикации. Рецепт сборки и инструкция по подаче —
+в [docs/publishing-fdroid.md](docs/publishing-fdroid.md).
 
 ### Из исходников
 
 ```bash
-git clone https://github.com/wxstdo-boop/agysha.git
+git clone https://github.com/wxstdo-boop/Agysha.git
 cd Agysha
 flutter pub get
 flutter run
 ```
 
-Подробности, требования к SDK и решение проблем — в [docs/BUILD.md](docs/BUILD.md).
+Требования к SDK и типовые проблемы — в [docs/BUILD.md](docs/BUILD.md).
 
----
+## Документация
 
-## 🏗 Архитектура
+| Документ | О чём |
+|---|---|
+| [docs/BUILD.md](docs/BUILD.md) | Сборка, запуск, требования, типовые поломки |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Слои, хранение, нативный слой, локализация |
+| [docs/TESTS.md](docs/TESTS.md) | Что и как проверяется |
+| [docs/RELEASE.md](docs/RELEASE.md) | Релизный процесс и версии |
+| [docs/publishing-fdroid.md](docs/publishing-fdroid.md) | F-Droid и другие каталоги |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Стиль, локализация, чек-лист перед PR |
+| [SECURITY.md](SECURITY.md) | Как сообщить об уязвимости |
 
-Проект — обычное Flutter-приложение, Android-first: надёжные будильники
-обеспечивает нативный код на Kotlin.
+## Как устроено
+
+Обычное Flutter-приложение, Android-first. Надёжные будильники — на Kotlin.
 
 ```
 lib/
-├── main.dart          Точка входа, навигация, startup, автосохранение
-├── l10n/              Переводы (ru/en/fr) и провайдер локали
-├── models/            Alarm, Habit, Task, RealityCheck, AppTimer, WakeTask
-├── screens/           42 файла: разделы и их компоненты
-├── services/          39 сервиса: данные, уведомления, ИИ, обновления
-├── overlay/           Оверлей Ады + мост (io / web)
-├── theme/             Единый построитель темы (app_theme.dart)
-├── utils/             Иконки, анимации, токены дизайна, «убрать анимации»
-└── widgets/           65 UI-компонента
+├── main.dart          точка входа, навигация, старт, автосохранение
+├── l10n/              переводы (ru/en/fr) и провайдер локали
+├── models/            8 моделей: Alarm, Habit, Task, RealityCheck, …
+├── screens/           42 экрана и их компоненты
+├── services/          39 сервисов: данные, уведомления, ИИ, обновления
+├── overlay/           оверлей Ады + мост (io / web)
+├── theme/             единый построитель темы (app_theme.dart)
+├── utils/             иконки, анимации, токены дизайна
+└── widgets/           66 UI-компонентов
 
 android/app/src/main/kotlin/com/wetcorp/agysha/
-├── MainActivity.kt             Точка входа Android, каналы плагинов
-├── AlarmSchedulerPlugin.kt     Планирование setAlarmClock, догон, манифест
-├── AlarmReceiver.kt            Приём срабатывания будильника
-├── AlarmForegroundService.kt   Удержание процесса во время звонка
-├── BootReceiver.kt             Перепланировка будильников после перезагрузки
-├── ScreenReaderService.kt      Доступность: чтение экрана
-└── AlarmLog.kt                 Чёрный ящик срабатываний (для диагностики)
+├── MainActivity.kt             точка входа Android, каналы плагинов
+├── AlarmSchedulerPlugin.kt     планирование setAlarmClock, догон
+├── AlarmReceiver.kt            приём срабатывания будильника
+├── AlarmForegroundService.kt   удержание процесса во время звонка
+├── BootReceiver.kt             перепланировка после перезагрузки
+├── ScreenReaderService.kt      доступность: чтение экрана
+└── AlarmLog.kt                 чёрный ящик срабатываний
 
 third_party/
-├── flutter_overlay_window/      Форк: регистрирует плагины в оверлее Ады
-└── flutter_keyboard_visibility/ Форк: поднят compileSdk до 36
+├── flutter_overlay_window/      форк: регистрирует плагины в оверлее Ады
+└── flutter_keyboard_visibility/ форк: поднят compileSdk
 ```
 
-Подробный разбор — в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
 ### Токены дизайна
+
 Геометрия, отступы, длительности и начертания живут в одном файле —
-`lib/utils/design_tokens.dart`. Тема (`lib/theme/app_theme.dart`) собирается
-из этих шкал, поэтому «ещё один магический радиус» не появляется незаметно.
+`lib/utils/design_tokens.dart`. Тема (`lib/theme/app_theme.dart`) собирается из
+этих шкал, поэтому случайный радиус или отступ не появляется незаметно.
 
 ### Хранение данных
-Без базы данных и без облака. Каждая сущность лежит отдельным JSON-файлом в
-каталоге документов приложения, настройки — в `SharedPreferences`. На вебе тот же
-код пишет в `localStorage`. Запись идёт через `flush: true` (fsync), с
-проверкой «на диске уже ровно этот текст», чтобы не мучить flash-память
-fsync-ом каждые 10 секунд. На web `dart:io` недоступен, поэтому
-`lib/utils/` и `lib/services/` умеют работать через `kIsWeb`.
+
+Ни базы данных, ни облака. Каждая сущность — отдельный зашифрованный JSON-файл
+в документах приложения, настройки — в `SharedPreferences`. На вебе тот же код
+пишет в `localStorage`. Запись атомарная, с блокировкой и слиянием независимых
+изменений.
 
 ### Стек
+
 | Слой | Что используется |
 |---|---|
 | UI | Flutter 3.47.5, Material 3, `dynamic_color` для Material You |
@@ -219,66 +192,49 @@ fsync-ом каждые 10 секунд. На web `dart:io` недоступен
 | Хранилище | JSON-файлы + `shared_preferences` |
 | Уведомления | `flutter_local_notifications`, `timezone` |
 | Оверлей | форк `flutter_overlay_window` |
-| ИИ | `http` к выбранному провайдеру, `uuid` для идентификаторов диалогов |
-| Локальные форки | `flutter_overlay_window`, `flutter_keyboard_visibility` |
+| ИИ | `http` к выбранному провайдеру, `uuid` для диалогов |
 
----
-
-## 🧪 Тесты
+## Тесты
 
 ```bash
 flutter test --concurrency=1
 ```
 
-75 тестовых файлов, 424 теста: стрики привычек, анимации чипов и тултипов,
-счётчик, слайдер-пикер, логика ворк-леда, локализация диалогов, смоук-тест.
+Проверяются стрики привычек, анимации, счётчики, слайдер-пикер, логика
+ворк-леда, локализация диалогов и смоук-тесты экранов. Текущее состояние —
+в [docs/TESTS.md](docs/TESTS.md).
 
-> По состоянию на 2026-11-20 в CI (Flutter 3.47.5, как в `.github/workflows/ci.yml`)
-> `flutter analyze` чистый, `flutter test` — 424 теста, 6 пропущено (ручные,
-> требуют сети), падений нет. Подробности — в разделе
-> [Состояние тестов](docs/TESTS.md).
+## Релизы
 
----
-
-## 🚢 Релизы
-
-Релизы собирает GitHub Actions по тегу вида `v1.6.49+45121`
-(тот же формат, что в `pubspec.yaml`). Workflow восстанавливает keystore из
-секретов, собирает `--split-per-abi`, переименовывает ассеты в
-`Agysha-<версия>-<abi>.apk` и публикует в Releases.
+Релизы собирает GitHub Actions по тегу вида `v1.6.234+45306` (тот же формат,
+что в `pubspec.yaml`). Workflow достаёт keystore из секретов, собирает
+`--split-per-abi`, переименовывает файлы в `Agysha-<версия>+<код>-<abi>.apk`
+и публикует в Releases.
 
 ```bash
-git tag v1.6.49+45121
+git tag v1.6.234+45306
 git push --tags
 ```
 
-> ⚠️ **`versionCode` должен быть строго выше установленного на телефоне.**
-> Flutter прибавляет к номеру из `pubspec.yaml` индекс ABI: `armeabi-v7a` +1000,
-> `arm64-v8a` +2000, `x86_64` +3000. Иначе `adb install -r` падает с
+> **versionCode должен быть выше установленного на телефоне.** Flutter
+> прибавляет к номеру из `pubspec.yaml` индекс ABI: `armeabi-v7a` +1000,
+> `arm64-v8a` +2000, `x86_64` +4000. Иначе `adb install -r` упадёт с
 > `INSTALL_FAILED_VERSION_DOWNGRADE`.
 
-Разбор процесса — в [docs/RELEASE.md](docs/RELEASE.md).
+Подробности — в [docs/RELEASE.md](docs/RELEASE.md).
 
----
+## Участие
 
-## 🤝 Участие
+Баги и идеи — в issues, правки — в PR. Перед этим загляни в
+[CONTRIBUTING.md](CONTRIBUTING.md): там про стиль, локализацию и то, как не
+сломать сборку.
 
-Приветствуются баги, идеи и PR. Перед правкой прочитайте
-[CONTRIBUTING.md](CONTRIBUTING.md) — там договорённости по стилю, локализации и
-тому, как не сломать сборку.
+## Лицензия
 
----
+MIT, см. [LICENSE](LICENSE). Приложение бесплатное. Твои данные никуда не
+уходят, кроме запросов к ИИ-провайдеру, которого ты выбрал сам.
 
-## 📄 Лицензия
+## Спасибо
 
-MIT — см. [LICENSE](LICENSE).
-
-Приложение бесплатное и открытое. Свои данные никуда не отправляются, кроме
-запросов к ИИ-провайдеру, которого ты сам выбрал в настройках.
-
----
-
-## 💜 Благодарности
-
-- Flutter и команде Dart
-- Всем, кто присылал баги и идеи по Аде
+- Flutter и команде Dart.
+- Всем, кто присылал баги и идеи.

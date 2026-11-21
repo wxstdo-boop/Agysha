@@ -1,11 +1,11 @@
 {
-    "name": "Agysha FOSS",
+    "name": "Agysha",
     "short_name": "Agysha",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFF0F5",
     "theme_color": "#E91E63",
-    "description": "A beautiful habit, alarm, task and nutrition tracking app",
+    "description": "Alarm clock, tasks, habits and nutrition tracker — open source, no ads, no trackers",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

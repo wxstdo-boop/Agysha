@@ -54,7 +54,9 @@ flutter run
 
 - Иконки и звуки — только в `assets/`, с добавлением в `pubspec.yaml`.
 - Растровые файлы сжимай: телефон грузит их с flash-памяти.
-- Скриншоты для README — в `docs/screenshots/`, инструкция там же.
+- Скриншоты для каталогов генерируются тестом в
+  `fastlane/metadata/android/en-US/images/phoneScreenshots/` — вручную их не
+  снимают и в README не кладут.
 
 ## Чего не делать
 

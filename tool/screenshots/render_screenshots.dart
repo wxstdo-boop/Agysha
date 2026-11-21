@@ -1,15 +1,15 @@
-// Генератор скриншотов для витрины (README / docs).
+// Генератор скриншотов для каталогов приложений (F-Droid / IzzyOnDroid).
 //
 // Зачем отдельный прогон, а не ручной `adb screencap`: снимки должны быть
 // воспроизводимы и без личных данных — один и тот же набор демо-записей,
 // одна тема, один размер. Скрипт монтирует РЕАЛЬНЫЕ экраны приложения в
-// настоящей теме (lib/theme/app_theme.dart), поэтому витрина не расходится
+// настоящей теме (lib/theme/app_theme.dart), поэтому каталог не расходится
 // с видом приложения.
 //
 // Запуск (нужен Flutter SDK и настоящие шрифты — см. AGENTS.md):
 //   flutter test tool/screenshots/render_screenshots.dart
-// PNG кладутся в docs/screenshots/ (витрина README) и в
-// fastlane/metadata/android/en-US/images/phoneScreenshots/ (F-Droid/IzzyOnDroid).
+// PNG кладутся в fastlane/metadata/android/en-US/images/phoneScreenshots/
+// (F-Droid/IzzyOnDroid).
 //
 // Файл лежит вне test/, поэтому обычный `flutter test` его не подхватывает.
 //
@@ -251,12 +251,11 @@ void main() {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       return data!.buffer.asUint8List();
     });
-    File('docs/screenshots/$name.png').writeAsBytesSync(bytes!);
     final fastlane = Directory(
       'fastlane/metadata/android/en-US/images/phoneScreenshots',
     );
     if (fastlane.existsSync()) {
-      File('${fastlane.path}/$name.png').writeAsBytesSync(bytes);
+      File('${fastlane.path}/$name.png').writeAsBytesSync(bytes!);
     }
   }
 
