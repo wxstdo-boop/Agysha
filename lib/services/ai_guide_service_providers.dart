@@ -31,7 +31,7 @@ Future<String> _sendAgnes(
         body: jsonEncode({
           'model': _agnesModel,
           'messages': messages,
-          'max_tokens': 3000,
+          'max_tokens': 6000,
         }),
       )
       .timeout(const Duration(seconds: 14));
@@ -86,7 +86,7 @@ Future<String> _sendZen(
             body: jsonEncode({
               'model': model,
               'messages': messages,
-              'max_tokens': 3000,
+              'max_tokens': 6000,
             }),
           )
           .timeout(const Duration(seconds: 14));
@@ -184,7 +184,7 @@ Future<Object> _poolsideRound(
           'model': model,
           'messages': messages,
           'tools': AiGuideService._tools(),
-          'max_tokens': 3000,
+          'max_tokens': 6000,
         }),
       )
       // Короткий таймаут: при недоступности своего ключа быстро
@@ -347,7 +347,7 @@ Future<String> _sendLlm7(
               'temperature': 0.6,
               // Щедрый лимит: часть токенов модель тратит на reasoning,
               // и при маленьком лимите content приходит обрезанным.
-              'max_tokens': 3000,
+              'max_tokens': 6000,
               'stream': false,
             }),
           )

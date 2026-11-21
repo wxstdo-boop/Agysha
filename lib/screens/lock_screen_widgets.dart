@@ -402,10 +402,12 @@ class _ExitCapsuleButtonState extends State<_ExitCapsuleButton> {
         onEnter: (_) => _prewarmExitBackdrop(lockExitBackdrop),
         child: GestureDetector(
         onTap: widget.onExit,
-        child: AnimatedScale(
-          scale: _pressed ? 0.94 : 1.0,
+        child: PressScale(
+          pressedScale: 0.94,
+          enableTilt: true,
+          maxTiltAngle: 0.12,
           duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOutCubic,
+          releaseDuration: const Duration(milliseconds: 260),
           child: ClipRRect(
             borderRadius: const BorderRadius.horizontal(
               right: Radius.circular(22),
@@ -699,7 +701,13 @@ Future<void> _showExitDialog(
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            TextButton(
+                            PressScale(
+                              pressedScale: 0.94,
+                              enableTilt: true,
+                              maxTiltAngle: 0.12,
+                              duration: const Duration(milliseconds: 150),
+                              releaseDuration: const Duration(milliseconds: 260),
+                              child: TextButton(
                               style: TextButton.styleFrom(
                                 minimumSize: const Size(0, 32),
                                 padding: const EdgeInsets.symmetric(
@@ -715,9 +723,16 @@ Future<void> _showExitDialog(
                                   fontSize: 12,
                                 ),
                               ),
+                              ),
                             ),
                             const SizedBox(width: 4),
-                            OutlinedButton(
+                            PressScale(
+                              pressedScale: 0.94,
+                              enableTilt: true,
+                              maxTiltAngle: 0.12,
+                              duration: const Duration(milliseconds: 150),
+                              releaseDuration: const Duration(milliseconds: 260),
+                              child: OutlinedButton(
                               style: OutlinedButton.styleFrom(
                                 minimumSize: const Size(0, 32),
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -750,6 +765,7 @@ Future<void> _showExitDialog(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 12,
                                 ),
+                              ),
                               ),
                             ),
                           ],
@@ -1191,6 +1207,15 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
       child: RepaintBoundary(
         child: GestureDetector(
           onTap: widget.onTap,
+          // 3D-наклон под палец, как у остальных кнопок приложения.
+          // Уменьшение делает внутренний Transform.scale ниже (у него
+          // transformHitTests: false, чтобы палец не «срывал» тап).
+          child: PressScale(
+          pressedScale: 1.0,
+          enableTilt: true,
+          maxTiltAngle: 0.10,
+          duration: const Duration(milliseconds: 150),
+          releaseDuration: const Duration(milliseconds: 300),
           child: AnimatedBuilder(
           animation: Listenable.merge([_in, _out]),
           builder: (context, _) {
@@ -1234,6 +1259,7 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
             );
           },
         ),
+          ),
       ),
     ),
   );
@@ -1456,9 +1482,11 @@ class _PinMedallionState extends State<_PinMedallion>
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = cs.primary;
-    // Скин скважины дарится на 12-й день ивента и снимается вместе с
-    // подарком: после сброса события медальон снова обычный.
-    final frost = NewYearEventService().prizeGranted;
+    // Обводка медальона всегда одного тона темы. Подарочный скин «Метель»
+    // красил ореол, бегунок и кольцо в лазурно-мятное северное сияние —
+    // владелец читал это как «синяя светящаяся обводка» на ПИН-экране.
+    // Геометрия скина осталась, меняется только цвет.
+    const frost = false;
     return RepaintBoundary(
       // Граница на всю плашку: перерисовывается только её квадрат, а не
       // страница с витражом. Статичный нижний слой при этом остаётся чистым

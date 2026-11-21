@@ -666,7 +666,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                           TextMagnifierConfiguration.disabled,
                       controller: _titleCtrl,
                       contextMenuBuilder: minimalContextMenuBuilder,
-                      maxLength: 250,
+                      maxLength: 1000,
                       inputFormatters: [WideDashFormatter()],
                       enableSuggestions: false,
                       autocorrect: false,

@@ -51,9 +51,6 @@ class _AlarmsScreenState extends State<AlarmsScreen>
   // FAB-ряд прячется при прокрутке вниз и плавно возвращается у верха.
   final ValueNotifier<bool> _fabVisible = ValueNotifier<bool>(true);
   final ScrollController _pillCtrl = ScrollController();
-  // Идёт ли сейчас перетаскивание карточки (см. onReorderStart/End).
-  bool _draggingAlarm = false;
-
   // Данные ещё не загружены: показываем пустоту вместо кросс-фейда
   // «пусто → список» (иначе после сплэша раздел мигает, как было в задачах
   // и привычках до появления такого же гварда).
@@ -651,15 +648,6 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       // устройствах (Redmi Note 12).
       scrollCacheExtent: const ScrollCacheExtent.pixels(1500),
       buildDefaultDragHandles: false,
-      // Пока карточка в полёте, порядок в ДАННЫХ ещё старый: ReorderableListView
-      // сообщает о нём только на отпускании (onReorderItem). Значит в это время
-      // «первый будильник» на экране и «первый в списке» — разные карточки, и
-      // звонковый значок, привязанный к индексу, висел бы не на той карточке:
-      // визуально он уезжал с драгом, а тест запускал прошлый будильник.
-      // На время драга значок гаснет (тот же кроссфейд, что и при смене
-      // порядка) и возвращается уже на настоящем первом будильнике.
-      onReorderStart: (_) => setState(() => _draggingAlarm = true),
-      onReorderEnd: (_) => setState(() => _draggingAlarm = false),
       onReorderItem: (oldIndex, newIndex) =>
           _service.reorder(oldIndex, newIndex),
       proxyDecorator: (child, index, animation) =>
@@ -794,91 +782,72 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                     theme: theme,
                                   ),
                                 ),
-                                // Тест доступен у всех будильников: раньше
-                                // значок стоял только на первом, и проверить
-                                // любой другой было нельзя. На время драга
-                                // значок гаснет, чтобы не мешать переносу.
-                                IgnorePointer(
-                                  ignoring: _draggingAlarm,
-                                  child: SizedBox(
-                                    width: 32,
-                                    height: 32,
-                                    child: AnimatedOpacity(
-                                      duration: const Duration(
-                                        milliseconds: 180,
-                                      ),
-                                      curve: Curves.easeOutCubic,
-                                      opacity: _draggingAlarm ? 0.0 : 1.0,
-                                      child: SmoothTooltip(
-                                        message: Translations.t(
-                                          'testAlarm',
-                                          context,
-                                          'Тест будильника',
+                                // Значок теста есть у каждой карточки и во время драга НЕ гаснет:
+                                // раньше он растворялся при переносе, и владелец
+                                // читал это как «значки теста пропадают».
+                                SizedBox(
+                                  width: 32,
+                                  height: 32,
+                                  child: SmoothTooltip(
+                                    message: Translations.t(
+                                      'testAlarm',
+                                      context,
+                                      'Тест будильника',
+                                    ),
+                                    preferredAbove: true,
+                                    child: PressScale(
+                                      pressedScale: 0.88,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          // Как «напоминания» в
+                                          // привычках: спокойная
+                                          // тональная подложка и
+                                          // тонкая кромка. На тёмной
+                                          // теме плотная заливка 0.20 и
+                                          // яркая кромка 0.55 делали
+                                          // значок «грязным» — теперь
+                                          // подложка тональная, а
+                                          // кромка мягкая.
+                                          color: theme
+                                              .colorScheme
+                                              .primaryContainer
+                                              .withValues(
+                                                alpha:
+                                                    theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.26
+                                                    : 0.18,
+                                              ),
+                                          border: Border.all(
+                                            color: theme.colorScheme.primary
+                                                .withValues(
+                                                  alpha:
+                                                      theme.brightness ==
+                                                          Brightness.dark
+                                                      ? 0.38
+                                                      : 0.28,
+                                                ),
+                                            width: 1,
+                                          ),
                                         ),
-                                        preferredAbove: true,
-                                        child: PressScale(
-                                          pressedScale: 0.88,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              // Как «напоминания» в
-                                              // привычках: спокойная
-                                              // тональная подложка и
-                                              // тонкая кромка. На тёмной
-                                              // теме плотная заливка 0.20 и
-                                              // яркая кромка 0.55 делали
-                                              // значок «грязным» — теперь
-                                              // подложка тональная, а
-                                              // кромка мягкая.
-                                              color: theme
-                                                  .colorScheme
-                                                  .primaryContainer
-                                                  .withValues(
-                                                    alpha:
-                                                        theme.brightness ==
-                                                            Brightness.dark
-                                                        ? 0.26
-                                                        : 0.18,
-                                                  ),
-                                              border: Border.all(
-                                                color: theme
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(
-                                                      alpha:
-                                                          theme.brightness ==
-                                                              Brightness.dark
-                                                          ? 0.38
-                                                          : 0.28,
-                                                    ),
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: IconButton(
-                                              onPressed: () =>
-                                                  _testAlarm(alarm),
-                                              icon: Icon(
-                                                Icons
-                                                    .notifications_active_outlined,
-                                                size: 17,
-                                                color: theme
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.95),
-                                              ),
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(
-                                                minWidth: 32,
-                                                minHeight: 32,
-                                              ),
-                                              style: IconButton.styleFrom(
-                                                tapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                              ),
-                                            ),
+                                        child: IconButton(
+                                          onPressed: () => _testAlarm(alarm),
+                                          icon: Icon(
+                                            Icons.notifications_active_outlined,
+                                            size: 17,
+                                            color: theme.colorScheme.primary
+                                                .withValues(alpha: 0.95),
+                                          ),
+                                          visualDensity: VisualDensity.compact,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 32,
+                                            minHeight: 32,
+                                          ),
+                                          style: IconButton.styleFrom(
+                                            tapTargetSize: MaterialTapTargetSize
+                                                .shrinkWrap,
                                           ),
                                         ),
                                       ),

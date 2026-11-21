@@ -56,21 +56,23 @@ void main() {
 
   test('зачёркивание толще и идёт змейкой, а не прямой', () {
     final src = read('lib/widgets/animated_strike_text.dart');
-    expect(RegExp(r'fontSize \* 0\.19').hasMatch(src), isTrue);
-    expect(RegExp(r'math\.max\(2\.6,').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 0\.17').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 0\.62').hasMatch(src), isTrue);
-    expect(RegExp(r'amp \* 0\.28').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.20').hasMatch(src), isTrue);
+    expect(RegExp(r'math\.max\(2\.8,').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.15').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 1\.6').hasMatch(src), isTrue);
+    // Ровно одна гармоника: вторая давала «пупырки».
+    expect(RegExp(r'amp \* 0\.28').hasMatch(src), isFalse);
   });
 
   test('у красных кнопок пробуждения есть красноватый отсвет внутри', () {
     final src = read('lib/screens/wake_task_screen.dart');
     expect(src.contains('pressTint: const Color(0xFFE02436)'), isTrue);
-    // Краснота зажатия усилена, и поверх заливки лежит радиальный
-    // отсвет — «свет изнутри», а не тусклая подложка под ней.
-    expect(src.contains('pressTintStrength: 0.30'), isTrue);
-    expect(src.contains('pressOverlay:'), isTrue);
-    expect(src.contains('RadialGradient'), isTrue);
+    // Отсвет — ровный, без «кровавого» радиального слоя поверх плашки:
+    // усиленная краснота и градиент поверх заливки читались владельцем как
+    // «окровавленный фон при нажатии». Красноватость даёт лёгкая подложка
+    // самой кнопки, а плавность — PressScale и AnimatedContainer.
+    expect(src.contains('pressTintStrength: 0.16'), isTrue);
+    expect(src.contains('pressOverlay:'), isFalse);
     expect(
       src.contains('releaseDuration: const Duration(milliseconds: 760)'),
       isTrue,
@@ -89,9 +91,9 @@ void main() {
       );
     }
     expect(
-      read('lib/overlay/ada_overlay.dart').contains(
-        'setState(() => _historyLoaded = true)',
-      ),
+      read(
+        'lib/overlay/ada_overlay.dart',
+      ).contains('setState(() => _historyLoaded = true)'),
       isTrue,
     );
   });

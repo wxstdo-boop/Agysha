@@ -19,6 +19,14 @@ const String kUpdateRepoName = 'agysha';
 /// самообновление выключено через `--dart-define=AGYSHA_NO_SELF_UPDATE=true`.
 const bool kSelfUpdateEnabled = !bool.fromEnvironment('AGYSHA_NO_SELF_UPDATE');
 
+/// Чем кончилась попытка обновления, когда её уже некому ждать на экране.
+enum UpdateOutcome {
+  installed,
+  downloadFailed,
+  permissionNeeded,
+  installFailed,
+}
+
 /// Пункт журнала для выпуска, из которого нечего показать. Заменяет прежнее
 /// «Обновление 1.6.231» — строка без смысла, читавшаяся как «заметки нет».
 const String kQuietReleaseNote = 'Полировка интерфейса и стабильность';
@@ -407,6 +415,48 @@ class UpdateService {
       r'lint\b|format\b)',
       caseSensitive: false,
     ).hasMatch(text.trim());
+  }
+
+  /// Прогресс общего скачивания 0..1 — живёт в сервисе, а не в экране.
+  static final ValueNotifier<double> downloadProgress = ValueNotifier<double>(
+    0,
+  );
+
+  /// Идущая загрузка. Одна на приложение: если владелец ушёл с экрана и
+  /// вернулся, та же загрузка продолжается, а не начинается заново.
+  static Future<String?>? _activeDownload;
+
+  /// Скачивание, переживающее смену экрана и уход приложения в фон: сама
+  /// работа живёт в сервисе, экран лишь смотрит на [downloadProgress].
+  Future<String?> ensureDownloaded(UpdateInfo info) {
+    final active = _activeDownload;
+    if (active != null) return active;
+    downloadProgress.value = 0;
+    final f = download(info, onProgress: (v) => downloadProgress.value = v);
+    _activeDownload = f;
+    f.whenComplete(() {
+      if (identical(_activeDownload, f)) _activeDownload = null;
+    });
+    return f;
+  }
+
+  /// Скачивает и СРАЗУ ставит APK — без участия экрана. Уход на другой
+  /// экран или в фон не обрывает ни загрузку, ни установку: раньше экран
+  /// ждал загрузку у себя и после `!mounted` установку уже не запускал.
+  Future<UpdateOutcome> downloadAndInstall(UpdateInfo info) async {
+    String? path;
+    try {
+      path = await ensureDownloaded(info);
+    } catch (_) {
+      return UpdateOutcome.downloadFailed;
+    }
+    if (path == null) return UpdateOutcome.downloadFailed;
+    if (!await Installer.canInstall()) {
+      await Installer.openInstallSettings();
+      return UpdateOutcome.permissionNeeded;
+    }
+    final ok = await Installer.installApk(path, expectedSha256: info.sha256);
+    return ok ? UpdateOutcome.installed : UpdateOutcome.installFailed;
   }
 
   Future<String?> download(
