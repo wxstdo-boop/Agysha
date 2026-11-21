@@ -1,0 +1,6 @@
+- polish: reality-check reveal, section pill fade, task notes 1000, splash bob, strike snake, Ada chat, wake buttons, memory digits one row
+- readme: кнопка «Добавить в Obtainium», статус заявки в F-Droid
+- fastlane: заметки к 1.6.236 по-человечески на трёх языках
+- tool: шрифты ищем в pub-кеше, а не по пути /home/openhands
+- repo: чистка скриптов, рецепт F-Dro
+...
