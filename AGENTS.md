@@ -34,7 +34,7 @@ adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 `agysha_database_key_v1`, `agysha_recovery_*`), именах каналов уведомлений
 (`agysha_alarm`, `agysha_rc`, `agysha_main`), именах APK-ассетов
 (`Agysha-<ver>-<abi>.apk`), keystore (`agysha-release.jks`, alias `agysha`,
-`CN=Agysha`) и боте релиза (`agysha-ship`).
+`CN=Agysha`).
 
 Исключение — обратная совместимость хранилища в `lib/services/json_file.dart`:
 константы `_legacyFormat`/`_legacyKeyName` (`keramika-json-v1`,
