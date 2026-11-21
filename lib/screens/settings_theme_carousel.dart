@@ -1,11 +1,13 @@
 part of 'settings_screen.dart';
 
-/// Выбор темы: сетка живых превью вместо горизонтальной карусели.
+/// Выбор темы «барабаном револьвера».
 ///
-/// Карусель приходилось листать вслепую: у соседних плиток видно только
-/// край, а тема применялась уже ПОСЛЕ остановки — отсюда ощущение «иногда
-/// не ставится». Здесь все темы видны сразу, каждая плитка — миниатюра
-/// самой темы, а выбор подсвечивается плавным кольцом и галочкой.
+/// Темы — каморы барабана. Тянешь барабан вбок — он вращается с инерцией и
+/// щёлкает по каморам, а тема, вставшая под указатель, сразу применяется:
+/// MaterialApp плавно перетекает между палитрами (300 мс), поэтому смена
+/// видна ещё во время прокрутки, а не после неё. Тап по каморе доводит
+/// барабан до неё, тап по центру применяет выбранное ещё раз (там живут
+/// «светлая Cyberpunk» и тёмный персик).
 extension _SettingsThemeCarousel on _SettingsScreenState {
   Widget _buildThemeCarousel(BuildContext context) {
     final appState = AgyshaApp.of(context);
@@ -28,11 +30,7 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
             ? Icons.wb_sunny_outlined
             : Icons.brightness_2_outlined,
       ),
-      _ThemeEntry(
-        'system',
-        Translations.systemOf(context),
-        Icons.brightness_auto,
-      ),
+      _ThemeEntry('system', Translations.systemOf(context), Icons.brightness_auto),
       _ThemeEntry(
         'systemLight',
         Translations.t('themeSystemLight', context),
@@ -46,153 +44,437 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
       ),
       const _ThemeEntry('grok', 'Grok', Icons.auto_awesome),
       const _ThemeEntry('darkGrok', 'Grok Dark', Icons.dark_mode),
-      // «Метель» — подарок 12-го дня ивента: в сетке появляется только
+      // «Метель» — подарок 12-го дня ивента: в барабане появляется только
       // после его получения и пропадает вместе со сбросом события.
       if (NewYearEventService().prizeGranted)
         _ThemeEntry('metel', Translations.t('metel', context), Icons.snowing),
     ];
+    return _ThemeRevolver(
+      key: const ValueKey('theme_revolver'),
+      entries: entries,
+      selectedKey: appState.themeKey,
+      // Прокрутка: только переключение палитры, без «спецрежимов» — иначе
+      // барабан, проезжая мимо персика, каждый раз переключал бы его тьму.
+      onPreview: (e) => appState.setThemeMode(e.key),
+      // Осознанный выбор (барабан встал или тап по центру): здесь уже
+      // работают повторные тапы — светлая Cyberpunk и тёмный персик.
+      onCommit: (e) {
+        Haptics.select();
+        if (e.key == 'oled' &&
+            (appState.themeKey == 'oled' ||
+                appState.themeKey == 'cyberpunkLight')) {
+          appState.setThemeMode(
+            appState.themeKey == 'oled' ? 'cyberpunkLight' : 'oled',
+          );
+        } else if (e.key == 'peach' && appState.themeKey == 'peach') {
+          appState.togglePeachDark();
+        } else {
+          appState.setThemeMode(e.key);
+        }
+      },
+    );
+  }
+}
+
+/// Барабан: круг с каморами-темами, указатель сверху, хаб с превью в центре.
+class _ThemeRevolver extends StatefulWidget {
+  const _ThemeRevolver({
+    super.key,
+    required this.entries,
+    required this.selectedKey,
+    required this.onPreview,
+    required this.onCommit,
+  });
+
+  final List<_ThemeEntry> entries;
+  final String selectedKey;
+  final void Function(_ThemeEntry entry) onPreview;
+  final void Function(_ThemeEntry entry) onCommit;
+
+  @override
+  State<_ThemeRevolver> createState() => _ThemeRevolverState();
+}
+
+class _ThemeRevolverState extends State<_ThemeRevolver>
+    with SingleTickerProviderStateMixin {
+  /// Сколько пикселей тянуть, чтобы барабан провернулся на одну камору.
+  static const double _dragStep = 78;
+
+  late final AnimationController _spin = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
+  Animation<double>? _spinAnim;
+
+  /// Позиция барабана в каморах; целое значение — камора ровно под
+  /// указателем, дробное — барабан между каморами.
+  double _pos = 0;
+  int _applied = 0;
+  bool _dragging = false;
+  int _spinToken = 0;
+
+  int get _n => widget.entries.length;
+
+  int _norm(int i) => i % _n < 0 ? i % _n + _n : i % _n;
+
+  int get _index => _norm(_pos.round());
+
+  @override
+  void initState() {
+    super.initState();
+    _pos = _indexOfKey(widget.selectedKey).toDouble();
+    _applied = _norm(_pos.round());
+    _spin.addListener(_onSpinTick);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ThemeRevolver oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedKey == widget.selectedKey) return;
+    // Тему поменяли не мы (например, вернулись с другого экрана): доводим
+    // барабан до неё, но не мешаем собственной прокрутке.
+    if (_dragging || _spin.isAnimating) return;
+    final target = _indexOfKey(widget.selectedKey);
+    if (target == _index) return;
+    _pos = target.toDouble();
+    _applied = target;
+  }
+
+  int _indexOfKey(String key) {
+    final i = widget.entries.indexWhere(
+      (e) => e.key == key || (e.key == 'oled' && key == 'cyberpunkLight'),
+    );
+    return i < 0 ? 0 : i;
+  }
+
+  void _onSpinTick() {
+    final anim = _spinAnim;
+    if (anim == null) return;
+    setState(() => _pos = anim.value);
+    _previewNearest();
+  }
+
+  /// Тема под указателем поменялась — сразу применяем её, чтобы прокрутка
+  /// выглядела как живое переключение палитры.
+  void _previewNearest() {
+    final i = _index;
+    if (i == _applied) return;
+    _applied = i;
+    Haptics.select();
+    widget.onPreview(widget.entries[i]);
+  }
+
+  int _shortestDelta(int from, int to) {
+    var d = (to - from) % _n;
+    if (d > _n / 2) d -= _n;
+    if (d < -_n / 2) d += _n;
+    return d;
+  }
+
+  void _settleTo(double goal) {
+    final token = ++_spinToken;
+    _spinAnim = Tween<double>(begin: _pos, end: goal).animate(
+      CurvedAnimation(parent: _spin, curve: Curves.easeOutCubic),
+    );
+    _spin.forward(from: 0).whenComplete(() {
+      if (!mounted || token != _spinToken) return;
+      _previewNearest();
+      widget.onCommit(widget.entries[_index]);
+    });
+  }
+
+  void _onDragStart(DragStartDetails details) {
+    _dragging = true;
+    _spin.stop();
+    _spinToken++;
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    setState(() => _pos -= (details.primaryDelta ?? 0) / _dragStep);
+    _previewNearest();
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    _dragging = false;
+    // Инерция: быстрый флик докручивает барабан ещё на камору-две.
+    final fling = (-(details.primaryVelocity ?? 0) / 1400).clamp(-1.6, 1.6);
+    _settleTo((_pos + fling).roundToDouble());
+  }
+
+  void _tapChamber(int index) {
+    final delta = _shortestDelta(_index, index);
+    if (delta == 0) {
+      widget.onCommit(widget.entries[index]);
+      return;
+    }
+    _settleTo(_pos.round() + delta.toDouble());
+  }
+
+  void _tapHub() {
+    widget.onCommit(widget.entries[_index]);
+  }
+
+  @override
+  void dispose() {
+    _spin.removeListener(_onSpinTick);
+    _spin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final entry = widget.entries[_index];
+    final preview = _ThemePreview.of(entry.key);
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        const gap = 10.0;
-        final tileWidth = (constraints.maxWidth - gap) / 2;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
+        final side = constraints.maxWidth.clamp(180.0, 252.0).toDouble();
+        final hub = side * 0.44;
+        return Column(
           children: <Widget>[
-            for (final e in entries)
-              SizedBox(width: tileWidth, child: _themeTile(context, e)),
+            SizedBox(
+              width: side,
+              height: side,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: _onDragStart,
+                onHorizontalDragUpdate: _onDragUpdate,
+                onHorizontalDragEnd: _onDragEnd,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: <Widget>[
+                    _drumShell(cs, side),
+                    for (var i = 0; i < _n; i++)
+                      _chamber(cs, i, side, widget.entries[i]),
+                    _hub(cs, entry, preview, hub),
+                    // Указатель — единственная неподвижная деталь: камора,
+                    // вставшая под него, и есть выбранная тема.
+                    Positioned(
+                      top: 0,
+                      child: Icon(
+                        Icons.arrow_drop_down,
+                        size: 26,
+                        color: cs.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 24,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.25),
+                      end: Offset.zero,
+                    ).animate(anim),
+                    child: child,
+                  ),
+                ),
+                child: Text(
+                  entry.label,
+                  key: ValueKey('theme_label_${entry.key}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ),
+            Text(
+              Translations.t('themeHint', context, 'Крути барабан'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+            ),
           ],
         );
       },
     );
   }
 
-  Widget _themeTile(BuildContext context, _ThemeEntry e) {
-    final appState = AgyshaApp.of(context);
-    final theme = Theme.of(context);
-    final isSelected = appState.themeKey == e.key ||
-        (e.key == 'oled' && appState.themeKey == 'cyberpunkLight');
-    final preview = _ThemePreview.of(e.key);
-    void select() {
-      Haptics.select();
-      if (e.key == 'oled' &&
-          (appState.themeKey == 'oled' ||
-              appState.themeKey == 'cyberpunkLight')) {
-        // Повторный тап по выбранной «Cyberpunk 2077» — светлый вариант.
-        appState.setThemeMode(
-          appState.themeKey == 'oled' ? 'cyberpunkLight' : 'oled',
-        );
-      } else if (e.key == 'peach' && appState.themeKey == 'peach') {
-        appState.togglePeachDark();
-      } else {
-        appState.setThemeMode(e.key);
-      }
-    }
+  /// Корпус барабана: круг с мягким градиентом и тонким колесом внутри.
+  Widget _drumShell(ColorScheme cs, double side) {
+    return Container(
+      width: side,
+      height: side,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            cs.surfaceContainerHighest.withValues(alpha: 0.55),
+            cs.surface.withValues(alpha: 0.15),
+          ],
+        ),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.5),
+          width: 1.2,
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.16),
+            blurRadius: 18,
+            spreadRadius: -6,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          width: side * 0.66,
+          height: side * 0.66,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.35),
+              width: 1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-    final tile = Semantics(
+  Widget _hub(
+    ColorScheme cs,
+    _ThemeEntry entry,
+    _ThemePreview preview,
+    double hub,
+  ) {
+    final hubBody = Semantics(
       button: true,
-      selected: isSelected,
-      label: e.label,
-      child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0, end: isSelected ? 1 : 0),
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-        builder: (context, t, child) {
-          return Container(
-            padding: const EdgeInsets.all(1.4),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  Color.lerp(
-                    theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
-                    theme.colorScheme.primary,
-                    t,
-                  )!,
-                  Color.lerp(
-                    theme.colorScheme.outlineVariant.withValues(alpha: 0.12),
-                    theme.colorScheme.tertiary,
-                    t,
-                  )!,
-                ],
-              ),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color:
-                      theme.colorScheme.primary.withValues(alpha: 0.18 * t),
-                  blurRadius: 12,
-                  spreadRadius: -4,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+      label: entry.label,
+      child: GestureDetector(
+        onTap: _tapHub,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          width: hub,
+          height: hub,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: preview.colors,
             ),
-            child: child,
-          );
-        },
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(16.6),
-          clipBehavior: Clip.antiAlias,
-          child: Ink(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: preview.colors,
-              ),
+            border: Border.all(
+              color: cs.onSurface.withValues(alpha: 0.12),
+              width: 1,
             ),
-            child: InkWell(
-              onTap: select,
-              child: SizedBox(
-                height: 74,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          Icon(e.icon, size: 17, color: preview.onColor),
-                          const Spacer(),
-                          // Галочка проявляется масштабом: без AnimatedSwitcher
-                          // на одной и той же иконке, который мигал.
-                          TweenAnimationBuilder<double>(
-                            tween: Tween<double>(
-                              begin: 0,
-                              end: isSelected ? 1 : 0,
-                            ),
-                            duration: const Duration(milliseconds: 260),
-                            curve: Curves.easeOutBack,
-                            builder: (context, t, _) => Opacity(
-                              opacity: t.clamp(0.0, 1.0),
-                              child: Transform.scale(
-                                scale: 0.6 + 0.4 * t,
-                                child: Icon(
-                                  Icons.check_circle,
-                                  size: 18,
-                                  color: preview.onColor,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        e.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: preview.onColor,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ],
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: preview.colors.last.withValues(alpha: 0.35),
+                blurRadius: 16,
+                spreadRadius: -4,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Icon(entry.icon, size: hub * 0.34, color: preview.onColor),
+          ),
+        ),
+      ),
+    );
+    if (!entry.specialMutilated) return hubBody;
+    // Пасхалка MUTILATED: долгое нажатие по центру.
+    return _LongPressChip(
+      duration: const Duration(seconds: 10),
+      onLongPress: () {
+        if (!mounted) return;
+        showBeautifulSnackBar(
+          context,
+          message: 'Вы элегантны? 🥀 — Are you elegant? — Êtes-vous élégant·e ?',
+          icon: Icons.diamond_outlined,
+          iconColor: const Color(0xFFFFD166),
+          duration: const Duration(seconds: 3),
+        );
+      },
+      child: hubBody,
+    );
+  }
+
+  /// Одна камора: кружок в цветах своей темы, стоит на окружности.
+  Widget _chamber(
+    ColorScheme cs,
+    int index,
+    double side,
+    _ThemeEntry entry,
+  ) {
+    final step = 2 * math.pi / _n;
+    final delta = (index - _pos) * step;
+    final theta = -math.pi / 2 + delta;
+    final orbit = side / 2 - 24;
+    final center = side / 2;
+    final x = center + math.cos(theta) * orbit;
+    final y = center + math.sin(theta) * orbit;
+
+    // Ближняя к указателю камора — крупнее и ярче, дальняя уходит в глубину:
+    // так плоский круг читается как барабан.
+    final near = (math.cos(delta) + 1) / 2;
+    final active = index == _index;
+    final dot = active ? 40.0 : 34.0;
+    final preview = _ThemePreview.of(entry.key);
+
+    return Positioned(
+      left: x - dot / 2,
+      top: y - dot / 2,
+      child: Transform.scale(
+        scale: 0.84 + 0.16 * near + (active ? 0.06 : 0),
+        child: Opacity(
+          opacity: 0.55 + 0.45 * near,
+          child: Semantics(
+            button: true,
+            selected: active,
+            label: entry.label,
+            child: GestureDetector(
+              onTap: () => _tapChamber(index),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                width: dot,
+                height: dot,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: preview.colors,
                   ),
+                  border: Border.all(
+                    color: active
+                        ? cs.primary
+                        : cs.onSurface.withValues(alpha: 0.16),
+                    width: active ? 2 : 1,
+                  ),
+                  boxShadow: active
+                      ? <BoxShadow>[
+                          BoxShadow(
+                            color: cs.primary.withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            spreadRadius: -2,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Icon(
+                  entry.icon,
+                  size: dot * 0.42,
+                  color: preview.onColor,
                 ),
               ),
             ),
@@ -200,31 +482,10 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
         ),
       ),
     );
-
-    return PressScale(
-      pressedScale: 0.96,
-      pressedOpacity: 0.9,
-      child: e.specialMutilated
-          ? _LongPressChip(
-              duration: const Duration(seconds: 10),
-              onLongPress: () {
-                showBeautifulSnackBar(
-                  context,
-                  message:
-                      'Вы элегантны? 🥀 — Are you elegant? — Êtes-vous élégant·e ?',
-                  icon: Icons.diamond_outlined,
-                  iconColor: const Color(0xFFFFD166),
-                  duration: const Duration(seconds: 3),
-                );
-              },
-              child: tile,
-            )
-          : tile,
-    );
   }
 }
 
-/// Мини-палитра темы для плитки выбора: цвета превью и цвет текста на нём.
+/// Мини-палитра темы: цвета превью и цвет текста/иконки на нём.
 class _ThemePreview {
   final List<Color> colors;
   final Color onColor;

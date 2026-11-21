@@ -2,6 +2,7 @@ import 'dart:async';
 import '../services/haptics.dart';
 import '../services/sounds.dart';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';

@@ -50,7 +50,7 @@ void main() {
     expect(await SettingsService.loadThemeMode(), 'cyberpunkLight');
   });
 
-  testWidgets('сетка тем: без карусели, тап по теме применяет и сохраняет её', (
+  testWidgets('барабан тем: без карусели, прокрутка сразу переключает тему', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(411, 891) * 3;
@@ -66,20 +66,28 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 500));
 
-    await tester.ensureVisible(find.text('Grok Dark'));
+    final revolver = find.byKey(const ValueKey('theme_revolver'));
+    await tester.ensureVisible(revolver);
     await tester.pump(const Duration(milliseconds: 200));
 
+    // Карусели больше нет: темы живут в барабане, и он виден целиком.
+    expect(find.byType(PageView), findsNothing);
+    expect(revolver, findsOneWidget);
+    final before = AgyshaApp.of(tester.element(revolver)).themeKey;
+
+    // Прокрутка барабана применяет тему сразу, не дожидаясь остановки.
+    await tester.drag(revolver, const Offset(-156, 0));
+    await tester.pump();
     expect(
-      find.byType(PageView),
-      findsNothing,
-      reason: 'карусель тем заменена сеткой превью',
+      AgyshaApp.of(tester.element(revolver)).themeKey,
+      isNot(before),
+      reason: 'пока барабан крутится, выбранная тема уже другая',
     );
-    expect(find.text('MUTILATED'), findsOneWidget);
-    expect(find.text('Grok Dark'), findsOneWidget);
-    // Плитка выбранной темы помечена галочкой: сетка показывает выбор
-    // сразу, без ожидания конца прокрутки, как было в карусели.
-    expect(find.byIcon(Icons.check_circle), findsWidgets);
-    // Дать догореть анимациям прокрутки и подсветки плиток.
+    await tester.pump(const Duration(milliseconds: 600));
+    final appState = AgyshaApp.of(tester.element(revolver));
+    expect(appState.themeKey, isNot(before));
+    // Тестовой файловой системы здесь нет — запись темы проверяется
+    // отдельным unit-тестом выше.
     await tester.pump(const Duration(seconds: 1));
   });
 }

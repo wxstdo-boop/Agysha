@@ -39,6 +39,12 @@ void showBeautifulSnackBar(
   // поэтому «наложения» двух плашек больше нет: нет ни дублей, ни рывка.
   // Единственное исключение — появление/исчезновение action-кнопки: её
   // нельзя дорисовать в уже существующей плашке, там идёт аккуратная эстафета.
+  // Осиротевшая плашка: entry ещё в overlay, а состояния уже нет — раньше
+  // такая плашка висела на экране вечно, потому что убирать её было некому.
+  if (_activeSnackState == null && _activeSnackBar != null) {
+    _activeSnackBar!.remove();
+    _activeSnackBar = null;
+  }
   final visible = _activeSnackState;
   final wantsAction = onAction != null && actionLabel != null;
   if (visible != null &&
@@ -149,7 +155,7 @@ class _AnimatedSnackBar extends StatefulWidget {
 }
 
 class _AnimatedSnackBarState extends State<_AnimatedSnackBar>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _controller;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
@@ -202,10 +208,36 @@ class _AnimatedSnackBarState extends State<_AnimatedSnackBar>
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(curved);
 
+    WidgetsBinding.instance.addObserver(this);
     _controller.forward();
     widget.onInit?.call(this);
     _scheduleDismiss();
   }
+
+  /// Пока приложение в фоне (человек ушёл в системные настройки), тикер и
+  /// таймеры Dart стоят. Поэтому срок жизни плашки считается ещё и по часам:
+  /// на возврате в приложение просроченная плашка убирается сразу.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (DateTime.now().difference(shownAt) > widget.duration) {
+      _finish();
+    } else {
+      _scheduleDismiss();
+    }
+  }
+
+  /// Жёсткий сторож: если анимация ухода не доехала (нет кадров, приложение
+  /// свернули посреди ухода), entry всё равно убирается из overlay.
+  void _armHardStop() {
+    _hardStop?.cancel();
+    _hardStop = Timer(
+      widget.duration + const Duration(milliseconds: 2500),
+      _finish,
+    );
+  }
+
+  Timer? _hardStop;
 
   /// Плавно обновляет содержимое без пересоздания overlay-entry.
   /// Используется при быстрых ON↔OFF-переключениях одной группы и вообще
@@ -266,10 +298,13 @@ class _AnimatedSnackBarState extends State<_AnimatedSnackBar>
   void _scheduleDismiss() {
     _dismissTimer?.cancel();
     _dismissTimer = Timer(widget.duration, () => dismissOut(ms: 900));
+    _armHardStop();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _hardStop?.cancel();
     _dismissTimer?.cancel();
     _controller.dispose();
     widget.onDispose?.call();
