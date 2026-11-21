@@ -148,15 +148,17 @@ class _MessageBubble extends StatelessWidget {
                             bottomLeft: Radius.circular(isUser ? 20 : 6),
                             bottomRight: Radius.circular(isUser ? 6 : 20),
                           ),
+                          // Обводка — еле заметная: раньше белая кромка
+                          // отсвечивала поверх пузыря и читалась как рамка.
                           border: Border.all(
                             color: isUser
-                                ? cs.primary.withValues(alpha: 0.25)
+                                ? cs.primary.withValues(alpha: 0.10)
                                 : Colors.white.withValues(
                                     alpha:
                                         Theme.of(context).brightness ==
                                             Brightness.dark
-                                        ? 0.08
-                                        : 0.22,
+                                        ? 0.045
+                                        : 0.10,
                                   ),
                             width: 1.0,
                           ),
@@ -486,7 +488,13 @@ class _ReadReceipt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final muted = cs.onSurfaceVariant.withValues(alpha: 0.85);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted = cs.onSurfaceVariant.withValues(alpha: isDark ? 0.92 : 0.85);
+    // Галочка «прочитано»: на тёмной теме чистый primary тонул в подложке
+    // пузыря — подмешиваем белый, чтобы чек читался.
+    final tick = isDark
+        ? Color.lerp(cs.primary, Colors.white, 0.45)!
+        : cs.primary;
     // «Прочитано в 14:32» — одним слитным текстом (время не отрывается
     // от слова): у старых сообщений без метки — просто «Прочитано».
     final label = readAt != null
@@ -496,7 +504,7 @@ class _ReadReceipt extends StatelessWidget {
     final receipt = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.done_all, size: 12, color: cs.primary),
+        Icon(Icons.done_all, size: 12, color: tick),
         const SizedBox(width: 3),
         Text(
           label,

@@ -249,16 +249,20 @@ class _SplashScreenState extends State<SplashScreen>
                                   // НЕ круг: нижняя подпись на логотипе не
                                   // обрезается кружком и остаётся читаемой.
                                   borderRadius: BorderRadius.circular(_kRadius),
+                                  // Кольцо — МОНОТОННОЕ: один винный тон с
+                                  // едва заметным светом в верхнем левом углу.
+                                  // Раньше здесь было четыре стопа с алым в
+                                  // середине — кайма «переливалась» и спорила
+                                  // с бликом, читаясь дешёвым глянцем.
                                   gradient: const LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                     colors: [
-                                      Color(0xFF7E0A15),
+                                      Color(0xFF9E0F1D),
                                       BrandColors.blood,
-                                      Color(0xFFE0192F),
-                                      Color(0xFF7E0A15),
+                                      Color(0xFF8C0C18),
                                     ],
-                                    stops: [0.0, 0.38, 0.68, 1.0],
+                                    stops: [0.0, 0.45, 1.0],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
@@ -331,9 +335,10 @@ class _SplashScreenState extends State<SplashScreen>
                                 ),
                               ),
                             ),
-                            // Кровавые пятна и бегущий блик (единый пейнтер).
-                            // Слой «разбитого стекла» отсюда убран: трещины
-                            // поверх чистой плиты читались наклейкой.
+                            // Кровавая «β» (вычерчивается по ходу сплеша) и
+                            // бегущий блик — одним пейнтером. Слой «разбитого
+                            // стекла» отсюда убран: трещины поверх чистой
+                            // плиты читались наклейкой.
                             Positioned.fill(
                               child: IgnorePointer(
                                 // Блик лежит ОДНИМ слоем под RepaintBoundary
@@ -348,7 +353,7 @@ class _SplashScreenState extends State<SplashScreen>
                                   child: AnimatedBuilder(
                                     animation: _shine,
                                     builder: (context, _) => CustomPaint(
-                                      painter: _PaintSplatPainter(
+                                      painter: _BetaSplatPainter(
                                         t: _shine.value,
                                         radius: _kRadius,
                                         // На светлой теме кровавые пятна по
@@ -582,155 +587,132 @@ class _ShineTextPainter extends CustomPainter {
       old.base != base || old.shine != shine;
 }
 
-/// Брызги краски на «стекле» карточки логотипа.
+/// Кровавая «β» на стекле карточки логотипа.
 ///
-/// [t] — ход 0 → 1 одного прохода. Кляксы набухают от центра, чуть
-/// перерастают и растворяются: огибающая sin(π·t) держит и старт, и финиш
-/// на нуле, поэтому появление и уход не читаются отдельным кадром.
+/// [t] — ход 0 → 1: буква ВЫЧЕРЧИВАЕТСЯ кровью (толстая обводка с круглыми
+/// стыками идёт по осевым линиям), а капли вокруг проявляются по мере
+/// прохода. Геометрия фиксирована, поэтому между кадрами буква стоит на
+/// месте и не «кипит».
 ///
-/// Геометрия детерминирована (фиксированный seed-фаза у каждой кляксы) —
-/// пятна стоят на месте и не «кипят» между кадрами. Край каждой кляксы
-/// неровный: радиус точки считается по углу с синусоидальной модуляцией,
-/// поэтому пятно выглядит растёкшимся, а не вычерченным циркулем.
-class _PaintSplatPainter extends CustomPainter {
+/// Раньше здесь были 6 клякс и 4 капли — они читались как случайные пятна
+/// поверх логотипа. Теперь это один знак: «B» = beta, канал сборки.
+class _BetaSplatPainter extends CustomPainter {
   final double t;
 
-  /// Радиус скругления плиты: брызги клипаются по нему ПРЯМО на канвасе
+  /// Радиус скругления плиты: буква клипается по нему ПРЯМО на канвасе
   /// (`canvas.clipRRect`), чтобы не платить за виджетный `ClipRRect`
   /// (он создаёт saveLayer на каждый кадр).
   final double radius;
 
-  /// Верхняя точка яркости: на тёмном стекле пятна читаются сильнее,
-  /// поэтому темой задаётся разная глубина.
+  /// Глубина тона: на тёмном стекле кровь читается сильнее, поэтому темой
+  /// задаётся разная плотность.
   final double strength;
 
-  /// Цвет брызг — фирменная «кровь», та же, что у подписи POWERED BY LARAF
-  /// (см. [_ShineText]): ава и текст забрызганы одним материалом.
-
-  /// Кляксы: (доля x, доля y, доля радиуса, фаза формы). Разнесены по плите
-  /// и мелкие — пятна читаются ОТДЕЛЬНЫМИ брызгами от удара кистью, а не
-  /// одной лужей: крупное центральное пятно сливало соседей в кашу.
-  static const List<(double, double, double, double)> _blobs = [
-    (0.40, 0.45, 0.15, 0.0),
-    (0.66, 0.28, 0.105, 1.7),
-    (0.24, 0.64, 0.085, 3.1),
-    (0.72, 0.66, 0.070, 4.4),
-    (0.18, 0.26, 0.052, 2.2),
-    (0.80, 0.44, 0.040, 5.3),
+  /// Капли-брызги вокруг буквы: (доля x, доля y, доля радиуса,
+  /// порог появления 0..1). Появляются не все сразу — след удара кистью.
+  static const List<(double, double, double, double)> _drops = [
+    (0.20, 0.24, 0.030, 0.18),
+    (0.86, 0.34, 0.022, 0.42),
+    (0.14, 0.70, 0.024, 0.55),
+    (0.88, 0.72, 0.017, 0.72),
   ];
 
-  /// Мелкие брызги-сателлиты вокруг клякс: (доля x, доля y, доля радиуса).
-  /// Капель стало меньше и они крупнее: восемь мелких точек по периметру
-  /// читались как случайный «мусор»/чёрточки, а не как брызги удара.
-  static const List<(double, double, double)> _drops = [
-    (0.50, 0.16, 0.026),
-    (0.87, 0.30, 0.020),
-    (0.14, 0.52, 0.022),
-    (0.60, 0.82, 0.018),
-  ];
-
-  const _PaintSplatPainter({
+  const _BetaSplatPainter({
     required this.t,
     required this.strength,
     required this.radius,
   });
 
-  /// Неровное пятно: полярный контур с двумя синусоидальными модуляциями.
-  Path _blob(Offset c, double r, double phase) {
-    final p = Path();
-    const steps = 30;
-    for (var i = 0; i <= steps; i++) {
-      final a = i / steps * math.pi * 2;
-      final wob =
-          1 +
-          0.22 * math.sin(3 * a + phase) +
-          0.11 * math.sin(5 * a + phase * 1.7);
-      final pt = Offset(
-        c.dx + math.cos(a) * r * wob,
-        c.dy + math.sin(a) * r * wob,
-      );
-      if (i == 0) {
-        p.moveTo(pt.dx, pt.dy);
-      } else {
-        p.lineTo(pt.dx, pt.dy);
-      }
-    }
-    p.close();
-    return p;
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
     if (t <= 0) return;
-    // Пятна появляются и ОСТАЮТСЯ: раньше огибающая sin(π·t) гасила их к
-    // t=1, и брызги «высыхали» на глазах — к концу сплэша плита снова была
-    // чистой. Теперь яркость только нарастает (easeOut к 1.0), а вспышка
-    // «удара кистью» — короткий довесок сверху, который гаснет, оставляя
-    // пятно на месте. t=1 — полная, но не финальная точка: сплэш уходит
-    // раньше, чем [t] доходит до 1, поэтому в кадре пятна всегда плотные.
-    final settle = Curves.easeOutCubic.transform(t.clamp(0.0, 1.0));
-    final flash = math.pow(math.sin(math.pi * t), 1.35).toDouble();
-    // Огибающая МОНОТОННО растёт: раньше в ней сидел вес 0.28·flash, и после
-    // пика «удара» (t≈0.65) яркость падала к t=1 — пятна на глазах
-    // прозрачнели к концу сплэша. Теперь вспышка «удара» живёт только как
-    // добавка в начале (множитель (1−settle) гасит её к концу), поэтому к
-    // финалу пятна самые плотные и уже не бледнеют.
-    final env = (settle + 0.15 * flash * (1 - settle)) * strength;
-    if (env <= 0.004) return;
-
-    // Разлёт: кляксы быстро растекаются и ЗАМИРАЮТ в максимальном размере.
-    // Раньше кривая easeOutBack к t=1 возвращалась к 1.0, и пятна в конце
-    // сплэша заметно уменьшались. Теперь рост монотонный (easeOutCubic), а
-    // лёгкий перелёт задан постоянным множителем — к концу хода пятна
-    // крупнее всего и стоят на месте.
-    final grow = Curves.easeOutCubic.transform(t.clamp(0.0, 1.0)) * 1.12;
-    final short = size.shortestSide;
+    final progress = Curves.easeInOutSine.transform(t.clamp(0.0, 1.0));
+    if (progress <= 0.001) return;
+    final w = size.width;
+    final h = size.height;
+    final env = strength.clamp(0.0, 1.4);
 
     canvas.save();
-    // Клип по скруглению плиты на канвасе, а не виджетом: saveLayer не нужен.
     canvas.clipRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, size.width, size.height),
+        Rect.fromLTWH(0, 0, w, h),
         Radius.circular(radius),
       ),
     );
 
-    // Тёмный контактный слой под пятнами: без него кровь на светлой плите
-    // сливалась бы с фоном и брызг «не было видно». Лёгкий — плотная тень
-    // превращала отдельные капли в одну тёмную кляксу.
-    final rim = Paint()..color = Colors.black.withValues(alpha: 0.10 * env);
-    for (final b in _blobs) {
-      final c = Offset(b.$1 * size.width, b.$2 * size.height);
-      canvas.drawPath(_blob(c, short * b.$3 * grow + 1.5, b.$4), rim);
-    }
+    // Осевая линия «B»: стойка + две чаши. Толщина от короткой стороны:
+    // на 104-пиксельной плите буква занимает почти всю высоту и читается
+    // даже на бюджетнике.
+    final spine = Path()
+      ..moveTo(w * 0.34, h * 0.17)
+      ..lineTo(w * 0.34, h * 0.83);
+    final bowls = Path()
+      ..moveTo(w * 0.34, h * 0.21)
+      ..cubicTo(w * 0.57, h * 0.15, w * 0.73, h * 0.24, w * 0.73, h * 0.37)
+      ..cubicTo(w * 0.73, h * 0.48, w * 0.58, h * 0.52, w * 0.34, h * 0.52)
+      ..moveTo(w * 0.34, h * 0.52)
+      ..cubicTo(w * 0.63, h * 0.50, w * 0.81, h * 0.58, w * 0.81, h * 0.68)
+      ..cubicTo(w * 0.81, h * 0.79, w * 0.64, h * 0.86, w * 0.34, h * 0.83);
 
-    // Полупрозрачная кровь: сквозь пятна просвечивает плита логотипа, и
-    // брызги читаются как след краски, а не как глухие наклейки.
-    final paint = Paint()
-      ..color = BrandColors.blood.withValues(alpha: 0.58 * env);
-    for (final b in _blobs) {
-      final c = Offset(b.$1 * size.width, b.$2 * size.height);
-      canvas.drawPath(_blob(c, short * b.$3 * grow, b.$4), paint);
-    }
-    // Сателлиты — мельче и чуть позже основных клякс (фаза роста со сдвигом).
-    // Кривая та же, что у основных: монотонный рост без «усыхания» на конце.
-    final dropGrow =
-        Curves.easeOutCubic.transform(((t - 0.12) / 0.88).clamp(0.0, 1.0)) *
-        1.12;
-    final dropPaint = Paint()
-      ..color = BrandColors.blood.withValues(alpha: 0.48 * env);
+    // Волна прорисовки: сначала стойка, затем чаши — как рука с кистью.
+    final spineDraw = (progress / 0.34).clamp(0.0, 1.0);
+    final bowlDraw = ((progress - 0.24) / 0.76).clamp(0.0, 1.0);
+
+    final strokeWidth = size.shortestSide * 0.105;
+    Paint stroke(double alpha) => Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = BrandColors.blood.withValues(alpha: 0.92 * alpha * env);
+
+    final drawn = Path()
+      ..addPath(_trim(spine, spineDraw), Offset.zero)
+      ..addPath(_trim(bowls, bowlDraw), Offset.zero);
+
+    // Мягкий ореол — кровь «мокрая», а не наклейка.
+    canvas.drawPath(
+      drawn,
+      stroke(0.34)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    canvas.drawPath(drawn, stroke(1.0));
+
+    // Капли: каждая появляется по своему порогу и мягко набухает.
     for (final d in _drops) {
+      final k = ((progress - d.$4) / 0.28).clamp(0.0, 1.0);
+      if (k <= 0) continue;
+      final grow = Curves.easeOutCubic.transform(k);
       canvas.drawCircle(
-        Offset(d.$1 * size.width, d.$2 * size.height),
-        short * d.$3 * dropGrow,
-        dropPaint,
+        Offset(d.$1 * w, d.$2 * h),
+        size.shortestSide * d.$3 * grow,
+        Paint()..color = BrandColors.blood.withValues(alpha: 0.85 * env),
       );
     }
+
     canvas.restore();
   }
 
+  /// Отрезает от пути его первые [progress] длины: буква «дорисовывается»
+  /// по ходу анимации, а не проявляется целиком одним кадром.
+  Path _trim(Path src, double progress) {
+    if (progress <= 0) return Path();
+    if (progress >= 1) return src;
+    final out = Path();
+    var left = src.computeMetrics().fold<double>(
+      0,
+      (sum, m) => sum + m.length,
+    ) * progress;
+    for (final m in src.computeMetrics()) {
+      if (left <= 0) break;
+      final take = math.min(left, m.length);
+      out.addPath(m.extractPath(0, take), Offset.zero);
+      left -= take;
+    }
+    return out;
+  }
+
   @override
-  bool shouldRepaint(_PaintSplatPainter oldDelegate) =>
+  bool shouldRepaint(_BetaSplatPainter oldDelegate) =>
       oldDelegate.t != t ||
       oldDelegate.strength != strength ||
       oldDelegate.radius != radius;
@@ -803,8 +785,10 @@ class _LevitationPainter extends CustomPainter {
     final bob = s * s * s;
     final rise = (bob + 1) / 2; // 0 .. 1
     final cx = size.width / 2;
-    final cy = size.height * 0.52 - bob * 2.4;
-    final tilt = 0.032 * math.sin(_tau * p + math.pi / 2);
+    // Амплитуда и наклон мягче: сильнее 2.4 px человечек «дёргался»
+    // на коротком сплэше, читаясь как рывок, а не как дыхание.
+    final cy = size.height * 0.52 - bob * 1.5;
+    final tilt = 0.018 * math.sin(_tau * p + math.pi / 2);
 
     // ── Ореол за спиной ─────────────────────────────────
     canvas.drawCircle(

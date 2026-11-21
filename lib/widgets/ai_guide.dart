@@ -420,6 +420,16 @@ class _AiChatBodyState extends State<_AiChatBody>
   String _lang = 'en';
   int _quotaLeft = 0;
   String _modelLabel = 'Pollinations · GPT';
+
+  /// «X — отвечает…» показываем только пока ответ реально готовится.
+  /// Иначе (ошибка, кулдаун, ответ уже пришёл) в шапке остаётся просто имя
+  /// провайдера — статус не залипает, когда пользователь ничего не пишет.
+  String get _displayModelLabel {
+    if (_busy) return _modelLabel;
+    final i = _modelLabel.indexOf('\u2014');
+    return i > 0 ? _modelLabel.substring(0, i).trim() : _modelLabel;
+  }
+
   // Плавная очистка чата: список гаснет, потом стирается.
   late final AnimationController _clearCtrl = AnimationController(
     vsync: this,
@@ -1506,12 +1516,18 @@ class _AiChatBodyState extends State<_AiChatBody>
                       child: ValueListenableBuilder<int>(
                         valueListenable: adaAvatarVariant,
                         builder: (context, idx, _) => AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 320),
-                          switchInCurve: Curves.easeOutBack,
-                          switchOutCurve: Curves.easeIn,
+                          // Смена аватарки в шапке — такой же ДОЛГИЙ
+                          // кросс-фейд, как у живой аватарки: без пружины
+                          // и без роста из нуля.
+                          duration: const Duration(milliseconds: 1150),
+                          switchInCurve: Curves.easeInOut,
+                          switchOutCurve: Curves.easeInOut,
                           transitionBuilder: (child, animation) =>
                               ScaleTransition(
-                                scale: animation,
+                                scale: Tween<double>(
+                                  begin: 0.98,
+                                  end: 1.0,
+                                ).animate(animation),
                                 child: FadeTransition(
                                   opacity: animation,
                                   child: child,
@@ -1559,7 +1575,7 @@ class _AiChatBodyState extends State<_AiChatBody>
                           child: Align(
                             alignment: Alignment.centerLeft,
                             child: ModelLabel(
-                              label: _modelLabel,
+                              label: _displayModelLabel,
                               details: AiGuideService.providerTrace.value.join(
                                 '\n',
                               ),
@@ -1698,15 +1714,34 @@ class _AiChatBodyState extends State<_AiChatBody>
                             opacity: _typingFade ? 0.0 : 1.0,
                             duration: const Duration(milliseconds: 220),
                             curve: Curves.easeOutCubic,
+                            // Вход мягкий и длинный: раньше индикатор
+                            // «щёлкал» из 70% с ростом за 280 мс — при
+                            // ответе на полное сообщение это читалось как
+                            // рывок. Теперь почти без масштаба, с подъёмом
+                            // снизу за 440 мс.
                             child: TweenAnimationBuilder<double>(
                               tween: Tween(begin: 0, end: 1),
-                              duration: const Duration(milliseconds: 280),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, t, child) => Opacity(
-                                opacity: t,
-                                child: Transform.scale(
-                                  scale: 0.7 + 0.3 * t,
-                                  child: child,
+                              duration: const Duration(milliseconds: 440),
+                              curve: Curves.easeOutQuart,
+                              // Высота растёт ВМЕСТЕ с прозрачностью
+                              // (heightFactor): раньше пузырёк «Сочиняю…»
+                              // возникал сразу во весь рост и одним кадром
+                              // сдвигал ленту вверх — на длинном сообщении
+                              // это и читалось как рывок.
+                              builder: (context, t, child) => ClipRect(
+                                child: Align(
+                                  alignment: Alignment.bottomCenter,
+                                  heightFactor: t,
+                                  child: Opacity(
+                                    opacity: t,
+                                    child: Transform.translate(
+                                      offset: Offset(0, 14 * (1 - t)),
+                                      child: Transform.scale(
+                                        scale: 0.94 + 0.06 * t,
+                                        child: child,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                               child: _TypingIndicator(animation: _dotsCtrl),
@@ -2025,11 +2060,13 @@ class _AiChatBodyState extends State<_AiChatBody>
             ),
           ),
         ),
-        // Встроенная клавиатура под тему приложения: исключает скачки IME и дерганья
+        // Встроенная клавиатура под тему приложения: исключает скачки IME и дерганья.
+        // Снизу — запас до скруглённых углов листа: раньше нижний ряд
+        // прилипал к углам и «заедал» при наборе.
         Padding(
-          padding: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.only(top: 4, bottom: 6),
           child: InlineKeyboard(
-            keyHeight: 38,
+            keyHeight: 46,
             onChar: _insertChar,
             onBackspace: _backspace,
             onSpace: _space,

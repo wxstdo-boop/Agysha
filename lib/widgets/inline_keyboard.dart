@@ -55,7 +55,7 @@ class InlineKeyboard extends StatefulWidget {
     this.actionLabel,
     this.onAction,
     this.actionEmphasized = true,
-    this.keyHeight = 44,
+    this.keyHeight = 46,
   });
 
   @override
@@ -93,23 +93,62 @@ class _InlineKeyboardState extends State<InlineKeyboard>
   }
 
   static const List<String> _digits = [
-    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    '0',
   ];
   static const List<String> _row1 = [
-    'й', 'ц', 'у', 'к', 'е', 'н', 'г', 'ш', 'щ', 'з', 'х',
+    'й',
+    'ц',
+    'у',
+    'к',
+    'е',
+    'н',
+    'г',
+    'ш',
+    'щ',
+    'з',
+    'х',
   ];
   static const List<String> _row2 = [
-    'ф', 'ы', 'в', 'а', 'п', 'р', 'о', 'л', 'д', 'ж', 'э',
+    'ф',
+    'ы',
+    'в',
+    'а',
+    'п',
+    'р',
+    'о',
+    'л',
+    'д',
+    'ж',
+    'э',
   ];
   static const List<String> _row3 = [
-    'я', 'ч', 'с', 'м', 'и', 'т', 'ь', 'б', 'ю', 'ъ',
+    'я',
+    'ч',
+    'с',
+    'м',
+    'и',
+    'т',
+    'ь',
+    'б',
+    'ю',
+    'ъ',
   ];
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
+      // Просторнее по краям: клавиши не липнут к скруглённым углам листа.
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 12),
       decoration: BoxDecoration(
         // Полупрозрачная панель с ЯВНЫМ КРАСНЫМ отливом: сквозь клавиатуру
         // просвечивает лист, а алый тон привязывает её к остальным
@@ -120,7 +159,9 @@ class _InlineKeyboardState extends State<InlineKeyboard>
           InlineKeyboard._brandRed.withValues(alpha: 0.30),
           theme.colorScheme.surfaceContainer.withValues(alpha: 0.66),
         ),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xl)),
+        // Скруглены ВСЕ углы: панель сидит внутри листа, и нижние углы
+        // раньше обрезались о скругление окна.
+        borderRadius: BorderRadius.circular(Radii.xl),
         border: Border(
           top: BorderSide(
             color: InlineKeyboard._brandRed.withValues(alpha: 0.38),
@@ -318,7 +359,7 @@ class _KeyState extends State<_Key> {
             cs.surfaceContainerHighest.withValues(alpha: 0.66),
           );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
       child: PressScale(
         // Отдача клавиши — заметно медленнее и мягче прежних 90/180 мс:
         // на быстром наборе клавиша «щёлкала» кадром и не читалась как
@@ -459,7 +500,11 @@ class _CaseGlyph extends StatelessWidget {
   Widget _glyph(String ch) => Text(
     ch,
     style: theme.textTheme.titleMedium?.copyWith(
-      fontWeight: Weights.semibold,
+      // Крупнее системного titleMedium: на 46-пиксельных клавишах буква
+      // должна читаться с ходу, а не выглядеть мелкой нашлёпкой.
+      fontSize: 19,
+      fontWeight: Weights.medium,
+      letterSpacing: 0.2,
       color: theme.colorScheme.onSurface,
     ),
   );

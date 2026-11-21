@@ -125,6 +125,19 @@ extension _SettingsSectionLook on _SettingsScreenState {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                  // «beta» — тихая приписка после FOSS: канал сборки виден
+                  // сразу, но не спорит с розовым акцентом названия.
+                  TextSpan(
+                    text: '  beta',
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.62,
+                      ),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
                 ],
               ),
             ),

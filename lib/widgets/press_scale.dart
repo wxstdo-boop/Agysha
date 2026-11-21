@@ -92,6 +92,12 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// а не каждый кадр.
   bool _swiping = false;
 
+  /// Плавное снятие наклона при уходе в свайп. Раньше наклон обнулялся
+  /// одним кадром: карточка из положения наклона «щёлкала» в плоскость и
+  /// обратно. Теперь сила наклона гаснет и возвращается кривой, а сами
+  /// углы обнуляются уже при нулевой силе — скачка не видно.
+  late final AnimationController _tiltFade;
+
   Offset _tilt = Offset.zero;
   Offset _releaseTilt = Offset.zero;
   final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(
@@ -125,6 +131,17 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInOutCubic,
     );
+    _tiltFade = AnimationController(
+      vsync: this,
+      value: 1.0,
+      duration: const Duration(milliseconds: 320),
+    )..addStatusListener((status) {
+      if (status != AnimationStatus.dismissed) return;
+      // Наклон уже невидим (сила 0) — можно обнулить углы без рывка.
+      _tilt = Offset.zero;
+      _releaseTilt = Offset.zero;
+      _tiltNotifier.value = Offset.zero;
+    });
   }
 
   @override
@@ -136,6 +153,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   @override
   void dispose() {
     _tiltNotifier.dispose();
+    _tiltFade.dispose();
     _swipeCtrl.dispose();
     _ctrl.dispose();
     super.dispose();
@@ -217,11 +235,11 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         // сбрасывает сам обработчик движения (см. [_move]) — здесь
         // трогать его value нельзя, это уведомило бы слушателей посреди
         // сборки дерева.
-        _releaseTilt = Offset.zero;
-        _tilt = Offset.zero;
-        _tiltNotifier.value = Offset.zero;
+        // Наклон не обнуляем кадром — его гасит кривая.
+        _tiltFade.reverse();
         _swipeCtrl.reverse();
       } else {
+        _tiltFade.forward();
         _swipeCtrl.forward();
       }
     }
@@ -232,7 +250,12 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       onPointerUp: _up,
       onPointerCancel: _cancel,
       child: AnimatedBuilder(
-        animation: Listenable.merge([_anim, _tiltNotifier, _swipeAnim]),
+        animation: Listenable.merge([
+          _anim,
+          _tiltNotifier,
+          _swipeAnim,
+          _tiltFade,
+        ]),
         builder: (context, child) {
           final v = _anim.value * _swipeAnim.value;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
@@ -240,14 +263,17 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
           final currentTilt = _ctrl.status == AnimationStatus.reverse
               ? _releaseTilt
               : _tilt;
+          final tiltFade = _tiltFade.value;
           final tiltActive =
               widget.enableTilt &&
               !MotionPrefs.shouldReduceMotion &&
               v > 0.001 &&
+              tiltFade > 0.001 &&
               currentTilt != Offset.zero;
 
-          final tiltX = -currentTilt.dy * widget.maxTiltAngle * v;
-          final tiltY = currentTilt.dx * widget.maxTiltAngle * v;
+          final tiltX =
+              -currentTilt.dy * widget.maxTiltAngle * v * tiltFade;
+          final tiltY = currentTilt.dx * widget.maxTiltAngle * v * tiltFade;
 
           final matrix = Matrix4.identity();
           if (tiltActive) {

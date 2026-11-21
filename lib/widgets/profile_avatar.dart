@@ -309,10 +309,19 @@ class ProfileAvatar extends StatelessWidget {
   Widget _imageAvatar(BuildContext context) {
     final file = File(imagePath!);
     final sigma = _sigma <= 0.2 ? 0.0 : _sigma;
+    // Декодируем НЕ в родном разрешении снимка: фото из галереи на 12 Мп это
+    // ~48 МБ растра ради кружка в 64–120 lp. Такой декод занимал главный
+    // isolate на кадры и давал «подтормаживание» при каждом открытии экрана,
+    // где видна своя аватарка (память под растр ещё и вытесняла кэш
+    // остальных картинок). 2× от логического размера — с запасом на блюр.
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final decodeSide = (size * dpr * 2).round();
     final image = Image.file(
       file,
       width: size,
       height: size,
+      cacheWidth: decodeSide,
+      cacheHeight: decodeSide,
       fit: BoxFit.cover,
       gaplessPlayback: true,
       filterQuality: FilterQuality.medium,
@@ -371,9 +380,7 @@ class ProfileAvatar extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(
-                  alpha: dark ? 0.36 : 0.14,
-                ),
+                color: Colors.black.withValues(alpha: dark ? 0.36 : 0.14),
                 blurRadius: size * 0.16,
                 spreadRadius: size * 0.02,
               ),

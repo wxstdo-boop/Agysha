@@ -30,7 +30,7 @@ class SmoothKeyboardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
     final bg = background ?? Theme.of(context).scaffoldBackgroundColor;
     return ColoredBox(
       color: bg,
