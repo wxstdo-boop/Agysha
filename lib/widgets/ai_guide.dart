@@ -30,6 +30,7 @@ import '../widgets/model_label.dart';
 import '../widgets/smooth_typing.dart';
 import 'agysha_confirm_dialog.dart';
 import 'inline_keyboard.dart';
+import '../utils/design_tokens.dart';
 
 export 'berserk_sheet.dart';
 part 'ai_guide_bubbles.dart';
@@ -316,16 +317,26 @@ class _AiChatSheetState extends State<_AiChatSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final totalH = MediaQuery.sizeOf(context).height;
-    // Фиксированное окно исключает скачки и дерганье при открытии/закрытии
-    final sheetHeight = (totalH * 0.90).clamp(360.0, totalH - 32.0);
+    final mq = MediaQuery.of(context);
+    final keyboard = mq.viewInsets.bottom;
+    // Окно поднимается над клавиатурой на её высоту и меряется по
+    // ОСТАВШЕМУСЯ месту: раньше высота считалась от полного экрана, лист
+    // уходил за клавиатуру, и поле ввода с быстрыми чипами «еле
+    // вмещалось». Теперь клавиатура всегда влезает целиком.
+    final usableH = math.max(mq.size.height - keyboard, 240.0);
+    final maxH = math.max(usableH - 12, 200.0);
+    final sheetHeight = (usableH * 0.94)
+        .clamp(math.min(300.0, maxH), maxH)
+        .toDouble();
 
     return RepaintBoundary(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
+        // Уже по краям (было 10) и с большим скруглением — окно шире и
+        // «мягче»; нижний отступ учитывает клавиатуру.
+        padding: EdgeInsets.fromLTRB(6, 0, 6, 10 + keyboard),
         child: ClipRRect(
           // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(32),
           child: BackdropFilter(
             filter: _backdropBlur,
             blendMode: BlendMode.src,
@@ -339,7 +350,7 @@ class _AiChatSheetState extends State<_AiChatSheet> {
                   color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.35),
                   width: 1.0,
                 ),
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(32),
               ),
               child: MediaQuery.removeViewInsets(
                 context: context,
@@ -881,14 +892,21 @@ class _AiChatBodyState extends State<_AiChatBody>
         enableTilt: true,
         duration: const Duration(milliseconds: 140),
         releaseDuration: const Duration(milliseconds: 220),
-        child: Container(
+        child: AnimatedContainer(
+          // Переключение — не щелчок: заливка, обводка и свечение плавно
+          // перетекают между состояниями (раньше менялись одним кадром и
+          // читались как «мигание»).
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
           width: 40,
           height: 40,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: _webSearch
                 ? cs.primary.withValues(alpha: isDark ? 0.35 : 0.25)
-                : cs.surfaceContainerHigh.withValues(alpha: isDark ? 0.32 : 0.42),
+                : cs.surfaceContainerHigh.withValues(
+                    alpha: isDark ? 0.32 : 0.42,
+                  ),
             border: Border.all(
               color: _webSearch
                   ? cs.primary.withValues(alpha: 0.70)
@@ -1014,19 +1032,24 @@ class _AiChatBodyState extends State<_AiChatBody>
             highlightColor: cs.primary.withValues(alpha: 0.14),
             onTap: () => _toggleScreenAware(context),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
+              duration: const Duration(milliseconds: 240),
               curve: Curves.easeOutCubic,
               width: 34,
               height: 34,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(17),
-                color: Colors.transparent,
+                color: _screenAware
+                    ? cs.primary.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                // Включено — чёткая плотная обводка в фирменный цвет (раньше
+                // 1.2 px primary на светлом фоне почти не читалась); выключено
+                // — тихая серая. Цвет и толщина перетекают, а не щёлкают.
                 border: Border.all(
                   color: _screenAware
-                      ? cs.primary
+                      ? cs.primary.withValues(alpha: 0.95)
                       : cs.outline.withValues(alpha: 0.45),
-                  width: 1.2,
+                  width: _screenAware ? 1.6 : 1.2,
                 ),
                 boxShadow: _screenAware
                     ? [
@@ -1042,13 +1065,15 @@ class _AiChatBodyState extends State<_AiChatBody>
                 alignment: Alignment.center,
                 children: [
                   AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
+                    duration: const Duration(milliseconds: 240),
                     switchInCurve: Curves.easeOutCubic,
                     switchOutCurve: Curves.easeInCubic,
                     transitionBuilder: (child, animation) =>
                         FadeTransition(opacity: animation, child: child),
                     child: Icon(
-                      _screenAware ? Icons.visibility : Icons.visibility_outlined,
+                      _screenAware
+                          ? Icons.visibility
+                          : Icons.visibility_outlined,
                       key: ValueKey('screen_toggle_icon_$_screenAware'),
                       size: 19,
                       color: _screenAware ? cs.primary : cs.onSurfaceVariant,
@@ -1084,10 +1109,14 @@ class _AiChatBodyState extends State<_AiChatBody>
     if (sel.isValid && sel.start >= 0 && sel.end >= sel.start) {
       final newText = t.replaceRange(sel.start, sel.end, ch);
       _inputCtrl.text = newText;
-      _inputCtrl.selection = TextSelection.collapsed(offset: sel.start + ch.length);
+      _inputCtrl.selection = TextSelection.collapsed(
+        offset: sel.start + ch.length,
+      );
     } else {
       _inputCtrl.text = t + ch;
-      _inputCtrl.selection = TextSelection.collapsed(offset: _inputCtrl.text.length);
+      _inputCtrl.selection = TextSelection.collapsed(
+        offset: _inputCtrl.text.length,
+      );
     }
   }
 
@@ -1105,7 +1134,9 @@ class _AiChatBodyState extends State<_AiChatBody>
       _inputCtrl.selection = TextSelection.collapsed(offset: sel.start - 1);
     } else {
       _inputCtrl.text = t.substring(0, t.length - 1);
-      _inputCtrl.selection = TextSelection.collapsed(offset: _inputCtrl.text.length);
+      _inputCtrl.selection = TextSelection.collapsed(
+        offset: _inputCtrl.text.length,
+      );
     }
   }
 
@@ -1412,11 +1443,7 @@ class _AiChatBodyState extends State<_AiChatBody>
               onTap: onTap,
               child: Padding(
                 padding: const EdgeInsets.all(7),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: cs.onSurfaceVariant,
-                ),
+                child: Icon(icon, size: 20, color: cs.onSurfaceVariant),
               ),
             ),
           ),
@@ -1438,13 +1465,15 @@ class _AiChatBodyState extends State<_AiChatBody>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Ручка.
+        // Ручка — та же, что у выбора иконки привычки (пикер иконок):
+        // полупрозрачная красная полоска той же ширины, а не серая полоска
+        // темы. Один «язык» у всех выезжающих листов.
         Container(
           margin: const EdgeInsets.only(top: 10),
           width: 40,
           height: 4,
           decoration: BoxDecoration(
-            color: cs.outlineVariant,
+            color: BrandColors.blood.withValues(alpha: 0.45),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -1474,10 +1503,14 @@ class _AiChatBodyState extends State<_AiChatBody>
                           duration: const Duration(milliseconds: 320),
                           switchInCurve: Curves.easeOutBack,
                           switchOutCurve: Curves.easeIn,
-                          transitionBuilder: (child, animation) => ScaleTransition(
-                            scale: animation,
-                            child: FadeTransition(opacity: animation, child: child),
-                          ),
+                          transitionBuilder: (child, animation) =>
+                              ScaleTransition(
+                                scale: animation,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              ),
                           child: AdaAvatar(
                             variantIndex: idx,
                             key: ValueKey('ada_avatar_$idx'),
@@ -1551,7 +1584,11 @@ class _AiChatBodyState extends State<_AiChatBody>
                   icon: floating
                       ? Icons.picture_in_picture_alt
                       : Icons.picture_in_picture_alt_outlined,
-                  tooltip: Translations.t('aiFloatingMode', context, 'Режим в окне'),
+                  tooltip: Translations.t(
+                    'aiFloatingMode',
+                    context,
+                    'Режим в окне',
+                  ),
                   onTap: _toggleFloating,
                   cs: cs,
                   isDark: isDark,
@@ -1866,7 +1903,9 @@ class _AiChatBodyState extends State<_AiChatBody>
                         return Container(
                           decoration: BoxDecoration(
                             color: cs.surfaceContainerHigh.withValues(
-                              alpha: theme.brightness == Brightness.dark ? 0.70 : 0.85,
+                              alpha: theme.brightness == Brightness.dark
+                                  ? 0.70
+                                  : 0.85,
                             ),
                             borderRadius: BorderRadius.circular(24),
                             border: Border.all(
@@ -1880,7 +1919,9 @@ class _AiChatBodyState extends State<_AiChatBody>
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(
-                                  alpha: theme.brightness == Brightness.dark ? 0.16 : 0.05,
+                                  alpha: theme.brightness == Brightness.dark
+                                      ? 0.16
+                                      : 0.05,
                                 ),
                                 blurRadius: 10,
                                 offset: const Offset(0, 2),

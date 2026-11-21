@@ -6,6 +6,7 @@ const Map<String, String> _fr = {
   'habits': 'Habitudes',
   'tasks': 'Tâches',
   'rc': 'CR',
+  'rcTab': 'Vérifs',
   'realityChecks': 'Vérifications de réalité',
   'rcSettingsTitle': 'Vérifications de réalité',
   'rcSettingsBody':

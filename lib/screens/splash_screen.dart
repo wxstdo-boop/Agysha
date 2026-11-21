@@ -445,7 +445,6 @@ class _ShineText extends StatelessWidget {
   /// Цвет блеска — фиксированная «кровь», не primary: фирменная подпись
   /// должна одинаково читаться во всех темах, включая grok и rose.
 
-
   /// Половина ширины полосы в координатах Alignment (по горизонтали).
   static const double _half = 0.55;
 
@@ -588,7 +587,6 @@ class _PaintSplatPainter extends CustomPainter {
   /// Цвет брызг — фирменная «кровь», та же, что у подписи POWERED BY LARAF
   /// (см. [_ShineText]): ава и текст забрызганы одним материалом.
 
-
   /// Кляксы: (доля x, доля y, доля радиуса, фаза формы). Разнесены по плите
   /// и мелкие — пятна читаются ОТДЕЛЬНЫМИ брызгами от удара кистью, а не
   /// одной лужей: крупное центральное пятно сливало соседей в кашу.
@@ -685,15 +683,13 @@ class _PaintSplatPainter extends CustomPainter {
     final rim = Paint()..color = Colors.black.withValues(alpha: 0.10 * env);
     for (final b in _blobs) {
       final c = Offset(b.$1 * size.width, b.$2 * size.height);
-      canvas.drawPath(
-        _blob(c, short * b.$3 * grow + 1.5, b.$4),
-        rim,
-      );
+      canvas.drawPath(_blob(c, short * b.$3 * grow + 1.5, b.$4), rim);
     }
 
     // Полупрозрачная кровь: сквозь пятна просвечивает плита логотипа, и
     // брызги читаются как след краски, а не как глухие наклейки.
-    final paint = Paint()..color = BrandColors.blood.withValues(alpha: 0.58 * env);
+    final paint = Paint()
+      ..color = BrandColors.blood.withValues(alpha: 0.58 * env);
     for (final b in _blobs) {
       final c = Offset(b.$1 * size.width, b.$2 * size.height);
       canvas.drawPath(_blob(c, short * b.$3 * grow, b.$4), paint);
@@ -703,7 +699,8 @@ class _PaintSplatPainter extends CustomPainter {
     final dropGrow =
         Curves.easeOutCubic.transform(((t - 0.12) / 0.88).clamp(0.0, 1.0)) *
         1.12;
-    final dropPaint = Paint()..color = BrandColors.blood.withValues(alpha: 0.48 * env);
+    final dropPaint = Paint()
+      ..color = BrandColors.blood.withValues(alpha: 0.48 * env);
     for (final d in _drops) {
       canvas.drawCircle(
         Offset(d.$1 * size.width, d.$2 * size.height),
@@ -781,11 +778,15 @@ class _LevitationPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final p = phase % 1.0;
-    final bob = math.sin(_tau * p); // -1 (внизу) .. 1 (наверху)
+    // Сглаженный ход: sin в кубе даёт ноль скорости на крайних точках —
+    // человечек мягко «зависает» сверху и снизу вместо равномерного
+    // маятника, который читался как механическое дёрганье.
+    final s = math.sin(_tau * p);
+    final bob = s * s * s;
     final rise = (bob + 1) / 2; // 0 .. 1
     final cx = size.width / 2;
-    final cy = size.height * 0.52 - bob * 2.8;
-    final tilt = 0.055 * math.sin(_tau * p + math.pi / 2);
+    final cy = size.height * 0.52 - bob * 2.4;
+    final tilt = 0.032 * math.sin(_tau * p + math.pi / 2);
 
     // ── Ореол за спиной ─────────────────────────────────
     canvas.drawCircle(
@@ -794,81 +795,85 @@ class _LevitationPainter extends CustomPainter {
       Paint()
         ..shader = RadialGradient(
           colors: [
-            color.withValues(alpha: glow * (0.35 + 0.45 * rise)),
+            color.withValues(alpha: glow * (0.30 + 0.40 * rise)),
             color.withValues(alpha: 0),
           ],
           stops: const [0.0, 1.0],
         ).createShader(Rect.fromCircle(center: Offset(cx, cy - 2), radius: 13)),
     );
 
-    // ── Кольцо-тень под ногами: сжимается, когда он выше ─
-    final ringY = size.height * 0.88;
-    final rx = 9.0 - 3.4 * rise;
+    // ── Мягкая тень под ногами ─────────────────────────
+    // Размытое пятно вместо тонкого кольца: одиночная обводка в 1.4 px на
+    // 30-пиксельном бейдже читалась как лишняя чёрточка-артефакт, а не как
+    // тень. Пятно гаснет и сжимается, когда человечек выше.
+    final shadowRx = 8.4 - 3.2 * rise;
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(cx, ringY),
-        width: rx * 2,
-        height: rx * 0.66,
+        center: Offset(cx, size.height * 0.88),
+        width: shadowRx * 2,
+        height: shadowRx * 0.62,
       ),
       Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4
-        ..color = color.withValues(alpha: 0.34 - 0.20 * rise),
+        ..color = color.withValues(alpha: 0.20 - 0.13 * rise)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.2),
     );
-
-    // ── Искры: пологой орбитой, пульсируют ──────────────
-    for (var i = 0; i < 3; i++) {
-      // Полный оборот (2π) за цикл, а не половина: при полуобороте на склейке
-      // витков искра телепортировалась на противоположную сторону орбиты —
-      // рывок раз в цикл. Здесь угол в p=0 и p=1 совпадает.
-      final a = _tau * p + i * (_tau / 3);
-      final spark = Offset(cx + math.cos(a) * 12.0, cy - 3 + math.sin(a) * 6.0);
-      final pulse = 0.30 + 0.55 * (0.5 + 0.5 * math.sin(_tau * p * 2 + i));
-      canvas.drawCircle(
-        spark,
-        1.0 + 0.5 * pulse,
-        Paint()..color = color.withValues(alpha: pulse.clamp(0.0, 1.0)),
-      );
-    }
 
     // ── Фигура ──────────────────────────────────────────
     canvas.save();
     canvas.translate(cx, cy);
     canvas.rotate(tilt);
 
-    final body = Path()
-      ..moveTo(0, -9.4) // шея
-      ..lineTo(0, -2.0) // позвоночник
-      // Руки подняты вверх-в стороны — классическая поза парения.
-      ..moveTo(0, -7.8)
-      ..quadraticBezierTo(-4.2, -9.4, -6.6, -13.2)
-      ..moveTo(0, -7.8)
-      ..quadraticBezierTo(4.2, -9.4, 6.6, -13.2)
-      // Ноги свисают вниз и чуть в стороны с мягким прогибом — поза
-      // парящего, а не сидящего: «скрещённые в лотосе» дуги из одного бедра
-      // самопересекались в 30-пиксельном бейдже и вместо ног давали кольцо
-      // на палочке.
-      ..moveTo(0, -2.0)
-      ..quadraticBezierTo(-3.8, 1.8, -2.9, 6.4)
-      ..moveTo(0, -2.0)
-      ..quadraticBezierTo(3.8, 1.8, 2.9, 6.4);
+    // Силуэт целиком заливкой, без «палочек»: раньше тело, руки и ноги
+    // были тонкими штрихами и на маленьком размере рассыпались в набор
+    // чёрточек. Залитый силуэт (голова + плащ + рукава) читается одной
+    // чистой формой даже на бюджетнике.
+    final head = Path()
+      ..addOval(Rect.fromCircle(center: const Offset(0, -9.4), radius: 3.3));
+    final robe = Path()
+      ..moveTo(-3.6, -6.4)
+      ..quadraticBezierTo(-3.1, 1.6, -1.9, 5.0)
+      ..quadraticBezierTo(0, 6.4, 1.9, 5.0)
+      ..quadraticBezierTo(3.1, 1.6, 3.6, -6.4)
+      ..quadraticBezierTo(0, -8.0, -3.6, -6.4)
+      ..close();
 
-    // Сначала широким мягким мазком — свечение, затем чёткий контур.
-    for (final (width, alpha) in [(5.0, glow * 0.55), (2.0, 1.0)]) {
-      canvas.drawPath(
-        body,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = width
-          ..strokeCap = StrokeCap.round
-          ..color = color.withValues(alpha: alpha),
-      );
-      canvas.drawCircle(
-        const Offset(0, -12.4),
-        width == 5.0 ? 3.4 : 3.0,
-        Paint()..color = color.withValues(alpha: alpha),
-      );
+    final silhouette = Path.combine(PathOperation.union, head, robe);
+
+    final glowPaint = Paint()
+      ..color = color.withValues(alpha: glow * 0.55)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.6);
+    final solidPaint = Paint()..color = color;
+
+    // Рукава — два скруглённых «крыла» вверх-в стороны.
+    void paintWings(Paint paint) {
+      for (final dir in const [-1.0, 1.0]) {
+        canvas.save();
+        canvas.translate(dir * 4.9, -8.0);
+        canvas.rotate(dir * 0.62);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(center: Offset.zero, width: 2.9, height: 7.6),
+            const Radius.circular(1.45),
+          ),
+          paint,
+        );
+        canvas.restore();
+      }
     }
+
+    // Свечение вокруг силуэта — мягкая подложка, чтобы фигура не «резала»
+    // фон острым краем.
+    canvas.drawPath(silhouette, glowPaint);
+    paintWings(glowPaint);
+    canvas.drawPath(silhouette, solidPaint);
+    paintWings(solidPaint);
+    // Лёгкий блик сверху головы: фигура читается объёмной, а не плоским
+    // пятном.
+    canvas.drawCircle(
+      const Offset(-1.0, -10.4),
+      1.15,
+      Paint()..color = Colors.white.withValues(alpha: 0.34),
+    );
     canvas.restore();
   }
 

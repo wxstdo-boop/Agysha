@@ -381,12 +381,15 @@ part of 'ai_guide_service.dart';
       'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     };
+    // Промпт держим отдельно: Horde возвращает в поле text ПРОМПТ ВМЕСТЕ с
+    // ответом, и без отсечения Ада «эхом» повторяла вопрос.
+    final prompt = _freePrompt(userText, languageCode);
     final submitted = await http
         .post(
           Uri.parse('$_hordeBaseUrl/generate/text/async'),
           headers: headers,
           body: jsonEncode({
-            'prompt': _freePrompt(userText, languageCode),
+            'prompt': prompt,
             'params': {
               'max_length': 320,
               'temperature': 0.7,
@@ -432,7 +435,10 @@ part of 'ai_guide_service.dart';
               ? '${first['model']}'.split('/').last
               : 'text';
           AiGuideService._setModel('AI Horde · $modelName');
-          return AiGuideService._cleanText(text);
+          final body = text.startsWith(prompt)
+              ? text.substring(prompt.length)
+              : text;
+          return AiGuideService._cleanText(body);
         }
       }
       if (status['faulted'] == true || status['is_possible'] == false) {
