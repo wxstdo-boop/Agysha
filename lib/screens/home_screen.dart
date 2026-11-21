@@ -550,7 +550,7 @@ class _HomeScreenState extends State<HomeScreen>
           preferredAbove: false,
           child: PressScale(
             pressedScale: 0.95,
-            enableTilt: false,
+            enableTilt: true,
             duration: const Duration(milliseconds: 140),
             releaseDuration: const Duration(milliseconds: 220),
             child: Container(
@@ -559,11 +559,11 @@ class _HomeScreenState extends State<HomeScreen>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: cs.surfaceContainerHigh.withValues(
-                  alpha: dark ? 0.65 : 0.85,
+                  alpha: dark ? 0.32 : 0.42,
                 ),
                 border: Border.all(
                   color: cs.outlineVariant.withValues(
-                    alpha: dark ? 0.40 : 0.55,
+                    alpha: dark ? 0.22 : 0.30,
                   ),
                   width: 1.0,
                 ),

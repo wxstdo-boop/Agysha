@@ -311,7 +311,7 @@ part of 'ai_guide_service.dart';
       {'role': 'user', 'content': userText},
     ];
 
-    for (final model in const ['openai-fast', 'openai']) {
+    for (final model in const ['openai-fast', 'openai', 'gpt-oss', 'ovh-reasoning']) {
       try {
         final resp = await http
             .post(
@@ -335,7 +335,7 @@ part of 'ai_guide_service.dart';
           if (!body.startsWith('<')) {
             final cleaned = AiGuideService._cleanText(body);
             if (cleaned.isNotEmpty && !AiGuideService._isRefusal(cleaned)) {
-              AiGuideService._setModel('Pollinations · GPT');
+              AiGuideService._setModel('Pollinations · $model');
               return cleaned;
             }
           }

@@ -650,7 +650,7 @@ class _SectionPillState extends State<SectionPill>
                 dark
                     ? Colors.white.withValues(alpha: 0.38)
                     : Colors.black.withValues(alpha: 0.42),
-                Colors.white,
+                const Color(0xFFFF453A),
                 badgeT,
               )!;
               return Expanded(
@@ -662,8 +662,8 @@ class _SectionPillState extends State<SectionPill>
                     type: MaterialType.transparency,
                     child: InkWell(
                       borderRadius: BorderRadius.circular(18),
-                      splashColor: Colors.white.withValues(alpha: 0.16),
-                      highlightColor: Colors.white.withValues(alpha: 0.10),
+                      splashColor: const Color(0xFFFF453A).withValues(alpha: 0.16),
+                      highlightColor: const Color(0xFFFF453A).withValues(alpha: 0.10),
                       onTap: () {
                         if (!mounted) return;
                         Haptics.select();
@@ -674,7 +674,7 @@ class _SectionPillState extends State<SectionPill>
                         child: PressScale(
                           enabled: !_dragging,
                           pressedScale: 0.95,
-                          enableTilt: false,
+                          enableTilt: true,
                           duration: const Duration(milliseconds: 140),
                           releaseDuration: const Duration(
                             milliseconds: 220,
@@ -685,12 +685,22 @@ class _SectionPillState extends State<SectionPill>
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: count >= 4 ? 12.5 : 13.5,
+                              fontSize: count >= 4 ? 13.0 : 14.0,
                               fontWeight: isSelected
                                   ? FontWeight.w700
                                   : FontWeight.w500,
                               color: textColor,
                               letterSpacing: -0.2,
+                              shadows: badgeT > 0.05
+                                  ? [
+                                      Shadow(
+                                        color: const Color(0xFFFF453A).withValues(
+                                          alpha: 0.45 * badgeT,
+                                        ),
+                                        blurRadius: 8 * badgeT,
+                                      ),
+                                    ]
+                                  : null,
                             ),
                           ),
                         ),
@@ -707,7 +717,8 @@ class _SectionPillState extends State<SectionPill>
   }
 }
 
-/// Выбранный раздел — плавно скользящая яркая красная плашка-индикатор.
+/// Выбранный раздел выделяется текстом без отдельной фоновой таблетки.
+/// Виджет сохраняет интерфейс для геометрических тестов без отрисовки фона.
 class _GlassStone extends StatelessWidget {
   final double capRadius;
 
@@ -717,28 +728,7 @@ class _GlassStone extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(capRadius),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFFF453A),
-            Color(0xFFE53935),
-            Color(0xFFC62828),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFE53935).withValues(alpha: 0.42),
-            blurRadius: 10,
-            spreadRadius: -1,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.expand();
   }
 }
 

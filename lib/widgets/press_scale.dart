@@ -104,9 +104,9 @@ class _PressScaleState extends State<PressScale>
     if (!widget.enableTilt || MotionPrefs.shouldReduceMotion) return;
     final size = context.size;
     if (size == null || size.width <= 0 || size.height <= 0) return;
-    // Кнопки и элементы с малой стороной (меньше 72px) в 3D не наклоняем:
-    // перспектива искажает координаты под пальцем и фреймворк отменяет тапы.
-    if (size.width < 72 || size.height < 72) return;
+    // Тактильный 3D-наклон работает для всех карточек, плашек и кнопок.
+    // Для микро-иконок меньше 20px наклон не нужен.
+    if (size.width < 20 || size.height < 20) return;
     final rawNx = (pos.dx / size.width - 0.5) * 2.0;
     final rawNy = (pos.dy / size.height - 0.5) * 2.0;
     final target = Offset(_softClamp(rawNx), _softClamp(rawNy));
@@ -197,6 +197,7 @@ class _PressScaleState extends State<PressScale>
           final transformed = Transform(
             transform: matrix,
             alignment: Alignment.center,
+            transformHitTests: false,
             child: child,
           );
 

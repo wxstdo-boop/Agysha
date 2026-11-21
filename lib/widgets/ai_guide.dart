@@ -29,6 +29,7 @@ import '../widgets/smooth_tooltip.dart';
 import '../widgets/model_label.dart';
 import '../widgets/smooth_typing.dart';
 import 'agysha_confirm_dialog.dart';
+import 'inline_keyboard.dart';
 
 export 'berserk_sheet.dart';
 part 'ai_guide_bubbles.dart';
@@ -297,7 +298,7 @@ Future<void> showAiGuideChat(BuildContext context) {
   });
 }
 
-/// Тонкая оболочка листа ИИ-чата с адаптивным стеклом и плавной реакцией на клавиатуру.
+/// Фиксированное окно ИИ-чата с адаптивным стеклом и закруглением всех 4 углов.
 class _AiChatSheet extends StatefulWidget {
   const _AiChatSheet();
 
@@ -315,41 +316,30 @@ class _AiChatSheetState extends State<_AiChatSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    // Клавиатура: анимированный отступ низа сглаживает дискретные скачки IME Android (0 → 120 → 300),
-    // благодаря чему поле ввода плавно поднимается и опускается без единого рывка.
-    final insets = MediaQuery.viewInsetsOf(context).bottom;
     final totalH = MediaQuery.sizeOf(context).height;
-    final targetH = (totalH * 0.86).clamp(320.0, totalH - 40.0);
-    final available = totalH - insets;
-    final sheetHeight = math.min(targetH, math.max(260.0, available - 16.0));
+    // Фиксированное окно исключает скачки и дерганье при открытии/закрытии
+    final sheetHeight = (totalH * 0.90).clamp(360.0, totalH - 32.0);
 
-    return AnimatedPadding(
-      padding: EdgeInsets.only(bottom: insets),
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      child: RepaintBoundary(
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
         child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
+          borderRadius: BorderRadius.circular(28),
           child: BackdropFilter(
             filter: _backdropBlur,
             blendMode: BlendMode.src,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
+            child: Container(
               height: sheetHeight,
               decoration: BoxDecoration(
                 color: theme.scaffoldBackgroundColor.withValues(
                   alpha: isDark ? 0.78 : 0.84,
                 ),
-                border: Border(
-                  top: BorderSide(
-                    color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.35),
-                    width: 1.0,
-                  ),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.35),
+                  width: 1.0,
                 ),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
+                borderRadius: BorderRadius.circular(28),
               ),
               child: MediaQuery.removeViewInsets(
                 context: context,
@@ -878,87 +868,72 @@ class _AiChatBodyState extends State<_AiChatBody>
   /// Фон свой (нейтральный), НЕ таблетный — значок всегда различим.
   Widget _buildWebSearchToggle(BuildContext context, ThemeData theme) {
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     return SmoothTooltip(
       message: Translations.t(
         _webSearch ? 'aiWebSearchOn' : 'aiWebSearch',
         context,
         _webSearch ? 'Web search ON' : 'Web search',
       ),
-      waitDuration: const Duration(milliseconds: 400),
+      waitDuration: const Duration(milliseconds: 300),
       child: PressScale(
-        pressedScale: 0.90,
-        enableTilt: false,
-        duration: const Duration(milliseconds: 180),
-        child: Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            splashColor: cs.primary.withValues(alpha: 0.22),
-            highlightColor: cs.primary.withValues(alpha: 0.14),
-            onTap: () {
-              Haptics.light();
-              setState(() {
-                _webSearch = !_webSearch;
-                try {
-                  globalPrefs.setBool('ai_web_search', _webSearch);
-                } catch (_) {}
-              });
-            },
-            child: ClipOval(
-              // ClipOval: иконка при анимации НИКОГДА не вылезает за круг.
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  // «Стеклянный» круг под стать чату: выключен — полупрозрачная
-                  // поверхность (сквозь неё видно размытый фон листа) с тонкой
-                  // кромкой; включён — заливается фирменным градиентом.
-                  shape: BoxShape.circle,
-                  gradient: _webSearch
-                      ? LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            cs.primary,
-                            Color.lerp(cs.primary, cs.tertiary, 0.4)!,
-                          ],
-                        )
-                      : null,
-                  color: _webSearch ? null : cs.surface.withValues(alpha: 0.55),
-                  border: Border.all(
-                    color: _webSearch
-                        ? cs.primary
-                        : cs.outlineVariant.withValues(alpha: 0.65),
-                    width: 1.3,
-                  ),
-                  boxShadow: _webSearch
-                      ? [
-                          BoxShadow(
-                            color: cs.primary.withValues(alpha: 0.35),
-                            blurRadius: 10,
-                            offset: const Offset(0, 1),
-                          ),
-                        ]
-                      : null,
-                ),
+        pressedScale: 0.95,
+        enableTilt: true,
+        duration: const Duration(milliseconds: 140),
+        releaseDuration: const Duration(milliseconds: 220),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _webSearch
+                ? cs.primary.withValues(alpha: isDark ? 0.35 : 0.25)
+                : cs.surfaceContainerHigh.withValues(alpha: isDark ? 0.32 : 0.42),
+            border: Border.all(
+              color: _webSearch
+                  ? cs.primary.withValues(alpha: 0.70)
+                  : cs.outlineVariant.withValues(alpha: isDark ? 0.22 : 0.30),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _webSearch
+                    ? cs.primary.withValues(alpha: 0.30)
+                    : Colors.black.withValues(alpha: isDark ? 0.12 : 0.04),
+                blurRadius: _webSearch ? 8 : 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              splashColor: cs.primary.withValues(alpha: 0.22),
+              highlightColor: cs.primary.withValues(alpha: 0.14),
+              onTap: () {
+                Haptics.light();
+                setState(() {
+                  _webSearch = !_webSearch;
+                  try {
+                    globalPrefs.setBool('ai_web_search', _webSearch);
+                  } catch (_) {}
+                });
+              },
+              child: Center(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 180),
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
-                  // Только fade, БЕЗ scale: иконка не увеличивается и не
-                  // «заезжает за границы» при переключении.
                   transitionBuilder: (child, animation) =>
                       FadeTransition(opacity: animation, child: child),
                   child: Icon(
                     _webSearch ? Icons.travel_explore : Icons.public,
                     key: ValueKey('web_toggle_icon_$_webSearch'),
-                    size: 19,
-                    color: _webSearch ? cs.onPrimary : cs.onSurfaceVariant,
+                    size: 20,
+                    color: _webSearch ? cs.primary : cs.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -1101,6 +1076,41 @@ class _AiChatBodyState extends State<_AiChatBody>
         ),
       ),
     );
+  }
+
+  void _insertChar(String ch) {
+    final t = _inputCtrl.text;
+    final sel = _inputCtrl.selection;
+    if (sel.isValid && sel.start >= 0 && sel.end >= sel.start) {
+      final newText = t.replaceRange(sel.start, sel.end, ch);
+      _inputCtrl.text = newText;
+      _inputCtrl.selection = TextSelection.collapsed(offset: sel.start + ch.length);
+    } else {
+      _inputCtrl.text = t + ch;
+      _inputCtrl.selection = TextSelection.collapsed(offset: _inputCtrl.text.length);
+    }
+  }
+
+  void _backspace() {
+    final t = _inputCtrl.text;
+    if (t.isEmpty) return;
+    final sel = _inputCtrl.selection;
+    if (sel.isValid && sel.start >= 0 && sel.end > sel.start) {
+      final newText = t.replaceRange(sel.start, sel.end, '');
+      _inputCtrl.text = newText;
+      _inputCtrl.selection = TextSelection.collapsed(offset: sel.start);
+    } else if (sel.isValid && sel.start > 0) {
+      final newText = t.replaceRange(sel.start - 1, sel.start, '');
+      _inputCtrl.text = newText;
+      _inputCtrl.selection = TextSelection.collapsed(offset: sel.start - 1);
+    } else {
+      _inputCtrl.text = t.substring(0, t.length - 1);
+      _inputCtrl.selection = TextSelection.collapsed(offset: _inputCtrl.text.length);
+    }
+  }
+
+  void _space() {
+    _insertChar(' ');
   }
 
   /// [keepUserBubble] — true при повторной отправке с плашки «ИИ на курорте»:
@@ -1896,6 +1906,8 @@ class _AiChatBodyState extends State<_AiChatBody>
                             ),
                             builder: (style) => TextField(
                               style: style,
+                              readOnly: true,
+                              showCursor: true,
                               magnifierConfiguration:
                                   TextMagnifierConfiguration.disabled,
                               controller: _inputCtrl,
@@ -1906,22 +1918,10 @@ class _AiChatBodyState extends State<_AiChatBody>
                               maxLines: 4,
                               maxLength: 13000,
                               inputFormatters: [WideDashFormatter()],
-                              // Отключаем автоподсказки/автокоррекцию
-                              // клавиатуры: Gboard/MIUI добавляет свой
-                              // автопробел после выбранного слова — отсюда
-                              // «пробел в конце».
                               enableSuggestions: false,
                               autocorrect: false,
-                              // Меню при зажатии: только Копировать/Вставить/
-                              // Вырезать/Курсив — без «Поделиться»,
-                              // «Спросить Copilot» и лишних пунктов.
                               contextMenuBuilder: minimalContextMenuBuilder,
-                              // Не запускать дополнительный автоскролл
-                              // EditableText при каждом кадре IME: лист уже
-                              // сам двигается.
                               scrollPadding: EdgeInsets.zero,
-                              // Каретка мигает ПЛАВНО (fade-переход, а не
-                              // резкое вкл/выкл) — «палка» не дёргается.
                               cursorOpacityAnimates: true,
                               decoration: InputDecoration(
                                 counterText: '',
@@ -1975,6 +1975,16 @@ class _AiChatBodyState extends State<_AiChatBody>
                 ],
               ),
             ),
+          ),
+        ),
+        // Встроенная клавиатура под тему приложения: исключает скачки IME и дерганья
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: InlineKeyboard(
+            keyHeight: 38,
+            onChar: _insertChar,
+            onBackspace: _backspace,
+            onSpace: _space,
           ),
         ),
       ],
