@@ -19,7 +19,6 @@ import '../services/settings_service.dart';
 import '../utils/wide_dash_formatter.dart';
 import '../utils/wide_dash_controller.dart';
 import '../widgets/ada_avatars.dart';
-import '../widgets/model_label.dart';
 import '../widgets/smooth_typing.dart';
 
 /// Канал системного оверлея.
@@ -219,6 +218,9 @@ class _OverlayChatState extends State<_OverlayChat>
   bool _inputFocused = false;
   bool _storageErrorShown = false;
   String _modelLabel = '';
+
+  /// В шапке окна модель показывается только после первого сообщения:
+  /// при открытии «пустого» окна статус не должен мелькать и меняться.
   int _avatarVariant = 0;
   // Сколько сообщений было при открытии: только новые анимируют вход,
   // иначе при появлении окошка вся история «вспыхивала» поверх.
@@ -1173,28 +1175,9 @@ class _OverlayChatState extends State<_OverlayChat>
                           color: cs.onSurface,
                         ),
                       ),
-                      // Текущий провайдер/модель (Kilo, OVHcloud, AI Horde).
-                      // переключается плавно при смене провайдера.
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 320),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        transitionBuilder: (child, anim) =>
-                            FadeTransition(opacity: anim, child: child),
-                        child: ModelLabel(
-                          key: ValueKey(
-                            _modelLabel.isEmpty ? 'ada-0.0.3' : _modelLabel,
-                          ),
-                          label: _modelLabel,
-                          details: AiGuideService.providerTrace.value.join(
-                            '\n',
-                          ),
-                          textStyle: TextStyle(
-                            fontSize: 10,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
+                      // Строки провайдера/модели в шапке НЕТ: статус
+                      // мелькал при открытии и менялся на каждом переборе
+                      // провайдера. Здесь только имя.
                     ],
                   ),
                 ),

@@ -25,7 +25,6 @@ import '../utils/context_menu.dart';
 import '../utils/markdown_text.dart';
 import '../widgets/beautiful_selection.dart';
 import '../widgets/smooth_tooltip.dart';
-import '../widgets/model_label.dart';
 import '../widgets/smooth_typing.dart';
 import 'agysha_confirm_dialog.dart';
 import 'inline_keyboard.dart';
@@ -334,14 +333,12 @@ class _AiChatSheetState extends State<_AiChatSheet> {
       // Navigator.pop из крестика работает и при canPop: false.
       canPop: false,
       child: RepaintBoundary(
-        // Поднятие клавиатуры анимируется вместе с высотой окна: без этого
-        // окно прыгало на новую высоту за один кадр.
-        child: AnimatedPadding(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          // Уже по краям (было 10) и с большим скруглением — окно шире и
-          // «мягче»; нижний отступ учитывает клавиатуру.
-          padding: EdgeInsets.fromLTRB(4, 0, 4, 8 + keyboard),
+        // Отступ следует за IME покадрово (MediaQuery.viewInsets сам
+        // анимирован системой). AnimatedPadding добавлял свою 220 мс
+        // задержку поверх системной — лист догонял клавиатуру и на каждом
+        // кадре отставал: вход в чат с клавиатурой «дёргался».
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(12, 0, 12, 8 + keyboard),
           child: ClipRRect(
             // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
             borderRadius: BorderRadius.circular(32),
@@ -436,14 +433,20 @@ class _AiChatBodyState extends State<_AiChatBody>
   /// История прочитана: до этого пустую подсказку не показываем, иначе
   /// при открытии на кадр мелькал «пустой Ада».
   bool _historyLoaded = false;
+
+  /// Последняя прочитанная история — общий кэш для ВСЕХ открытий чата.
+  /// Без него каждый вход в раздел создавал пустую ленту и ждал разбора
+  /// файла: окно уже въехало, а сообщения «доезжали» после — читалось как
+  /// «мигает с пустого Ады и проходит путь до этого». С кэшем повторное
+  /// открытие сразу рисует историю в первом кадре.
+  static List<AiMessage>? _historyCache;
   String _lang = 'en';
   int _quotaLeft = 0;
-  String _modelLabel = 'Pollinations · GPT';
+  String _modelLabel = '';
 
   /// В шапке — только имя провайдера. Живого статуса «отвечает…» нет:
   /// он скакал на каждом переборе провайдеров, а порой залипал, когда
   /// пользователь уже ничего не писал.
-  String get _displayModelLabel => _modelLabel;
 
   // Плавная очистка чата: список гаснет, потом стирается.
   late final AnimationController _clearCtrl = AnimationController(
@@ -480,6 +483,19 @@ class _AiChatBodyState extends State<_AiChatBody>
     // анимации открытия и был тем «лагающим входом» — выход шёл плавно,
     // потому что читать уже было нечего.
     _loadLiked();
+    // Кэш истории — сразу в первом кадре (см. _historyCache). Если кэша
+    // ещё нет (первый вход за запуск), читаем файл прямо сейчас, а не
+    // после въезда окна: к концу анимации лента уже на месте.
+    final cached = _historyCache;
+    if (cached != null) {
+      _messages
+        ..clear()
+        ..addAll(cached);
+      _openedCount = _messages.length;
+      _historyLoaded = true;
+    } else {
+      _loadHistory();
+    }
     // Открытый чат слушает доставку и перечитывает историю — отчёт
     // появляется в ленте в момент доставки, без переоткрытия.
     AiGuideService.adaReportTick.addListener(_onAdaReportTick);
@@ -533,7 +549,7 @@ class _AiChatBodyState extends State<_AiChatBody>
   void _startPostTransitionWork() {
     if (_deferredInitStarted || !mounted) return;
     _deferredInitStarted = true;
-    _loadHistory();
+    if (!_historyLoaded) _loadHistory();
     _loadPins();
     _ensureReports();
     unawaited(AiGuideService.maybeDeliverAdaNudge('system'));
@@ -727,6 +743,7 @@ class _AiChatBodyState extends State<_AiChatBody>
     } catch (error, stackTrace) {
       _reportStorageFailure(error, stackTrace);
     }
+    _historyCache = List<AiMessage>.of(_messages);
     if (mounted) setState(() => _historyLoaded = true);
   }
 
@@ -1592,35 +1609,11 @@ class _AiChatBodyState extends State<_AiChatBody>
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      // Строка 2: провайдер и активная модель.
-                      //
-                      // Раньше здесь стоял ВТОРОЙ AnimatedSwitcher поверх
-                      // собственной анимации [ModelLabel]: два перехода
-                      // накладывались друг на друга, строка «скакала» и
-                      // буквы уезжали вправо при каждой смене длины текста.
-                      // Теперь анимацию делает только ModelLabel, а эта
-                      // обёртка держит ФИКСИРОВАННУЮ высоту и левое
-                      // выравнивание — статус меняется на месте.
-                      SizedBox(
-                        height: 18,
-                        width: double.infinity,
-                        child: ClipRect(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: ModelLabel(
-                              label: _displayModelLabel,
-                              details: AiGuideService.providerTrace.value.join(
-                                '\n',
-                              ),
-                              textStyle: theme.textTheme.bodySmall?.copyWith(
-                                color: cs.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                                height: 1.2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      // Строки статуса («провайдер · модель», «Ада
+                      // отвечает…») больше НЕТ: она мелькала при открытии,
+                      // менялась на каждом переборе провайдера и читалась
+                      // владельцем как «скачущий статус». В шапке — только
+                      // имя.
                     ],
                   ),
                 ),
@@ -1808,9 +1801,11 @@ class _AiChatBodyState extends State<_AiChatBody>
                         // Ключ по самому сообщению: индексы сдвигаются при
                         // каждой вставке, и раньше все пузыри
                         // пересоздавались — вход нового читался рывком.
-                        final bubbleKey = ValueKey(
-                          'msg_${m.ts}_${m.text.hashCode}_${m.isUser}',
-                        );
+                        // Ключ — только по метке и автору: текст сообщения
+                        // при потоковой дорисовке меняется, и хеш текста в
+                        // ключе пересоздавал пузырь на каждом куске ответа —
+                        // сообщение «приходило грубо», рывками.
+                        final bubbleKey = ValueKey('msg_${m.ts}_${m.isUser}');
                         return RepaintBoundary(
                           key: bubbleKey,
                           child: _MessageBubble(
@@ -2106,7 +2101,9 @@ class _AiChatBodyState extends State<_AiChatBody>
         // Снизу — запас до скруглённых углов листа: раньше нижний ряд
         // прилипал к углам и «заедал» при наборе.
         Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 6),
+          // Бока клавиатуры больше не упираются в скруглённые края листа:
+          // 12 px от края окна + запас снизу до нижних углов.
+          padding: const EdgeInsets.only(top: 4, bottom: 10),
           child: InlineKeyboard(
             keyHeight: 46,
             onChar: _insertChar,

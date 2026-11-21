@@ -59,6 +59,12 @@ class PressScale extends StatefulWidget {
   /// Скругление подложки отдачи.
   final BorderRadius? pressTintRadius;
 
+  /// Свечение ПОВЕРХ содержимого (0..1 прогресс нажатия в аргументе).
+  /// Нужно кнопкам со своей сплошной заливкой: подложка [pressTint] лежит
+  /// ПОД ней и на красной кнопке не видна — отсвет должен идти поверх,
+  /// «изнутри» самой плашки.
+  final Widget Function(BuildContext context, double progress)? pressOverlay;
+
   const PressScale({
     super.key,
     required this.child,
@@ -74,6 +80,7 @@ class PressScale extends StatefulWidget {
     this.pressTint,
     this.pressTintStrength = 0.12,
     this.pressTintRadius,
+    this.pressOverlay,
   });
 
   @override
@@ -135,19 +142,20 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInOutCubic,
     );
-    _tiltFade = AnimationController(
-      vsync: this,
-      value: 1.0,
-      // 460 мс: наклон уходит и возвращается заметно мягче — при свайпе
-      // удаления карточка больше не «щёлкает» из наклона в плоскость.
-      duration: const Duration(milliseconds: 460),
-    )..addStatusListener((status) {
-      if (status != AnimationStatus.dismissed) return;
-      // Наклон уже невидим (сила 0) — можно обнулить углы без рывка.
-      _tilt = Offset.zero;
-      _releaseTilt = Offset.zero;
-      _tiltNotifier.value = Offset.zero;
-    });
+    _tiltFade =
+        AnimationController(
+          vsync: this,
+          value: 1.0,
+          // 460 мс: наклон уходит и возвращается заметно мягче — при свайпе
+          // удаления карточка больше не «щёлкает» из наклона в плоскость.
+          duration: const Duration(milliseconds: 460),
+        )..addStatusListener((status) {
+          if (status != AnimationStatus.dismissed) return;
+          // Наклон уже невидим (сила 0) — можно обнулить углы без рывка.
+          _tilt = Offset.zero;
+          _releaseTilt = Offset.zero;
+          _tiltNotifier.value = Offset.zero;
+        });
   }
 
   @override
@@ -274,10 +282,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         builder: (context, child) {
           // В покое и нажатии — плавная кривая, при возврате — своя,
           // если задана: отдача читается «пружинкой», а не вялым спадом.
-          final curve =
-              (_ctrl.status == AnimationStatus.reverse
-                  ? (widget.releaseCurve ?? widget.curve)
-                  : widget.curve);
+          final curve = (_ctrl.status == AnimationStatus.reverse
+              ? (widget.releaseCurve ?? widget.curve)
+              : widget.curve);
           final v = curve.transform(_ctrl.value) * _swipeAnim.value;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
 
@@ -317,6 +324,17 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
                 borderRadius: widget.pressTintRadius,
               ),
               child: content,
+            );
+          }
+
+          if (widget.pressOverlay != null) {
+            content = Stack(
+              children: [
+                content,
+                Positioned.fill(
+                  child: IgnorePointer(child: widget.pressOverlay!(context, v)),
+                ),
+              ],
             );
           }
 

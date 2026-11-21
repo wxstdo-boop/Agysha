@@ -228,6 +228,14 @@ class SectionPill extends StatefulWidget {
 
 class _SectionPillState extends State<SectionPill>
     with TickerProviderStateMixin {
+  /// Тумблер проверок реальности в настройках включает/выключает четвёртый
+  /// раздел. Раньше таблетка читала `RealityCheckService().enabled` только
+  /// при сборке, а пересборки не было: четвёртая подпись появлялась лишь
+  /// после перезахода на главный экран (владелец: «а оно ток при перезаходе»).
+  void _onRcChanged() {
+    if (mounted) setState(() {});
+  }
+
   /// Внутренняя ширина капсулы: 304 минус набивка 4 слева и справа. Ровно
   /// столько же занимает жест-дорожка: она лежит в `Stack(StackFit.expand)`.
   /// По этой ширине палец переводится в долю карусели — камень едет ровно
@@ -291,6 +299,8 @@ class _SectionPillState extends State<SectionPill>
   @override
   void initState() {
     super.initState();
+    // Четвёртый раздел «Проверки» появляется/исчезает сразу по тумблеру.
+    RealityCheckService().addListener(_onRcChanged);
     _landingCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
@@ -319,6 +329,7 @@ class _SectionPillState extends State<SectionPill>
 
   @override
   void dispose() {
+    RealityCheckService().removeListener(_onRcChanged);
     _landingCtrl.dispose();
     _edgeSettle.dispose();
     _edgePullNotifier.dispose();
@@ -693,11 +704,15 @@ class _SectionPillState extends State<SectionPill>
                         pressTintRadius: BorderRadius.circular(18),
                         enableTilt: true,
                         // Отдача как у кнопок Ады и «плюсика»: вдавливание
-                        // 200 мс, возврат 760 мс. Возврат заметно длиннее:
+                        // 220 мс, возврат 1100 мс. Возврат заметно длиннее:
                         // красноватая подложка при тапе должна растворяться
-                        // следом, а не исчезать за долю секунды.
-                        duration: const Duration(milliseconds: 200),
-                        releaseDuration: const Duration(milliseconds: 760),
+                        // следом, а не исчезать за долю секунды. Владелец
+                        // несколько раз возвращался к этому пункту — «фон при
+                        // тапе по-прежнему быстро исчезает» — поэтому отдача
+                        // растянута до 1.1 с и идёт по мягкой кривой.
+                        duration: const Duration(milliseconds: 220),
+                        releaseDuration: const Duration(milliseconds: 1100),
+                        releaseCurve: Curves.easeOutQuart,
                         child: Material(
                           type: MaterialType.transparency,
                           child: InkWell(
@@ -807,10 +822,10 @@ class _PillLabelState extends State<_PillLabel>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
-    // 400 мс: переключение текста отзывается сразу («чуть быстрее»), но
+    // 300 мс: переключение текста отзывается сразу («чуть быстрее»), но
     // всё ещё кросс-фейдом, а не кадром — 640/1100 мс читались как
     // «текст думает».
-    duration: const Duration(milliseconds: 400),
+    duration: const Duration(milliseconds: 300),
     value: 1,
   );
   late double _from = widget.glow;

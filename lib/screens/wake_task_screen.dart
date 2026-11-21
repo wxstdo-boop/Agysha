@@ -1044,80 +1044,89 @@ class _MemoryChallengeState extends State<_MemoryChallenge> {
                   child: _showing
                       ? KeyedSubtree(
                           key: const ValueKey('show'),
-                          child: Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: gap,
-                            runSpacing: gap,
-                            children: <Widget>[
-                              ...List.generate(_numbers.length, (i) {
-                                final n = _numbers[i];
-                                return Container(
-                                  width: tileW,
-                                  height: 56,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(14),
-                                    // Плитка «запомни» — ЧЕРНЕЕ: обе ступени
-                                    // градиента утоплены к тёмному, блик сверху
-                                    // остаётся лёгким, свечение в тон акцента.
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        Color.lerp(
-                                          cs.primary,
-                                          Colors.black,
-                                          0.30,
-                                        )!,
-                                        Color.lerp(
-                                          cs.tertiary,
-                                          Colors.black,
-                                          0.44,
-                                        )!,
-                                      ],
-                                    ),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.26,
+                          // Row, а НЕ Wrap: Wrap при нехватке пары пикселей
+                          // переносил ряд на вторую строку — тот самый баг
+                          // «цифры в две строки иногда». Ряд не переносится
+                          // никогда, а FittedBox ужимает его целиком, если
+                          // ширины совсем не хватило (очень узкий экран,
+                          // крупный системный шрифт).
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              spacing: gap,
+                              children: <Widget>[
+                                ...List.generate(_numbers.length, (i) {
+                                  final n = _numbers[i];
+                                  return Container(
+                                    width: tileW,
+                                    height: 56,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      // Плитка «запомни» — ЧЕРНЕЕ: обе ступени
+                                      // градиента утоплены к тёмному, блик сверху
+                                      // остаётся лёгким, свечение в тон акцента.
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Color.lerp(
+                                            cs.primary,
+                                            Colors.black,
+                                            0.30,
+                                          )!,
+                                          Color.lerp(
+                                            cs.tertiary,
+                                            Colors.black,
+                                            0.44,
+                                          )!,
+                                        ],
                                       ),
-                                      width: 1,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Color.lerp(
-                                          cs.primary,
-                                          Colors.black,
-                                          0.24,
-                                        )!.withValues(alpha: 0.40),
-                                        blurRadius: 12,
-                                        spreadRadius: -2,
-                                        offset: const Offset(0, 5),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.26,
+                                        ),
+                                        width: 1,
                                       ),
-                                    ],
-                                  ),
-                                  child: _PopNumber(
-                                    key: ValueKey('n$n#$i'),
-                                    index: i,
-                                    text: '$n',
-                                    style: theme.textTheme.titleLarge?.copyWith(
-                                      fontSize: tileFont,
-                                      height: 1.0,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      shadows: [
-                                        Shadow(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.25,
-                                          ),
-                                          blurRadius: 5,
-                                          offset: const Offset(0, 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Color.lerp(
+                                            cs.primary,
+                                            Colors.black,
+                                            0.24,
+                                          )!.withValues(alpha: 0.40),
+                                          blurRadius: 12,
+                                          spreadRadius: -2,
+                                          offset: const Offset(0, 5),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                );
-                              }),
-                            ],
+                                    child: _PopNumber(
+                                      key: ValueKey('n$n#$i'),
+                                      index: i,
+                                      text: '$n',
+                                      style: theme.textTheme.titleLarge
+                                          ?.copyWith(
+                                            fontSize: tileFont,
+                                            height: 1.0,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                            shadows: [
+                                              Shadow(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.25,
+                                                ),
+                                                blurRadius: 5,
+                                                offset: const Offset(0, 1.5),
+                                              ),
+                                            ],
+                                          ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
                           ),
                         )
                       : KeyedSubtree(
@@ -1766,12 +1775,30 @@ class _RedPillButton extends StatelessWidget {
         enabled: on,
         pressedScale: 0.965,
         enableTilt: true,
-        // Красноватый отсвет ВНУТРИ фона под пальцем: слабая винная
-        // подложка заливает таблетку и плавно растворяется после отпускания
-        // (760 мс), а не гаснет рывком.
+        // Красноватый отсвет ВНУТРИ фона под пальцем: винная подложка
+        // заливает таблетку и плавно растворяется после отпускания
+        // (760 мс), а не гаснет рывком. Плотность вернули к заметной
+        // (0.16 владелец читал как «отсвет убрали»).
         pressTint: const Color(0xFFE02436),
-        pressTintStrength: 0.16,
+        pressTintStrength: 0.30,
         pressTintRadius: radius,
+        // Второй слой — свет ИЗ-ПОД кромки: центр таблетки остаётся
+        // прозрачным, а к краям зажатие наливается кровью. Так «отсвет
+        // внутри» читается даже на сплошной заливке.
+        pressOverlay: (context, progress) => DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            gradient: RadialGradient(
+              center: Alignment.center,
+              radius: 1.1,
+              colors: [
+                const Color(0xFFE02436).withValues(alpha: 0.06 * progress),
+                const Color(0xFFE02436).withValues(alpha: 0.34 * progress),
+              ],
+              stops: const [0.0, 1.0],
+            ),
+          ),
+        ),
         duration: const Duration(milliseconds: 160),
         releaseDuration: const Duration(milliseconds: 760),
         releaseCurve: Curves.easeOutCubic,

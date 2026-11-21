@@ -56,16 +56,21 @@ void main() {
 
   test('зачёркивание толще и идёт змейкой, а не прямой', () {
     final src = read('lib/widgets/animated_strike_text.dart');
-    expect(RegExp(r'fontSize \* 0\.155').hasMatch(src), isTrue);
-    expect(RegExp(r'math\.max\(2\.2,').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 0\.13').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 0\.55').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.19').hasMatch(src), isTrue);
+    expect(RegExp(r'math\.max\(2\.6,').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.17').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.62').hasMatch(src), isTrue);
+    expect(RegExp(r'amp \* 0\.28').hasMatch(src), isTrue);
   });
 
   test('у красных кнопок пробуждения есть красноватый отсвет внутри', () {
     final src = read('lib/screens/wake_task_screen.dart');
     expect(src.contains('pressTint: const Color(0xFFE02436)'), isTrue);
-    expect(src.contains('pressTintStrength: 0.16'), isTrue);
+    // Краснота зажатия усилена, и поверх заливки лежит радиальный
+    // отсвет — «свет изнутри», а не тусклая подложка под ней.
+    expect(src.contains('pressTintStrength: 0.30'), isTrue);
+    expect(src.contains('pressOverlay:'), isTrue);
+    expect(src.contains('RadialGradient'), isTrue);
     expect(
       src.contains('releaseDuration: const Duration(milliseconds: 760)'),
       isTrue,
