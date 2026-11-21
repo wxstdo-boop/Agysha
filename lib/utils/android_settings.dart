@@ -10,6 +10,11 @@ const _package = 'com.wetcorp.agysha';
 // Канал проверки полноэкранных уведомлений (поверх блокировки).
 const _fullscreenChannel = MethodChannel('com.wetcorp.agysha/fullscreen');
 
+// Системные экраны (батарея) — нативная цепочка интентов, см. MainActivity.
+const _systemSettingsChannel = MethodChannel(
+  'com.wetcorp.agysha/system_settings',
+);
+
 /// Проверяет, выдано ли уже разрешение полноэкранных уведомлений
 /// (full-screen notifications / поверх блокировки).
 /// API 34+: NotificationManager.canUseFullScreenIntent().
@@ -74,10 +79,30 @@ Future<bool> openNotificationSettingsAndroid() async {
 }
 
 /// Opens battery optimization settings.
+///
+/// Сначала нативная цепочка (`system_settings`): системный диалог → родные
+/// страницы realme/ColorOS → общий список «Оптимизация батареи» → карточка
+/// приложения. `android_intent_plus` остаётся фолбэком на случай, если канал
+/// не зарегистрирован (например, старая сборка).
 Future<bool> openAppSettingsAndroid() async {
   if (!_isAndroid) return false;
   systemUiActive = true;
+  try {
+    final opened = await _systemSettingsChannel.invokeMethod<String>(
+      'openBatterySettings',
+    );
+    if (opened != null && opened != 'failed') return true;
+  } catch (_) {}
+
   final n = [Flag.FLAG_ACTIVITY_NEW_TASK];
+
+  try {
+    await AndroidIntent(
+      action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
+      flags: n,
+    ).launch();
+    return true;
+  } catch (_) {}
 
   try {
     await AndroidIntent(
