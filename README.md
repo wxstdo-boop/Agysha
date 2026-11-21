@@ -18,6 +18,8 @@
   <p>
     <a href="https://github.com/wxstdo-boop/Agysha/releases/latest"><strong>Скачать APK</strong></a>
     &nbsp;·&nbsp;
+    <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.wetcorp.agysha%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fwxstdo-boop%2FAgysha%22%2C%22author%22%3A%22wxstdo-boop%22%2C%22name%22%3A%22Agysha%22%7D">Добавить в Obtainium</a>
+    &nbsp;·&nbsp;
     <a href="docs/BUILD.md">Собрать самому</a>
     &nbsp;·&nbsp;
     <a href="docs/ARCHITECTURE.md">Как устроено</a>
@@ -106,7 +108,12 @@ Agysha — бесплатное Android-приложение. Без рекла�
 ### Obtainium
 
 [Obtainium](https://github.com/ImranR98/Obtainium) сам следит за релизами на
-GitHub и сверяет APK по SHA-256. Достаточно добавить ссылку:
+GitHub и сверяет APK по SHA-256 — обновления приходят сами, магазин не нужен.
+
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.wetcorp.agysha%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fwxstdo-boop%2FAgysha%22%2C%22author%22%3A%22wxstdo-boop%22%2C%22name%22%3A%22Agysha%22%7D"><img src="assets/badge_obtainium.png" alt="Добавить в Obtainium" height="48" /></a>
+
+Кнопка откроет Obtainium с уже заполненной формой. Вручную — просто добавь
+ссылку:
 
 ```
 https://github.com/wxstdo-boop/Agysha
@@ -114,7 +121,8 @@ https://github.com/wxstdo-boop/Agysha
 
 ### F-Droid
 
-Приложение готовится к публикации. Рецепт сборки и инструкция по подаче —
+Заявка отправлена и ждёт ревью — как только её примут, Agysha появится в
+каталоге и обновления пойдут через него. Рецепт сборки и детали подачи —
 в [docs/publishing-fdroid.md](docs/publishing-fdroid.md).
 
 ### Из исходников
