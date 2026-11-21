@@ -1,24 +1,24 @@
 # Состояние тестов
 
-## Текущее состояние (проверено в CI)
+## Текущее состояние
 
 GitHub Actions, workflow `CI` (`.github/workflows/ci.yml`), Flutter **3.47.5**,
-ветка `main`, 2026-11-20:
+ветка `main`. Локальный прогон тех же команд 2026-11-21:
 
 ```
 flutter pub get --enforce-lockfile
 flutter analyze                 →  No issues found!
-flutter test                    →  All tests passed! (424, 6 skipped)
+flutter test                    →  All tests passed! (439, 3 skipped)
 ```
 
-Прогон зелёный целиком: **424 теста в 75 файлах**, падений нет; 6 тестов
-помечены `skip` — это ручные прогоны, которым нужны сеть и токен
-(`live_forge_test.dart`). В том числе проходит `exit_dialog_localization_test.dart`
-(3 теста: ru/en/fr).
+Прогон зелёный целиком: **439 тестов в 79 файлах**, падений нет; 3 теста
+помечены `skip` — это ручные прогоны «Кузницы», которым нужны сеть и токен
+(`live_forge_test.dart`, включаются переменной `FORGE_LIVE=1`). В том числе
+проходит `exit_dialog_localization_test.dart` (3 теста: ru/en/fr).
 
-Число тестов берётся из итога прогона `flutter test` (424); объявлений
+Число тестов берётся из итога прогона `flutter test` (439); объявлений
 `test(` / `testWidgets(` в `test/*.dart` чуть больше, потому что часть
-проверок объявлена внутри общих хелперов. Файлов `test/*.dart` — 75.
+проверок объявлена внутри общих хелперов. Файлов `test/*.dart` — 79.
 
 Эти же команды CI выполняет на каждый pull request и на каждый push в `main`,
 поэтому состояние воспроизводимо на раннере GitHub: локальный SDK для проверки
@@ -37,17 +37,21 @@ flutter test                    →  All tests passed! (424, 6 skipped)
 | Локализация и тексты | `translations_parity_test`, `exit_dialog_localization_test`, `wide_dash_test` |
 | Экраны (смоук) | `smoke_test`, `nutrition_interactions_test`, `stats_stretch_test`, `task_shelves_test`, `developer_corner_screen_test`, `changelog_screen_test` |
 
-## Скриншоты для README
+## Скриншоты для каталогов
 
-Отдельно от `test/` лежит генератор витрины — `tool/screenshots/render_screenshots.dart`.
-Он монтирует реальные экраны в точной теме приложения и рендерит PNG в
-`docs/screenshots/`:
+Отдельно от `test/` лежит генератор снимков —
+`tool/screenshots/render_screenshots.dart`. Он монтирует реальные экраны в
+точной теме приложения и рендерит PNG прямо в
+`fastlane/metadata/android/en-US/images/phoneScreenshots/`, откуда их читают
+F-Droid и IzzyOnDroid:
 
 ```bash
 flutter test tool/screenshots/render_screenshots.dart
 ```
 
-Файл вынесен из `test/`, поэтому обычный `flutter test` его не запускает.
+В README и документации снимки не публикуются — они живут только в
+метаданных каталогов. Файл вынесен из `test/`, поэтому обычный `flutter test`
+его не запускает.
 
 ## История разборов (снимки прошлых коммитов)
 

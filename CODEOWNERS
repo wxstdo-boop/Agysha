@@ -3,7 +3,7 @@
 # По умолчанию — maintainer репозитория.
 * @wxstdo-boop
 
-#Android-специфичные файлы — كذلك.
+# Android-специфичные файлы.
 android/ @wxstdo-boop
 
 # GitHub Actions — maintainer.

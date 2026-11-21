@@ -10,8 +10,8 @@
 |---|---|
 | `fdroid/metadata/com.wetcorp.agysha.yml` | Готовый рецепт сборки для fdroiddata — копируется в MR как есть |
 | `fastlane/metadata/android/{en-US,ru,fr}/` | Иконка, скриншоты, короткое и полное описание, changelog — в формате, который читает и F-Droid, и IzzyOnDroid |
-| `docs/screenshots/` + `tool/screenshots/render_screenshots.dart` | Скриншоты рисуются из кода без устройства |
 | `lib/services/update_service.dart` | Флаг `AGYSHA_NO_SELF_UPDATE` выключает самообновление в сборке для F-Droid (см. ниже) |
+| `tool/screenshots/render_screenshots.dart` | Рисует скриншоты из кода без устройства и кладёт их в `fastlane/` |
 
 ## Почему самообновление нужно выключать в F-Droid-сборке
 
@@ -61,21 +61,23 @@ Neo Store, Droid-ify и других клиентах F-Droid.
 
 #### Проверено локально (на этот рецепт)
 
-Рецепт уже прогнан через настоящий пайплайн F-Droid, повторять шаг 2 не
-обязательно:
+Рецепт уже прогнан через настоящий пайплайн F-Droid на релизе
+`v1.6.170+45242`. Сам рецепт переведён на актуальный тег `v1.6.233+45305`,
+и шаги сборки в нём те же, что проверялись; перед отправкой MR прогони шаг 2
+ещё раз, чтобы `fdroid checkupdates` подтвердил совпадение версии.
 
 - `fdroid readmeta` — рецепт читается, `proper_format=True` (нулевой diff
   `fdroid rewritemeta`), CI-гейт формата проходит.
-- `fdroid checkupdates com.wetcorp.agysha` — расхождения версии нет: `commit:`
-  совпадает с тегом `v1.6.170+45242`, `versionName`/`versionCode` совпадают с
-  `pubspec.yaml`.
+- `fdroid checkupdates com.wetcorp.agysha` — на проверенном релизе `commit:`
+  совпадал с тегом, `versionName`/`versionCode` — с `pubspec.yaml`.
 - `fdroid lint com.wetcorp.agysha` — замечаний нет.
 - Полная сборка по шагам рецепта (Flutter 3.47.5, NDK 28.2.13676358,
-  `flutter pub get --enforce-lockfile`, `flutter build apk --release
+  `flutter pub get --enforce-lockfile`, дописывание `flutter.sdk` в
+  `android/local.properties`, `flutter build apk --release
   --dart-define=AGYSHA_NO_SELF_UPDATE=true`) — успешно, unsigned APK ~70 МБ
-  (arm64-v8a + armeabi-v7a + x86_64), `versionCode=45242`.
-- `REQUEST_INSTALL_PACKAGES` и `ENFORCE_UPDATE_OWNERSHIP` из манифеста
-  вырезаются `prebuild`-шагами; проверено по `aapt2 dump badging`.
+  (arm64-v8a + armeabi-v7a + x86_64).
+- `REQUEST_INSTALL_PACKAGES` вырезается `prebuild`-шагом; проверено по
+  `aapt2 dump badging`.
 
 #### Грабли: `android/key.properties` и подпись
 
@@ -96,18 +98,11 @@ Neo Store, Droid-ify и других клиентах F-Droid.
   Остальное приложение работает офлайн. Это допустимо для F-Droid как
   Anti-Feature (предупреждение), но не блокирует включение.
 - **`REQUEST_INSTALL_PACKAGES`** — разрешение на установку APK. В F-Droid-сборке
-  самообновление выключено, поэтому разрешение не используется по назначению.
-  Можно предложить ревьюеру удалить его в рецепте (`sed -i '/REQUEST_INSTALL_PACKAGES/d'
-  android/app/src/main/AndroidManifest.xml`), если это будет замечанием.
-  Вместе с ним в F-Droid-сборке не нужно и `ENFORCE_UPDATE_OWNERSHIP`
-  (объявление себя владельцем обновлений) — оба относятся только к
-  самообновлению: вырезать оба —
-  `sed -i -e '/REQUEST_INSTALL_PACKAGES/d' -e '/ENFORCE_UPDATE_OWNERSHIP/d'
-  android/app/src/main/AndroidManifest.xml`. В рецепте оставлена и строка
-  `/UPDATE_PACKAGES_WITHOUT_USER_ACTION/d`: сейчас такого разрешения в
-  манифесте нет (его убрали — это был триггер Play Protect), но `sed` без
-  совпадений безвреден, а для старых коммитов, где разрешение ещё есть, он
-  нужен.
+  самообновление выключено, поэтому разрешение не используется по назначению
+  и вырезается в `prebuild`:
+  `sed -i -e '/REQUEST_INSTALL_PACKAGES/d' android/app/src/main/AndroidManifest.xml`.
+  В обычной сборке разрешение нужно самообновлению, а в F-Droid-сборке его
+  вырезает `prebuild`.
 - **`third_party/`** — два локальных форка плагинов лежат прямо в репозитории
   (не git-submodules). F-Droid это устраивает: код доступен, собирается из
   исходников.
@@ -197,7 +192,7 @@ PR в `main` по их шаблону.
 ## Чек-лист перед подачей
 
 - [x] Релиз на GitHub собран и подписан, тег вида `vX.Y.Z+NNNNN` проставлен
-      (последний — `v1.6.170+45242`).
+      (последний — `v1.6.233+45305`).
 - [x] `version` в `pubspec.yaml` на `main` совпадает с последним релизом.
 - [x] `fastlane/metadata/android/{en-US,ru,fr}/` заполнены: title, short/full
       description, icon, phoneScreenshots, changelog с номером текущего
@@ -246,7 +241,10 @@ PR в `main` по их шаблону.
 >   — заголовок `New app: Agysha`, ветка `com.wetcorp.agysha` форка
 >   `wxstdo/fdroiddata`, ровно один файл `metadata/com.wetcorp.agysha.yml`.
 >   MR `mergeable`, кросс-ссылка на rfp#4794 подставлена (`Closes rfp#4794`).
->   Рецепт в MR переведён на `v1.6.172+45244` — релиз с уже чистым changelog.
+>   На момент подачи рецепт в MR был переведён на `v1.6.172+45244`. В
+>   репозитории он уже на `v1.6.233+45305`; перед ревью синхронизируй файл
+>   `metadata/com.wetcorp.agysha.yml` в MR с `fdroid/metadata/com.wetcorp.agysha.yml`,
+>   иначе `fdroid checkupdates` покажет diff.
 >
 > **Почему пайплайн в форке красный.** Не ошибка рецепта: GitLab отказывается
 > запускать джобы в форке без верификации личности. Точный ответ API на

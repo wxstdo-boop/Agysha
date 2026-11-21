@@ -2,45 +2,80 @@ Categories:
   - Time
   - Productivity
 License: MIT
-AuthorName: Wet Corporation
+AuthorName: Wetidom
+WebSite: https://agysha.ru
 SourceCode: https://github.com/wxstdo-boop/Agysha
 IssueTracker: https://github.com/wxstdo-boop/Agysha/issues
 Changelog: https://github.com/wxstdo-boop/Agysha/releases
 
+AntiFeatures:
+  - NonFreeNet
 AutoName: Agysha
-Summary: 100% Reliable Open Source alarm clock, tasks, habits & reality checks
+Summary: Alarm clock that won't let you snooze back to sleep
 Description: |-
-  Agysha is a modern, ultra-reliable Open Source alarm clock with habit tracking,
-  task manager, and reality checks crafted with Material You & Cyberpunk 2077 aesthetics.
+  Agysha is a free and open-source alarm clock that will not let you go back to
+  sleep. Alarms, tasks, habits, nutrition tracking and an optional AI assistant
+  live in one Material You app.
 
-  Features:
-  * 100% Guaranteed wake-up using Android AlarmClock API + WakeLock handover
-  * Cyberpunk 2077 OLED Black theme with 120 FPS buttery smooth transitions
-  * Live radial audio equalizer dancing around your avatar
-  * Collectible 3D-tilt holographic artifacts (NFT gifts / Steam trophies style)
-  * Daily Zen Sphere clicker with soothing haptic micro-feedback
-  * Prestige titles and badges ("Night City Legend", "Cyberpunk 2077 Legend")
-  * Offline-first, encrypted local JSON storage (no ads, no tracking)
-  * Smart wake-up math and color puzzles to stop oversleeping
+  Alarms
+  * Exact alarms via SCHEDULE_EXACT_ALARM and a foreground service that keeps the
+    process alive
+  * Wake tasks: attach a task you must complete to switch the alarm off
+  * Survives a reboot - alarms are rescheduled automatically
+  * Full-screen intent, so the alarm shows above the lock screen
+  * Five built-in sounds: classic, default, digital, gentle, nature
+
+  Tasks and habits
+  * Tasks with priority, due date and repeat rules
+  * Habits with streaks and daily or total goals
+  * Reality checks - an honest "are you lying to yourself?" prompt
+  * Swipe to delete, drag to reorder, springy animations
+
+  Nutrition
+  * Meals, macro goals and 30-day trends
+  * Ring progress for every goal
+
+  Ada, the assistant
+  Ada understands plain speech ("set an alarm for 7 am on weekdays"), creates,
+  edits and deletes alarms, tasks, habits, checks and meals, and can undo her
+  last action. She runs in a small window above other apps and can use free
+  public model providers with no account of your own. An API key, if you add
+  one, is stored only on the device. This is the only feature that uses the
+  network, and it is optional.
+
+  Privacy and system
+  * PIN lock and an app lock screen
+  * Local encrypted storage, no ads, no trackers, no Google Play Services
+  * Export all your data as a single file
+  * Material You dynamic colours plus a dark theme
+  * Localisation: English, Russian, French
+
+  In-app updates are disabled in the F-Droid build; F-Droid updates the app.
+
+  Requires Android 8.0 (API 26) or newer.
 
 RepoType: git
 Repo: https://github.com/wxstdo-boop/Agysha.git
 
 Builds:
-  - versionName: 1.6.176
-    versionCode: 45248
-    commit: main
+  - versionName: 1.6.233
+    versionCode: 45305
+    commit: v1.6.233+45305
     subdir: .
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
-      - flutter@stable
+      - flutter@3.47.5
+    ndk: 28.2.13676358
     prebuild:
       - $$flutter$$/bin/flutter config --no-analytics
-      - $$flutter$$/bin/flutter pub get
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - echo "flutter.sdk=$$flutter$$" >> android/local.properties
+      - sed -i -e '/REQUEST_INSTALL_PACKAGES/d' android/app/src/main/AndroidManifest.xml
     build:
-      - $$flutter$$/bin/flutter build apk --release
+      - $$flutter$$/bin/flutter build apk --release --dart-define=AGYSHA_NO_SELF_UPDATE=true
 
 AutoUpdateMode: Version
-UpdateCheckMode: Tags
-CurrentVersion: 1.6.176
-CurrentCode: 45248
+UpdateCheckMode: Tags ^v[0-9.]+\+[0-9]+$
+UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: 1.6.233
+CurrentVersionCode: 45305

@@ -1,1 +1,6 @@
-- fix(ui+ai): сплэш без дёрганья и ровная обводка, след таблетки разделов, beta строкой, Ада без мигающих статусов и обрезки «Ready to assist», плавные авы, клавиатура в окне, монотонные значки Проверок, тихий звук будильника
+- Splash: no more shaking, even outline on the logo
+- Section pill: trailing motion is smooth again
+- Ada: no flickering statuses, no clipped "Ready to assist", smoother avatars
+- Keyboard no longer covers the input inside Ada's window
+- Reality checks: calmer, consistent icons
+- Alarm ring sound fades in quietly instead of blasting at full volume

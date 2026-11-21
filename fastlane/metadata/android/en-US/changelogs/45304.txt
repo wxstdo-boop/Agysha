@@ -1,1 +1,3 @@
-- fix(alarms): красная таблетка и тест у всех будильников, реордер, звук и клавиатура; чистые патч-ноуты
+- Alarms: the red pill and the wake task now work for every alarm
+- Fixed alarm reordering, ring sound and keyboard behaviour
+- Cleaner release notes
