@@ -83,6 +83,11 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// кадром, и карточка под пальцем дёргалась обратно в полный размер.
   late final AnimationController _swipeCtrl;
 
+  /// Сглаженная кривая свайпа. При гашении — easeInOut (мягкий вход и
+  /// выход), при возврате — easeOut: карточка «выдыхается» в исходный
+  /// размер без рывка на последнем кадре.
+  late final Animation<double> _swipeAnim;
+
   /// Предыдущее состояние свайпа — дёргаем [_swipeCtrl] только на смене,
   /// а не каждый кадр.
   bool _swiping = false;
@@ -113,7 +118,12 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     _swipeCtrl = AnimationController(
       vsync: this,
       value: 1.0,
-      duration: const Duration(milliseconds: 260),
+      duration: const Duration(milliseconds: 280),
+    );
+    _swipeAnim = CurvedAnimation(
+      parent: _swipeCtrl,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInOutCubic,
     );
   }
 
@@ -155,6 +165,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   void _down(PointerDownEvent e) {
     if (!mounted || !widget.enabled) return;
     if (SwipeToDeleteScope.of(context)) return;
+    if (_swipeCtrl.value < 1.0) _swipeCtrl.forward();
     _updateTilt(e.localPosition, smooth: false);
     // Длительность переключаем ДО старта: контроллер живёт один, и без этого
     // после первого же нажатия он запомнил бы длину отпускания.
@@ -165,7 +176,15 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   void _move(PointerMoveEvent e) {
     if (!mounted || !widget.enabled || _ctrl.value <= 0) return;
     if (SwipeToDeleteScope.of(context)) {
-      if (_ctrl.value > 0) _ctrl.reverse();
+      // Смахивание забирает палец у кнопки: отдачу больше не ведём.
+      // Гасим ТОЛЬКО прежнее нажатие до нуля мгновенно, а плавность
+      // возврата даёт один канал — [_swipeCtrl]. Раньше нажатие и свайп
+      // гасились параллельно, их кривые перемножались, и на возврате
+      // карточка «спотыкалась» — тот самый рывок.
+      if (_ctrl.value > 0) {
+        _ctrl.stop();
+        _ctrl.value = 0;
+      }
       return;
     }
     _updateTilt(e.localPosition, smooth: true);
@@ -190,13 +209,17 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final isSwiping = SwipeToDeleteScope.of(context);
-    if (isSwiping && _ctrl.value > 0) {
-      _ctrl.reverse();
-    }
     // Свайп начинается и заканчивается — гасим отдачу плавно, а не кадром.
     if (isSwiping != _swiping) {
       _swiping = isSwiping;
       if (isSwiping) {
+        // Только безопасные для build действия: контроллер нажатия
+        // сбрасывает сам обработчик движения (см. [_move]) — здесь
+        // трогать его value нельзя, это уведомило бы слушателей посреди
+        // сборки дерева.
+        _releaseTilt = Offset.zero;
+        _tilt = Offset.zero;
+        _tiltNotifier.value = Offset.zero;
         _swipeCtrl.reverse();
       } else {
         _swipeCtrl.forward();
@@ -209,9 +232,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       onPointerUp: _up,
       onPointerCancel: _cancel,
       child: AnimatedBuilder(
-        animation: Listenable.merge([_anim, _tiltNotifier, _swipeCtrl]),
+        animation: Listenable.merge([_anim, _tiltNotifier, _swipeAnim]),
         builder: (context, child) {
-          final v = _anim.value * _swipeCtrl.value;
+          final v = _anim.value * _swipeAnim.value;
           final s = 1.0 + (widget.pressedScale - 1.0) * v;
 
           final currentTilt = _ctrl.status == AnimationStatus.reverse

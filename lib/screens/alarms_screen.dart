@@ -709,9 +709,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
               margin: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  // Drag handle слева — ReorderableDragStartListener включает
-                  // перетаскивание (без него реордер не стартует).
-                  ReorderableDragStartListener(
+                  // Drag handle слева: перетаскивание по ЗАЖАТИЮ, как в
+                  // привычках. Мгновенный старт цеплял карточку при
+                  // случайном касании ручки — «чуть что и дёргает».
+                  ReorderableDelayedDragStartListener(
                     index: i,
                     child: const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 4),

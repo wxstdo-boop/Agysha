@@ -298,7 +298,6 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
               Center(
                 child: PressScale(
                   pressedScale: 0.92,
-                  enableTilt: false,
                   duration: const Duration(milliseconds: 160),
                   releaseDuration: const Duration(milliseconds: 300),
                   child: GestureDetector(
@@ -518,8 +517,8 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
                   begin: _habitType == 'good' ? 1.0 : 0.0,
                   end: _habitType == 'good' ? 1.0 : 0.0,
                 ),
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeInOutCubic,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
                 builder: (context, t, child) => ClipRect(
                   key: const ValueKey('notes_reveal'),
                   child: Align(
@@ -527,11 +526,17 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
                     heightFactor: t,
                     child: Opacity(
                       opacity: t,
-                      child: IgnorePointer(
-                        ignoring: t == 0,
-                        child: Transform.translate(
-                          offset: Offset(0, (1.0 - t) * -12),
-                          child: child,
+                      // Тяжёлый блок (Card + TextField на 5 строк +
+                      // SmoothTyping) кэшируется растром: пока едет высота,
+                      // он не перерисовывается каждый кадр — пропадает
+                      // «лаг» при появлении/скрытии заметки.
+                      child: RepaintBoundary(
+                        child: IgnorePointer(
+                          ignoring: t == 0,
+                          child: Transform.translate(
+                            offset: Offset(0, (1.0 - t) * -10),
+                            child: child,
+                          ),
                         ),
                       ),
                     ),
@@ -970,8 +975,9 @@ class _DayChip extends StatelessWidget {
     // «вдавливание» с мягким возвратом). Раньше чип отзывался только
     // рябью InkWell — на ощупь он выпадал из общего ритма.
     return PressScale(
+      // Тот же мягкий 3D-наклон, что у чипов будильника и карточек:
+      // в окне привычки его не хватало — чипы отзывались только сжатием.
       pressedScale: 0.94,
-      enableTilt: false,
       duration: const Duration(milliseconds: 180),
       releaseDuration: const Duration(milliseconds: 300),
       child: AnimatedContainer(
@@ -1062,22 +1068,36 @@ class _TypeCapsule extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 450),
-          curve: Curves.easeInOutCubic,
+          // 260 мс вместо 450: смена типа должна читаться как мгновенный
+          // отклик, а не как «торможение». easeOutCubic без раскачки.
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            color: selected ? containerColor : cs.surfaceContainerHighest,
+            color: selected
+                // На тёмной теме — не плотный errorContainer (светлая
+                // розовая плашка читалась «убого»), а тот же фон карточки
+                // с лёгким винным подтоном: монотонно, в тон экрану.
+                ? (isDark
+                      ? Color.alphaBlend(
+                          color.withValues(alpha: 0.16),
+                          cs.surfaceContainerHigh,
+                        )
+                      : containerColor)
+                : cs.surfaceContainerHighest,
             border: Border.all(
               color: selected
-                  ? color.withValues(alpha: 0.6)
+                  ? color.withValues(alpha: isDark ? 0.38 : 0.6)
                   : cs.outlineVariant.withValues(alpha: isDark ? 0.5 : 0.62),
-              width: selected ? 1.4 : 1,
+              width: selected ? 1.2 : 1,
             ),
-            boxShadow: selected
+            // Свечение только на светлой теме: на тёмной красный ореол
+            // вокруг капсулы выглядел грязным пятном.
+            boxShadow: selected && !isDark
                 ? [
                     BoxShadow(
-                      color: color.withValues(alpha: isDark ? 0.30 : 0.18),
+                      color: color.withValues(alpha: 0.18),
                       blurRadius: 10,
                       offset: const Offset(0, 3),
                     ),
@@ -1085,11 +1105,13 @@ class _TypeCapsule extends StatelessWidget {
                 : null,
           ),
           child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 450),
-            curve: Curves.easeInOutCubic,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
             style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-              color: selected ? onSelectedColor : cs.onSurfaceVariant,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected
+                  ? (isDark ? color : onSelectedColor)
+                  : cs.onSurfaceVariant,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             ),
             child: Text(label),
           ),

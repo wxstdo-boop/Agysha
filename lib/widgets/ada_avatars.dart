@@ -239,33 +239,38 @@ class AdaAvatar extends StatelessWidget {
     // подсказки), без дополнительных обёрток.
     return ValueListenableBuilder<int>(
       valueListenable: adaAvatarVariant,
-      builder: (context, idx, _) => AnimatedSwitcher(
-        // Смена аватарки — мягкий «поворот» значка: новая иконка
-        // доворачивается на малый угол и всплывает, старая тихо уходит.
-        // Без пружинного отскока (easeOutBack): на мелких аватарках в
-        // пузырях он читался дёрганьем.
-        duration: const Duration(milliseconds: 420),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, anim) {
-          final curved = CurvedAnimation(
-            parent: anim,
-            curve: Curves.easeOutCubic,
-          );
-          return FadeTransition(
-            opacity: anim,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.86, end: 1.0).animate(curved),
-              child: RotationTransition(
-                turns: Tween<double>(begin: -0.035, end: 0.0).animate(curved),
+      // Растровая граница вокруг всей аватарки: смена варианта
+      // перерисовывает только этот кружок, а не строку/пузырь вокруг.
+      builder: (context, idx, _) => RepaintBoundary(
+        child: AnimatedSwitcher(
+          // Смена аватарки — только кросс-фейд с еле заметным «дыханием»
+          // масштаба (0.95 → 1). Поворот и уменьшение до 0.86 читались как
+          // «перерисовка»: градиент, тень и глиф успевали «прыгнуть» на
+          // каждом кадре.
+          duration: const Duration(milliseconds: 300),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.center,
+            children: [...previous, ?current],
+          ),
+          transitionBuilder: (child, anim) {
+            final curved = CurvedAnimation(
+              parent: anim,
+              curve: Curves.easeOutCubic,
+            );
+            return FadeTransition(
+              opacity: anim,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.95, end: 1.0).animate(curved),
                 child: child,
               ),
-            ),
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey('ada_av_$idx'),
-          child: _core(context, adaVariants[idx]),
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey('ada_av_$idx'),
+            child: _core(context, adaVariants[idx]),
+          ),
         ),
       ),
     );

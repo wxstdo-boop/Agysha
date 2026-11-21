@@ -687,7 +687,7 @@ class _SectionPillState extends State<SectionPill>
                     enabled: !_dragging,
                     pressedScale: 0.94,
                     pressTint: const Color(0xFFFF453A),
-                    pressTintStrength: 0.10,
+                    pressTintStrength: 0.16,
                     pressTintRadius: BorderRadius.circular(18),
                     enableTilt: true,
                     duration: const Duration(milliseconds: 190),
@@ -696,12 +696,8 @@ class _SectionPillState extends State<SectionPill>
                       type: MaterialType.transparency,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(18),
-                        splashColor: const Color(
-                          0xFFFF453A,
-                        ).withValues(alpha: 0.10),
-                        highlightColor: const Color(
-                          0xFFFF453A,
-                        ).withValues(alpha: 0.06),
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
                         onTap: () {
                           if (!mounted) return;
                           Haptics.select();

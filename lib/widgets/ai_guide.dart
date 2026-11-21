@@ -325,22 +325,30 @@ class _AiChatSheetState extends State<_AiChatSheet> {
     // вмещалось». Теперь клавиатура всегда влезает целиком.
     final usableH = math.max(mq.size.height - keyboard, 240.0);
     final maxH = math.max(usableH - 12, 200.0);
-    final sheetHeight = (usableH * 0.94)
+    // 0.86 вместо 0.94: окно не «долбит» в верхний и нижний край экрана,
+    // остаётся воздух вокруг, а встроенная клавиатура влезает целиком.
+    final sheetHeight = (usableH * 0.86)
         .clamp(math.min(300.0, maxH), maxH)
         .toDouble();
 
     return RepaintBoundary(
-      child: Padding(
+      // Поднятие клавиатуры анимируется вместе с высотой окна: без этого
+      // окно прыгало на новую высоту за один кадр.
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
         // Уже по краям (было 10) и с большим скруглением — окно шире и
         // «мягче»; нижний отступ учитывает клавиатуру.
-        padding: EdgeInsets.fromLTRB(6, 0, 6, 10 + keyboard),
+        padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + keyboard),
         child: ClipRRect(
           // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
           borderRadius: BorderRadius.circular(32),
           child: BackdropFilter(
             filter: _backdropBlur,
             blendMode: BlendMode.src,
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
               height: sheetHeight,
               decoration: BoxDecoration(
                 color: theme.scaffoldBackgroundColor.withValues(
@@ -892,66 +900,64 @@ class _AiChatBodyState extends State<_AiChatBody>
         enableTilt: true,
         duration: const Duration(milliseconds: 140),
         releaseDuration: const Duration(milliseconds: 220),
-        child: AnimatedContainer(
-          // Переключение — не щелчок: заливка, обводка и свечение плавно
-          // перетекают между состояниями (раньше менялись одним кадром и
-          // читались как «мигание»).
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _webSearch
-                ? cs.primary.withValues(alpha: isDark ? 0.35 : 0.25)
-                : cs.surfaceContainerHigh.withValues(
-                    alpha: isDark ? 0.32 : 0.42,
-                  ),
-            border: Border.all(
+        // Растровый слой: переключение перекрашивает только этот кружок,
+        // соседние таблетки и фон списка не перерисовываются.
+        child: RepaintBoundary(
+          child: AnimatedContainer(
+            // Переключение как у «Ада видит экран»: перетекают только
+            // заливка и кромка. Раньше анимировалась ещё и тень с
+            // меняющимся blurRadius — она «раздувалась» за границы кружка,
+            // и включение/выключение читалось как дёрганье фона вокруг.
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
               color: _webSearch
-                  ? cs.primary.withValues(alpha: 0.70)
-                  : cs.outlineVariant.withValues(alpha: isDark ? 0.22 : 0.30),
-              width: 1.0,
-            ),
-            boxShadow: [
-              BoxShadow(
+                  ? cs.primary.withValues(alpha: isDark ? 0.24 : 0.16)
+                  : cs.surfaceContainerHigh.withValues(
+                      alpha: isDark ? 0.32 : 0.42,
+                    ),
+              border: Border.all(
                 color: _webSearch
-                    ? cs.primary.withValues(alpha: 0.30)
-                    : Colors.black.withValues(alpha: isDark ? 0.12 : 0.04),
-                blurRadius: _webSearch ? 8 : 4,
-                offset: const Offset(0, 1),
+                    ? cs.primary.withValues(alpha: 0.85)
+                    : cs.outlineVariant.withValues(alpha: isDark ? 0.22 : 0.30),
+                width: _webSearch ? 1.5 : 1.0,
               ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              splashColor: cs.primary.withValues(alpha: 0.22),
-              highlightColor: cs.primary.withValues(alpha: 0.14),
-              onTap: () {
-                Haptics.light();
-                setState(() {
-                  _webSearch = !_webSearch;
-                  try {
-                    globalPrefs.setBool('ai_web_search', _webSearch);
-                  } catch (_) {}
-                });
-              },
-              child: Center(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) =>
-                      FadeTransition(opacity: animation, child: child),
-                  child: Icon(
-                    _webSearch ? Icons.travel_explore : Icons.public,
-                    key: ValueKey('web_toggle_icon_$_webSearch'),
-                    size: 20,
-                    color: _webSearch ? cs.primary : cs.onSurfaceVariant,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                // Подсветку даёт PressScale; рябь внутри кружка только
+                // добавляла второе «мигание» фона.
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                onTap: () {
+                  Haptics.light();
+                  setState(() {
+                    _webSearch = !_webSearch;
+                    try {
+                      globalPrefs.setBool('ai_web_search', _webSearch);
+                    } catch (_) {}
+                  });
+                },
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: Icon(
+                      _webSearch ? Icons.travel_explore : Icons.public,
+                      key: ValueKey('web_toggle_icon_$_webSearch'),
+                      size: 20,
+                      color: _webSearch ? cs.primary : cs.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
@@ -1538,30 +1544,31 @@ class _AiChatBodyState extends State<_AiChatBody>
                         ),
                       ),
                       // Строка 2: провайдер и активная модель.
-                      // Плавно переключается через Fade + Slide без рывков.
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 320),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 0.25),
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
-                          ),
-                        ),
-                        child: ModelLabel(
-                          key: ValueKey(_modelLabel),
-                          label: _modelLabel,
-                          details: AiGuideService.providerTrace.value.join(
-                            '\n',
-                          ),
-                          textStyle: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
+                      //
+                      // Раньше здесь стоял ВТОРОЙ AnimatedSwitcher поверх
+                      // собственной анимации [ModelLabel]: два перехода
+                      // накладывались друг на друга, строка «скакала» и
+                      // буквы уезжали вправо при каждой смене длины текста.
+                      // Теперь анимацию делает только ModelLabel, а эта
+                      // обёртка держит ФИКСИРОВАННУЮ высоту и левое
+                      // выравнивание — статус меняется на месте.
+                      SizedBox(
+                        height: 18,
+                        width: double.infinity,
+                        child: ClipRect(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: ModelLabel(
+                              label: _modelLabel,
+                              details: AiGuideService.providerTrace.value.join(
+                                '\n',
+                              ),
+                              textStyle: theme.textTheme.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
+                              ),
+                            ),
                           ),
                         ),
                       ),

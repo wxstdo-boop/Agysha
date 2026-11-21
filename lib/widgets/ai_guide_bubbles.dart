@@ -152,7 +152,8 @@ class _MessageBubble extends StatelessWidget {
                             color: isUser
                                 ? cs.primary.withValues(alpha: 0.25)
                                 : Colors.white.withValues(
-                                    alpha: Theme.of(context).brightness ==
+                                    alpha:
+                                        Theme.of(context).brightness ==
                                             Brightness.dark
                                         ? 0.08
                                         : 0.22,
@@ -162,7 +163,8 @@ class _MessageBubble extends StatelessWidget {
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(
-                                alpha: Theme.of(context).brightness ==
+                                alpha:
+                                    Theme.of(context).brightness ==
                                         Brightness.dark
                                     ? 0.22
                                     : 0.06,
@@ -242,26 +244,29 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
     if (!animate) return bubble;
-    // Мои сообщения — чистый fade (без scale: резкая вставка снизу в
-    // reverse-ленту и одновременный scale на слабом устройстве выглядели
-    // «дёргано»). Ответы Ады — fade + едва заметный scale, чуть дольше.
+    // Мои сообщения — чистый fade с мягким подъёмом (без заметного scale:
+    // резкая вставка снизу в reverse-ленту и одновременный scale на слабом
+    // устройстве выглядели «дёргано»). Ответы Ады — fade + едва заметный
+    // scale и чуть дольше, чтобы появление читалось спокойно.
     final isUserMsg = message.isUser;
     return TweenAnimationBuilder<double>(
       // Анимируется один раз при первом появлении пузыря; у старых
       // сообщений анимация отключена (animate: false) — скролл большого
       // чата не дёргается.
       tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: isUserMsg ? 320 : 460),
-      curve: Curves.easeOutCubic,
+      duration: Duration(milliseconds: isUserMsg ? 360 : 520),
+      curve: Curves.easeOutQuart,
       builder: (context, t, child) {
-        final e = Curves.easeOutCubic.transform(t);
+        final e = Curves.easeOutQuart.transform(t);
         return Opacity(
           opacity: e,
           child: Transform.translate(
-            offset: Offset(0, 10.0 * (1.0 - e)),
+            offset: Offset(0, 12.0 * (1.0 - e)),
             child: Transform.scale(
-              scale: isUserMsg ? (0.98 + 0.02 * e) : (0.97 + 0.03 * e),
-              alignment: isUserMsg ? Alignment.bottomRight : Alignment.bottomLeft,
+              scale: isUserMsg ? (0.99 + 0.01 * e) : (0.985 + 0.015 * e),
+              alignment: isUserMsg
+                  ? Alignment.bottomRight
+                  : Alignment.bottomLeft,
               child: child,
             ),
           ),
@@ -583,7 +588,8 @@ class _TypingIndicator extends StatelessWidget {
                     return AnimatedBuilder(
                       animation: animation,
                       builder: (context, _) {
-                        final wave = 0.5 +
+                        final wave =
+                            0.5 +
                             0.5 *
                                 math.sin(
                                   (animation.value * 2 * math.pi) - i * 0.9,

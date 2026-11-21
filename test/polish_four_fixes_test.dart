@@ -163,8 +163,9 @@ void main() {
     expect(tester.getSize(reveal).height, lessThan(1.0));
   });
 
-  /// Бейдж «Сегодня очищено» на тёмной теме — плотная капсула (errorContainer),
-  /// а не мутная полупрозрачная плашка.
+  /// Бейдж «Сегодня очищено» на тёмной теме — тихая однотонная капсула
+  /// (поверхность темы + винный подтон, тонкая кромка), без заливки
+  /// errorContainer и без ореола.
   testWidgets('бейдж «Сегодня очищено» читается на тёмной теме', (
     WidgetTester tester,
   ) async {
@@ -208,11 +209,21 @@ void main() {
       seedColor: const Color(0xFF8E6DB8),
       brightness: Brightness.dark,
     );
+    final expected = Color.alphaBlend(
+      const Color(0xFFB3121F).withValues(alpha: 0.10),
+      cs.surfaceContainerHigh,
+    );
     expect(
       deco.color,
-      cs.errorContainer,
-      reason: 'тёмная тема — плотная капсула, а не полупрозрачный градиент',
+      expected,
+      reason: 'тёмная тема — тихая капсула с винным подтоном',
     );
+    expect(deco.color, isNot(cs.errorContainer));
     expect(deco.gradient, isNull);
+    expect(
+      deco.boxShadow ?? const <BoxShadow>[],
+      isEmpty,
+      reason: 'без светящегося ореола',
+    );
   });
 }
