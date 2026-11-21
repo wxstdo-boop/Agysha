@@ -1,0 +1,1 @@
+- fix: background update install, strike snake, ada tap zones, pin screen 3d tilt, alarm test icons
