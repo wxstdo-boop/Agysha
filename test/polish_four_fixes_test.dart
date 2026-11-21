@@ -47,7 +47,10 @@ void main() {
         activeDays: const [1, 2, 3, 4, 5, 6, 7],
         type: 'bad',
         doneToday: true,
-        lastDoneDate: DateTime.now(),
+        // Дата — в московском календаре, как её пишет сам сервис: локальный
+        // DateTime.now() после 21:00 UTC попадает во «вчера» по MSK, и
+        // бейдж «Сегодня очищено» пропадал (тест падал только вечером).
+        lastDoneDate: HabitService.mskToday(),
       ),
     );
   });
