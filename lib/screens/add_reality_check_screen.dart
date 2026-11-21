@@ -91,87 +91,105 @@ class _AddRealityCheckScreenState extends State<AddRealityCheckScreen> {
         ],
       ),
       resizeToAvoidBottomInset: false,
-      body: SmoothKeyboardBody(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Center(
-              child: PressScale(
-                pressedScale: 0.92,
-                child: GestureDetector(
-                  onTap: _pickIcon,
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
-                      switchInCurve: Curves.easeOutBack,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: (child, animation) => ScaleTransition(
-                        scale: animation,
-                        child: FadeTransition(opacity: animation, child: child),
-                      ),
-                      child: Icon(
-                        iconDataForCodePoint(_iconCodePoint),
-                        key: ValueKey(_iconCodePoint),
-                        size: 32,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Center(
-              child: TextButton.icon(
-                onPressed: _pickIcon,
-                icon: const Icon(Icons.touch_app, size: 16),
-                label: Text(Translations.t('changeIcon', context)),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: SmoothTyping(
-                  controller: _questionCtrl,
-                  builder: (style) => TextField(
-                    style: style,
-                    cursorOpacityAnimates: true,
-                    magnifierConfiguration: TextMagnifierConfiguration.disabled,
-                    controller: _questionCtrl,
-                    contextMenuBuilder: minimalContextMenuBuilder,
-                    maxLength: 200,
-                    inputFormatters: [WideDashFormatter()],
-                    enableSuggestions: false,
-                    autocorrect: false,
-                    maxLines: 3,
-                    buildCounter: smoothCharCounterBuilder,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _save(),
-                    decoration: InputDecoration(
-                      labelText: Translations.t('rcQuestion', context),
-                      prefixIcon: const Icon(Icons.help_outline),
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
+      // Фон страницы «приколот» к окну отдельным слоем: при подъёме
+      // клавиатуры контент уезжает вверх (SmoothKeyboardBody), а подложка
+      // остаётся на месте. Раньше фон просвечивал сквозь анимируемый
+      // контент и читался как «фон поднимается сзади клавиатуры».
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: theme.colorScheme.surface),
+          SmoothKeyboardBody(
+            background: Colors.transparent,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Center(
+                  child: PressScale(
+                    pressedScale: 0.92,
+                    child: GestureDetector(
+                      onTap: _pickIcon,
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.12,
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 260),
+                          switchInCurve: Curves.easeOutBack,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (child, animation) =>
+                              ScaleTransition(
+                                scale: animation,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              ),
+                          child: Icon(
+                            iconDataForCodePoint(_iconCodePoint),
+                            key: ValueKey(_iconCodePoint),
+                            size: 32,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 4),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: _pickIcon,
+                    icon: const Icon(Icons.touch_app, size: 16),
+                    label: Text(Translations.t('changeIcon', context)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: SmoothTyping(
+                      controller: _questionCtrl,
+                      builder: (style) => TextField(
+                        style: style,
+                        cursorOpacityAnimates: true,
+                        magnifierConfiguration:
+                            TextMagnifierConfiguration.disabled,
+                        controller: _questionCtrl,
+                        contextMenuBuilder: minimalContextMenuBuilder,
+                        maxLength: 200,
+                        inputFormatters: [WideDashFormatter()],
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        maxLines: 3,
+                        buildCounter: smoothCharCounterBuilder,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _save(),
+                        decoration: InputDecoration(
+                          labelText: Translations.t('rcQuestion', context),
+                          prefixIcon: const Icon(Icons.help_outline),
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

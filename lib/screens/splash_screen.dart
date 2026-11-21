@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../main.dart' show preDecodedLogo;
-import '../utils/motion_prefs.dart';
 import '../utils/design_tokens.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -27,19 +26,17 @@ class _SplashScreenState extends State<SplashScreen>
   /// приходился ровно на смену экрана.
   late final CurvedAnimation _shine;
 
-  /// Левитирующий человечек — независимый бесшовный цикл.
-  late final AnimationController _float;
+  /// Левитация человечка — окно 340→1950 мс того же мастер-контроллера:
+  /// один плавный подъём-спуск без отдельного тикера и без repeat().
+  late final Animation<double> _float;
 
   /// Финальное растворение человечка: в последние 20 % хода мастер-контроллера
   /// (0.80→1.0) его альфа идёт 1→0 — иконка исчезает ровно в момент, когда
   /// сплеш уходит на контент, а не в начале.
   late final CurvedAnimation _badgeExit;
 
+  /// Таймер ухода со сплэша на главную.
   Timer? _splashTimer;
-
-  /// Селекторы _float и _splashTimer: отложенный запуск левитации + её
-  /// остановка на выходе.
-  Timer? _startFloatTimer;
 
   /// Радиус скругления «стекла» — тот же, что у карточки-сквайркла.
   static const double _kRadius = 30;
@@ -87,9 +84,18 @@ class _SplashScreenState extends State<SplashScreen>
     // (когда страница встала после въезда) и уход на 1950 мс. Длительность
     // цикла равна этому окну, поэтому человечек доигрывает фазу ИМЕННО к
     // моменту ухода: фаза на выходе ровно 1.0 (== 0), без рывка.
-    _float = AnimationController(
-      duration: const Duration(milliseconds: _kVisibleMs - _kFloatStartMs),
-      vsync: this,
+    // Левитация ведётся ТЕМ ЖЕ ходом, что и весь сплэш: один плавный цикл
+    // «вверх-вниз» на окно 340→1950 мс. Раньше это был отдельный
+    // AnimationController с repeat(), который поднимался таймером посреди
+    // кадра и останавливался на выходе: старт/стоп читались как рывок, а
+    // отдельный тикер спорил с въездом страницы за кадр.
+    _float = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(
+        _kFloatStartMs / _kVisibleMs,
+        1.0,
+        curve: Curves.easeInOutSine,
+      ),
     );
     // ЛЕВИТАЦИЯ НЕ ПУСКАЕТСЯ СРАЗУ: сплеш въезжает через lockRoute
     // (340 мс, scale + fade всей страницы), и в это же время крутился бы
@@ -99,13 +105,6 @@ class _SplashScreenState extends State<SplashScreen>
     // (alpha = _fade * (1 - _badgeExit) ≈ 0), поэтому старт левитации на
     // 340-м мс не виден глазом, а тяжёлый loop крутится уже когда
     // страница встала на место.
-    _startFloatTimer = Timer(const Duration(milliseconds: _kFloatStartMs), () {
-      if (!mounted) return;
-      // Левитация — чисто декоративная петля: при «убрать анимации»
-      // человечек просто стоит на месте (в позе покоя), а не парит.
-      if (MotionPrefs.shouldReduceMotion) return;
-      _float.repeat();
-    });
     // Человечек доигрывает левитацию и затем мягко растворяется: за
     // последние ~400 мс (t 0.80→1.0) альфа 1→0. Таким образом он живёт
     // весь сплэш и исчезает в КОНЦЕ, когда экран уже уходит.
@@ -135,7 +134,6 @@ class _SplashScreenState extends State<SplashScreen>
       // покачивание на ±2.8 px) замирает почти незаметно, растворение
       // человечка (_badgeExit) продолжается — его ведёт ещё живой
       // _controller, а блик к этому моменту уже отработал.
-      _float.stop();
       widget.onDone?.call();
     });
     // Разрешения больше не запрашиваем автоматически.
@@ -148,17 +146,12 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
-    _startFloatTimer?.cancel();
     _splashTimer?.cancel();
-    // Левитацию останавливаем ПЕРЕД dispose: контроллер, размонтированный
-    // со стартовавшим бесконечным циклом, роняет assertion («ticker
-    // active at dispose»).
-    _float.stop();
     // CurvedAnimation снимает свой слушатель с мастер-контроллера, поэтому
     // его dispose() идёт ДО dispose родителя.
     _shine.dispose();
+    (_float as CurvedAnimation).dispose();
     _badgeExit.dispose();
-    _float.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -249,42 +242,26 @@ class _SplashScreenState extends State<SplashScreen>
                                   // НЕ круг: нижняя подпись на логотипе не
                                   // обрезается кружком и остаётся читаемой.
                                   borderRadius: BorderRadius.circular(_kRadius),
-                                  // Кольцо — МОНОТОННОЕ: один винный тон с
-                                  // едва заметным светом в верхнем левом углу.
-                                  // Раньше здесь было четыре стопа с алым в
-                                  // середине — кайма «переливалась» и спорила
-                                  // с бликом, читаясь дешёвым глянцем.
-                                  gradient: const LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Color(0xFF9E0F1D),
-                                      BrandColors.blood,
-                                      Color(0xFF8C0C18),
-                                    ],
-                                    stops: [0.0, 0.45, 1.0],
-                                  ),
+                                  // Кольцо — ПЛОСКОЕ, один тон на всю кайму:
+                                  // любой градиент на 3.5 px читается как
+                                  // «перелив» и неровность, а не как металл.
+                                  // Один мягкий ореол вместо трёх теней —
+                                  // карточка не обрастает грязной каймой.
+                                  color: BrandColors.blood,
                                   boxShadow: [
                                     BoxShadow(
                                       color: BrandColors.blood.withValues(
-                                        alpha: isDark ? 0.42 : 0.30,
+                                        alpha: isDark ? 0.34 : 0.24,
                                       ),
-                                      blurRadius: 34,
-                                      spreadRadius: 2,
-                                    ),
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFFE0192F,
-                                      ).withValues(alpha: isDark ? 0.26 : 0.16),
-                                      blurRadius: 10,
-                                      spreadRadius: 0.5,
+                                      blurRadius: 26,
+                                      spreadRadius: 1,
                                     ),
                                     BoxShadow(
                                       color: Colors.black.withValues(
-                                        alpha: isDark ? 0.30 : 0.08,
+                                        alpha: isDark ? 0.24 : 0.06,
                                       ),
-                                      blurRadius: 18,
-                                      offset: const Offset(0, 9),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 8),
                                     ),
                                   ],
                                 ),
@@ -294,17 +271,11 @@ class _SplashScreenState extends State<SplashScreen>
                                     borderRadius: BorderRadius.circular(
                                       _kRadius - 4,
                                     ),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        Colors.white.withValues(
-                                          alpha: isDark ? 0.08 : 0.94,
-                                        ),
-                                        accent.withValues(
-                                          alpha: isDark ? 0.18 : 0.10,
-                                        ),
-                                      ],
+                                    // Мат под логотипом тоже ровный: он
+                                    // отделяет картинку от винной каймы и
+                                    // одинаков со всех сторон.
+                                    color: Colors.white.withValues(
+                                      alpha: isDark ? 0.10 : 0.92,
                                     ),
                                   ),
                                   child: ClipRRect(
@@ -698,10 +669,9 @@ class _BetaSplatPainter extends CustomPainter {
     if (progress <= 0) return Path();
     if (progress >= 1) return src;
     final out = Path();
-    var left = src.computeMetrics().fold<double>(
-      0,
-      (sum, m) => sum + m.length,
-    ) * progress;
+    var left =
+        src.computeMetrics().fold<double>(0, (sum, m) => sum + m.length) *
+        progress;
     for (final m in src.computeMetrics()) {
       if (left <= 0) break;
       final take = math.min(left, m.length);
@@ -781,8 +751,10 @@ class _LevitationPainter extends CustomPainter {
     // Сглаженный ход: sin в кубе даёт ноль скорости на крайних точках —
     // человечек мягко «зависает» сверху и снизу вместо равномерного
     // маятника, который читался как механическое дёрганье.
-    final s = math.sin(_tau * p);
-    final bob = s * s * s;
+    // Ровная синусоида, а не sin³: куб «залипал» у крайних точек, и
+    // движение читалось как два рывка с паузами. Синус идёт с постоянной
+    // скоростью по всему циклу — человечек дышит, а не дёргается.
+    final bob = math.sin(_tau * p);
     final rise = (bob + 1) / 2; // 0 .. 1
     final cx = size.width / 2;
     // Амплитуда и наклон мягче: сильнее 2.4 px человечек «дёргался»

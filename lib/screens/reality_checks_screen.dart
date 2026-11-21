@@ -477,19 +477,19 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                               onTap: () => _doCheck(check),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 260),
-                                width: 36,
-                                height: 36,
+                                // Ровно как кружок привычки: 32 px, в покое
+                                // ПРОЗРАЧНЫЙ (без цветной заливки-«плашки»),
+                                // только тематическая обводка. Раньше здесь
+                                // была залитая primary-подложка 36 px — она
+                                // читалась как отдельный «бейдж» и выбивалась
+                                // из ряда привычек/задач.
+                                width: 32,
+                                height: 32,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  // Цвет кружка — primary темы.
                                   color: check.isDoneToday
                                       ? theme.colorScheme.primary
-                                      : theme.colorScheme.primary.withValues(
-                                          alpha: 0.12,
-                                        ),
-                                  // Красивая обводка: выбранная — яркий
-                                  // primary, не выбранная — тематический
-                                  // outline (мягкий, не серый).
+                                      : Colors.transparent,
                                   border: Border.all(
                                     color: check.isDoneToday
                                         ? theme.colorScheme.primary
@@ -516,14 +516,16 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                                       ? const Icon(
                                           Icons.check,
                                           key: ValueKey('rc_done_check'),
-                                          size: 22,
+                                          size: 23,
                                           color: Colors.white,
                                         )
                                       : Icon(
                                           check.icon,
                                           key: const ValueKey('rc_icon'),
-                                          size: 21,
-                                          color: theme.colorScheme.primary,
+                                          size: 23,
+                                          color: theme
+                                              .colorScheme
+                                              .onSurfaceVariant,
                                         ),
                                 ),
                               ),
@@ -549,7 +551,7 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                                 // цвет был непрозрачным, и «выполненная» фраза
                                 // оставалась такой же яркой.
                                 struckColor: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.42),
+                                    .withValues(alpha: 0.26),
                                 // Линия берётся НЕ `outline`: он светлее
                                 // текста примерно на 15 уровней серого, и на
                                 // телефоне зачёркивание не читалось совсем.

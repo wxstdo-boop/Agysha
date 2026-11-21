@@ -148,7 +148,7 @@ class _InlineKeyboardState extends State<InlineKeyboard>
     final theme = Theme.of(context);
     return Container(
       // Просторнее по краям: клавиши не липнут к скруглённым углам листа.
-      padding: const EdgeInsets.fromLTRB(8, 10, 8, 12),
+      padding: const EdgeInsets.fromLTRB(6, 10, 6, 12),
       decoration: BoxDecoration(
         // Полупрозрачная панель с ЯВНЫМ КРАСНЫМ отливом: сквозь клавиатуру
         // просвечивает лист, а алый тон привязывает её к остальным

@@ -44,7 +44,9 @@ extension _SettingsSectionLook on _SettingsScreenState {
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
                 splashColor: theme.colorScheme.primary.withValues(alpha: 0.20),
-                highlightColor: theme.colorScheme.primary.withValues(alpha: 0.14),
+                highlightColor: theme.colorScheme.primary.withValues(
+                  alpha: 0.14,
+                ),
                 onTap: onTap,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -53,11 +55,7 @@ extension _SettingsSectionLook on _SettingsScreenState {
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        icon,
-                        size: 19,
-                        color: theme.colorScheme.primary,
-                      ),
+                      Icon(icon, size: 19, color: theme.colorScheme.primary),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -83,328 +81,328 @@ extension _SettingsSectionLook on _SettingsScreenState {
     }
 
     return <Widget>[
-    const SizedBox(height: 8),
-    Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-          width: 1,
+      const SizedBox(height: 8),
+      Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            width: 1,
+          ),
         ),
-      ),
-      elevation: 0,
-      color: theme.colorScheme.surfaceContainerLow,
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              Translations.aboutOf(context),
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 12),
-            // «Agysha FOSS» — приписку FOSS выделяем розовым,
-            // как она была на сплэше.
-            Text.rich(
-              TextSpan(
-                style: theme.textTheme.titleMedium?.copyWith(
+        elevation: 0,
+        color: theme.colorScheme.surfaceContainerLow,
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                Translations.aboutOf(context),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: theme.colorScheme.primary,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.2,
                 ),
+              ),
+              const SizedBox(height: 12),
+              // «Agysha FOSS» — приписку FOSS выделяем розовым,
+              // как она была на сплэше.
+              Text.rich(
+                TextSpan(
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                  ),
+                  children: [
+                    const TextSpan(text: 'Agysha '),
+                    const TextSpan(
+                      text: 'FOSS',
+                      style: TextStyle(
+                        color: Color(0xFFF06292),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              // Номер версии — пасхалка: держим палец → конфетти в цветах
+              // темы + тост. GestureDetector без ripple, чтобы не портить
+              // «информационный» вид строки.
+              // Версия (долгое нажатие — пасхалка) и рядом полупрозрачная
+              // таблетка «Проверить обновления».
+              Row(
                 children: [
-                  const TextSpan(text: 'Agysha '),
-                  const TextSpan(
-                    text: 'FOSS',
-                    style: TextStyle(
-                      color: Color(0xFFF06292),
-                      fontWeight: FontWeight.w800,
+                  GestureDetector(
+                    onLongPress: _onVersionLongPress,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        // Версия — из установленного APK (Android) или из
+                        // pubspec (web/десктоп). Раньше здесь стояла
+                        // захардкоженная «1.3», и приложение на 1.6.72
+                        // показывало пользователю старую версию.
+                        'v${AppVersion.current}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   ),
-                  // «beta» — тихая приписка после FOSS: канал сборки виден
-                  // сразу, но не спорит с розовым акцентом названия.
-                  TextSpan(
-                    text: '  beta',
-                    style: TextStyle(
+                  // «beta» — СТРОКОЙ рядом с версией: канал сборки читается
+                  // в одном месте с номером, а название «Agysha FOSS»
+                  // остаётся чистым.
+                  const SizedBox(width: 6),
+                  Text(
+                    'beta',
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant.withValues(
                         alpha: 0.62,
                       ),
                       fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                      letterSpacing: 1.2,
+                      letterSpacing: 0.8,
                     ),
                   ),
+                  const Spacer(),
                 ],
               ),
-            ),
-            const SizedBox(height: 4),
-            // Номер версии — пасхалка: держим палец → конфетти в цветах
-            // темы + тост. GestureDetector без ripple, чтобы не портить
-            // «информационный» вид строки.
-            // Версия (долгое нажатие — пасхалка) и рядом полупрозрачная
-            // таблетка «Проверить обновления».
-            Row(
-              children: [
-                GestureDetector(
-                  onLongPress: _onVersionLongPress,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+              const SizedBox(height: 16),
+              buildLinkTile(
+                icon: Icons.history_outlined,
+                label: Translations.t('patchNotes', context),
+                onTap: _openChangelog,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
+                    if (kSelfUpdateEnabled) ...[
+                      const SizedBox(width: 8),
+                      const UpdatePill(),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 2),
+              buildLinkTile(
+                icon: Icons.code,
+                label: 'GitHub',
+                onTap: () => _openGitHub(),
+                trailing: Container(
+                  padding: const EdgeInsets.all(1),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        theme.colorScheme.primary.withValues(
+                          alpha: theme.brightness == Brightness.dark
+                              ? 0.60
+                              : 0.45,
+                        ),
+                        theme.colorScheme.primary.withValues(
+                          alpha: theme.brightness == Brightness.dark
+                              ? 0.12
+                              : 0.10,
+                        ),
+                        theme.colorScheme.tertiary.withValues(
+                          alpha: theme.brightness == Brightness.dark
+                              ? 0.48
+                              : 0.30,
+                        ),
+                      ],
+                      stops: const [0, 0.55, 1],
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withValues(
+                        alpha: theme.brightness == Brightness.dark
+                            ? 0.72
+                            : 0.78,
+                      ),
+                      borderRadius: BorderRadius.circular(998),
+                    ),
                     child: Text(
-                      // Версия — из установленного APK (Android) или из
-                      // pubspec (web/десктоп). Раньше здесь стояла
-                      // захардкоженная «1.3», и приложение на 1.6.72
-                      // показывало пользователю старую версию.
-                      'v${AppVersion.current}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                      'Recommended',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
                 ),
-                const Spacer(),
-              ],
-            ),
-            const SizedBox(height: 16),
-            buildLinkTile(
-              icon: Icons.history_outlined,
-              label: Translations.t('patchNotes', context),
-              onTap: _openChangelog,
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
+              ),
+              const SizedBox(height: 2),
+              buildLinkTile(
+                icon: Icons.account_tree,
+                label: 'GitFlic',
+                onTap: () => _openLink(
+                  'https://gitflic.ru/project/wetcorporation/agysha',
+                ),
+              ),
+              const SizedBox(height: 2),
+              buildLinkTile(
+                icon: Icons.merge,
+                label: 'GitLab',
+                onTap: _openGitLab,
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
+        elevation: 0,
+        color: theme.colorScheme.surfaceContainerLow,
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
                   Icon(
-                    Icons.chevron_right,
-                    size: 18,
+                    Icons.person_outline,
+                    size: 20,
                     color: theme.colorScheme.primary,
                   ),
-                  if (kSelfUpdateEnabled) ...[
-                    const SizedBox(width: 8),
-                    const UpdatePill(),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 2),
-            buildLinkTile(
-              icon: Icons.code,
-              label: 'GitHub',
-              onTap: () => _openGitHub(),
-              trailing: Container(
-                padding: const EdgeInsets.all(1),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      theme.colorScheme.primary.withValues(
-                        alpha: theme.brightness == Brightness.dark
-                            ? 0.60
-                            : 0.45,
-                      ),
-                      theme.colorScheme.primary.withValues(
-                        alpha: theme.brightness == Brightness.dark
-                            ? 0.12
-                            : 0.10,
-                      ),
-                      theme.colorScheme.tertiary.withValues(
-                        alpha: theme.brightness == Brightness.dark
-                            ? 0.48
-                            : 0.30,
-                      ),
-                    ],
-                    stops: const [0, 0.55, 1],
-                  ),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer
-                        .withValues(
-                          alpha: theme.brightness == Brightness.dark
-                              ? 0.72
-                              : 0.78,
-                        ),
-                    borderRadius: BorderRadius.circular(998),
-                  ),
-                  child: Text(
-                    'Recommended',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 2),
-            buildLinkTile(
-              icon: Icons.account_tree,
-              label: 'GitFlic',
-              onTap: () => _openLink(
-                'https://gitflic.ru/project/wetcorporation/agysha',
-              ),
-            ),
-            const SizedBox(height: 2),
-            buildLinkTile(
-              icon: Icons.merge,
-              label: 'GitLab',
-              onTap: _openGitLab,
-            ),
-          ],
-        ),
-      ),
-    ),
-    const SizedBox(height: 8),
-    Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-          width: 1,
-        ),
-      ),
-      elevation: 0,
-      color: theme.colorScheme.surfaceContainerLow,
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.person_outline,
-                  size: 20,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  Translations.t('aboutAuthorTitle', context),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.15,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _CtaButton(
-              label: Translations.t('visitellaName', context, 'Visitella'),
-              icon: Icons.rocket_launch_outlined,
-              // Оригинальный вид Visitella: тёмный градиент + чёрное свечение.
-              gradient: const [
-                Color(0xFF4A4D54),
-                Color(0xFF232428),
-                Color(0xFF101013),
-              ],
-              glow: Colors.black,
-              onTap: () => _openLink('https://mutilated.pages.dev/#top'),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              Translations.t(
-                'visitellaDesc',
-                context,
-                'Projects, games, news',
-              ),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    ),
-    const SizedBox(height: 8),
-    Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-          width: 1,
-        ),
-      ),
-      elevation: 0,
-      color: theme.colorScheme.surfaceContainerLow,
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.volunteer_activism_outlined,
-                  color: Color(0xFFE91E63),
-                  size: 24,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    Translations.t(
-                      'supportAuthorTitle',
-                      context,
-                      'Support the author',
-                    ),
+                  const SizedBox(width: 8),
+                  Text(
+                    Translations.t('aboutAuthorTitle', context),
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.15,
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _CtaButton(
+                label: Translations.t('visitellaName', context, 'Visitella'),
+                icon: Icons.rocket_launch_outlined,
+                // Оригинальный вид Visitella: тёмный градиент + чёрное свечение.
+                gradient: const [
+                  Color(0xFF4A4D54),
+                  Color(0xFF232428),
+                  Color(0xFF101013),
+                ],
+                glow: Colors.black,
+                onTap: () => _openLink('https://mutilated.pages.dev/#top'),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                Translations.t(
+                  'visitellaDesc',
+                  context,
+                  'Projects, games, news',
                 ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              Translations.t(
-                'supportAuthorBody',
-                context,
-                'If this app helps you, you can thank the developer with a small donation.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
               ),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 14),
-            // Кнопка «Поддержать»: открывает снизу окно с выбором способа
-            // оплаты — CloudTips, Boosty (и др.). Внутри окна — крупные
-            // градиентные кнопки, каждая открывает свою страницу.
-            _CtaButton(
-              label: Translations.t('support', context, 'Support'),
-              icon: Icons.favorite,
-              // «Кровавый» вид: топ-стоп тёплого ализарина, середина —
-              // насыщенный багровый, низ — почти вишнёвый, как Запекшаяся
-              // кровь. Свечение в тон середины: кнопка горит изнутри,
-              // а не светится розовым обертоном.
-              gradient: const [
-                Color(0xFFFF5A66),
-                Color(0xFFD90D28),
-                Color(0xFF7E0B1B),
-              ],
-              glow: const Color(0xFFC8102E),
-              onTap: _showSupportSheet,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  ];
+      const SizedBox(height: 8),
+      Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
+        elevation: 0,
+        color: theme.colorScheme.surfaceContainerLow,
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.volunteer_activism_outlined,
+                    color: Color(0xFFE91E63),
+                    size: 24,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      Translations.t(
+                        'supportAuthorTitle',
+                        context,
+                        'Support the author',
+                      ),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.15,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                Translations.t(
+                  'supportAuthorBody',
+                  context,
+                  'If this app helps you, you can thank the developer with a small donation.',
+                ),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Кнопка «Поддержать»: открывает снизу окно с выбором способа
+              // оплаты — CloudTips, Boosty (и др.). Внутри окна — крупные
+              // градиентные кнопки, каждая открывает свою страницу.
+              _CtaButton(
+                label: Translations.t('support', context, 'Support'),
+                icon: Icons.favorite,
+                // «Кровавый» вид: топ-стоп тёплого ализарина, середина —
+                // насыщенный багровый, низ — почти вишнёвый, как Запекшаяся
+                // кровь. Свечение в тон середины: кнопка горит изнутри,
+                // а не светится розовым обертоном.
+                gradient: const [
+                  Color(0xFFFF5A66),
+                  Color(0xFFD90D28),
+                  Color(0xFF7E0B1B),
+                ],
+                glow: const Color(0xFFC8102E),
+                onTap: _showSupportSheet,
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
   }
 }

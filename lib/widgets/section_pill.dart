@@ -667,13 +667,6 @@ class _SectionPillState extends State<SectionPill>
               // Выделение — мягкий красный той же «тихой» насыщенности:
               // полный 0xFFFF453A на мелком кегле резал глаза, особенно
               // вечером, поэтому цвет спокойнее и без свечения-блика.
-              final textColor = Color.lerp(
-                dark
-                    ? Colors.white.withValues(alpha: 0.30)
-                    : Colors.black.withValues(alpha: 0.32),
-                const Color(0xFFFF453A).withValues(alpha: 0.66),
-                badgeT,
-              )!;
               return Expanded(
                 child: Semantics(
                   button: true,
@@ -714,19 +707,11 @@ class _SectionPillState extends State<SectionPill>
                               horizontal: 4,
                               vertical: 6,
                             ),
-                            child: Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: count >= 4 ? 12.5 : 14.0,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                                color: textColor,
-                                letterSpacing: -0.2,
-                              ),
+                            child: _PillLabel(
+                              label: label,
+                              glow: badgeT,
+                              dark: dark,
+                              fontSize: count >= 4 ? 12.5 : 14.0,
                             ),
                           ),
                         ),
@@ -739,6 +724,89 @@ class _SectionPillState extends State<SectionPill>
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Подпись раздела с ПОЗДНИМ выделением.
+///
+/// Раньше красноватый тон считался прямо из позиции карусели и менялся тем
+/// же кадром, что и палец: при быстрых тапах подсветка «щёлкала» с раздела
+/// на раздел. Здесь каждое слово само тянется к новой яркости 480 мс —
+/// выделение приходит СЛЕДОМ за выбором и не мигает при серии тапов.
+class _PillLabel extends StatefulWidget {
+  final String label;
+  final double glow;
+  final bool dark;
+  final double fontSize;
+
+  const _PillLabel({
+    required this.label,
+    required this.glow,
+    required this.dark,
+    required this.fontSize,
+  });
+
+  @override
+  State<_PillLabel> createState() => _PillLabelState();
+}
+
+class _PillLabelState extends State<_PillLabel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 480),
+    value: 1,
+  );
+  late double _from = widget.glow;
+  late double _to = widget.glow;
+
+  @override
+  void didUpdateWidget(covariant _PillLabel old) {
+    super.didUpdateWidget(old);
+    if ((old.glow - widget.glow).abs() < 0.001) return;
+    _from = _value;
+    _to = widget.glow;
+    _ctrl.forward(from: 0);
+  }
+
+  double get _value {
+    final t = Curves.easeInOutCubic.transform(_ctrl.value);
+    return _from + (_to - _from) * t;
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        final v = _value.clamp(0.0, 1.0);
+        final color = Color.lerp(
+          widget.dark
+              ? Colors.white.withValues(alpha: 0.30)
+              : Colors.black.withValues(alpha: 0.32),
+          const Color(0xFFFF453A).withValues(alpha: 0.66),
+          v,
+        )!;
+        return Text(
+          widget.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: widget.fontSize,
+            fontWeight: FontWeight.lerp(FontWeight.w500, FontWeight.w600, v),
+            color: color,
+            letterSpacing: -0.2,
+          ),
+        );
+      },
     );
   }
 }

@@ -82,10 +82,11 @@ class AiGuideService {
       );
       return null;
     }
-    // Живая метка «кто сейчас отвечает»: пока идёт запрос, в плашке
-    // модели видно имя активного провайдера — раньше лейбл молчал
-    // до(/если) успеха, и казалось, что Ада зависла.
-    _setModel('$name — отвечает…');
+    // Метка «готовит ответ» — ОДНА на всю цепочку провайдеров и
+    // выставляется только если ответа ещё нет. Раньше каждый провайдер
+    // писал своё «AI Horde — отвечает…», и при быстром падении одного за
+    // другим плашка мигала именами, будто Ада металась между ними.
+    _beginAnswering();
     try {
       final result = await fn().timeout(Duration(seconds: seconds));
       if (_isRefusal(result)) {
@@ -213,6 +214,14 @@ class AiGuideService {
         'знаешь. 6) Не больше одного вопроса за ответ. 7) Список — максимум '
         'пять пунктов, каждый в одну строку. 8) Заканчивай законченной '
         'фразой: обрыв на полуслове — ошибка.\n'
+        'БЕЗ ШАБЛОНОВ: никогда не начинай ответ с представления и '
+        'дежурных фраз — «Я Ада», «Ready to assist», «Чем могу помочь?», '
+        '«Как я могу помочь?», «Конечно!», «Отличный вопрос!». Сразу '
+        'первое слово — по делу, с ЗАГЛАВНОЙ буквы. Ни одной служебной '
+        'строки вида «status:», «ready», «message» — только живой текст. '
+        'Не заканчивай многоточием или обрубком — последнее слово должно '
+        'быть целым. Если ответ про приложение Agysha — назови конкретный '
+        'раздел, кнопку или шаг.\n'
         '$context$liked';
   }
 
@@ -372,6 +381,10 @@ class AiGuideService {
     return _refusalRe.hasMatch(s);
   }
 
+  /// Публичная обёртка над [cleanAnswerText] для тестов чистки ответа:
+  /// служебные строки вырезаются, а живая фраза Ады остаётся.
+  static String cleanAnswerText(String t) => _cleanText(t);
+
   static String _cleanText(String t) {
     var s = t;
     while (s.isNotEmpty) {
@@ -442,16 +455,34 @@ class AiGuideService {
     // Некоторые бесплатные модели вместо ответа выдают служебный
     // «статус-вывод»: «system ready true», «status waiting...»,
     // «client connected» и т.п. Вырезаем такие строки целиком.
-    s = s.replaceAll(
+    // ВАЖНО: режем только настоящую служебку. Раньше любая строка,
+    // начинавшаяся с «ready»/«message», удалялась целиком — и живая фраза
+    // Ады «Ready to assist —» бесследно исчезала из ответа. Теперь строка,
+    // похожая на человеческое предложение, остаётся.
+    s = s.replaceAllMapped(
       RegExp(
-        r'^\s*(?:system|status|state|ready|waiting|debug|warning|error|'
+        r'^[ \t]*(?:system|status|state|ready|waiting|debug|warning|error|'
         r'client|server|session|thread|model_name?|provider|request|'
         r'response|result|message|type|object|created|iteration|step|'
-        r'success|fail(?:ed)?|usage|stop_reason)\b[^\n]*$',
+        r'success|fail(?:ed)?|usage|stop_reason)\b[^\n]*(?:\r?\n|$)',
         multiLine: true,
         caseSensitive: false,
       ),
-      '',
+      (m) {
+        final raw = m.group(0)!;
+        final line = raw.replaceAll(RegExp(r'[\r\n]'), '').trimRight();
+        final words = line
+            .split(RegExp(r'\s+'))
+            .where((w) => w.isNotEmpty)
+            .length;
+        final pair = line.contains(':') || line.contains('=');
+        final sentence = RegExp(r'[.!?…]["»)]?$').hasMatch(line);
+        if (!pair && (sentence || words >= 3)) {
+          final nl = raw.endsWith('\n') ? '\n' : '';
+          return '$line$nl';
+        }
+        return '';
+      },
     );
     s = s.trim();
     // Если после чистки остался только служебный статус — это НЕ ответ
@@ -947,13 +978,23 @@ class AiGuideService {
     modelLabelTick.value++;
   }
 
-  /// Убирает временную метку провайдера, если он так и не ответил.
+  /// Ставит нейтральную метку «готовит ответ», не трогая уже стоящую.
+  static void _beginAnswering() {
+    if (_lastModel.contains('—')) return;
+    _setModel('Ада — отвечает…');
+  }
+
+  /// Убирает временную метку, если провайдер так и не ответил.
+  ///
+  /// Проверка по «—», а не по префиксу имени: метка теперь общая для всей
+  /// цепочки, и старый вариант залипал — статус «отвечает…» висел в
+  /// плашке ещё долго после того, как пользователь ничего не писал.
   static void _resetAnswering(String name, {bool toName = false}) {
-    if (!_lastModel.startsWith('$name ')) return;
-    if (toName && _lastModel == '$name — отвечает…') {
+    if (toName) {
       _setModel(name);
       return;
     }
+    if (!_lastModel.contains('—')) return;
     _setModel(_lastGoodModel.isNotEmpty ? _lastGoodModel : 'Ада');
   }
 
