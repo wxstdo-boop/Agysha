@@ -1351,9 +1351,9 @@ class _TaskNoteSheetState extends State<_TaskNoteSheet> {
       0.4,
     )!;
     return Container(
-      width: MediaQuery.of(context).size.width * 0.9,
+      width: MediaQuery.sizeOf(context).width * 0.9,
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.8,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.8,
       ),
       margin: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(

@@ -75,7 +75,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_pos == Offset.zero) {
-      final size = MediaQuery.of(context).size;
+      final size = MediaQuery.sizeOf(context);
       try {
         _pos = Offset(
           (globalPrefs.getDouble('ai_bubble_fx') ?? 0.58) * size.width,
@@ -346,7 +346,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final screen = MediaQuery.of(context).size;
+    final screen = MediaQuery.sizeOf(context);
     final w = _windowWidth(screen.width);
     return ValueListenableBuilder<bool>(
       valueListenable: aiLockScreenVisible,
@@ -387,10 +387,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                     layoutBuilder: (currentChild, previousChildren) => Stack(
                       fit: StackFit.expand,
                       alignment: Alignment.center,
-                      children: <Widget>[
-                        ...previousChildren,
-                        ?currentChild,
-                      ],
+                      children: <Widget>[...previousChildren, ?currentChild],
                     ),
                     transitionBuilder: (child, anim) => FadeTransition(
                       opacity: anim,
@@ -434,12 +431,18 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                 // позиции — сама позиция при этом не перезаписывается.
                 // Инсет приходит покадрово вместе с анимацией клавиатуры,
                 // поэтому подъём читается плавным.
-                final mq = MediaQuery.of(context);
+                // sizeOf/viewInsetsOf вместо MediaQuery.of: окошко зависит
+                // только от размера экрана и клавиатуры, а полный `of`
+                // подписывал его на ЛЮБОЕ изменение метрик и пересобирал
+                // каждый кадр анимации клавиатуры целиком.
+                final mqSize = MediaQuery.sizeOf(context);
+                final kb = _collapsed
+                    ? 0.0
+                    : MediaQuery.viewInsetsOf(context).bottom;
                 var top = pos.dy;
                 if (!_collapsed) {
-                  final kb = mq.viewInsets.bottom;
                   if (kb > 0) {
-                    final maxTop = mq.size.height - _expandedHeight - 8;
+                    final maxTop = mqSize.height - _expandedHeight - 8;
                     if (top > maxTop) top = maxTop < 0 ? 0 : maxTop;
                   }
                 }
@@ -474,8 +477,8 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
       key: key,
       behavior: HitTestBehavior.opaque,
       onTap: () => setState(() => _collapsed = false),
-      onPanUpdate: (d) => _drag(d.delta, MediaQuery.of(context).size),
-      onPanEnd: (_) => _savePos(MediaQuery.of(context).size),
+      onPanUpdate: (d) => _drag(d.delta, MediaQuery.sizeOf(context)),
+      onPanEnd: (_) => _savePos(MediaQuery.sizeOf(context)),
       child: Center(
         child: Container(
           width: 52,
@@ -522,7 +525,9 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
             _drag(d.delta, screen);
             _swipeDx += d.delta.dx;
             _swipeDy += d.delta.dy;
-            if (!_swipedClosed && _swipeDy > 84 && _swipeDy.abs() > _swipeDx.abs() * 1.4) {
+            if (!_swipedClosed &&
+                _swipeDy > 84 &&
+                _swipeDy.abs() > _swipeDx.abs() * 1.4) {
               _swipedClosed = true;
               Haptics.light();
               setState(() => _collapsed = true);
@@ -851,7 +856,7 @@ class _MiniBubble extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 2),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.55,
+          maxWidth: MediaQuery.sizeOf(context).width * 0.55,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(

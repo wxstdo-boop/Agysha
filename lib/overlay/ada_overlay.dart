@@ -684,7 +684,7 @@ class _OverlayChatState extends State<_OverlayChat>
     if (!mounted || _collapsed || _resizing) return;
     // MediaQuery у состояния ещё не «обрезана» (removeViewInsets стоит
     // только на детях), поэтому инсет клавиатуры здесь настоящий.
-    final inset = MediaQuery.of(context).viewInsets.bottom;
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
     if ((inset - _lastKbInset).abs() < 1) return;
     _lastKbInset = inset;
     _kbTimer?.cancel();
@@ -1445,7 +1445,7 @@ class _MiniBubble extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 2),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
+          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

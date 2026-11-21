@@ -111,30 +111,38 @@ class BloodSpeck {
   /// а не плотными «кровавыми» плашками.
   static BoxDecoration decoration(ThemeData theme, {double opacity = 1.0}) {
     final isDark = theme.brightness == Brightness.dark;
+    if (isDark) {
+      // Тёмная тема — МОНОТОННО: одна ровная винная поверхность без
+      // градиента и без светлой кромки сверху. Трёхстопный градиент давал
+      // на тёмном фоне светлую «нашлёпку» в углу, и капсула читалась
+      // грязным пятном (владелец: «стало уёбищнее, надо монотоннее»).
+      final fill = Color.alphaBlend(
+        const Color(0xFFB3121F).withValues(alpha: 0.16 * opacity),
+        theme.colorScheme.surfaceContainerHigh,
+      );
+      return BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xFFFF8A90).withValues(alpha: 0.26 * opacity),
+          width: 1,
+        ),
+      );
+    }
     return BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: isDark
-            ? [
-                // На тёмной теме — сильно прозрачное «виноградное стекло»:
-                // бейдж лишь слегка подкрашивает фон, не превращаясь в
-                // плотную тёмную плиту. Пятна крови читаются, но не «давят».
-                const Color(0xFFE86A72).withValues(alpha: 0.12 * opacity),
-                const Color(0xFF8E0E18).withValues(alpha: 0.20 * opacity),
-                const Color(0xFF4A050C).withValues(alpha: 0.15 * opacity),
-              ]
-            : [
-                const Color(0xFFC0202C).withValues(alpha: 0.62 * opacity),
-                const Color(0xFF96101B).withValues(alpha: 0.58 * opacity),
-                const Color(0xFF6E0810).withValues(alpha: 0.54 * opacity),
-              ],
+        colors: [
+          const Color(0xFFC0202C).withValues(alpha: 0.62 * opacity),
+          const Color(0xFF96101B).withValues(alpha: 0.58 * opacity),
+          const Color(0xFF6E0810).withValues(alpha: 0.54 * opacity),
+        ],
         stops: const [0.0, 0.42, 1.0],
       ),
       borderRadius: BorderRadius.circular(999),
       border: Border.all(
-        color: (isDark ? const Color(0xFFFFA2A8) : const Color(0xFFE0525C))
-            .withValues(alpha: (isDark ? 0.22 : 0.40) * opacity),
+        color: const Color(0xFFE0525C).withValues(alpha: 0.40 * opacity),
         width: 1,
       ),
     );

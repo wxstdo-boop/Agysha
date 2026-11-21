@@ -243,13 +243,12 @@ class AdaAvatar extends StatelessWidget {
       // перерисовывает только этот кружок, а не строку/пузырь вокруг.
       builder: (context, idx, _) => RepaintBoundary(
         child: AnimatedSwitcher(
-          // Смена аватарки — только кросс-фейд с еле заметным «дыханием»
-          // масштаба (0.95 → 1). Поворот и уменьшение до 0.86 читались как
-          // «перерисовка»: градиент, тень и глиф успевали «прыгнуть» на
-          // каждом кадре.
-          duration: const Duration(milliseconds: 300),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
+          // Смена аватарки — ДОЛГИЙ кросс-фейд (1,15 с) с еле заметным
+          // «дыханием» масштаба (0.98 → 1). Быстрые 300 мс читались как
+          // «перерисовка»: градиент и глиф успевали прыгнуть на каждом кадре.
+          duration: const Duration(milliseconds: 1150),
+          switchInCurve: Curves.easeInOut,
+          switchOutCurve: Curves.easeInOut,
           layoutBuilder: (current, previous) => Stack(
             alignment: Alignment.center,
             children: [...previous, ?current],
@@ -262,7 +261,7 @@ class AdaAvatar extends StatelessWidget {
             return FadeTransition(
               opacity: anim,
               child: ScaleTransition(
-                scale: Tween<double>(begin: 0.95, end: 1.0).animate(curved),
+                scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
                 child: child,
               ),
             );
@@ -314,11 +313,15 @@ class AdaAvatar extends StatelessWidget {
         // Тонкое адаптивное кольцо: полупрозрачная, почти чёрная обводка
         // как у снекбаров — только тоньше и чище. Аватарка аккуратно «садится»
         // в любую тему, не торча цветным кружком.
+        // На тёмной теме почти чёрное кольцо сливалось с фоном: аватарка
+        // «расплывалась». Там кольцо светлое, поэтому круг читается чётко.
         border: Border.all(
           color: monochrome
               ? cs.outlineVariant.withValues(alpha: dark ? 0.55 : 0.70)
-              : Colors.black.withValues(alpha: dark ? 0.30 : 0.32),
-          width: 1.1,
+              : (dark
+                    ? Colors.white.withValues(alpha: 0.24)
+                    : Colors.black.withValues(alpha: 0.32)),
+          width: dark ? 1.2 : 1.1,
         ),
         // Без тени: в мини-окошке blur-тень обрезается прямоугольной
         // границей окна и выглядит как «квадрат» за круглой аватаркой.

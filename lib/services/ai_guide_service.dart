@@ -107,6 +107,9 @@ class AiGuideService {
       _recordProviderTrace(
         '$name: \u043e\u0442\u0432\u0435\u0442 \u043f\u043e\u043b\u0443\u0447\u0435\u043d',
       );
+      // Если провайдер не выставил свою финальную метку, временная
+      // «— отвечает…» осталась бы висеть после ответа.
+      _resetAnswering(name, toName: true);
       return result;
     } on TimeoutException {
       _markCooldown(name);
@@ -198,7 +201,18 @@ class AiGuideService {
         'ЯВНО просит («создай», «добавь», «запиши», «удали»). При создании '
         'используй инструмент (create_habit / create_task / create_alarm / '
         'create_reality_check / create_meal / delete_item) и коротко подтверди. '
-        'Если время будильника словами («на 7 утра») — переведи в 07:00. '
+        'Если время будильника словами («на 7 утра») — переведи в 07:00.\n'
+        'КАЧЕСТВО (эти правила важнее красоты слога): 1) Отвечай ровно на '
+        'заданный вопрос и не пересказывай сообщение пользователя. 2) Ни '
+        'одного повторения мысли и никакой «воды»: каждое предложение — '
+        'новое. 3) Не выдумывай разделы, кнопки и функции Agysha, которых '
+        'нет; если не уверена — так и скажи и предложи, где посмотреть. '
+        '4) Не придумывай числа, даты и статистику: только из данных выше. '
+        '5) Запрещены фразы «как ИИ», «я не могу», «я всего лишь модель» — '
+        'ты живая Ада и либо помогаешь, либо честно говоришь, чего не '
+        'знаешь. 6) Не больше одного вопроса за ответ. 7) Список — максимум '
+        'пять пунктов, каждый в одну строку. 8) Заканчивай законченной '
+        'фразой: обрыв на полуслове — ошибка.\n'
         '$context$liked';
   }
 
@@ -626,6 +640,9 @@ class AiGuideService {
       return answer;
     } on TimeoutException {
       throw Exception('timeout');
+    } finally {
+      // «Отвечает…» живёт ровно столько, сколько идёт подготовка ответа.
+      endAnswering();
     }
   }
 
@@ -795,8 +812,17 @@ class AiGuideService {
       _recordProviderTrace('Zen: пропущен, ключ не задан');
     }
 
-    // Бесплатные провайдеры без ключа (Pollinations AI + AI Horde)
+    // Бесплатные провайдеры без ключа: LLM7.io (самый быстрый из троих),
+    // Pollinations AI и AI Horde — запасные.
     final providers = <(String, Future<String?> Function())>[
+      (
+        'LLM7',
+        () => _tryProvider(
+          'LLM7',
+          () => _sendLlm7(userText, history, languageCode),
+          18,
+        ),
+      ),
       (
         'Pollinations',
         () => _tryProvider(
@@ -922,8 +948,18 @@ class AiGuideService {
   }
 
   /// Убирает временную метку провайдера, если он так и не ответил.
-  static void _resetAnswering(String name) {
-    if (_lastModel.startsWith('$name ')) {
+  static void _resetAnswering(String name, {bool toName = false}) {
+    if (!_lastModel.startsWith('$name ')) return;
+    if (toName && _lastModel == '$name — отвечает…') {
+      _setModel(name);
+      return;
+    }
+    _setModel(_lastGoodModel.isNotEmpty ? _lastGoodModel : 'Ада');
+  }
+
+  /// Гасит любую временную метку «— отвечает…», если ответ уже не готовится.
+  static void endAnswering() {
+    if (_lastModel.contains('—')) {
       _setModel(_lastGoodModel.isNotEmpty ? _lastGoodModel : 'Ада');
     }
   }

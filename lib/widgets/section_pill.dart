@@ -687,11 +687,15 @@ class _SectionPillState extends State<SectionPill>
                     enabled: !_dragging,
                     pressedScale: 0.94,
                     pressTint: const Color(0xFFFF453A),
-                    pressTintStrength: 0.16,
+                    pressTintStrength: 0.13,
                     pressTintRadius: BorderRadius.circular(18),
                     enableTilt: true,
-                    duration: const Duration(milliseconds: 190),
-                    releaseDuration: const Duration(milliseconds: 320),
+                    // Подсветка не «вспыхивает»: она проявляется мягко, а
+                    // гаснет долго (620 мс), поэтому при быстрых тапах не
+                    // мигает, а тянется за пальцем как след. Вдавливание
+                    // тоже спокойнее — 210 мс вместо резких 190.
+                    duration: const Duration(milliseconds: 210),
+                    releaseDuration: const Duration(milliseconds: 620),
                     child: Material(
                       type: MaterialType.transparency,
                       child: InkWell(
