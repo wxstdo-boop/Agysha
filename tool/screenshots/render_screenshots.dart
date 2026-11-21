@@ -139,11 +139,32 @@ Future<void> _seed() async {
   );
 }
 
+/// Ищет шрифты Roboto в кеше pub: пакет shared_preferences таскает их
+/// внутри devtools-расширения. Путь берём из PUB_CACHE/HOME, а не хардкодом,
+/// иначе скрипт работает только на машине автора.
+String? _findRobotoInPubCache() {
+  final pubCache = Platform.environment['PUB_CACHE'] ??
+      (Platform.environment['HOME'] == null
+          ? null
+          : '${Platform.environment['HOME']}/.pub-cache');
+  if (pubCache == null) return null;
+  final hosted = Directory('$pubCache/hosted/pub.dev');
+  if (!hosted.existsSync()) return null;
+  for (final entry in hosted.listSync()) {
+    if (entry is! Directory) continue;
+    final name = entry.uri.pathSegments.where((s) => s.isNotEmpty).last;
+    if (!name.startsWith('shared_preferences-')) continue;
+    final fonts =
+        '${entry.path}/extension/devtools/build/assets/packages/devtools_app_shared/fonts/Roboto';
+    if (Directory(fonts).existsSync()) return fonts;
+  }
+  return null;
+}
+
 Future<void> _loadFonts() async {
-  const robotoRoot =
-      '/home/openhands/.pub-cache/hosted/pub.dev/shared_preferences-2.5.6/extension/devtools/build/assets/packages/devtools_app_shared/fonts/Roboto';
+  final robotoRoot = _findRobotoInPubCache();
   const dejavuRoot = '/usr/share/fonts/truetype/dejavu';
-  final useRoboto = Directory(robotoRoot).existsSync();
+  final useRoboto = robotoRoot != null;
   final regular = useRoboto
       ? '$robotoRoot/Roboto-Regular.ttf'
       : '$dejavuRoot/DejaVuSans.ttf';
