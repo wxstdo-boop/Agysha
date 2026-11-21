@@ -93,3 +93,10 @@ if [ "$DRY_RUN" = "1" ]; then
 else
   echo "Готово: удалено ассетов: $targets"
 fi
+
+# Затем сами записи релизов — отдельным скриптом, чтобы его можно было
+# запустить и руками: ./tool/prune_releases.sh 10 1
+here="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$here/prune_releases.sh" ]; then
+  bash "$here/prune_releases.sh" "$KEEP" "$DRY_RUN"
+fi

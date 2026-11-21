@@ -1,8 +1,14 @@
-Build recipe: run
-`Remove-Item Env:AGYSHA_NO_R8 -ErrorAction SilentlyContinue; & 'C:\Users\Larafut\dev\flutter\bin\flutter.bat' build apk --release --split-per-abi --target-platform android-arm64`
-then install over the existing Android device (keep user data):
-`& "$env:USERPROFILE\dev\android-sdk\platform-tools\adb.exe" install -r "build\app\outputs\flutter-apk\app-arm64-v8a-release.apk"`.
-flutter/adb are not on PATH on this machine: flutter lives at `C:\Users\Larafut\dev\flutter\bin\flutter.bat`, adb at `C:\Users\Larafut\dev\android-sdk\platform-tools\adb.exe` (see `android/local.properties`).
+# Agysha — заметки по репозиторию
+
+Сборка для проверки на устройстве:
+
+```bash
+flutter build apk --release --split-per-abi --target-platform android-arm64
+adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+```
+
+`flutter` и `adb` должны быть в `PATH`; путь к локальному SDK — в
+`android/local.properties` (файл не коммитится).
 
 ## Идентификаторы проекта (переименование 2026-11)
 
@@ -1090,11 +1096,9 @@ Play Protect, file an appeal», support.google.com/googleplay/answer/2812853).
   на реальных заголовках и отдельно проверяет, что ни в одном уже лежащем
   changelog нет служебных пунктов. Правило: если коммит не меняет поведение
   приложения для пользователя — его заголовок не должен попадать в «Что нового».
-- **Рецепт указывает на тег релиза, а не на коммит после него.** У `v1.6.171+45243`
-  тег стоял на `2c1156d` (F-Droid-коммит), а сам релизный коммит `3568f6b`
-  лежал ниже. Для F-Droid это неважно (changelog в дереве тега есть), но
-  `UpdateCheckMode: Tags` берёт версию из последнего тега — поэтому рецепт и
-  `CurrentVersion*` держать на версии, которая в этом теге действительно есть.
+- **Тег релиза должен указывать на коммит с тем же `version` в `pubspec.yaml`.**
+  `UpdateCheckMode: Tags` берёт версию из последнего тега, поэтому рецепт и
+  `CurrentVersion*` держим на версии, которая в этом теге действительно есть.
 - **`fdroid rewritemeta` — жёсткий гейт CI.** В fdroiddata есть job
   `fdroid rewritemeta`, который переформатирует файл и требует НУЛЕВОЙ diff.
   Поэтому рецепт держать строго в каноническом виде: ключи верхнего уровня

@@ -66,10 +66,10 @@ flutter build appbundle --release
 
 ```bash
 flutter build web --release
-python scripts/web_server.py      # http://127.0.0.1:8080 без кэша
+python tool/web_server.py      # http://127.0.0.1:8080 без кэша
 ```
 
-`scripts/web_server.py` отдаёт `build/web` с заголовками `no-store`, чтобы
+`tool/web_server.py` отдаёт `build/web` с заголовками `no-store`, чтобы
 изменения не застревали в кэше. Данные на web идут в `localStorage`
 (`lib/services/json_file.dart` проверяет `kIsWeb`).
 
@@ -112,10 +112,10 @@ android/       нативная часть (Kotlin)
 assets/        звуки, шрифт Caveat, логотип
 shaders/       GLSL-шейдеры (film grain)
 test/          тесты
-tool/          генератор скриншотов для каталогов (не подхватывается `flutter test`)
+tool/          служебные скрипты: скриншоты для каталогов, заметки к релизу,
+               чистка релизов, локальный веб-сервер
 third_party/   локальные форки плагинов
-tools/         скрипты сборки датасета Ады, генерация логотипа
-scripts/       вспомогательные скрипты сборки и веб-сервер
+tools/         сборка датасета и обучение Ады (к сборке приложения не относятся)
 ```
 
 Мусор в корень не кладём: логи, разовые скрипты, собранные APK и скриншоты
