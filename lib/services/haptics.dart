@@ -37,6 +37,23 @@ class Haptics {
   /// Сильный удар — ошибки, важные действия.
   static Future<void> heavy() => _invoke('heavy');
 
+  /// Долгая вибрация конца таймера: две волны по ~0.5 с. Короткий
+  /// «щелчок» `heavy()` человек в кармане не замечает.
+  ///
+  /// Идёт мимо [enabled]: выключатель в настройках гасит отклик
+  /// ИНТЕРФЕЙСА, а завершение таймера — событие, которое надо заметить,
+  /// как и звонок будильника.
+  static Future<void> alert() async {
+    if (kIsWeb) return;
+    try {
+      await _channel.invokeMethod<void>('alert');
+    } catch (_) {
+      try {
+        await HapticFeedback.heavyImpact();
+      } catch (_) {}
+    }
+  }
+
   static Future<void> _invoke(String kind) async {
     if (kIsWeb || !enabled) return;
     // Глобальный троттл: TapHapticsSplash бьёт на появлении плеска (tap-down),
@@ -59,6 +76,8 @@ class Haptics {
           case 'medium':
             await HapticFeedback.mediumImpact();
           case 'heavy':
+            await HapticFeedback.heavyImpact();
+          case 'alert':
             await HapticFeedback.heavyImpact();
           default:
             await HapticFeedback.lightImpact();

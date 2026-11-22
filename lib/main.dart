@@ -34,6 +34,7 @@ import 'services/habit_service.dart';
 import 'services/task_service.dart';
 import 'services/timer_service.dart';
 import 'services/prefs.dart';
+import 'services/nutrition_service.dart';
 import 'services/profile_service.dart';
 import 'services/score_service.dart';
 import 'services/ai_guide_service.dart';
@@ -182,6 +183,8 @@ Future<void> _saveAllData() async {
       AlarmService().forceSave(),
       RealityCheckService().forceSave(),
       TimerService().forceSave(),
+      NutritionService().forceSave(),
+      ProfileService().forceSave(),
     ]);
     _autoSaveFailureActive = false;
     await SettingsService.markAutoSaveOk();
@@ -636,7 +639,6 @@ class _StartupState {
     required this.hasPin,
     required this.theme,
     required this.lang,
-    required this.peachDark,
     required this.fontFamily,
     required this.launchedByNotification,
     required this.notificationPayload,
@@ -645,7 +647,6 @@ class _StartupState {
   final bool hasPin;
   final String theme;
   final String lang;
-  final bool peachDark;
   final String fontFamily;
 
   /// Запуск тапом по уведомлению будильника — сам обработчик навешивается
@@ -711,7 +712,6 @@ Future<_StartupState> _loadStartupState() async {
   final hasPin = PinService.hasPin();
   final theme = SettingsService.loadThemeMode();
   final lang = SettingsService.loadLanguageCode();
-  final peachDark = SettingsService.loadPeachDark();
   final fontFamily = SettingsService.loadFontFamily();
   // Прогреваем живые флаги режимов до первого Home-кадра:
   // кнопка BERSERK и карточки не ждут открытия настроек.
@@ -734,7 +734,6 @@ Future<_StartupState> _loadStartupState() async {
     hasPin,
     theme,
     lang,
-    peachDark,
     fontFamily,
     modes,
   ]);
@@ -743,7 +742,6 @@ Future<_StartupState> _loadStartupState() async {
     hasPin: await hasPin,
     theme: await theme,
     lang: await lang,
-    peachDark: await peachDark,
     fontFamily: await fontFamily,
     launchedByNotification: details?.didNotificationLaunchApp == true,
     notificationPayload: details?.notificationResponse?.payload,
@@ -832,7 +830,6 @@ Future<void> _restoreStartupBackup(Map<String, dynamic> backup) async {
       initialLocked: startup.hasPin,
       initialTheme: startup.theme,
       initialLanguageCode: startup.lang,
-      initialPeachDark: startup.peachDark,
       initialFontFamily: startup.fontFamily,
       alarmBootPayload: _alarmBootPayload,
     ),
@@ -928,7 +925,6 @@ Future<void> _startApp() async {
       initialLocked: startup.hasPin,
       initialTheme: startup.theme,
       initialLanguageCode: startup.lang,
-      initialPeachDark: startup.peachDark,
       initialFontFamily: startup.fontFamily,
       alarmBootPayload: _alarmBootPayload,
     ),
@@ -1096,7 +1092,6 @@ class AgyshaApp extends StatefulWidget {
   final bool initialLocked;
   final String initialTheme;
   final String initialLanguageCode;
-  final bool initialPeachDark;
   final String initialFontFamily;
 
   /// Не-null, если приложение открыто срабатыванием будильника (холодный
@@ -1108,7 +1103,6 @@ class AgyshaApp extends StatefulWidget {
     this.initialLocked = false,
     this.initialTheme = 'light',
     this.initialLanguageCode = 'system',
-    this.initialPeachDark = false,
     this.initialFontFamily = 'ordinary',
     this.alarmBootPayload,
   });
@@ -1125,7 +1119,6 @@ class AgyshaAppState extends State<AgyshaApp>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   late String _themeKey;
   late String _languageCode;
-  late bool _peachDark;
   late String _fontFamily;
   Key _appKey = UniqueKey();
   bool _locked = false;
@@ -1188,8 +1181,10 @@ class AgyshaAppState extends State<AgyshaApp>
         return ThemeMode.dark;
       case 'oled':
         return ThemeMode.dark;
+      // Светлая Cyberpunk убрана; ключ ещё может лежать в настройках
+      // старой версии — ведём его в обычную Cyberpunk (oled).
       case 'cyberpunkLight':
-        return ThemeMode.light;
+        return ThemeMode.dark;
       case 'grok':
         return ThemeMode.light;
       case 'darkGrok':
@@ -1203,7 +1198,8 @@ class AgyshaAppState extends State<AgyshaApp>
       case 'systemLight':
         return ThemeMode.light;
       case 'peach':
-        return _peachDark ? ThemeMode.dark : ThemeMode.light;
+        // Персик всегда светлый: тёмный вариант убран из барабана.
+        return ThemeMode.light;
       case 'rose':
         return ThemeMode.light; // Rose — всегда светлая, воздушная тема
       case 'mutilated':
@@ -1263,11 +1259,6 @@ class AgyshaAppState extends State<AgyshaApp>
     SettingsService.saveThemeMode(key);
     // Тема перетекает сама — MaterialApp анимирует ThemeData (AnimatedTheme),
     // без своих затемнений и вспышек.
-  }
-
-  void togglePeachDark() {
-    setState(() => _peachDark = !_peachDark);
-    SettingsService.savePeachDark(_peachDark);
   }
 
   void setLanguageCode(String code) {
@@ -1396,7 +1387,6 @@ class AgyshaAppState extends State<AgyshaApp>
     super.initState();
     _themeKey = widget.initialTheme;
     _languageCode = widget.initialLanguageCode;
-    _peachDark = widget.initialPeachDark;
     _fontFamily = widget.initialFontFamily == 'caveat' ? 'caveat' : 'ordinary';
     _locked = widget.initialLocked;
     aiLockScreenVisible.value = _locked;
@@ -1773,35 +1763,6 @@ class AgyshaAppState extends State<AgyshaApp>
                     surfaceContainer: Color(0xFFEDF5F7),
                     surfaceContainerHigh: Color(0xFFE6F0F3),
                     surfaceContainerHighest: Color(0xFFDFEBEF),
-                  );
-                }
-                if (_themeKey == 'cyberpunkLight') {
-                  // Cyberpunk 2077 Light — хай-тек киберпанк (стиль Arasaka/Trauma Team):
-                  // платиновый кибер-белый фон, неон-кримсон (#FF003C), ночной кибер-жёлтый (#FCEE0A)
-                  // и неоновый электрик-циан (#00F0FF) на ультра-чётких контрастных контейнерах.
-                  return const ColorScheme.light(
-                    primary: Color(0xFFFF003C),
-                    onPrimary: Colors.white,
-                    primaryContainer: Color(0xFFFFE5EC),
-                    onPrimaryContainer: Color(0xFF80001E),
-                    secondary: Color(0xFFFCEE0A),
-                    onSecondary: Colors.black,
-                    secondaryContainer: Color(0xFFFEF9C3),
-                    onSecondaryContainer: Color(0xFF713F12),
-                    tertiary: Color(0xFF00F0FF),
-                    onTertiary: Colors.black,
-                    tertiaryContainer: Color(0xFFCFFAFE),
-                    onTertiaryContainer: Color(0xFF0E7490),
-                    surface: Color(0xFFF6F8FC),
-                    onSurface: Color(0xFF0D1117),
-                    onSurfaceVariant: Color(0xFF334155),
-                    outline: Color(0xFFFF003C),
-                    outlineVariant: Color(0xFFCBD5E1),
-                    surfaceContainerLowest: Colors.white,
-                    surfaceContainerLow: Color(0xFFF1F5F9),
-                    surfaceContainer: Color(0xFFE8EEF5),
-                    surfaceContainerHigh: Color(0xFFDFE7F2),
-                    surfaceContainerHighest: Color(0xFFD4E0EE),
                   );
                 }
                 // Обычная СВЕТЛАЯ — светло-сиреневая: фиолетовый акцент и

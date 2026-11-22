@@ -36,8 +36,13 @@ class AlarmService extends ChangeNotifier {
     if (!_loaded) return;
     final value = alarmsToJson(_alarms);
     if (_snapshot != null && value == _snapshot) return;
-    final resolved = await JsonFile.writeWithSnapshot(_key, value, _snapshot);
-    if (resolved == value) _snapshot = resolved;
+    final resolved = await JsonFile.writeWithSnapshotRetrying(
+      _key,
+      value,
+      _snapshot,
+    );
+    _snapshot = resolved;
+    if (resolved != value) _alarms = alarmsFromJson(resolved);
   }
 
   Future<void> add(Alarm alarm) async {

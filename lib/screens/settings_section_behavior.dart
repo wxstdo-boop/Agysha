@@ -113,64 +113,79 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
             ),
             const Divider(height: 1),
             PressScale(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                leading: Icon(
-                  Icons.save_outlined,
-                  color: theme.colorScheme.primary,
-                ),
-                title: Text(Translations.t('autoSave', context)),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      Translations.t('autoSaveDesc', context),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    // Показываем ДОКАЗАТЕЛЬСТВО работы: время последней
-                    // успешной записи. Строка живёт ТОЛЬКО при включённом
-                    // автосохранении и появляется/исчезает вместе с ним
-                    // плавно (AnimatedCrossFade анимирует и прозрачность,
-                    // и высоту), а само время меняется перетеканием цифр.
-                    ValueListenableBuilder<bool>(
-                      valueListenable: SettingsService.autoSaveEnabled,
-                      builder: (context, on, _) => AnimatedCrossFade(
-                        duration: const Duration(milliseconds: 300),
-                        sizeCurve: Curves.easeOutCubic,
-                        firstCurve: Curves.easeOutCubic,
-                        secondCurve: Curves.easeInCubic,
-                        crossFadeState: on && _autoSave
-                            ? CrossFadeState.showFirst
-                            : CrossFadeState.showSecond,
-                        firstChild: _AutoSaveStamp(
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.85,
-                            ),
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                        secondChild: const SizedBox(
-                          key: ValueKey('auto_save_stamp_hidden'),
-                          width: double.infinity,
-                          height: 0,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              // Своя раскладка вместо ListTile: у ListTile высота
+              // переключается дискретными порогами (56/72/88), и при
+              // появлении строки «Последнее сохранение» заголовок со
+              // значком дёргались вниз рывком. Здесь высота идёт только
+              // через AnimatedCrossFade, а Row каждый кадр центрирует
+              // значок и текст — они поднимаются и опускаются плавно.
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
                 onTap: () => _applyAutoSave(!_autoSave),
-                trailing: VolumetricSwitch(
-                  value: _autoSave,
-                  semanticLabel: Translations.t('autoSave', context),
-                  onChanged: _applyAutoSave,
-                  activeColor: theme.colorScheme.primary,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.save_outlined,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              Translations.t('autoSave', context),
+                              style: theme.textTheme.bodyLarge,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              Translations.t('autoSaveDesc', context),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            ValueListenableBuilder<bool>(
+                              valueListenable: SettingsService.autoSaveEnabled,
+                              builder: (context, on, _) => AnimatedCrossFade(
+                                duration: const Duration(milliseconds: 320),
+                                sizeCurve: Curves.easeOutCubic,
+                                firstCurve: Curves.easeOutCubic,
+                                secondCurve: Curves.easeInCubic,
+                                crossFadeState: on && _autoSave
+                                    ? CrossFadeState.showFirst
+                                    : CrossFadeState.showSecond,
+                                firstChild: _AutoSaveStamp(
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.primary.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                ),
+                                secondChild: const SizedBox(
+                                  key: ValueKey('auto_save_stamp_hidden'),
+                                  width: double.infinity,
+                                  height: 0,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      VolumetricSwitch(
+                        value: _autoSave,
+                        semanticLabel: Translations.t('autoSave', context),
+                        onChanged: _applyAutoSave,
+                        activeColor: theme.colorScheme.primary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

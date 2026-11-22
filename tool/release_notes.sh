@@ -55,4 +55,5 @@ for raw in sys.stdin:
         if any(k in low for k in keys):
             emoji = icon
             break
-    print(f"- {emoji} {text}")' || true
+    print(f"- {emoji} {text}")' \
+  | awk '!seen[$0]++' || true

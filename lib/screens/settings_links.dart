@@ -134,7 +134,7 @@ extension _SettingsLinks on _SettingsScreenState {
                     Color(0xCC8A0F26),
                   ],
                   glow: const Color(0xFFD42A45),
-                  foreground: const Color(0x99FFFFFF),
+                  foreground: const Color(0x73FFFFFF),
                   onTap: () => _openLink(
                     'https://finance.ozon.ru/apps/sbp/ozonbankpay/ccccb061-0a35-4e1b-8607-79c369b40b37',
                   ),
@@ -152,7 +152,7 @@ extension _SettingsLinks on _SettingsScreenState {
                     Color(0xCC7C0D22),
                   ],
                   glow: const Color(0xFFD42A45),
-                  foreground: const Color(0x99FFFFFF),
+                  foreground: const Color(0x73FFFFFF),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _openLink(_boostyUrl);

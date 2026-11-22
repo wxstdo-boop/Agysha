@@ -45,9 +45,11 @@ void main() {
     } catch (_) {}
   });
 
-  test('cyberpunkLight сохраняется и читается обратно', () async {
+  test('устаревший cyberpunkLight читается как обычная Cyberpunk', () async {
+    // Светлая Cyberpunk убрана из барабана: старый ключ из prefs не должен
+    // оставлять приложение без темы.
     await SettingsService.saveThemeMode('cyberpunkLight');
-    expect(await SettingsService.loadThemeMode(), 'cyberpunkLight');
+    expect(await SettingsService.loadThemeMode(), 'oled');
   });
 
   testWidgets('барабан тем: без карусели, прокрутка сразу переключает тему', (

@@ -111,8 +111,13 @@ class TimerService extends ChangeNotifier {
   Future<void> _save() async {
     if (!_loaded) return;
     final value = appTimersToJson(_timers);
-    final resolved = await JsonFile.writeWithSnapshot(_key, value, _snapshot);
-    if (resolved == value) _snapshot = resolved;
+    final resolved = await JsonFile.writeWithSnapshotRetrying(
+      _key,
+      value,
+      _snapshot,
+    );
+    _snapshot = resolved;
+    if (resolved != value) _timers = appTimersFromJson(resolved);
   }
 
   /// Снапшот «что идёт и до каких часов». Нужен, чтобы после убийства

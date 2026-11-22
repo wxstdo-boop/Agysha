@@ -9,7 +9,7 @@ part of 'settings_screen.dart';
 /// палитра успевала мигнуть промежуточным вариантом (например, «своя
 /// тёмная», потом светлая Cyberpunk, и только потом выбранная тема).
 /// Тап по каморе доводит барабан до неё, тап по центру применяет выбранное
-/// ещё раз (там живут «светлая Cyberpunk» и тёмный персик).
+/// ещё раз.
 extension _SettingsThemeCarousel on _SettingsScreenState {
   Widget _buildThemeCarousel(BuildContext context) {
     final appState = AgyshaApp.of(context);
@@ -25,13 +25,8 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
       _ThemeEntry('dark', Translations.darkOf(context), Icons.dark_mode),
       _ThemeEntry(
         'oled',
-        appState.themeKey == 'cyberpunkLight'
-            ? '${Translations.t('themeOled', context, 'Cyberpunk 2077')} '
-                  '${Translations.t('themeLightSuffix', context, '(Light)')}'
-            : Translations.t('themeOled', context, 'Cyberpunk 2077'),
-        appState.themeKey == 'cyberpunkLight'
-            ? Icons.wb_sunny_outlined
-            : Icons.brightness_2_outlined,
+        Translations.t('themeOled', context, 'Cyberpunk 2077'),
+        Icons.brightness_2_outlined,
       ),
       _ThemeEntry(
         'system',
@@ -44,16 +39,10 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
         Icons.palette_outlined,
       ),
       _ThemeEntry('rose', Translations.roseOf(context), Icons.favorite_outline),
-      // Персик — тоже пара вариантов: подпись и значок меняются вместе
-      // с тёмной/светлой стороной, иначе рычаг выглядел «мёртвым».
       _ThemeEntry(
         'peach',
-        appState.themeKey == 'peach' && appState.themeMode == ThemeMode.dark
-            ? Translations.t('peachDarkLabel', context, 'Dark peach')
-            : Translations.peachOf(context),
-        appState.themeKey == 'peach' && appState.themeMode == ThemeMode.dark
-            ? Icons.nightlight_round
-            : Icons.local_florist_outlined,
+        Translations.peachOf(context),
+        Icons.local_florist_outlined,
       ),
       const _ThemeEntry('grok', 'Grok', Icons.auto_awesome),
       const _ThemeEntry('darkGrok', 'Grok Dark', Icons.dark_mode),
@@ -66,21 +55,11 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
       key: const ValueKey('theme_revolver'),
       entries: entries,
       selectedKey: appState.themeKey,
-      // Осознанный выбор (барабан встал или тап по центру): здесь уже
-      // работают повторные тапы — светлая Cyberpunk и тёмный персик.
+      // Осознанный выбор (барабан встал или тап по центру). Светлая
+      // Cyberpunk и тёмный персик убраны: одна тема — одна камора.
       onCommit: (e) {
         Haptics.select();
-        if (e.key == 'oled' &&
-            (appState.themeKey == 'oled' ||
-                appState.themeKey == 'cyberpunkLight')) {
-          appState.setThemeMode(
-            appState.themeKey == 'oled' ? 'cyberpunkLight' : 'oled',
-          );
-        } else if (e.key == 'peach' && appState.themeKey == 'peach') {
-          appState.togglePeachDark();
-        } else {
-          appState.setThemeMode(e.key);
-        }
+        appState.setThemeMode(e.key);
       },
     );
   }
@@ -107,9 +86,9 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     with SingleTickerProviderStateMixin {
   /// Сколько пикселей тянуть, чтобы барабан провернулся на одну камору.
   /// 46 px было слишком резво: одно движение через пол-экрана пролистывало
-  /// полколеса. 58 px — поворот всё ещё идёт за пальцем, но каждую камору
+  /// полколеса. 64 px — поворот всё ещё идёт за пальцем, но каждую камору
   /// видно, и она успевает проявиться.
-  static const double _dragStep = 58;
+  static const double _dragStep = 64;
 
   late final AnimationController _spin = AnimationController(
     vsync: this,
@@ -123,11 +102,9 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   bool _dragging = false;
   int _spinToken = 0;
 
-  /// Положение, с которого началось текущее перетаскивание, и направление
-  /// последнего движения. Нужны, чтобы отмена жеста не отбрасывала барабан
-  /// назад через полколеса: он довершает шаг в ту сторону, куда его вели.
+  /// Положение, с которого началось текущее перетаскивание. Нужно, чтобы
+  /// дребезг в конце жеста не разворачивал довод назад.
   double _dragStartPos = 0;
-  int _dragDir = 0;
 
   /// Последняя камора, по которой уже щёлкнула вибрация. Нужна только для
   /// отклика во время кручения — тему она не трогает.
@@ -186,9 +163,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   }
 
   int _indexOfKey(String key) {
-    final i = widget.entries.indexWhere(
-      (e) => e.key == key || (e.key == 'oled' && key == 'cyberpunkLight'),
-    );
+    final i = widget.entries.indexWhere((e) => e.key == key);
     return i < 0 ? 0 : i;
   }
 
@@ -244,7 +219,6 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _onDragStart(DragStartDetails details) {
     _dragging = true;
     _dragStartPos = _pos;
-    _dragDir = 0;
     _hapticIndex = _index;
     _spin.stop();
     _spinToken++;
@@ -256,7 +230,6 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     // Строго 1:1 за пальцем, без порогов «против хода». Раньше короткая
     // дрожь отбрасывалась, а накопленный хват потом применялся одним кадром —
     // барабан прыгал и крутился не туда, куда вели.
-    _dragDir = delta < 0 ? 1 : -1;
     setState(() => _pos -= delta / _dragStep);
     _tickHaptics();
   }
@@ -264,30 +237,31 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _onDragEnd(DragEndDetails details) {
     _dragging = false;
     // Инерцию не подкручиваем: на отпускании телефон иногда отдаёт скорость
-    // обратного знака, и барабан резко уезжал назад. Доводим до ближайшей
-    // каморы тем же easeOutCubic. Но если за жест барабан увело на заметную
-    // часть шага вперёд, доводим В ТУ ЖЕ сторону: откат назад через полколеса
-    // читался как «крутится не туда».
-    final moved = _pos - _dragStartPos;
-    if (moved.abs() >= 0.18 && _dragDir != 0) {
-      _settleTo(_dragDir > 0 ? _pos.ceilToDouble() : _pos.floorToDouble());
-    } else {
-      _settleTo(_dragStartPos);
-    }
+    // обратного знака, и барабан резко уезжал назад.
+    _settleFromDrag();
   }
 
   void _onDragCancel() {
     _dragging = false;
-    // Жест перехватил вертикальный скролл. Раньше барабан в этом случае
-    // возвращался к ближайшей каморе — то есть назад, против движения, и
-    // выглядело как «крутишь в одну сторону, а он крутится в другую».
-    // Теперь довершаем шаг в ту сторону, куда уже увели барабан.
+    // Жест перехватил вертикальный скролл. Возврат «в начало жеста» читался
+    // как «барабан встал и крутится в обратную сторону», поэтому и отмена
+    // довершает шаг туда, куда его увели.
+    _settleFromDrag();
+  }
+
+  /// Довод после жеста — ВСЕГДА по итоговому смещению, а не по последнему
+  /// дельта-событию. Раньше направление бралось из последнего delta: если
+  /// палец в самом конце дёргался на пиксель назад, барабан «доводился» в
+  /// противоположную сторону и уезжал на камору назад — это и был баг
+  /// «останавливается и начинает крутиться в другую сторону».
+  void _settleFromDrag() {
     final moved = _pos - _dragStartPos;
-    if (_dragDir != 0 && moved.abs() >= 0.25) {
-      _settleTo(_dragDir > 0 ? _pos.ceilToDouble() : _pos.floorToDouble());
-    } else {
-      _settleTo(_dragStartPos);
+    if (moved.abs() < 0.08) {
+      // Ничего осмысленного не протянули — мягко встаём на ближайшую.
+      _settleTo(_pos.roundToDouble());
+      return;
     }
+    _settleTo(moved > 0 ? _pos.ceilToDouble() : _pos.floorToDouble());
   }
 
   void _tapChamber(int index) {

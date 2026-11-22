@@ -57,23 +57,30 @@ class TaskService extends ChangeNotifier {
     // Автосохранение тикает каждые 10 секунд: если ничего не изменилось,
     // не переписываем файл (шифрование + полная запись) зря.
     if (_tasksSnapshot != null && value == _tasksSnapshot) return;
-    final resolved = await JsonFile.writeWithSnapshot(
+    final resolved = await JsonFile.writeWithSnapshotRetrying(
       _key,
       value,
       _tasksSnapshot,
     );
-    if (resolved == value) _tasksSnapshot = resolved;
+    // Снимок принимаем ВСЕГДА: при слиянии с чужим изменением он иначе
+    // остаётся устаревшим, каждая следующая запись конфликтует так же,
+    // и автосохранение молча перестаёт сохранять задачи.
+    _tasksSnapshot = resolved;
+    if (resolved != value) _tasks = tasksFromJson(resolved);
   }
 
   Future<void> _saveCategories() async {
     if (!_loaded) return;
     final value = jsonEncode(_categories);
-    final resolved = await JsonFile.writeWithSnapshot(
+    final resolved = await JsonFile.writeWithSnapshotRetrying(
       _catKey,
       value,
       _categoriesSnapshot,
     );
-    if (resolved == value) _categoriesSnapshot = resolved;
+    _categoriesSnapshot = resolved;
+    if (resolved != value) {
+      _categories = (jsonDecode(resolved) as List).cast<String>();
+    }
   }
 
   Future<bool> addCategory(String name) async {

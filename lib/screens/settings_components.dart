@@ -309,7 +309,7 @@ class _SupportPillState extends State<_SupportPill> {
               end: Alignment.bottomRight,
               colors: widget.gradient,
             ),
-            border: Border.all(color: fg.withValues(alpha: 0.22), width: 1),
+            border: Border.all(color: fg.withValues(alpha: 0.16), width: 1),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
@@ -319,17 +319,18 @@ class _SupportPillState extends State<_SupportPill> {
                 height: 38,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: fg.withValues(alpha: 0.18),
+                  color: fg.withValues(alpha: 0.12),
                   border: Border.all(
-                    color: fg.withValues(alpha: 0.40),
+                    color: fg.withValues(alpha: 0.26),
                     width: 1,
                   ),
                 ),
-                // Значок в кружке так же полупрозрачен, как подпись
-                // таблетки: плотная иконка выбивалась из матового стекла.
+                // Значок в кружке намеренно приглушён сильнее подписи:
+                // внутри окна поддержки всё должно читаться как матовое
+                // стекло, а не как плотная кнопка.
                 child: Icon(
                   widget.icon,
-                  color: fg.withValues(alpha: fg.a * 0.72),
+                  color: fg.withValues(alpha: fg.a * 0.55),
                   size: 20,
                 ),
               ),
@@ -361,7 +362,7 @@ class _SupportPillState extends State<_SupportPill> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: fg.withValues(alpha: 0.80),
+                          color: fg.withValues(alpha: 0.58),
                           fontWeight: FontWeight.w600,
                           fontSize: 11.5,
                           letterSpacing: 0.1,
@@ -374,7 +375,7 @@ class _SupportPillState extends State<_SupportPill> {
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: fg.withValues(alpha: 0.7),
+                color: fg.withValues(alpha: 0.48),
                 size: 26,
               ),
             ],
