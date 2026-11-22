@@ -63,7 +63,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('горизонтальное листание гасит наклон, чтобы не заедать', (
+  testWidgets('потяг дальше порога прокрутки всё равно наклоняет карточку', (
     tester,
   ) async {
     await tester.pumpWidget(host());
@@ -75,19 +75,18 @@ void main() {
     await gesture.moveBy(const Offset(40, 0));
     await tester.pump(const Duration(milliseconds: 32));
 
-    final tilt = tiltOf(tester);
     expect(
-      tilt.dx.abs(),
-      lessThan(0.01),
-      reason: 'во время листания карточка стоит ровно по X',
-    );
-    expect(
-      tilt.dy.abs(),
-      lessThan(0.01),
-      reason: 'во время листания карточка стоит ровно по Y',
+      tiltOf(tester).dy.abs(),
+      greaterThan(0.02),
+      reason: 'карточка тянется за пальцем, а не замирает на листании',
     );
 
     await gesture.up();
     await tester.pumpAndSettle();
+    expect(
+      tiltOf(tester).dy.abs(),
+      lessThan(0.005),
+      reason: 'после отпускания карточка плавно возвращается ровно',
+    );
   });
 }

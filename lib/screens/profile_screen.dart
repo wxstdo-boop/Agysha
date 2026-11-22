@@ -442,7 +442,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       // Название берём из отпечатка: разные звуки получают РАЗНЫЕ имена (а
       // не имя файла вроде «record_2024_05_11»), а служба сама добавит
       // номер, если имя всё же совпало с уже занятым.
-      final title = _funSongTitle(fingerprint, context);
+      final title = _freshSongTitle(
+        _service.tracks.map((t) => t.title).toSet(),
+        context,
+        seed: fingerprint,
+      );
       final added = await _service.addTrack(
         path: newPath,
         title: title,
@@ -479,6 +483,109 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  /// Что вообще считаем фонком: по этим словам отбираем результаты.
+  static const List<String> _phonkWords = [
+    'phonk',
+    'drift',
+    'memphis',
+    'brazil',
+    'bass',
+    'hard',
+  ];
+
+  /// Запросы к archive.org. Перебираем по очереди, пока не найдём трек.
+  static const List<String> _phonkQueries = [
+    'phonk AND mediatype:audio AND format:(MP3)',
+    'drift phonk AND mediatype:audio AND format:(MP3)',
+    'brazilian phonk AND mediatype:audio AND format:(MP3)',
+    'memphis phonk AND mediatype:audio AND format:(MP3)',
+    'phonk bass AND mediatype:audio AND format:(MP3)',
+  ];
+
+  bool _looksLikePhonk(String text) {
+    final t = text.toLowerCase();
+    return _phonkWords.any(t.contains);
+  }
+
+  /// Скачивает один небольшой mp3-трек с archive.org.
+  ///
+  /// Ограничения по длительности и размеру отсекают подкасты, лекции и
+  /// многолетние сборники, а проверка названия — всё, что просто «audio»
+  /// попалось в выдаче. Возвращает null, если вменяемого трека нет.
+  Future<({List<int> bytes, String identifier})?> _downloadPhonkFromArchive(
+    Set<String> existingFingerprints,
+  ) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 14));
+    final queries = [..._phonkQueries]..shuffle();
+    for (final q in queries) {
+      if (DateTime.now().isAfter(deadline)) break;
+      final searchUri = Uri.https('archive.org', '/advancedsearch.php', {
+        'q': q,
+        'fl[]': ['identifier', 'title'],
+        'sort[]': 'downloads desc',
+        'rows': '30',
+        'output': 'json',
+      });
+      final searchRes = await http
+          .get(searchUri)
+          .timeout(const Duration(seconds: 6));
+      if (searchRes.statusCode != 200) continue;
+      final data = json.decode(searchRes.body) as Map<String, dynamic>;
+      final docs = (data['response']?['docs'] as List<dynamic>?) ?? const [];
+      final candidates = docs.where((d) {
+        final id = d['identifier']?.toString() ?? '';
+        if (id.isEmpty) return false;
+        final title = d['title']?.toString() ?? '';
+        return _looksLikePhonk('$title $id');
+      }).toList()..shuffle();
+
+      for (final doc in candidates.take(8)) {
+        if (DateTime.now().isAfter(deadline)) break;
+        final id = doc['identifier'].toString();
+        final metaUri = Uri.parse('https://archive.org/metadata/$id/files');
+        final metaRes = await http
+            .get(metaUri)
+            .timeout(const Duration(seconds: 5));
+        if (metaRes.statusCode != 200) continue;
+        final metaData = json.decode(metaRes.body) as Map<String, dynamic>;
+        final files =
+            (metaData['result'] as List<dynamic>?) ??
+            (metaData['files'] as List<dynamic>?) ??
+            const [];
+        final audio = files.where((f) {
+          final name = (f['name']?.toString() ?? '').toLowerCase();
+          if (!name.endsWith('.mp3')) return false;
+          final size = int.tryParse('${f['size'] ?? ''}') ?? 0;
+          final length = double.tryParse('${f['length'] ?? ''}') ?? 0;
+          return size > 400000 && size < 14000000 && length >= 45;
+        }).toList();
+        if (audio.isEmpty) continue;
+        // Самый короткий подходящий файл — обычно это и есть трек.
+        audio.sort(
+          (a, b) => (double.tryParse('${a['length']}') ?? 0).compareTo(
+            double.tryParse('${b['length']}') ?? 0,
+          ),
+        );
+        final file = audio.first;
+        final fileName = Uri.encodeComponent(file['name'].toString());
+        final dlUri = Uri.parse('https://archive.org/download/$id/$fileName');
+        final dlRes = await http
+            .get(dlUri)
+            .timeout(const Duration(seconds: 15));
+        if (dlRes.statusCode != 200 || dlRes.bodyBytes.length < 200000) {
+          continue;
+        }
+        final fp = _fingerprintOf(dlRes.bodyBytes);
+        if (existingFingerprints.contains(fp) ||
+            _service.hasTrackWithFingerprint(fp)) {
+          continue;
+        }
+        return (bytes: dlRes.bodyBytes, identifier: id);
+      }
+    }
+    return null;
+  }
+
   /// Поиск и добавление отборного Drift Phonk бэнгера из интернета прямо по кнопке
   Future<void> _searchAndAddHardtekkInline() async {
     if (_isSearchingHardtekk) return;
@@ -505,22 +612,13 @@ class _ProfileScreenState extends State<ProfileScreen>
           .where((f) => f.isNotEmpty)
           .toSet();
 
-      // Название берём из общего пула «как назвал бы человек»: сначала
-      // первое ещё не занятое в подборке, иначе — по отпечатку.
-      String title = '';
-      for (var i = 0; i < _kSongTitles.length; i++) {
-        final candidate = _songTitleAt(i, context);
-        if (!existingTitles.contains(candidate.toLowerCase().trim())) {
-          title = candidate;
-          break;
-        }
-      }
-      if (title.isEmpty) {
-        title = _funSongTitle(
-          'phonk_${DateTime.now().microsecondsSinceEpoch}',
-          context,
-        );
-      }
+      // Название берём из общего пула «как назвал бы человек»: свободная
+      // строка, а когда пул исчерпан — пара строк, но всё равно без повторов.
+      String title = _freshSongTitle(
+        existingTitles,
+        context,
+        seed: 'phonk_${DateTime.now().microsecondsSinceEpoch}',
+      );
 
       final dir = await getApplicationDocumentsDirectory();
       final soundsDir = Directory('${dir.path}/sounds');
@@ -530,79 +628,14 @@ class _ProfileScreenState extends State<ProfileScreen>
       String fileExt = 'wav';
       String trackId = 'phonk_net_${DateTime.now().millisecondsSinceEpoch}';
 
-      // 1. Реальный разнообразный поиск и загрузка свежего фонка из интернета
+      // 1. Свежий фонк из интернета. Берём только настоящие короткие треки,
+      // а не случайный файл из чужой коллекции.
       try {
-        final queries = [
-          'phonk+AND+mediatype:audio',
-          'drift+phonk+AND+mediatype:audio',
-          'brazilian+phonk+AND+mediatype:audio',
-          'aggressive+phonk+AND+mediatype:audio',
-          'hard+phonk+AND+mediatype:audio',
-          'memphis+phonk+AND+mediatype:audio',
-          'phonk+bass+AND+mediatype:audio',
-          'cyber+phonk+AND+mediatype:audio',
-        ];
-        final sorts = ['downloads+desc', 'publicdate+desc', 'week+desc'];
-        final q = queries[DateTime.now().millisecond % queries.length];
-        final s = sorts[DateTime.now().second % sorts.length];
-        final searchUri = Uri.parse(
-          'https://archive.org/advancedsearch.php?q=$q&fl[]=identifier,title&sort[]=$s&rows=50&output=json',
-        );
-        final searchRes = await http
-            .get(searchUri)
-            .timeout(const Duration(seconds: 6));
-        if (searchRes.statusCode == 200) {
-          final data = json.decode(searchRes.body) as Map<String, dynamic>;
-          final docs = (data['response']?['docs'] as List<dynamic>?) ?? [];
-          final freshDocs = docs.where((d) {
-            final id = d['identifier']?.toString() ?? '';
-            return id.isNotEmpty &&
-                !_service.tracks.any((t) => t.path.contains(id));
-          }).toList();
-          freshDocs.shuffle();
-
-          for (final doc in freshDocs.take(5)) {
-            final id = doc['identifier'].toString();
-            final metaUri = Uri.parse('https://archive.org/metadata/$id/files');
-            final metaRes = await http
-                .get(metaUri)
-                .timeout(const Duration(seconds: 5));
-            if (metaRes.statusCode == 200) {
-              final metaData =
-                  json.decode(metaRes.body) as Map<String, dynamic>;
-              final files =
-                  (metaData['result'] as List<dynamic>?) ??
-                  (metaData['files'] as List<dynamic>?) ??
-                  [];
-              final audioFile = files.firstWhere(
-                (f) => (f['name']?.toString() ?? '').toLowerCase().endsWith(
-                  '.mp3',
-                ),
-                orElse: () => null,
-              );
-              if (audioFile != null) {
-                final fileName = Uri.encodeComponent(
-                  audioFile['name'].toString(),
-                );
-                final dlUri = Uri.parse(
-                  'https://archive.org/download/$id/$fileName',
-                );
-                final dlRes = await http
-                    .get(dlUri)
-                    .timeout(const Duration(seconds: 15));
-                if (dlRes.statusCode == 200 && dlRes.bodyBytes.length > 5000) {
-                  final fp = _fingerprintOf(dlRes.bodyBytes);
-                  if (!existingFingerprints.contains(fp) &&
-                      !_service.hasTrackWithFingerprint(fp)) {
-                    downloadedBytes = dlRes.bodyBytes;
-                    fileExt = 'mp3';
-                    trackId = 'phonk_web_$id';
-                    break;
-                  }
-                }
-              }
-            }
-          }
+        final found = await _downloadPhonkFromArchive(existingFingerprints);
+        if (found != null) {
+          downloadedBytes = found.bytes;
+          fileExt = 'mp3';
+          trackId = 'phonk_web_${found.identifier}';
         }
       } catch (_) {
         // Оффлайн или сетевая задержка — мягкий fallback

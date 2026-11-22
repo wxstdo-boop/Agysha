@@ -150,7 +150,87 @@ class MusicService extends ChangeNotifier {
     // пока очередь не пересобрана, уведомление показывает старое имя или
     // имя файла. Пересобираем только когда подборка правда изменилась —
     // иначе каждая перестройка профиля дёргала бы плеер.
-    if (changed && _playlist.isNotEmpty) unawaited(_refreshQueueTags());
+    if (!changed || _playlist.isEmpty) return;
+    // Изменился только набор треков (удалили один) — правим плейлист на
+    // месте. Полная пересборка источника на время роняет плеер в idle:
+    // музыка обрывалась, даже если удаляли трек, который не играет.
+    if (_canMutateQueue(_queue, nextTitles)) {
+      unawaited(_applyQueueDiff(nextPaths, nextTitles));
+      return;
+    }
+    unawaited(_refreshQueueTags());
+  }
+
+  /// Можно ли обойтись удалением/вставкой элементов вместо пересборки
+  /// источника: играющий трек остался, а подписи у него не менялись.
+  bool _canMutateQueue(List<String> paths, Map<String, String> titles) {
+    final current = _path;
+    if (current == null || !paths.contains(current)) return false;
+    final source = _player.audioSource;
+    // ignore: deprecated_member_use
+    if (source is! ConcatenatingAudioSource) return false;
+    for (final child in source.children) {
+      final tag = child is IndexedAudioSource ? child.tag : null;
+      if (tag is! MediaItem) return false;
+      final p = tag.id;
+      if (!paths.contains(p)) continue; // его сейчас уберём
+      if (titles[p] != tag.title) return false; // переименовали — пересборка
+    }
+    return true;
+  }
+
+  /// Путь трека из тега источника (`MediaItem` от just_audio_background).
+  static String? _sourcePath(AudioSource source) {
+    final tag = source is IndexedAudioSource ? source.tag : null;
+    return tag is MediaItem ? tag.id : null;
+  }
+
+  /// Точечная правка играющего плейлиста: убрать исчезнувшие треки и
+  /// вставить новые, не трогая текущий. Звук при этом не прерывается.
+  Future<void> _applyQueueDiff(
+    List<String> nextPaths,
+    Map<String, String> nextTitles,
+  ) async {
+    final source = _player.audioSource;
+    // ignore: deprecated_member_use
+    if (source is! ConcatenatingAudioSource) return;
+    _reloading = true;
+    try {
+      final art = await notificationArtUri();
+      // С конца, иначе индексы съезжают под руками.
+      for (var i = source.children.length - 1; i >= 0; i--) {
+        final p = _sourcePath(source.children[i]);
+        if (p != null && !nextPaths.contains(p)) {
+          await _player.removeAudioSourceAt(i);
+        }
+      }
+      final present = <String>{
+        for (final child in source.children) ?_sourcePath(child),
+      };
+      for (var i = 0; i < nextPaths.length; i++) {
+        final p = nextPaths[i];
+        if (present.contains(p)) continue;
+        await _player.insertAudioSource(
+          i,
+          AudioSource.file(
+            p,
+            tag: MediaItem(
+              id: p,
+              title: nextTitles[p] ?? _bareName(p),
+              artist: 'Agysha',
+              artUri: art,
+            ),
+          ),
+        );
+        present.add(p);
+      }
+      _playlist = List<String>.unmodifiable(nextPaths);
+      _sourceSig = _signature(nextPaths);
+    } catch (_) {
+      // Не вышло аккуратно — очередь пересоберётся на следующем треке.
+    } finally {
+      _reloading = false;
+    }
   }
 
   /// Обновить теги играющей очереди, не теряя позицию и громкость.
@@ -400,7 +480,7 @@ class MusicService extends ChangeNotifier {
     if (cached != null) return cached;
     try {
       final dir = await getApplicationSupportDirectory();
-      final file = File('${dir.path}/notification_art_v2.png');
+      final file = File('${dir.path}/notification_art_v3.png');
       if (!await file.exists() || await file.length() == 0) {
         final data = await rootBundle.load('assets/agysha_art.png');
         await file.writeAsBytes(data.buffer.asUint8List(), flush: true);

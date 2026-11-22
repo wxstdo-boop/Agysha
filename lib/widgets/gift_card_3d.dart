@@ -60,10 +60,6 @@ class _GiftCard3DState extends State<GiftCard3D>
   /// пальца, и нажатие ровно по центру не давало отдачи вовсе.
   Offset? _downPos;
 
-  /// Палец ушёл в сторону — значит, человек листает полосу, а не играет
-  /// карточкой. Наклон в этом случае гасим сразу, без анимации возврата.
-  bool _scrolling = false;
-
   @override
   void initState() {
     super.initState();
@@ -105,7 +101,7 @@ class _GiftCard3DState extends State<GiftCard3D>
   ///
   /// Второе слагаемое и есть та приятная отдача: карточка откликается на
   /// сдвиг в сторону, даже если палец лежит на самой середине.
-  void _updateTiltFromPos(Offset localPosition) {
+  void _updateTiltFromPos(Offset localPosition, {bool snap = false}) {
     if (!widget.tiltEnabled || MotionPrefs.shouldReduceMotion) return;
     _resetController.stop();
     final rawDx = (localPosition.dx / widget.width - 0.5) * 2.0;
@@ -121,7 +117,9 @@ class _GiftCard3DState extends State<GiftCard3D>
       _softClamp(rawDx * 0.85 + dragDx * 1.95),
       _softClamp(rawDy * 0.85 + dragDy * 1.95),
     );
-    final next = Offset.lerp(_tilt, target, 0.55) ?? target;
+    // Первый кадр нажатия — сразу в цель: иначе карточка «думает» перед
+    // тем, как отозваться. Дальше ведём плавно за пальцем.
+    final next = snap ? target : (Offset.lerp(_tilt, target, 0.62) ?? target);
     if ((next - _tilt).distance > 0.0005) {
       _tilt = next;
       _tiltNotifier.value = next;
@@ -138,36 +136,19 @@ class _GiftCard3DState extends State<GiftCard3D>
 
   void _onPointerDown(PointerDownEvent event) {
     _downPos = event.localPosition;
-    _scrolling = false;
-    _updateTiltFromPos(event.localPosition);
+    _updateTiltFromPos(event.localPosition, snap: true);
   }
 
   void _onPointerMove(PointerMoveEvent event) {
-    final start = _downPos;
-    final delta = start == null ? Offset.zero : event.localPosition - start;
-    // Листание отменяет наклон только когда палец ушёл В БОК: случайная
-    // вертикальная дрожь при нажатии раньше гасила наклон, и карточка
-    // «не крутилась» вовсе.
-    if (start != null &&
-        !_scrolling &&
-        delta.dx.abs() > 14 &&
-        delta.dx.abs() > delta.dy.abs() * 1.4) {
-      _scrolling = true;
-      _flattenNow();
-    }
-    if (_scrolling) return;
+    // Наклон ведём и во время листания: карточка тянется за пальцем, как
+    // раньше. Отменять его по горизонтальному сдвигу нельзя — обычное
+    // нажатие с дрожью пальца гасило наклон, и выходило «не крутится».
     _updateTiltFromPos(event.localPosition);
   }
 
   void _onPointerUp() {
-    final wasScrolling = _scrolling;
     _downPos = null;
-    _scrolling = false;
-    if (wasScrolling) {
-      _flattenNow();
-    } else {
-      _resetTilt();
-    }
+    _resetTilt();
   }
 
   void _resetTilt() {
@@ -374,53 +355,51 @@ class _GiftCard3DState extends State<GiftCard3D>
       ),
     );
 
-    return RepaintBoundary(
-      child: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: _onPointerDown,
-        onPointerMove: _onPointerMove,
-        onPointerUp: (_) => _onPointerUp(),
-        onPointerCancel: (_) => _onPointerUp(),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _openDetails(context),
-          child: PressScale(
-            enableTilt: false,
-            pressedScale: 0.965,
-            duration: const Duration(milliseconds: 240),
-            releaseDuration: const Duration(milliseconds: 360),
-            child: AnimatedBuilder(
-              animation: Listenable.merge([_resetController, _tiltNotifier]),
-              builder: (context, child) {
-                final currentTilt = _resetController.isAnimating
-                    ? _tiltAnimation.value
-                    : _tilt;
-                // Сочный наклон: 0.34 рад (~19°) — прежняя «пищдатость»,
-                // у 0.26 карточка под пальцем почти не отзывалась.
-                final tiltX = -currentTilt.dy * 0.40;
-                final tiltY = currentTilt.dx * 0.40;
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
+      onPointerUp: (_) => _onPointerUp(),
+      onPointerCancel: (_) => _onPointerUp(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openDetails(context),
+        child: PressScale(
+          enableTilt: false,
+          pressedScale: 0.965,
+          duration: const Duration(milliseconds: 240),
+          releaseDuration: const Duration(milliseconds: 360),
+          child: AnimatedBuilder(
+            animation: Listenable.merge([_resetController, _tiltNotifier]),
+            builder: (context, child) {
+              final currentTilt = _resetController.isAnimating
+                  ? _tiltAnimation.value
+                  : _tilt;
+              // Сочный наклон: 0.34 рад (~19°) — прежняя «пищдатость»,
+              // у 0.26 карточка под пальцем почти не отзывалась.
+              final tiltX = -currentTilt.dy * 0.46;
+              final tiltY = currentTilt.dx * 0.46;
 
-                // Перспектива стоит постоянно. При нулевом наклоне такая
-                // матрица рисует ровно те же пиксели, что и единичная, но
-                // переключения «плоско ↔ перспектива» на старте нажатия
-                // больше нет — фон карточки не прыгает.
-                final transform = Matrix4.identity()
-                  ..setEntry(3, 2, 0.0018)
-                  ..rotateX(tiltX)
-                  ..rotateY(tiltY);
+              // Перспектива стоит постоянно. При нулевом наклоне такая
+              // матрица рисует ровно те же пиксели, что и единичная, но
+              // переключения «плоско ↔ перспектива» на старте нажатия
+              // больше нет — фон карточки не прыгает.
+              final transform = Matrix4.identity()
+                ..setEntry(3, 2, 0.0018)
+                ..rotateX(tiltX)
+                ..rotateY(tiltY);
 
-                // Transform держим всегда, даже с единичной матрицей: раньше
-                // при возврате карточка меняла поддерево (Transform → child),
-                // и перелив пересоздавался — отсюда мигание фона.
-                return Transform(
-                  key: const ValueKey('gift_tilt_transform'),
-                  transform: transform,
-                  alignment: FractionalOffset.center,
-                  child: child!,
-                );
-              },
-              child: cardContent,
-            ),
+              // Transform держим всегда, даже с единичной матрицей: раньше
+              // при возврате карточка меняла поддерево (Transform → child),
+              // и перелив пересоздавался — отсюда мигание фона.
+              return Transform(
+                key: const ValueKey('gift_tilt_transform'),
+                transform: transform,
+                alignment: FractionalOffset.center,
+                child: child!,
+              );
+            },
+            child: cardContent,
           ),
         ),
       ),
