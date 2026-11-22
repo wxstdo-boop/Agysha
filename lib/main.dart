@@ -27,6 +27,7 @@ import 'services/haptics.dart';
 import 'services/sounds.dart';
 import 'theme/app_theme.dart';
 import 'utils/motion_prefs.dart';
+import 'utils/perf_prefs.dart';
 import 'models/alarm.dart';
 import 'models/wake_task.dart';
 import 'services/alarm_service.dart';
@@ -777,9 +778,10 @@ Future<_StartupState> _loadStartupState() async {
 
   // Данные старых версий переезжают в JSON-файлы до того, как их начнут
   // читать сервисы (те стартуют после runApp).
-  // Глобальный тумблер «убрать анимации» действует на ВСЕ переходы, а не
-  // только на декоративные петли: ускорение ставится до первого кадра.
+  // Системное «убрать анимации» и режим «Оптимизация» подключаются до
+  // первого кадра: флаги читают декоративные петли и PressScale.
   MotionPrefs.install();
+  PerfPrefs.install();
 
   final migration = migrateFromPrefs();
   final notifications = notificationService.init().then((_) {
@@ -792,7 +794,7 @@ Future<_StartupState> _loadStartupState() async {
   final fontFamily = SettingsService.loadFontFamily();
   // Прогреваем живые флаги режимов до первого Home-кадра:
   // кнопка BERSERK и карточки не ждут открытия настроек.
-  // Вибрация, звуки и «убрать анимации» тоже читаются ДО первого кадра:
+  // Вибрация, звуки и «Оптимизация» тоже читаются ДО первого кадра:
   // плеск кнопок не должен успеть дать один лишний отклик, декоративные
   // петли — один лишний виток, а звук — прозвучать до применения настройки.
   final modes = Future.wait<void>([
@@ -800,9 +802,7 @@ Future<_StartupState> _loadStartupState() async {
     SettingsService.loadBerserk(),
     SettingsService.loadHaptics().then((v) => Haptics.enabled = v),
     SettingsService.loadSounds().then((v) => Sounds.enabled = v),
-    SettingsService.loadReduceMotion().then(
-      (v) => MotionPrefs.enabled.value = v,
-    ),
+    SettingsService.loadOptimize().then((v) => PerfPrefs.enabled.value = v),
   ]);
 
   await Future.wait<void>([

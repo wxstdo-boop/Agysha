@@ -49,7 +49,10 @@ class _GlassSheenState extends State<GlassSheen>
   void initState() {
     super.initState();
     _ctrl = ambientRepeat(
-      AnimationController(vsync: this, duration: widget.period),
+      AnimationController(
+        vsync: MotionPrefs.ambient(this),
+        duration: widget.period,
+      ),
     );
   }
 
@@ -121,7 +124,10 @@ class _GentleFloatState extends State<GentleFloat>
   void initState() {
     super.initState();
     _ctrl = ambientRepeat(
-      AnimationController(vsync: this, duration: widget.period),
+      AnimationController(
+        vsync: MotionPrefs.ambient(this),
+        duration: widget.period,
+      ),
       reverse: true,
     );
   }

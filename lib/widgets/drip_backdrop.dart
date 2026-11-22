@@ -119,7 +119,10 @@ class _DripBackdropState extends State<DripBackdrop>
     super.initState();
     _drips = _buildDrips();
     _ctrl = ambientRepeat(
-      AnimationController(vsync: this, duration: widget.duration),
+      AnimationController(
+        vsync: MotionPrefs.ambient(this),
+        duration: widget.duration,
+      ),
     );
     _seenPulses = widget.controller?.pulses ?? 0;
   }
@@ -151,7 +154,10 @@ class _DripBackdropState extends State<DripBackdrop>
       return _Drip(
         index: i,
         // Колонна, а не весь экран: x разбросан вокруг центра капсулы KID.
-        x: widget.xCenter - widget.xSpread / 2 + rng.nextDouble() * widget.xSpread,
+        x:
+            widget.xCenter -
+            widget.xSpread / 2 +
+            rng.nextDouble() * widget.xSpread,
         y0: t + (b - t) * (0.34 * rng.nextDouble()),
         y1: t + (b - t) * (0.66 + 0.34 * rng.nextDouble()),
         radius: 22 + rng.nextDouble() * 30,
@@ -232,7 +238,9 @@ class _DripBackdropState extends State<DripBackdrop>
     // Подъём короче, спад длиннее: пятно мягко проявляется, долго держится
     // на пике и медленно стекает — плавнее, чем было.
     final rise = Curves.easeOutCubic.transform((a / 0.16).clamp(0.0, 1.0));
-    final fall = Curves.easeInCubic.transform(((a - 0.42) / 0.58).clamp(0.0, 1.0));
+    final fall = Curves.easeInCubic.transform(
+      ((a - 0.42) / 0.58).clamp(0.0, 1.0),
+    );
     return rise * (1 - fall) * 1.9;
   }
 
@@ -358,15 +366,20 @@ class _Live {
 
   /// Горизонталь капли в долях ширины холста.
   final double x;
+
   /// Длина штриха в долях высоты (разная — разрозненность).
   final double length;
+
   /// Скорость: доля высоты за жизнь. Разная у каждой капли.
   final double speed;
+
   /// Фаза лёгкого покачивания (дождь «плывёт» вбок).
   final double drift;
   final Color color;
+
   /// Индекс цвета палитры.
   final int colorIndex;
+
   /// Момент рождения: нажатие обязано отозваться сразу.
   final DateTime born;
 
@@ -469,7 +482,8 @@ class _DripPainter extends CustomPainter {
     // на почти белом фоне; на тёмной — оставляем фирменный цвет.
     // На светлой теме дождь читаем: сильный сдвиг в холодный тёмный
     // (иначе на почти белом фоне штрихи не видно вовсе).
-    final rainColor = isDark ? l.color
+    final rainColor = isDark
+        ? l.color
         : Color.lerp(l.color, const Color(0xFF233246), 0.85) ?? l.color;
 
     final h = size.height;
@@ -488,11 +502,20 @@ class _DripPainter extends CustomPainter {
     // (pow 1.6) — дождь не «вспыхивает/гаснет», а течёт.
     // Очень плавный цикл: медленный подъём (0.35), долгое плато,
     // мягкое затухание (pow 1.8) — дождь течёт, не «вспыхивает/гаснет».
-    final alpha = (a < 0.35 ? a / 0.35 : 1 - pow(((a - 0.35) / 0.65).clamp(0.0, 1.0), 1.8)).clamp(0.0, 1.0);
+    final alpha =
+        (a < 0.35
+                ? a / 0.35
+                : 1 - pow(((a - 0.35) / 0.65).clamp(0.0, 1.0), 1.8))
+            .clamp(0.0, 1.0);
     if (alpha <= 0.01) return;
 
     // Вертикальный штрих: хвост (сверху) прозрачный → голова (снизу) яркая.
-    final strokeRect = Rect.fromLTRB(cx - 1.25, headY - lenPx, cx + 1.25, headY);
+    final strokeRect = Rect.fromLTRB(
+      cx - 1.25,
+      headY - lenPx,
+      cx + 1.25,
+      headY,
+    );
     canvas.drawLine(
       Offset(cx, headY - lenPx),
       Offset(cx, headY),
@@ -514,9 +537,11 @@ class _DripPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(cx, headY),
       2.4,
-      Paint()..color = rainColor.withValues(alpha: (isDark ? 0.95 : 1.0) * alpha),
+      Paint()
+        ..color = rainColor.withValues(alpha: (isDark ? 0.95 : 1.0) * alpha),
     );
   }
+
   @override
   bool shouldRepaint(covariant _DripPainter old) =>
       old.t != t || old.drips != drips;

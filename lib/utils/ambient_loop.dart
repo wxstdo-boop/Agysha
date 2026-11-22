@@ -1,5 +1,7 @@
 import 'package:flutter/scheduler.dart';
 
+import 'perf_prefs.dart';
+
 /// Провайдер тикеров для ВЕЧНЫХ декоративных циклов (дыхание свечения,
 /// пульсация активного таймера). Он передаёт тик не каждый кадр, а раз в
 /// [everyFrames]: на 60 Гц при `everyFrames: 3` цикл идёт ~20 fps.
@@ -16,10 +18,15 @@ import 'package:flutter/scheduler.dart';
 /// бюджета из 16,6 мс непрерывно. Медленные decorative-циклы глазом не
 /// отличаются по частоте, а бюджет кадра освобождают втрое.
 class AmbientVsync implements TickerProvider {
-  AmbientVsync(this._inner, {this.everyFrames = 3});
+  AmbientVsync(this._inner, {this.everyFrames = 3, this.everyFramesOf});
 
   final TickerProvider _inner;
   final int everyFrames;
+
+  /// Живой источник частоты: читается на каждом тике, поэтому режим
+  /// «Оптимизация» (см. [PerfPrefs.ambientEveryFrames]) действует сразу,
+  /// без пересоздания контроллера. Имеет приоритет над [everyFrames].
+  final int Function()? everyFramesOf;
 
   @override
   Ticker createTicker(TickerCallback onTick) {
@@ -29,7 +36,8 @@ class AmbientVsync implements TickerProvider {
     );
     var tick = 0;
     return _inner.createTicker((Duration elapsed) {
-      if (++tick % everyFrames == 1) onTick(elapsed);
+      final every = everyFramesOf?.call() ?? everyFrames;
+      if (every <= 1 || ++tick % every == 1) onTick(elapsed);
     });
   }
 }

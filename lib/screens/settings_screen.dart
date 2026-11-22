@@ -43,7 +43,7 @@ import 'developer_corner_screen.dart';
 import '../services/update_service.dart';
 import 'forge_screen.dart';
 import '../utils/page_transitions.dart';
-import '../utils/motion_prefs.dart';
+import '../utils/perf_prefs.dart';
 import '../utils/snackbar.dart';
 import '../utils/time_format.dart';
 import 'changelog_screen.dart';
@@ -134,6 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _aiKey = '';
   final TextEditingController _aiKeyController = TextEditingController();
   bool _aiKeyVisible = false;
+
   /// Отложенная запись ключа: пишем через паузу в наборе, а не на каждую
   /// букву, но и не ждём «готово»/выхода с экрана (раньше ключ, введённый
   /// без Enter, терялся, и Ада отвечала бесплатными моделями).
@@ -147,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _taskNotes = false;
   bool _haptics = true;
   bool _sounds = false;
-  bool _reduceMotion = false;
+  bool _optimize = false;
   bool _permissionWarningDismissed = false;
   bool _grantPressed = false; // Состояние зажатия кнопки «Выдать»
   bool? _notificationsEnabled; // Кэш статуса уведомлений
@@ -216,7 +217,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _loadTaskNotes(),
       _loadHaptics(),
       _loadSounds(),
-      _loadReduceMotion(),
+      _loadOptimize(),
       _checkPermissionWarning(),
       _checkNotificationsEnabled(),
       _checkFullScreenGrant(),
@@ -385,15 +386,22 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  Future<void> _loadReduceMotion() async {
-    _reduceMotion = await SettingsService.loadReduceMotion();
-    MotionPrefs.enabled.value = _reduceMotion;
+  Future<void> _loadOptimize() async {
+    _optimize = await SettingsService.loadOptimize();
+    PerfPrefs.enabled.value = _optimize;
   }
 
-  Future<void> _setReduceMotion(bool value) async {
-    await SettingsService.saveReduceMotion(value);
-    MotionPrefs.enabled.value = value;
-    if (mounted) setState(() => _reduceMotion = value);
+  Future<void> _setOptimize(bool value) async {
+    // Флаг применяется сразу (петли и наклон читают его на ходу), запись —
+    // в фоне: тумблер не должен ждать диск.
+    PerfPrefs.enabled.value = value;
+    if (mounted) setState(() => _optimize = value);
+    try {
+      await SettingsService.saveOptimize(value);
+    } catch (_) {
+      PerfPrefs.enabled.value = !value;
+      if (mounted) setState(() => _optimize = !value);
+    }
   }
 
   /// Перерисовка из part-файлов: `setState` — protected член `State`, и в

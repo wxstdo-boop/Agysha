@@ -106,7 +106,7 @@ class _MetelAuroraState extends State<MetelAurora>
     _cache.bands = _bands;
     _ctrl = ambientRepeat(
       AnimationController(
-        vsync: this,
+        vsync: MotionPrefs.ambient(this),
         duration: const Duration(seconds: 12),
       ),
     );
@@ -192,7 +192,11 @@ Color _auroraAt(double x) {
   final p = (x % 1.0) * BrandColors.aurora.length;
   final i = p.floor() % BrandColors.aurora.length;
   final j = (i + 1) % BrandColors.aurora.length;
-  return Color.lerp(BrandColors.aurora[i], BrandColors.aurora[j], p - p.floor())!;
+  return Color.lerp(
+    BrandColors.aurora[i],
+    BrandColors.aurora[j],
+    p - p.floor(),
+  )!;
 }
 
 /// Одна полоса сияния: горизонтальная подсветка (`curtain: false`) или

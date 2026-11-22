@@ -221,6 +221,11 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
               pressedScale: 0.9,
               maxTiltAngle: 0.12,
               pressTint: theme.colorScheme.onSurfaceVariant,
+              // Скругление ОБЯЗАТЕЛЬНО и равно скруглению InkWell: без него
+              // пятно нажатия рисуется прямоугольником и торчит из-под
+              // текста квадратом.
+              pressTintRadius: BorderRadius.circular(8),
+              pressTintStrength: 0.08,
               child: InkWell(
                 onTap: _showDevModeDialog,
                 borderRadius: BorderRadius.circular(8),

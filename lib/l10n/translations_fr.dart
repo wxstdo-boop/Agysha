@@ -670,8 +670,9 @@ const Map<String, String> _fr = {
   'hapticsDesc': 'Courte vibration lors des appuis et bascules',
   'sounds': 'Sons',
   'soundsDesc': 'Cliquetis système discret lors des confirmations',
-  'reduceMotion': 'Réduire les animations',
-  'reduceMotionDesc': 'Désactiver les animations et effets décoratifs',
+  'reduceMotion': 'Optimisation',
+  'reduceMotionDesc':
+      'Graphismes plus légers : les animations restent, l’app est plus fluide',
   'devMode': 'Mode développeur',
   'devModePrompt': 'Saisissez le code d’accès pour continuer',
   'devModeInvalidCode': 'Code incorrect. Veuillez réessayer.',

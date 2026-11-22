@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../utils/motion_prefs.dart';
+import '../utils/perf_prefs.dart';
 import 'swipe_to_delete.dart' show SwipeToDeleteScope;
 
 /// Плавная отдача «вдавливания» и тактильного 3D-наклона для карточек и кнопок:
@@ -230,7 +231,13 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   }
 
   void _updateTilt(Offset pos, {bool smooth = false}) {
-    if (!widget.enableTilt || MotionPrefs.shouldReduceMotion) return;
+    // В режиме «Оптимизация» наклон выключен: перспективный Transform
+    // поднимает слой и перерисовывает его каждый кадр драга.
+    if (!widget.enableTilt ||
+        MotionPrefs.shouldReduceMotion ||
+        PerfPrefs.active) {
+      return;
+    }
     final size = context.size;
     if (size == null || size.width <= 0 || size.height <= 0) return;
     // Тактильный 3D-наклон работает для всех карточек, плашек и кнопок.
@@ -427,6 +434,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
           final tiltActive =
               widget.enableTilt &&
               !MotionPrefs.shouldReduceMotion &&
+              !PerfPrefs.active &&
               tiltFade > 0.001 &&
               currentTilt != Offset.zero;
 
