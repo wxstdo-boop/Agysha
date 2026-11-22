@@ -4,6 +4,7 @@ import '../widgets/rolling_text.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import 'package:uuid/uuid.dart';
 import '../models/app_timer.dart';
+import '../services/haptics.dart';
 import '../services/timer_service.dart';
 import '../l10n/translations.dart';
 import '../utils/context_menu.dart';
@@ -420,26 +421,42 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                title: Text(Translations.vibrateOf(context)),
-                leading: Icon(
-                  _vibrate ? Icons.vibration : Icons.music_note,
-                  color: theme.colorScheme.primary,
-                ),
-                onTap: () => setState(() => _vibrate = !_vibrate),
+            // Плитка вибрации наклоняется к пальцу и «вдавливается», как
+            // остальные карточки настроек: раньше это была единственная
+            // плоская строка в экране таймера.
+            PressScale(
+              pressedScale: 0.985,
+              enableTilt: true,
+              maxTiltAngle: 0.05,
+              duration: const Duration(milliseconds: 180),
+              releaseDuration: const Duration(milliseconds: 300),
+              child: Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
-                trailing: VolumetricSwitch(
-                  value: _vibrate,
-                  onChanged: (v) => setState(() => _vibrate = v),
-                  activeColor: theme.colorScheme.primary,
-                  semanticLabel: Translations.vibrateOf(context),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  title: Text(Translations.vibrateOf(context)),
+                  leading: Icon(
+                    _vibrate ? Icons.vibration : Icons.music_note,
+                    color: theme.colorScheme.primary,
+                  ),
+                  onTap: () {
+                    Haptics.medium();
+                    setState(() => _vibrate = !_vibrate);
+                  },
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  trailing: VolumetricSwitch(
+                    value: _vibrate,
+                    onChanged: (v) {
+                      Haptics.medium();
+                      setState(() => _vibrate = v);
+                    },
+                    activeColor: theme.colorScheme.primary,
+                    semanticLabel: Translations.vibrateOf(context),
+                  ),
                 ),
               ),
             ),

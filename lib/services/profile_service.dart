@@ -318,8 +318,12 @@ class ProfileService extends ChangeNotifier {
       'avatarImage': _avatarImagePath,
       'friends': _friends.map((f) => f.toJson()).toList(),
     });
-    final resolved = await JsonFile.writeWithSnapshot(_fileKey, value, _snapshot);
-    if (resolved == value) _snapshot = resolved;
+    final resolved = await JsonFile.writeWithSnapshotRetrying(
+      _fileKey,
+      value,
+      _snapshot,
+    );
+    _snapshot = resolved;
   }
 
   /// Установить престижный титул (отображается под именем в профиле).
@@ -553,6 +557,11 @@ class ProfileService extends ChangeNotifier {
   /// Рейтинг: друзья + сам пользователь, отсортировано по очкам (по убыванию).
   /// [selfFallback] — подпись себя, когда имя ещё не задано (перевод задаёт
   /// экран).
+  /// Немедленная запись для автосохранения и ухода в фон.
+  Future<void> forceSave() async {
+    await _save();
+  }
+
   List<ProfileFriend> leaderboard({String selfFallback = 'Я'}) {
     final all = <ProfileFriend>[
       ProfileFriend(

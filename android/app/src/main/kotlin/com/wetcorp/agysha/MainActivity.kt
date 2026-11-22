@@ -179,6 +179,32 @@ class MainActivity : AudioServiceActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HAPTICS_CHANNEL)
             .setMethodCallHandler { call, result ->
                 val kind = call.method
+                // Долгая вибрация конца таймера: короткий «щелчок» 26 мс
+                // человек в кармане не замечает. Две волны по ~450 мс с
+                // паузой — тот же ритм, что у будильника.
+                if (kind == "alert") {
+                    try {
+                        val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager)
+                                .defaultVibrator
+                        } else {
+                            @Suppress("DEPRECATION")
+                            getSystemService(VIBRATOR_SERVICE) as Vibrator
+                        }
+                        val pattern = longArrayOf(0, 450, 180, 450)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            vib.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            vib.vibrate(pattern, -1)
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "haptics failed: $e")
+                        result.error("VIBRATE_FAILED", e.message, null)
+                    }
+                    return@setMethodCallHandler
+                }
                 // Длительности короткие (14-26 мс): длинные one-shot на
                 // 30-95 мс, что были раньше, на линейном моторе звучали как
                 // «гул», а отдача от кнопок должна быть сухой щёлкающей.

@@ -230,10 +230,12 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           name: ${{ inputs.tag }}
-          # Тело — всегда таблица SHA-256 (плюс заметки автора, если есть).
-          # Сгенерированные GitHub заметки добавляются к нему.
+          # Тело — заметки автора (их всегда собирает ship.yml) и таблица
+          # SHA-256. Автозаметки GitHub выключены намеренно: они добавляли
+          # «What's Changed» с тем же заголовком PR, и в патч-ноутах каждый
+          # пункт стоял дважды.
           body: ${{ steps.hashes.outputs.body }}
-          generate_release_notes: true
+          generate_release_notes: false
           files: build/app/outputs/flutter-apk/*.apk
 
   prune-assets:

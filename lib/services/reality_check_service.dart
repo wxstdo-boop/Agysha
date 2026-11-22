@@ -137,8 +137,16 @@ class RealityCheckService extends ChangeNotifier {
     if (!_loaded) return;
     final value = jsonEncode(_toMap());
     if (_snapshot != null && value == _snapshot) return;
-    final resolved = await JsonFile.writeWithSnapshot(_key, value, _snapshot);
-    if (resolved == value) _snapshot = resolved;
+    final resolved = await JsonFile.writeWithSnapshotRetrying(
+      _key,
+      value,
+      _snapshot,
+    );
+    _snapshot = resolved;
+    if (resolved != value) {
+      _fromMap(jsonDecode(resolved) as Map<String, dynamic>);
+      _generateTodaySchedule();
+    }
   }
 
   void _generateTodaySchedule() {

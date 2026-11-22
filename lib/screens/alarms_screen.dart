@@ -107,6 +107,12 @@ class _AlarmsScreenState extends State<AlarmsScreen>
     super.dispose();
   }
 
+  /// Секция таймеров показывается по флагу «Экспериментальное», а после
+  /// выключения флага остаётся, если таймеры уже созданы: иначе они
+  /// «отваливались» от будильников и выглядели пропавшими.
+  bool get _timersVisible =>
+      SettingsService.experimentalEnabled.value || _timerSvc.timers.isNotEmpty;
+
   /// Раздел стал активным — форсируем ресинк офсета таблетки (keep-alive
   /// вкладка не присылает событий скролла, а общий notifier мог остаться с
   /// устаревшей высотой: таблетка разделов исчезала до первого скролла).
@@ -174,10 +180,14 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       (t) => t.id == id,
       orElse: () => AppTimer(id: '', totalSeconds: 0),
     );
-    // Вибрация при завершении таймера.
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    // Вибрация при завершении таймера — только если она включена у самого
+    // таймера. Раньше били всегда и коротким `heavy()`: тумблер вибрации
+    // ни на что не влиял, а 26 мс в кармане не слышно.
+    if (t.vibrate &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
       try {
-        Haptics.heavy();
+        Haptics.alert();
       } catch (_) {}
     }
     notificationService.showInstant(
@@ -347,31 +357,6 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                 visible: _fabVisible,
                 child: Column(
                   children: [
-                    // Секция таймеров — по флагу «Экспериментальное» в настройках.
-                    // Выключение тумблера только прячет секцию: сами таймеры
-                    // остаются в хранилище и снова появляются при включении.
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 320),
-                      curve: Curves.easeInOutCubic,
-                      // Тик таймера перерисовывает только эту секцию, а не весь
-                      // список будильников под ней.
-                      // Секция остаётся на месте и после выключения
-                      // тумблера, если таймеры уже созданы: иначе они
-                      // «отваливались» от будильников и выглядели
-                      // пропавшими.
-                      child:
-                          SettingsService.experimentalEnabled.value ||
-                              _timerSvc.timers.isNotEmpty
-                          ? ListenableBuilder(
-                              listenable: _timerSvc,
-                              builder: (context, _) => _buildTimersSection(
-                                context,
-                                theme,
-                                _timerSvc.timers,
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
                     Expanded(
                       // Плавный кросс-фейд между списком и пустым состоянием:
                       // после удаления последнего будильника карточка-совет
@@ -396,7 +381,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                                       child: child,
                                     ),
                                   ),
-                              child: hasAlarms
+                              // Таймеры живут в том же прокручиваемом
+                              // списке (в его header), поэтому пустое
+                              // состояние будильников не должно их прятать.
+                              child: hasAlarms || _timersVisible
                                   ? KeyedSubtree(
                                       key: const ValueKey('alarms_list'),
                                       child: _buildAlarmList(
@@ -651,12 +639,31 @@ class _AlarmsScreenState extends State<AlarmsScreen>
     // непрокручиваемым блоком (в Column), поэтому место под капсулу
     // резервирует она сама (см. _buildTimersSection), а списку отступ не
     // нужен — его вьюпорт и так начинается ниже таблетки.
-    final topPadding = SettingsService.experimentalEnabled.value
-        ? 8.0
-        : 8.0 + kSectionPillSlotHeight;
     return ReorderableListView.builder(
       scrollController: _pillCtrl,
-      header: _buildNextAlarmPill(context, theme, alarms),
+      // Таймеры и «следующий будильник» — часть того же списка, а не
+      // отдельный непрокручиваемый блок: раньше секция таймеров висела над
+      // списком и выглядела отдельным окном. Header прокручивается вместе
+      // с будильниками, а тик таймера перестраивает только его.
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListenableBuilder(
+            listenable: _timerSvc,
+            builder: (context, _) => AnimatedSize(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              child: _timersVisible
+                  ? _buildTimersSection(context, theme, _timerSvc.timers)
+                  : const SizedBox.shrink(),
+            ),
+          ),
+          if (!_timersVisible) const SizedBox(height: kSectionPillSlotHeight),
+          _buildNextAlarmPill(context, theme, alarms),
+          if (alarms.isEmpty) _buildAlarmEmpty(context, theme),
+        ],
+      ),
       // Медленнее штатного автоскролла (по умолчанию 50 → ~1000 px/с):
       // 18 → ~360 px/с — при подтаскивании карточки к кромке список едет
       // спокойно и плавно, а не «улетает» рывком.
@@ -668,7 +675,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       // поэтому раздел будильников с 1-2 карточками не листался и не
       // свайпался вверх/вниз, в отличие от остальных разделов.
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(12, topPadding, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       itemCount: alarms.length,
       // Предзагрузка вне вьюпорта и изоляция отрисовки каждой карточки от
       // соседних — при прокрутке и драге список не «дёргается» на слабых
@@ -921,102 +928,88 @@ class _AlarmsScreenState extends State<AlarmsScreen>
     ThemeData theme,
     List<AppTimer> timers,
   ) {
-    // Одна анимация высоты на всю секцию. Раньше их было две (внешняя
-    // AnimatedSize + внутренний AnimatedSwitcher с SizeTransition) плюс
-    // жёсткие maxHeight 460/120: удаление последнего таймера прыгало в два
-    // шага, а список обрезался по высоте.
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeInOutCubic,
-      alignment: Alignment.topCenter,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            // Секция непрокручиваемая и стоит в самом верху — резервирует
-            // под стеклом таблетки столько же, сколько список резервировал
-            // бы, будь она выключена.
-            padding: EdgeInsets.fromLTRB(16, 8 + kSectionPillSlotHeight, 16, 0),
-            child: Row(
-              children: [
-                Text(
-                  Translations.t('timers', context),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const Spacer(),
-                PressScale(
-                  pressedScale: 0.9,
-                  enableTilt: true,
-                  maxTiltAngle: 0.12,
-                  duration: const Duration(milliseconds: 170),
-                  releaseDuration: const Duration(milliseconds: 320),
-                  child: SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: FilledButton(
-                      onPressed: _addTimer,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFFFAB91),
-                        padding: EdgeInsets.zero,
-                        shape: const CircleBorder(),
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        size: 20,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeInOutCubic,
-            alignment: Alignment.topCenter,
-            // Пустое состояние не «щёлкает» на месте: строка «таймеров пока
-            // нет» проявляется и уезжает с лёгким сдвигом, а высоту секции
-            // всё равно ведёт внешний AnimatedSize.
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.08),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
+    // Высоту секции ведёт РОВНО ОДНА анимация — внешний AnimatedSize из
+    // header списка. Своя AnimatedSize здесь вместе с ней давала вторую
+    // волну: при удалении таймера карточка исчезала, секция «догоняла»
+    // высоту и потом ещё раз дёргалась.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          // Секция непрокручиваемая и стоит в самом верху — резервирует
+          // под стеклом таблетки столько же, сколько список резервировал
+          // бы, будь она выключена.
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Row(
+            children: [
+              Text(
+                Translations.t('timers', context),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: theme.colorScheme.primary,
                 ),
               ),
-              child: timers.isEmpty
-                  ? Padding(
-                      key: const ValueKey('timers_empty'),
-                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
-                      child: Text(
-                        Translations.t('noTimers', context),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    )
-                  : Column(
-                      key: const ValueKey('timers_list'),
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final timer in timers)
-                          _buildTimerCard(context, theme, timer),
-                      ],
+              const Spacer(),
+              PressScale(
+                pressedScale: 0.9,
+                enableTilt: true,
+                maxTiltAngle: 0.12,
+                duration: const Duration(milliseconds: 170),
+                releaseDuration: const Duration(milliseconds: 320),
+                child: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: FilledButton(
+                    onPressed: _addTimer,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFFFAB91),
+                      padding: EdgeInsets.zero,
+                      shape: const CircleBorder(),
                     ),
+                    child: const Icon(Icons.add, size: 20, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Пустое состояние не «щёлкает» на месте: строка «таймеров пока
+        // нет» проявляется и уезжает с лёгким сдвигом, а высоту секции
+        // ведёт внешний AnimatedSize.
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.08),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
             ),
           ),
-        ],
-      ),
+          child: timers.isEmpty
+              ? Padding(
+                  key: const ValueKey('timers_empty'),
+                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
+                  child: Text(
+                    Translations.t('noTimers', context),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              : Column(
+                  key: const ValueKey('timers_list'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final timer in timers)
+                      _buildTimerCard(context, theme, timer),
+                  ],
+                ),
+        ),
+      ],
     );
   }
 

@@ -307,8 +307,17 @@ class NutritionService extends ChangeNotifier {
 
   Future<void> _save() async {
     final value = jsonEncode(_meals.map((e) => e.toJson()).toList());
-    final resolved = await JsonFile.writeWithSnapshot(_key, value, _snapshot);
-    if (resolved == value) _snapshot = resolved;
+    final resolved = await JsonFile.writeWithSnapshotRetrying(
+      _key,
+      value,
+      _snapshot,
+    );
+    _snapshot = resolved;
+    if (resolved != value) {
+      _meals = (jsonDecode(resolved) as List)
+          .map((e) => Meal.fromJson(e))
+          .toList();
+    }
   }
 
   Future<void> add(Meal meal) async {
@@ -359,5 +368,10 @@ class NutritionService extends ChangeNotifier {
       notifyListeners();
       await _save();
     }
+  }
+
+  /// Немедленная запись для автосохранения и ухода в фон.
+  Future<void> forceSave() async {
+    await _save();
   }
 }
