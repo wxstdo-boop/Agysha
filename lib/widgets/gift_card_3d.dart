@@ -55,6 +55,15 @@ class _GiftCard3DState extends State<GiftCard3D>
     Offset.zero,
   );
 
+  /// Куда палец лёг на карточку. Наклон считается ещё и от смещения
+  /// относительно этой точки: раньше он зависел только от положения
+  /// пальца, и нажатие ровно по центру не давало отдачи вовсе.
+  Offset? _downPos;
+
+  /// Палец ушёл в сторону — значит, человек листает полосу, а не играет
+  /// карточкой. Наклон в этом случае гасим сразу, без анимации возврата.
+  bool _scrolling = false;
+
   @override
   void initState() {
     super.initState();
@@ -71,7 +80,7 @@ class _GiftCard3DState extends State<GiftCard3D>
   @override
   void didUpdateWidget(covariant GiftCard3D oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tiltEnabled && !widget.tiltEnabled) _resetTilt();
+    if (oldWidget.tiltEnabled && !widget.tiltEnabled) _flattenNow();
   }
 
   @override
@@ -92,16 +101,67 @@ class _GiftCard3DState extends State<GiftCard3D>
     return sign * damped;
   }
 
+  /// Наклон = положение пальца на карточке + «потяг» за пальцем.
+  ///
+  /// Второе слагаемое и есть та приятная отдача: карточка откликается на
+  /// сдвиг в сторону, даже если палец лежит на самой середине.
   void _updateTiltFromPos(Offset localPosition) {
     if (!widget.tiltEnabled || MotionPrefs.shouldReduceMotion) return;
     _resetController.stop();
     final rawDx = (localPosition.dx / widget.width - 0.5) * 2.0;
     final rawDy = (localPosition.dy / widget.height - 0.5) * 2.0;
-    final target = Offset(_softClamp(rawDx), _softClamp(rawDy));
+    final start = _downPos;
+    final dragDx = start == null
+        ? 0.0
+        : (localPosition.dx - start.dx) / widget.width * 2.0;
+    final dragDy = start == null
+        ? 0.0
+        : (localPosition.dy - start.dy) / widget.height * 2.0;
+    final target = Offset(
+      _softClamp(rawDx * 0.60 + dragDx * 1.70),
+      _softClamp(rawDy * 0.60 + dragDy * 1.70),
+    );
     final next = Offset.lerp(_tilt, target, 0.55) ?? target;
     if ((next - _tilt).distance > 0.0005) {
       _tilt = next;
       _tiltNotifier.value = next;
+    }
+  }
+
+  /// Мгновенно поставить карточку ровно (без анимации возврата).
+  void _flattenNow() {
+    _resetController.stop();
+    if (_tilt == Offset.zero) return;
+    _tilt = Offset.zero;
+    _tiltNotifier.value = Offset.zero;
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    _downPos = event.localPosition;
+    _scrolling = false;
+    _updateTiltFromPos(event.localPosition);
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    final start = _downPos;
+    if (start != null &&
+        !_scrolling &&
+        (event.localPosition - start).distance > 16) {
+      _scrolling = true;
+      _flattenNow();
+    }
+    if (_scrolling) return;
+    _updateTiltFromPos(event.localPosition);
+  }
+
+  void _onPointerUp() {
+    final wasScrolling = _scrolling;
+    _downPos = null;
+    _scrolling = false;
+    if (wasScrolling) {
+      _flattenNow();
+    } else {
+      _resetTilt();
     }
   }
 
@@ -312,10 +372,10 @@ class _GiftCard3DState extends State<GiftCard3D>
     return RepaintBoundary(
       child: Listener(
         behavior: HitTestBehavior.translucent,
-        onPointerDown: (e) => _updateTiltFromPos(e.localPosition),
-        onPointerMove: (e) => _updateTiltFromPos(e.localPosition),
-        onPointerUp: (_) => _resetTilt(),
-        onPointerCancel: (_) => _resetTilt(),
+        onPointerDown: _onPointerDown,
+        onPointerMove: _onPointerMove,
+        onPointerUp: (_) => _onPointerUp(),
+        onPointerCancel: (_) => _onPointerUp(),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _openDetails(context),
@@ -353,6 +413,7 @@ class _GiftCard3DState extends State<GiftCard3D>
                 // при возврате карточка меняла поддерево (Transform → child),
                 // и перелив пересоздавался — отсюда мигание фона.
                 return Transform(
+                  key: const ValueKey('gift_tilt_transform'),
                   transform: transform,
                   alignment: FractionalOffset.center,
                   child: child!,

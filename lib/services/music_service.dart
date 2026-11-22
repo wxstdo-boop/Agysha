@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../utils/motion_prefs.dart';
 import 'notification_service.dart';
@@ -30,16 +32,10 @@ enum QueueMode { repeat, order, shuffle }
 class MusicService extends ChangeNotifier {
   MusicService._() {
     _player.playerStateStream.listen((state) {
-      // «Повтор одного» держим руками: при LoopMode.one плеер запрещает
-      // переход к следующему треку (кнопка «дальше» в шторке становилась
-      // мёртвой), поэтому в этом режиме loop выключен, а трек заводится
-      // заново здесь.
-      if (state.processingState == ProcessingState.completed &&
-          _mode == QueueMode.repeat &&
-          _playing) {
-        unawaited(_restartCurrent());
-        return;
-      }
+      // «Повтор одного» теперь держит сам плеер (LoopMode.one): раньше в
+      // этом режиме loop был выключен, а трек заводился вручную по событию
+      // `completed` — событие приходило не всегда, и вместо повтора играл
+      // следующий трек подборки, хотя на кнопке горел «повтор одного».
       final playing =
           state.playing && state.processingState != ProcessingState.completed;
       if (playing != _playing) {
@@ -175,6 +171,11 @@ class MusicService extends ChangeNotifier {
     }
     try {
       await _ensureSource(path);
+      // Режим очереди применяем ПЕРЕД стартом: если он менялся, пока
+      // источник ещё не был загружен, `_applyLoopMode` тогда молчал, и
+      // плеер оставался в чужом режиме — на кнопке «повтор одного», а
+      // играло очередями.
+      await _applyLoopMode();
       _level = 0;
       await _player.setVolume(0);
       unawaited(_player.play());
@@ -263,28 +264,43 @@ class MusicService extends ChangeNotifier {
   }
 
   /// Следующий трек по режиму.
+  ///
+  /// Индекс берём у самого плеера (`nextIndex`): он уже учитывает и
+  /// перемешивание, и режим зацикливания. `seekToNext()` для этого не
+  /// годится — под `LoopMode.one` он молчит, и кнопка «дальше» в шторке
+  /// не работала.
   Future<void> next() async {
     if (_playlist.isEmpty) return;
-    try {
-      if (_player.hasNext) {
-        await _player.seekToNext();
-      } else {
-        await _player.seek(Duration.zero, index: 0);
-      }
-    } catch (_) {}
+    final index = _player.nextIndex;
+    if (index == null) return;
+    await _jumpTo(index);
   }
 
-  /// Заново завести текущий трек (режим «повтор одного»).
-  Future<void> _restartCurrent() async {
-    final index = _player.currentIndex;
+  /// Предыдущий трек — для кнопки «назад» в медиауведомлении.
+  Future<void> previous() async {
+    if (_playlist.isEmpty) return;
+    final index = _player.previousIndex;
     if (index == null) return;
+    // Как в обычных плеерах: из середины трека «назад» сначала возвращает
+    // его начало, и только повторное нажатие уходит на предыдущий.
+    if (_player.position > const Duration(seconds: 3)) {
+      await _jumpTo(_player.currentIndex ?? index);
+      return;
+    }
+    await _jumpTo(index);
+  }
+
+  /// Перейти к треку [index] с начала, не теряя фейда громкости.
+  Future<void> _jumpTo(int index) async {
     try {
       await _player.seek(Duration.zero, index: index);
       _level = 0;
       await _player.setVolume(0);
       unawaited(_player.play());
       await _ramp(0, 1, over: _fadeIn);
-    } catch (_) {}
+    } catch (_) {
+      // Трек мог исчезнуть с диска — плеер сам сообщит об ошибке.
+    }
   }
 
   /// Загрузить в плеер очередь так, чтобы она начиналась с [current].
@@ -293,6 +309,7 @@ class MusicService extends ChangeNotifier {
   Future<void> _ensureSource(String current) async {
     final paths = _queue.contains(current) ? _queue : <String>[current];
     if (listEquals(paths, _playlist) && _player.audioSource != null) {
+      await _applyLoopMode();
       final index = _playlist.indexOf(current);
       if (_player.currentIndex != index ||
           _player.processingState == ProcessingState.completed) {
@@ -300,6 +317,9 @@ class MusicService extends ChangeNotifier {
       }
       return;
     }
+    // Обложку готовим один раз и кладём файлом: в медиауведомлении тогда
+    // фирменная Агюша вместо серой заглушки Android.
+    final art = await notificationArtUri();
     final sources = <AudioSource>[
       for (final p in paths)
         AudioSource.file(
@@ -310,6 +330,7 @@ class MusicService extends ChangeNotifier {
             // тогда в уведомлении остаётся имя файла, а не пустая строка.
             title: _titles[p] ?? _bareName(p),
             artist: 'Agysha',
+            artUri: art,
           ),
         ),
     ];
@@ -322,6 +343,29 @@ class MusicService extends ChangeNotifier {
     );
   }
 
+  /// Обложка для медиауведомления: `assets/agysha.png`, выложенная во
+  /// внутреннюю папку приложения. `just_audio_background` умеет принимать
+  /// и `file://`, и `content://`, но не `asset://`, поэтому ассет копируем.
+  static Uri? _artUri;
+
+  @visibleForTesting
+  static Future<Uri?> notificationArtUri() async {
+    final cached = _artUri;
+    if (cached != null) return cached;
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final file = File('${dir.path}/notification_art.png');
+      if (!await file.exists() || await file.length() == 0) {
+        final data = await rootBundle.load('assets/agysha.png');
+        await file.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      }
+      _artUri = Uri.file(file.path);
+    } catch (_) {
+      // Не вышло — уведомление покажет иконку приложения, музыка играет.
+    }
+    return _artUri;
+  }
+
   static String _bareName(String path) {
     final slash = path.lastIndexOf('/');
     final name = slash >= 0 ? path.substring(slash + 1) : path;
@@ -331,16 +375,16 @@ class MusicService extends ChangeNotifier {
 
   /// Подобрать зацикливание/перемешивание под текущую очередь.
   ///
-  /// «Повтор одного» — `LoopMode.off`: трек заводится заново вручную
-  /// (см. [_restartCurrent]), зато кнопка «дальше» в уведомлении живая.
+  /// «Повтор одного» — настоящий `LoopMode.one`: плеер крутит трек сам,
+  /// без нашего ручного перезапуска. Кнопка «дальше» в уведомлении при
+  /// этом живая, потому что переключение треков идёт по индексу
+  /// ([next]), а не через `seekToNext()`.
   Future<void> _applyLoopMode() async {
     try {
       switch (_mode) {
         case QueueMode.repeat:
           await _player.setShuffleModeEnabled(false);
-          await _player.setLoopMode(
-            _playlist.length <= 1 ? LoopMode.one : LoopMode.off,
-          );
+          await _player.setLoopMode(LoopMode.one);
         case QueueMode.order:
           await _player.setShuffleModeEnabled(false);
           await _player.setLoopMode(LoopMode.all);

@@ -238,7 +238,17 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     if (size.width < 20 || size.height < 20) return;
     final rawNx = (pos.dx / size.width - 0.5) * 2.0;
     final rawNy = (pos.dy / size.height - 0.5) * 2.0;
-    final target = Offset(_softClamp(rawNx), _softClamp(rawNy));
+    // Плюс «потяг» за пальцем от точки нажатия: кнопка отзывается наклоном
+    // и когда палец лежит ровно по центру, а не только по краям.
+    final start = _downPos;
+    final dragNx = start == null ? 0.0 : (pos.dx - start.dx) / size.width * 2.0;
+    final dragNy = start == null
+        ? 0.0
+        : (pos.dy - start.dy) / size.height * 2.0;
+    final target = Offset(
+      _softClamp(rawNx * 0.75 + dragNx * 1.15),
+      _softClamp(rawNy * 0.75 + dragNy * 1.15),
+    );
     if (smooth) {
       _tilt = Offset.lerp(_tilt, target, 0.55) ?? target;
     } else {

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../utils/motion_prefs.dart';
+import '../utils/avatar_image.dart';
 
 /// Вариант аватарки «Agysha-юзера»: красный тон со «стеклянным» блеском.
 ///
@@ -315,13 +316,13 @@ class ProfileAvatar extends StatelessWidget {
     // где видна своя аватарка (память под растр ещё и вытесняла кэш
     // остальных картинок). 2× от логического размера — с запасом на блюр.
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final decodeSide = (size * dpr * 2).round();
-    final image = Image.file(
-      file,
+    // Тот же провайдер, что у предзагрузки при старте: если файл уже
+    // декодирован, первый кадр берёт готовый растр и не показывает
+    // сгенерированную заглушку.
+    final image = Image(
+      image: avatarImageProvider(file, side: avatarDecodeSide(size, dpr)),
       width: size,
       height: size,
-      cacheWidth: decodeSide,
-      cacheHeight: decodeSide,
       fit: BoxFit.cover,
       gaplessPlayback: true,
       filterQuality: FilterQuality.medium,

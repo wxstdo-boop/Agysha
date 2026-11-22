@@ -61,6 +61,7 @@ import 'services/installer.dart';
 import 'services/app_version.dart';
 export 'services/backup_service.dart';
 import 'services/backup_service.dart';
+import 'utils/avatar_image.dart';
 
 final NotificationService notificationService = NotificationService();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -129,6 +130,11 @@ Future<void> _loadStartupData() async {
       // Копилка очков рейтинга — до первого кадра профиля.
       ScoreService().load(),
     ]);
+
+    // Свою аватарку декодируем до первого кадра профиля: иначе круг
+    // секунду показывал сгенерированную заглушку, пока фото читается с
+    // диска, — «аватарка не сразу подгружается».
+    await prewarmAvatarImage(ProfileService().avatarImagePath);
 
     // Дефолтные демо-записи убраны: пользователь добавляет привычки,
     // задачи и будильники сам. Чистим остатки старых демо-данных,

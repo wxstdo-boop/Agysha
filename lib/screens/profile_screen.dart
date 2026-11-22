@@ -151,7 +151,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _isPrestigePickerOpen = false;
 
   /// Едет ли полоса артефактов: пока да, карточки не наклоняются.
-  bool _giftsScrolling = false;
 
   /// Прозрачность подсказки «Как вас звать?»: видна, пока поле НЕ в фокусе.
   /// Подсказка гаснет плавно, как только пользователь открыл поле, и так же
@@ -2302,36 +2301,26 @@ class _ProfileScreenState extends State<ProfileScreen>
         height: 220,
         // Ленивый список с фиксированной шириной карточки: коллекция на
         // сотни артефактов раньше строилась вся целиком при каждом кадре
-        // прокрутки — отсюда рывки у краёв. Растяжение по краям вернули
-        // (Bouncing), а дёрганье убрали иначе: пока полоса едет, карточки
-        // не ловят наклон, поэтому каждая не качается под пальцем.
-        child: NotificationListener<ScrollNotification>(
-          onNotification: (n) {
-            if (n.depth != 0) return false;
-            if (n is ScrollStartNotification || n is OverscrollNotification) {
-              if (!_giftsScrolling) setState(() => _giftsScrolling = true);
-            } else if (n is ScrollEndNotification) {
-              if (_giftsScrolling) setState(() => _giftsScrolling = false);
-            }
-            return false;
-          },
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            itemExtent: GiftCard3D.defaultWidth + Spacing.sm,
-            itemCount: gifts.length,
-            itemBuilder: (context, i) => Padding(
-              padding: const EdgeInsets.only(right: Spacing.sm),
-              child: RepaintBoundary(
-                key: ValueKey('gift_card_${gifts[i].id}'),
-                child: GiftCard3D(
-                  gift: gifts[i],
-                  tiltEnabled: !_giftsScrolling,
-                  onFavoriteToggled: () => setState(() {}),
-                ),
+        // прокрутки — отсюда рывки у краёв. Растяжение по краям — Bouncing.
+        // Карточку больше не пересобираем на старте и конце прокрутки:
+        // раньше из-за этого весь список перестраивался дважды за жест, и
+        // на быстром листании карточки успевали пропасть на кадр. Теперь
+        // карточка сама отличает листание от игры и гаснет без анимации.
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          itemExtent: GiftCard3D.defaultWidth + Spacing.sm,
+          itemCount: gifts.length,
+          itemBuilder: (context, i) => Padding(
+            padding: const EdgeInsets.only(right: Spacing.sm),
+            child: RepaintBoundary(
+              key: ValueKey('gift_card_${gifts[i].id}'),
+              child: GiftCard3D(
+                gift: gifts[i],
+                onFavoriteToggled: () => setState(() {}),
               ),
             ),
           ),
