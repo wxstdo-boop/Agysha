@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../services/haptics.dart';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'press_scale.dart';
@@ -62,7 +63,7 @@ class LiveAdaAvatar extends StatelessWidget {
   /// Монхром — для кнопки-Ады на плите: см. [AdaAvatar.monochrome].
   final bool monochrome;
 
-  const LiveAdaAvatar({super.key, required this.size, this.monochrome = true});
+  const LiveAdaAvatar({super.key, required this.size, this.monochrome = false});
 
   @override
   Widget build(BuildContext context) {
@@ -403,6 +404,7 @@ class _AiChatBodyState extends State<_AiChatBody>
   final _inputCtrl = WideDashController();
   final _inputFocus = FocusNode();
   final _scrollCtrl = ScrollController();
+
   /// Записи истории идут СТРОГО по очереди. Без очереди две параллельные
   /// записи (отправка и очистка) завершались в произвольном порядке, и
   /// последней на диск могла лечь старая: после «Очистить чат» и
@@ -410,6 +412,10 @@ class _AiChatBodyState extends State<_AiChatBody>
   Future<void> _historyWriteChain = Future<void>.value();
   final List<AiMessage> _messages = [];
   String? _historySnapshot;
+
+  /// Поколение истории: очистка чата увеличивает его, и чтение/дописывание,
+  /// начатые ДО очистки, уже не имеют права вернуть старые сообщения.
+  int _historyEpoch = 0;
   // Закреплённые сообщения Ады: живут отдельно от чата и НЕ стираются
   // вместе с ним — только ручным откреплением.
   final List<AiMessage> _pinned = [];
@@ -717,15 +723,19 @@ class _AiChatBodyState extends State<_AiChatBody>
   }
 
   Future<void> _loadHistory() async {
+    final epoch = _historyEpoch;
     try {
       final raw = await JsonFile.read(_historyKey);
+      if (epoch != _historyEpoch) return;
       _historySnapshot = raw;
       if (raw != null && raw.isNotEmpty) {
         final list = jsonDecode(raw) as List;
+        final clearedAt = AiGuideService.chatClearedAt();
         final loaded = list
             .map((e) => AiMessage.fromJson(e as Map<String, dynamic>))
+            .where((m) => (m.ts ?? 0) > clearedAt)
             .toList();
-        if (mounted) {
+        if (mounted && epoch == _historyEpoch) {
           setState(() {
             // Чат исчерпал 1000 сообщений — стираем и начинаем заново.
             if (loaded.length >= 1000) {
@@ -912,12 +922,14 @@ class _AiChatBodyState extends State<_AiChatBody>
       final pos = _scrollCtrl.position;
       if (animate) {
         if (pos.pixels > 1) {
-          // Отправка сверху: лента едет к ответу одним мягким проездом.
-          // 360 мс с резким стартом читались как рывок вниз.
+          // Отправка сверху: лента едет к ответу одним проездом.
+          // easeInOutCubic «раскачивался» и первые ~150 мс стоял на месте —
+          // это читалось как «дёрнуло и только потом поехало». easeOutCubic
+          // трогается сразу и мягко тормозит у низа.
           _scrollCtrl.animateTo(
             0,
-            duration: const Duration(milliseconds: 560),
-            curve: Curves.easeInOutCubic,
+            duration: const Duration(milliseconds: 380),
+            curve: Curves.easeOutCubic,
           );
         }
       } else if (pos.pixels > 0) {
@@ -994,10 +1006,11 @@ class _AiChatBodyState extends State<_AiChatBody>
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 customBorder: const CircleBorder(),
-                // Подсветку даёт PressScale; рябь внутри кружка только
-                // добавляла второе «мигание» фона.
-                splashColor: Colors.transparent,
-                highlightColor: Colors.transparent,
+                // Та же отдача фона, что у «Ада видит экран»: при зажатии
+                // кружок заметно заливается — раньше веб-поиск оставался
+                // визуально «мёртвым» до самого отпускания.
+                splashColor: cs.primary.withValues(alpha: 0.22),
+                highlightColor: cs.primary.withValues(alpha: 0.14),
                 onTap: () {
                   Haptics.light();
                   setState(() {
@@ -1381,6 +1394,10 @@ class _AiChatBodyState extends State<_AiChatBody>
     if (_clearCtrl.isAnimating) return;
     // Старые «летящие» ответы больше не имеют права вернуться в пустой чат.
     adaChatGeneration++;
+    // ...и чтение файла, начатое до очистки, тоже. Раньше `_loadHistory`
+    // из соседнего тика успевал прочитать СТАРЫЙ файл и возвращал ленту.
+    _historyEpoch++;
+    AiGuideService.markChatCleared();
     _clearCtrl.forward(from: 0).then((_) {
       if (!mounted) return;
       setState(() {
@@ -1388,6 +1405,8 @@ class _AiChatBodyState extends State<_AiChatBody>
         _busy = false;
         _error = false;
       });
+      _historyCache = <AiMessage>[];
+      _openedCount = 0;
       _dotsCtrl.stop();
       _saveHistory();
       _clearCtrl.reset();

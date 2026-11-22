@@ -567,6 +567,8 @@ class _NutritionScreenState extends State<NutritionScreen>
       child: _ringed(
         accent: cs.primary,
         child: Card(
+          // Боковые поля карточки нормы вернули: без них она растягивалась
+          // до краёв и кольцо с цифрами «скукоживалось».
           margin: const EdgeInsets.symmetric(horizontal: 16),
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -589,7 +591,9 @@ class _NutritionScreenState extends State<NutritionScreen>
                         trackColor: cs.surfaceContainerHighest,
                         overColor: cs.tertiary,
                         size: 112,
-                        thickness: 10,
+                        // Кольцо нормы вернули к прежней толщине: 10 px
+                        // читалось как «обводку утолстили».
+                        thickness: 8,
                         centerBuilder: (context, shown) => Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [

@@ -393,13 +393,70 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
     } catch (_) {}
   }
 
-  // Параллельно: Bing + Instant Answer + Wikipedia; ждём не дольше
-  // ~5 секунд, чтобы успеть собрать глубокий контекст.
+  /// Google News RSS: работает без ключей и отдаёт свежие материалы,
+  /// когда Bing показывает бот-челлендж (а он показывал его почти всегда,
+  /// из-за чего веб-поиск отвечал только статьями Википедии).
+  Future<void> newsRss() async {
+    try {
+      final resp = await http
+          .get(
+            Uri.parse(
+              'https://news.google.com/rss/search'
+              '?q=${Uri.encodeQueryComponent(searchQuery)}'
+              '&hl=${languageCode == 'ru'
+                  ? 'ru'
+                  : languageCode == 'fr'
+                  ? 'fr'
+                  : 'en'}'
+              '&gl=${languageCode == 'ru'
+                  ? 'RU'
+                  : languageCode == 'fr'
+                  ? 'FR'
+                  : 'US'}'
+              '&ceid=${languageCode == 'ru'
+                  ? 'RU:ru'
+                  : languageCode == 'fr'
+                  ? 'FR:fr'
+                  : 'US:en'}',
+            ),
+            headers: ua,
+          )
+          .timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) return;
+      final body = utf8.decode(resp.bodyBytes, allowMalformed: true);
+      final itemRe = RegExp(r'<item>(.*?)</item>', dotAll: true);
+      final titleRe = RegExp(r'<title>(.*?)</title>', dotAll: true);
+      final sourceRe = RegExp(
+        r'<source[^>]*url="([^"]+)"[^>]*>(.*?)</source>',
+        dotAll: true,
+      );
+      var added = 0;
+      for (final m in itemRe.allMatches(body)) {
+        if (added >= 4) break;
+        final item = m.group(1) ?? '';
+        final title = clean(titleRe.firstMatch(item)?.group(1) ?? '');
+        if (title.length < 12 || !relevant(title)) continue;
+        final sm = sourceRe.firstMatch(item);
+        final host = sm == null ? '' : _hostOf(clean(sm.group(1) ?? ''));
+        final source = sm == null ? '' : clean(sm.group(2) ?? '');
+        if (host.isNotEmpty && _junkHosts.contains(host)) continue;
+        final label = host.isNotEmpty ? host : source.toLowerCase();
+        if (label.isEmpty) continue;
+        if (!domainBudget(label, 2)) continue;
+        results.add('$title [$label]');
+        added++;
+      }
+    } catch (_) {}
+  }
+
+  // Параллельно: Bing + Instant Answer + Wikipedia + свежие новости; ждём
+  // не дольше ~5 секунд, чтобы успеть собрать глубокий контекст.
   await Future.wait([
     bingSearch(),
     bingRss(),
     ddgInstant(),
     wiki(),
+    newsRss(),
   ]).timeout(const Duration(seconds: 6), onTimeout: () => <void>[]);
 
   // Дедупликация по нормализованному ключу, лимит 6 фактов и обрезка
@@ -407,13 +464,23 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
   // и отвечает пусто. Чистим мусор, не содержащий слов запроса.
   /// Обрезка до ~150 символов, НЕ отрубая метку источника [домен] —
   /// иначе в конце ответа Ады пропадает домен из списка источников.
+  /// Режем по границе слова, а не по середине слова: раньше хвост
+  /// выдержки обрывался на «полсло», и Ада повторяла обрубок.
+  String cut(String text, int limit) {
+    if (text.length <= limit) return text;
+    final slice = text.substring(0, limit);
+    final space = slice.lastIndexOf(RegExp(r'\s'));
+    final clean = (space > limit * 0.6 ? slice.substring(0, space) : slice)
+        .replaceAll(RegExp(r'[\s,;:—-]+$'), '');
+    return '$clean…';
+  }
+
   String truncate(String r) {
     if (r.length <= 150) return r;
     final marker = RegExp(r'\s+\[[a-z0-9.-]+\]$').firstMatch(r);
-    if (marker == null) return '${r.substring(0, 150)}…';
+    if (marker == null) return cut(r, 150);
     final body = r.substring(0, marker.start);
-    return '${body.length > 140 ? '${body.substring(0, 140)}…' : body}'
-        '${marker.group(0)}';
+    return '${cut(body, 140)}${marker.group(0)}';
   }
 
   final seen = <String>{};

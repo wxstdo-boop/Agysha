@@ -331,7 +331,7 @@ void main() {
     );
   });
 
-  testWidgets('значки Ады по умолчанию монохромные, цветной — только явно', (
+  testWidgets('значки Ады по умолчанию эмодзи, монохром — только явно', (
     tester,
   ) async {
     late ColorScheme cs;
@@ -347,10 +347,10 @@ void main() {
               cs = Theme.of(context).colorScheme;
               return const Column(
                 children: [
-                  // Явный цветной вариант остаётся доступным,
-                  // но по умолчанию все значки — монохромные.
+                  // Внутри Ады значки — горячие эмодзи; монохром
+                  // включается точечно (плитка-Ада, пузырь мини-окна).
                   AdaAvatar(variantIndex: 0, size: 40, monochrome: false),
-                  AdaAvatar(variantIndex: 0, size: 40),
+                  AdaAvatar(variantIndex: 0, size: 40, monochrome: true),
                 ],
               );
             },
@@ -379,8 +379,8 @@ void main() {
       reason:
           'монохром — две соседние ступени поверхности, без фирменных цветов',
     );
-    // Монохром рисует ВЕКТОРНЫЙ значок в цвете темы: эмодзи в один цвет
-    // не перекрашивается и выбивался бы из таблетки разделов.
+    // Явный монохром рисует векторный значок в цвете темы: эмодзи в один
+    // цвет не перекрашивается и выбивался бы из таблетки разделов.
     expect(find.descendant(of: mono, matching: find.text('🍑')), findsNothing);
     expect(
       find.descendant(of: mono, matching: find.byType(Icon)),

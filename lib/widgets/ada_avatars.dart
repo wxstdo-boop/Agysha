@@ -307,7 +307,9 @@ class AdaAvatar extends StatelessWidget {
     super.key,
     this.size = 34,
     this.variantIndex = -1,
-    this.monochrome = true,
+    // Внутри Ады аватарки — эмодзи. Монохром включается точечно: кнопка-Ада
+    // на плите и пузырь мини-окна (monochrome: true).
+    this.monochrome = false,
   });
 
   @override

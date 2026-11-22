@@ -401,53 +401,56 @@ class _ExitCapsuleButtonState extends State<_ExitCapsuleButton> {
         // Desktop/web: курсор на кнопке — тоже повод прогреть снимок.
         onEnter: (_) => _prewarmExitBackdrop(lockExitBackdrop),
         child: GestureDetector(
-        onTap: widget.onExit,
-        child: PressScale(
-          pressedScale: 0.94,
-          enableTilt: true,
-          maxTiltAngle: 0.12,
-          duration: const Duration(milliseconds: 150),
-          releaseDuration: const Duration(milliseconds: 260),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.horizontal(
-              right: Radius.circular(22),
-            ),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                gradient: widget.glassGrad,
-                borderRadius: const BorderRadius.horizontal(
-                  right: Radius.circular(22),
-                ),
-                border: Border.all(
-                  color: _pressed
-                      ? widget.cs.primary.withValues(alpha: 0.45)
-                      : (widget.isDark
-                            ? Colors.white.withValues(alpha: 0.12)
-                            : Colors.white.withValues(alpha: 0.85)),
-                  width: 1,
-                ),
+          onTap: widget.onExit,
+          child: PressScale(
+            pressedScale: 0.94,
+            enableTilt: true,
+            maxTiltAngle: 0.12,
+            duration: const Duration(milliseconds: 150),
+            releaseDuration: const Duration(milliseconds: 260),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.horizontal(
+                right: Radius.circular(22),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.logout_rounded, size: 14, color: accent),
-                  const SizedBox(width: 4),
-                  Text(
-                    Translations.t('exit', context),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: accent,
-                    ),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  gradient: widget.glassGrad,
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(22),
                   ),
-                ],
+                  border: Border.all(
+                    color: _pressed
+                        ? widget.cs.primary.withValues(alpha: 0.45)
+                        : (widget.isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : Colors.white.withValues(alpha: 0.85)),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.logout_rounded, size: 14, color: accent),
+                    const SizedBox(width: 4),
+                    Text(
+                      Translations.t('exit', context),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: accent,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
         ),
       ),
     );
@@ -706,23 +709,26 @@ Future<void> _showExitDialog(
                               enableTilt: true,
                               maxTiltAngle: 0.12,
                               duration: const Duration(milliseconds: 150),
-                              releaseDuration: const Duration(milliseconds: 260),
+                              releaseDuration: const Duration(
+                                milliseconds: 260,
+                              ),
                               child: TextButton(
-                              style: TextButton.styleFrom(
-                                minimumSize: const Size(0, 32),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size(0, 32),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () => Navigator.pop(ctx),
-                              child: Text(
-                                Translations.t('cancel', context),
-                                style: TextStyle(
-                                  color: cs.onSurfaceVariant,
-                                  fontSize: 12,
+                                onPressed: () => Navigator.pop(ctx),
+                                child: Text(
+                                  Translations.t('cancel', context),
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 12,
+                                  ),
                                 ),
-                              ),
                               ),
                             ),
                             const SizedBox(width: 4),
@@ -731,41 +737,44 @@ Future<void> _showExitDialog(
                               enableTilt: true,
                               maxTiltAngle: 0.12,
                               duration: const Duration(milliseconds: 150),
-                              releaseDuration: const Duration(milliseconds: 260),
+                              releaseDuration: const Duration(
+                                milliseconds: 260,
+                              ),
                               child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(0, 32),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                side: BorderSide(
-                                  color: cs.error.withValues(alpha: 0.55),
-                                  width: 1.4,
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(0, 32),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  side: BorderSide(
+                                    color: cs.error.withValues(alpha: 0.55),
+                                    width: 1.4,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
+                                onPressed: () {
+                                  // Обратный проход (glassMs) должен успеть отыграть:
+                                  // SystemNavigator.pop() убивает Activity в том же
+                                  // кадре, и «стекло» обрывается на середине.
+                                  Navigator.of(ctx).pop();
+                                  Future<void>.delayed(
+                                    const Duration(milliseconds: glassMs + 40),
+                                    SystemNavigator.pop,
+                                  );
+                                },
+                                child: Text(
+                                  Translations.t('exit', context),
+                                  style: TextStyle(
+                                    color: cs.error,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
                                 ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                              ),
-                              onPressed: () {
-                                // Обратный проход (glassMs) должен успеть отыграть:
-                                // SystemNavigator.pop() убивает Activity в том же
-                                // кадре, и «стекло» обрывается на середине.
-                                Navigator.of(ctx).pop();
-                                Future<void>.delayed(
-                                  const Duration(milliseconds: glassMs + 40),
-                                  SystemNavigator.pop,
-                                );
-                              },
-                              child: Text(
-                                Translations.t('exit', context),
-                                style: TextStyle(
-                                  color: cs.error,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
                               ),
                             ),
                           ],
@@ -1145,8 +1154,9 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
   late final AnimationController _tiltCtrl = AnimationController(
     vsync: this,
     value: 0,
-    duration: const Duration(milliseconds: 150),
-    reverseDuration: const Duration(milliseconds: 520),
+    // Медленнее и мягче: наклон догоняет палец, а не щёлкает за ним.
+    duration: const Duration(milliseconds: 520),
+    reverseDuration: const Duration(milliseconds: 1150),
   );
   final ValueNotifier<Offset> _tilt = ValueNotifier(Offset.zero);
 
@@ -1155,8 +1165,20 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
     const side = 80.0;
     final nx = ((local.dx / side) - 0.5).clamp(-1.0, 1.0) * 2.0;
     final ny = ((local.dy / side) - 0.5).clamp(-1.0, 1.0) * 2.0;
-    final target = Offset(nx, ny);
-    _tilt.value = Offset.lerp(_tilt.value, target, 0.55) ?? target;
+    // Диагональ в углу давала |x| и |y| одновременно по 1: матрица
+    // складывала два поворота, и клавиша «уезжала» вниз боком. Нормируем
+    // вектор к кругу — направление сохраняется, амплитуда ограничена.
+    var tx = nx;
+    var ty = ny;
+    final mag = math.sqrt(tx * tx + ty * ty);
+    if (mag > 1.0) {
+      tx /= mag;
+      ty /= mag;
+    }
+    final target = Offset(tx, ty);
+    // Мягче прежнего 0.55: при быстром перетаскивании курсор не «дёргает»
+    // плоскость, а ведёт её за собой.
+    _tilt.value = Offset.lerp(_tilt.value, target, 0.16) ?? target;
   }
 
   /// Уровень пигмента по прогрессу удержания: налилось до 1 за первые 30%
@@ -1272,9 +1294,12 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               final tilt = Curves.easeOutCubic.transform(_tiltCtrl.value);
               final matrix = Matrix4.identity();
               if (tilt > 0.001) {
-                matrix.setEntry(3, 2, 0.0021);
-                matrix.rotateX(-_tilt.value.dy * 0.34 * tilt);
-                matrix.rotateY(_tilt.value.dx * 0.34 * tilt);
+                matrix.setEntry(3, 2, 0.0012);
+                // Вертикальный наклон вдвое слабее горизонтального: при
+                // потяге строго вниз клавиша больше не «уезжает» вниз
+                // перспективой, а лишь мягко подаётся под палец.
+                matrix.rotateX(-_tilt.value.dy * 0.12 * tilt);
+                matrix.rotateY(_tilt.value.dx * 0.24 * tilt);
               }
               final scale = 1 - 0.12 * press * (1 - lift);
               matrix.scaleByDouble(scale, scale, 1.0, 1.0);
@@ -1461,7 +1486,11 @@ Color _auroraAt(double x) {
   final p = (x % 1.0) * BrandColors.aurora.length;
   final i = p.floor() % BrandColors.aurora.length;
   final j = (i + 1) % BrandColors.aurora.length;
-  return Color.lerp(BrandColors.aurora[i], BrandColors.aurora[j], p - p.floor())!;
+  return Color.lerp(
+    BrandColors.aurora[i],
+    BrandColors.aurora[j],
+    p - p.floor(),
+  )!;
 }
 
 /// Эмблема ПИН-экрана вместо стандартного замка: монотонный знак кодового
@@ -1638,7 +1667,9 @@ class _MedallionPainter extends CustomPainter {
       // выражению `frost ? … : …` и ломается на `Expected an identifier`.
       frost
           ? (Paint()
-              ..color = BrandColors.aurora[1].withValues(alpha: isDark ? 0.16 : 0.12))
+              ..color = BrandColors.aurora[1].withValues(
+                alpha: isDark ? 0.16 : 0.12,
+              ))
           : _ink(isDark ? 0.15 : 0.10),
     );
     if (frost) {

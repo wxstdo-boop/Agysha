@@ -17,12 +17,12 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   // чужое приложение, а подсказку всё равно видно.
   // Ещё меньше: 168 px в высоту и не шире 202 px — окошко перестаёт
   // закрывать половину экрана, но строка ввода и две строки ответа влезают.
-  static const double _expandedHeight = 168;
-  static const double _collapsedSize = 52;
+  static const double _expandedHeight = 146;
+  static const double _collapsedSize = 46;
 
   /// Ширина развёрнутого окошка: компактная, ближе к квадрату.
   static double _windowWidth(double screenWidth) =>
-      (screenWidth * 0.46).clamp(166.0, 202.0);
+      (screenWidth * 0.40).clamp(148.0, 178.0);
 
   Offset _pos = Offset.zero;
   // Позиция окошка — ValueNotifier: драг двигает только Positioned
@@ -65,7 +65,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   /// пересчитывается от ЦЕНТРА — превращение идёт из того же места.
   late final AnimationController _morph = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 340),
+    duration: const Duration(milliseconds: 460),
     value: 0.0,
   );
 
@@ -111,7 +111,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   void _setCollapsed(bool value) {
     if (_collapsed == value) return;
     setState(() => _collapsed = value);
-    _morph.animateTo(value ? 1.0 : 0.0, curve: Curves.easeInOutCubic);
+    _morph.animateTo(value ? 1.0 : 0.0, curve: Curves.easeInOutQuart);
   }
 
   /// [_pos] всегда хранит левый верхний угол РАЗВЁРНУТОГО окна — так
@@ -149,8 +149,10 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
       _historySnapshot = raw;
       if (raw != null && raw.isNotEmpty) {
         final list = jsonDecode(raw) as List;
+        final clearedAt = AiGuideService.chatClearedAt();
         final loaded = list
             .map((e) => AiMessage.fromJson(e as Map<String, dynamic>))
+            .where((m) => (m.ts ?? 0) > clearedAt)
             .toList();
         if (mounted) {
           setState(() {
@@ -353,13 +355,15 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
         ],
       ),
       border: Border.all(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: cs.outlineVariant.withValues(alpha: 0.55),
         width: 1.2,
       ),
       boxShadow: [
         // Цветное свечение — «объём» пузыря.
         BoxShadow(
-          color: cs.primary.withValues(alpha: collapsed ? 0.4 : 0.25),
+          // Нейтральная тень темы: сиреневого ореола от `cs.primary`
+          // больше нет, пузырь читается частью интерфейса.
+          color: cs.shadow.withValues(alpha: collapsed ? 0.34 : 0.22),
           blurRadius: collapsed ? 14 : 22,
           offset: const Offset(0, 4),
         ),
@@ -419,14 +423,14 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
               // Размер ведём из того же контроллера, что и позицию:
               // AnimatedContainer с левым верхним якорем в конце скрутки
               // дёргался, потому что окно сжималось в угол.
-              final mt = Curves.easeInOutCubic.transform(_morph.value);
+              final mt = Curves.easeInOutQuart.transform(_morph.value);
               final cw = w + (_collapsedSize - w) * mt;
               final ch =
                   _expandedHeight + (_collapsedSize - _expandedHeight) * mt;
               // Контент меняем на середине морфа, а не мгновенно: иначе
               // при скрутке чат исчезал, пока коробка ещё большая, и
               // пузырь «дёргался» в последний момент.
-              final shownCollapsed = mt >= 0.5;
+              final shownCollapsed = mt >= 0.45;
               return RepaintBoundary(
                 child: Container(
                   width: cw,
@@ -437,7 +441,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                     fit: StackFit.expand,
                     children: [
                       AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 380),
+                        duration: const Duration(milliseconds: 200),
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
                         // Свой layout: уходящий слой остаётся позиционированным
@@ -502,25 +506,19 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                 // подписывал его на ЛЮБОЕ изменение метрик и пересобирал
                 // каждый кадр анимации клавиатуры целиком.
                 final mqSize = MediaQuery.sizeOf(context);
-                final kb = _morph.value >= 0.5
-                    ? 0.0
-                    : MediaQuery.viewInsetsOf(context).bottom;
                 // Позиция считается от ЦЕНТРА: при скрутке окно уменьшается
                 // в обе стороны, а не убегает в левый верхний угол и не
                 // «стопорится» на последнем кадре.
-                final mt = Curves.easeInOutCubic.transform(_morph.value);
+                final mt = Curves.easeInOutQuart.transform(_morph.value);
                 final cw = w + (_collapsedSize - w) * mt;
                 final ch =
                     _expandedHeight + (_collapsedSize - _expandedHeight) * mt;
                 var left = pos.dx + (w - cw) / 2;
                 left = left.clamp(8.0, mqSize.width - cw - 8.0);
-                var top = pos.dy + (_expandedHeight - ch) / 2;
-                if (_morph.value < 0.5) {
-                  if (kb > 0) {
-                    final maxTop = mqSize.height - ch - 8;
-                    if (top > maxTop) top = maxTop < 0 ? 0 : maxTop;
-                  }
-                }
+                // Клавиатура НЕ двигает окошко: оно остаётся там, куда его
+                // поставил палец. Раньше подъём над клавиатурой читался
+                // рывком и «дёргал» пузырь на каждом кадре.
+                final top = pos.dy + (_expandedHeight - ch) / 2;
                 return Positioned(
                   left: left,
                   top: top,
@@ -551,29 +549,33 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
     return GestureDetector(
       key: key,
       behavior: HitTestBehavior.opaque,
+      dragStartBehavior: DragStartBehavior.down,
       onTap: () => _setCollapsed(false),
       onPanUpdate: (d) => _drag(d.delta, MediaQuery.sizeOf(context)),
       onPanEnd: (_) => _savePos(MediaQuery.sizeOf(context)),
       child: Center(
         child: Container(
-          width: 52,
-          height: 52,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
+            // Нейтральные тона темы вместо сиреневого `primaryContainer`:
+            // пузырь больше не выбивается из любой темы.
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [cs.primaryContainer, cs.primary.withValues(alpha: 0.85)],
+              colors: [cs.surfaceContainerHighest, cs.surfaceContainerLowest],
             ),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
             boxShadow: [
               BoxShadow(
-                color: cs.primary.withValues(alpha: 0.45),
+                color: cs.shadow.withValues(alpha: 0.32),
                 blurRadius: 12,
                 offset: const Offset(0, 3),
               ),
             ],
           ),
-          child: const Center(child: AdaAvatar(size: 34, monochrome: true)),
+          child: const Center(child: AdaAvatar(size: 30, monochrome: true)),
         ),
       ),
     );
