@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/locale_provider.dart';
 import '../l10n/translations.dart';
 import '../services/haptics.dart';
 import '../services/music_service.dart';
@@ -450,6 +451,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     setState(() => _isSearchingHardtekk = true);
     Haptics.light();
 
+    // Локаль снимаем до первого await: ниже идёт сеть, а обращаться к
+    // context через async-разрыв нельзя.
+    final langCode = LocaleProvider.of(context).languageCode;
     try {
       final existingTitles =
           _service.tracks.map((t) => t.title.toLowerCase().trim()).toSet();
@@ -625,7 +629,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             catalogCandidate = item;
             finalAudioBytes = itemWav;
             fingerprint = itemFp;
-            title = Translations.t(item.titleKey, context, item.title);
+            title = Translations.tFor(langCode, item.titleKey, item.title);
             break;
           }
         }

@@ -161,6 +161,7 @@ const Map<String, String> _ru = {
   'repeat': 'Повтор',
   'wakeUpTask': 'Задача пробуждения',
   'taskNone': 'Нет',
+  'wakeTaskBodyPrefix': 'Задача: ',
   'taskMath': 'Решить пример',
   'taskPattern': 'Запомнить паттерн',
   'taskMemory': 'Игра на память',

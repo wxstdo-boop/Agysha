@@ -732,16 +732,18 @@ class NotificationService extends ChangeNotifier {
     final title = alarm.label.isNotEmpty ? alarm.label : 'Alarm';
     String body;
     final lang = globalPrefs.getString('setting_locale') ?? 'ru';
+    // Названия задач короткие («Решить пример»), для тела уведомления их
+    // мало: человек должен сразу понять, что от него хотят, поэтому
+    // добавляем «Задача: …» на языке интерфейса.
+    final taskPrefix = Translations.tFor(lang, 'wakeTaskBodyPrefix', 'Задача: ');
     if (alarm.taskType == WakeUpTask.math) {
-      body = Translations.tFor(lang, 'taskMath', 'Задача: решить пример');
+      body = '$taskPrefix${Translations.tFor(lang, 'taskMath', 'Решить пример')}';
     } else if (alarm.taskType == WakeUpTask.pattern) {
-      body = Translations.tFor(
-        lang,
-        'taskPattern',
-        'Задача: повторить паттерн',
-      );
+      body =
+          '$taskPrefix${Translations.tFor(lang, 'taskPattern', 'Запомнить паттерн')}';
     } else if (alarm.taskType == WakeUpTask.memory) {
-      body = Translations.tFor(lang, 'taskMemory', 'Задача: вспомни слово');
+      body =
+          '$taskPrefix${Translations.tFor(lang, 'taskMemory', 'Игра на память')}';
     } else {
       body = formatHmValues(alarm.time.hour, alarm.time.minute);
     }
