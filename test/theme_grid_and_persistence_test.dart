@@ -75,15 +75,17 @@ void main() {
     expect(revolver, findsOneWidget);
     final before = AgyshaApp.of(tester.element(revolver)).themeKey;
 
-    // Прокрутка барабана применяет тему сразу, не дожидаясь остановки.
+    // Прокрутка барабана применяет тему, когда барабан доведён до каморы.
+    // У тем с вариантом (персик, Cyberpunk) живой предпросмотр отключён:
+    // раньше проезд мимо каморы сам включал светлый вариант.
     await tester.drag(revolver, const Offset(-156, 0));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
     expect(
       AgyshaApp.of(tester.element(revolver)).themeKey,
       isNot(before),
-      reason: 'пока барабан крутится, выбранная тема уже другая',
+      reason: 'после доводки выбранная тема должна смениться',
     );
-    await tester.pump(const Duration(milliseconds: 600));
     final appState = AgyshaApp.of(tester.element(revolver));
     expect(appState.themeKey, isNot(before));
     // Тестовой файловой системы здесь нет — запись темы проверяется

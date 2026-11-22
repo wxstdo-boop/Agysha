@@ -9,6 +9,7 @@ import 'package:agysha/main.dart';
 import 'package:agysha/screens/settings_screen.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
+import 'package:agysha/services/reality_check_service.dart';
 import 'package:agysha/theme/app_theme.dart';
 
 /// Второй раунд полировки настроек:
@@ -54,6 +55,9 @@ void main() {
     await tester.pumpWidget(const AgyshaApp(initialLanguageCode: 'ru'));
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 600));
+    // Стартовый таймер приложения закрывает всё, что открыто в первые ~1.5 с
+    // после запуска, поэтому настройки пушим уже после него.
+    await tester.pump(const Duration(milliseconds: 2500));
     navigatorKey.currentState!.push(
       MaterialPageRoute(builder: (_) => const SettingsScreen()),
     );
@@ -61,28 +65,72 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
   }
 
-  testWidgets('карточка Reality Check: кольцо видно и в выключенном состоянии', (
+  testWidgets('карточка Reality Check: обводка видна всегда, вкл и выкл', (
     tester,
   ) async {
     await openSettings(tester);
 
-    // Кольцо — контейнер с отступом 1.4 и трёхцветным градиентом. В
-    // выключенном состоянии первый цвет должен быть плотным (alpha ≈ 0.8):
-    // раньше там было 0.42 от почти прозрачного outlineVariant, и обводки
-    // фактически не было.
-    final ring = find.byWidgetPredicate((w) {
+    // Обводка — сплошное кольцо (Border 1.5) вокруг карточки, а не градиент
+    // с прозрачными краями: у градиента при выключении гасли участки и
+    // казалось, что кольцо пропадает.
+    final ringFinder = find.byWidgetPredicate((w) {
       if (w is! Container) return false;
       final padding = w.padding;
       if (padding is! EdgeInsets || padding.left != 1.4) return false;
       final deco = w.decoration;
       if (deco is! BoxDecoration) return false;
-      final gradient = deco.gradient;
-      if (gradient is! LinearGradient || gradient.colors.length != 3) {
-        return false;
-      }
-      return gradient.colors.first.a >= 0.75;
+      final border = deco.border;
+      if (border is! Border) return false;
+      return border.top.width == 1.5;
     });
-    expect(ring, findsWidgets);
+    Color? ringColor() {
+      final ring = ringFinder;
+      if (ring.evaluate().isEmpty) return null;
+      final deco =
+          (tester.widget<Container>(ring.first).decoration as BoxDecoration);
+      return (deco.border as Border).top.color;
+    }
+
+    // Сервис живёт дольше теста и мог остаться включённым от предыдущего
+    // прогона — начинаем гарантированно из выключенного состояния.
+    RealityCheckService().setEnabled(false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    final off = ringColor();
+    expect(off, isNotNull, reason: 'в выключенном состоянии обводки нет');
+    expect(off!.a, greaterThanOrEqualTo(0.6));
+
+    // Включаем: кольцо не должно пропасть ни в начале перекраски, ни после.
+    await tester.tap(ringFinder.first);
+    await tester.pump();
+    expect(ringColor(), isNotNull, reason: 'обводка пропала сразу после тапа');
+    await tester.pump(const Duration(milliseconds: 210));
+    expect(
+      ringColor(),
+      isNotNull,
+      reason: 'обводка пропала в середине анимации',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    final on = ringColor();
+    expect(on, isNotNull, reason: 'обводка пропала во включённом состоянии');
+    expect(on, isNot(off), reason: 'цвет обводки не перекрасился');
+
+    // Обратно в выключенное состояние. Второй тап по карточке тест сделать
+    // не может: снекбар перекрывает её верх и съедает нажатие, поэтому
+    // выключаем через сервис — обводка должна остаться видимой и плавно
+    // вернуть цвет «выключено».
+    RealityCheckService().setEnabled(false);
+    await tester.pump();
+    expect(ringColor(), isNotNull, reason: 'обводка пропала сразу после выкл');
+    await tester.pump(const Duration(milliseconds: 210));
+    expect(
+      ringColor(),
+      isNotNull,
+      reason: 'обводка пропала в середине обратной анимации',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(ringColor(), isNotNull, reason: 'обводка пропала при выключении');
+    expect(ringColor(), off, reason: 'цвет обводки не вернулся к выключенному');
 
     await tester.pump(const Duration(seconds: 1));
   });
@@ -178,6 +226,7 @@ void main() {
       if (w is SlideTransition) return hasScale(w.child);
       return false;
     }
+
     expect(hasScale(widget), isFalse);
   });
 }
