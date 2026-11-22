@@ -1426,8 +1426,15 @@ class _AiChatBodyState extends State<_AiChatBody>
     );
     if (lastUser.text.isEmpty) return;
     if (_busy) return;
-    // Плашку не прячем: она гаснет только когда ответ реально пришёл.
-    setState(() => _retrying = true);
+    // Плашка гаснет СРАЗУ и плавно (AnimatedSize/AnimatedSwitcher), а не
+    // висит поднятой до конца ответа: раньше она «дёргала» ленту и при
+    // повторной ошибке поднималась ещё раз. Спиннер остаётся только в
+    // самой плашке на время до её ухода.
+    setState(() {
+      _retrying = true;
+      _error = false;
+      _errorMsg = '';
+    });
     _send(text: lastUser.text, keepUserBubble: true);
   }
 
@@ -1847,6 +1854,28 @@ class _AiChatBodyState extends State<_AiChatBody>
                         bottom: 116,
                       ),
                       itemCount: _messages.length + (_busy ? 1 : 0),
+                      // Ключ пузыря — метка времени, а не индекс. В
+                      // reverse-ленте новая реплика вставляется в 0 и
+                      // сдвигает все индексы: без этого колбэка лента
+                      // пересоздавала пузыри и мигала при отправке,
+                      // появлении ответа и повторе.
+                      findChildIndexCallback: (key) {
+                        if (key is! ValueKey<String>) return null;
+                        final m = RegExp(
+                          r'^msg_(\d+)_(true|false)$',
+                        ).firstMatch(key.value);
+                        if (m == null) return null;
+                        final ts = int.tryParse(m.group(1)!);
+                        if (ts == null) return null;
+                        final isUser = m.group(2) == 'true';
+                        final mi = _messages.indexWhere(
+                          (msg) => msg.ts == ts && msg.isUser == isUser,
+                        );
+                        if (mi < 0) return null;
+                        return _busy
+                            ? _messages.length - mi
+                            : _messages.length - 1 - mi;
+                      },
                       // Элементы уже обёрнуты в RepaintBoundary ниже;
                       // не добавляем вторую границу для каждого пузыря.
                       addRepaintBoundaries: false,
@@ -1859,7 +1888,11 @@ class _AiChatBodyState extends State<_AiChatBody>
                           // пузыря, и лента прыгала вверх на его высоту —
                           // переход «Сочиняю…» → полный ответ читался рывком.
                           return TweenAnimationBuilder<double>(
-                            key: ValueKey('typing_slot_${_typingFade ? 1 : 0}'),
+                            // Ключ ПОСТОЯННЫЙ: при смене ключа элемент
+                            // пересоздавался и индикатор на миг вспыхивал
+                            // во весь рост заново — это и читалось как
+                            // мигание чата при ответе.
+                            key: const ValueKey('typing_slot'),
                             tween: Tween(
                               begin: 1.0,
                               end: _typingFade ? 0.0 : 1.0,

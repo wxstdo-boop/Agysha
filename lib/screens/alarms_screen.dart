@@ -935,9 +935,15 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       children: [
         Padding(
           // Секция непрокручиваемая и стоит в самом верху — резервирует
-          // под стеклом таблетки столько же, сколько список резервировал
-          // бы, будь она выключена.
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          // под таблеткой разделов столько же, сколько резервировал бы
+          // список, будь она выключена. Без этого слота таймеры налезали
+          // на таблетку разделов (её стекло перекрывало заголовок).
+          padding: const EdgeInsets.fromLTRB(
+            16,
+            kSectionPillSlotHeight + 4,
+            16,
+            0,
+          ),
           child: Row(
             children: [
               Text(

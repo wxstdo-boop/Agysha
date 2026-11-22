@@ -4,7 +4,11 @@ part of 'ai_guide_service.dart';
 
 // ---- Agnes AI (нужен свой ключ) ----
 const _agnesUrl = 'https://apihub.agnes-ai.com/v1/chat/completions';
-const _agnesModel = 'agnes-2.0-flash';
+
+/// Живые модели Agnes на 2026-11: `agnes-2.0-flash` удалён из каталога,
+/// из-за чего валидный ключ получал ошибку и Ада уходила на бесплатные
+/// модели. Сначала самая быстрая, затем запасная.
+const _agnesModels = <String>['agnes-3.0-flash', 'agnes-2.5-flash'];
 
 Future<String> _sendAgnes(
   String userText,
@@ -21,58 +25,78 @@ Future<String> _sendAgnes(
       {'role': m.isUser ? 'user' : 'assistant', 'content': m.text},
     {'role': 'user', 'content': userText},
   ];
-  final resp = await http
-      .post(
-        Uri.parse(_agnesUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $apiKey',
-        },
-        body: jsonEncode({
-          'model': _agnesModel,
-          'messages': messages,
-          'max_tokens': 6000,
-          'stream': false,
-        }),
-      )
-      .timeout(const Duration(seconds: 14));
-  if (resp.statusCode != 200) {
-    // Тело ответа обычно объясняет причину (401 — ключ, 429 — лимит),
-    // поэтому кладём короткий фрагмент в ошибку: он виден в трассе.
-    final snippet = AiGuideService._shortBody(resp.body);
-    throw Exception(
-      'Agnes ${resp.statusCode}${snippet.isEmpty ? '' : ': $snippet'}',
-    );
-  }
-  final decoded = jsonDecode(resp.body);
-  final body = AiGuideService._asMap(decoded);
-  final choices = AiGuideService._asList(body['choices']);
-  if (choices.isEmpty) throw Exception('Agnes empty response');
-  final message = AiGuideService._asMap(
-    AiGuideService._asMap(choices.first)['message'],
-  );
-  var text = AiGuideService._asString(message['content']);
-  // Некоторые OpenAI-совместимые шлюзы отдают content массивом частей.
-  if (text == null) {
-    final parts = AiGuideService._asList(message['content']);
-    final buffer = StringBuffer();
-    for (final part in parts) {
-      final piece = AiGuideService._asString(
-        AiGuideService._asMap(part)['text'],
+  Object? lastError;
+  for (final model in _agnesModels) {
+    try {
+      final resp = await http
+          .post(
+            Uri.parse(_agnesUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $apiKey',
+            },
+            body: jsonEncode({
+              'model': model,
+              'messages': messages,
+              'max_tokens': 6000,
+              'stream': false,
+            }),
+          )
+          .timeout(const Duration(seconds: 14));
+      if (resp.statusCode != 200) {
+        // Тело ответа обычно объясняет причину (401 — ключ, 429 — лимит),
+        // поэтому кладём короткий фрагмент в ошибку: он виден в трассе.
+        final snippet = AiGuideService._shortBody(resp.body);
+        lastError = Exception(
+          'Agnes $model ${resp.statusCode}'
+          '${snippet.isEmpty ? '' : ': $snippet'}',
+        );
+        continue;
+      }
+      final decoded = jsonDecode(resp.body);
+      final body = AiGuideService._asMap(decoded);
+      final choices = AiGuideService._asList(body['choices']);
+      if (choices.isEmpty) {
+        lastError = Exception('Agnes empty response');
+        continue;
+      }
+      final message = AiGuideService._asMap(
+        AiGuideService._asMap(choices.first)['message'],
       );
-      if (piece != null) buffer.write(piece);
+      var text = AiGuideService._asString(message['content']);
+      // Некоторые OpenAI-совместимые шлюзы отдают content массивом частей.
+      if (text == null) {
+        final parts = AiGuideService._asList(message['content']);
+        final buffer = StringBuffer();
+        for (final part in parts) {
+          final piece = AiGuideService._asString(
+            AiGuideService._asMap(part)['text'],
+          );
+          if (piece != null) buffer.write(piece);
+        }
+        text = buffer.isEmpty ? null : buffer.toString();
+      }
+      if (text == null || text.trim().isEmpty) {
+        lastError = Exception('Agnes empty text');
+        continue;
+      }
+      final cleaned = AiGuideService._cleanText(text);
+      if (cleaned.isEmpty) {
+        lastError = Exception('Agnes junk text');
+        continue;
+      }
+      if (AiGuideService._isRefusal(cleaned)) {
+        lastError = Exception('Agnes refusal');
+        continue;
+      }
+      AiGuideService._noteModel('Agnes AI · $model');
+      return cleaned;
+    } catch (e) {
+      lastError = e;
     }
-    text = buffer.isEmpty ? null : buffer.toString();
   }
-  if (text == null || text.trim().isEmpty) {
-    throw Exception('Agnes empty text');
-  }
-  final cleaned = AiGuideService._cleanText(text);
-  if (cleaned.isEmpty) throw Exception('Agnes junk text');
-  if (AiGuideService._isRefusal(cleaned)) throw Exception('Agnes refusal');
-  AiGuideService._noteModel('Agnes AI');
-  return cleaned;
+  throw lastError ?? Exception('Agnes unavailable');
 }
 
 // ---- Poolside / Laguna (нужен свой ключ) ----
@@ -255,8 +279,18 @@ Future<String> _poolsideRoundWithTools(
 /// Промпт для бесплатных анонимных провайдеров: короткий текст + ЖЁСТКОЕ
 /// указание языка прямо в запросе (system-промпт до них не доезжает,
 /// а модели любят «уплывать» в английский).
-String _freePrompt(String userText, String languageCode) {
-  final short = userText.length > 500 ? userText.substring(0, 500) : userText;
+String _freePrompt(String userText, String languageCode) =>
+    freePromptForTest(userText, languageCode);
+
+/// То же, что [_freePrompt]: тестам нужно видеть, доехал ли вопрос до модели.
+String freePromptForTest(String userText, String languageCode) {
+  // Голова + хвост: с веб-поиском вопрос стоит В КОНЦЕ длинного текста, и
+  // обрезка «первые 500 символов» выбрасывала сам вопрос — модель видела
+  // только выдержки и здоровалась вместо ответа.
+  final short = userText.length <= 500
+      ? userText
+      : '${userText.substring(0, 260).trim()} … '
+            '${userText.substring(userText.length - 300).trim()}';
   final lang = switch (languageCode) {
     'ru' =>
       'Ты Ада — его горячая подружка, тёплая живая девушка и проводница '
@@ -320,9 +354,9 @@ Future<String> _sendLlm7(
   // выбивало весь бесплатный слой.
   for (final model in const [
     'gpt-oss:20b',
-    'gpt-oss',
     'codestral-latest',
     'mistral-Nemo-Instruct-2407',
+    'gemma-3-27b',
   ]) {
     try {
       final resp = await http
@@ -411,9 +445,7 @@ String _flatPollinationsPrompt(
   if (prompt.length > 2000) {
     // Длинный промпт режем по истории, а не по хвосту: вопрос стоит в
     // конце и должен дойти до модели целиком.
-    final short = userText.length > 300
-        ? userText.substring(0, 300)
-        : userText;
+    final short = userText.length > 300 ? userText.substring(0, 300) : userText;
     prompt = flat(_freePrompt(short, languageCode));
   }
   return prompt;

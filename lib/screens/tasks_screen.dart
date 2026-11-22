@@ -337,7 +337,10 @@ class _TasksScreenState extends State<TasksScreen>
     // рывок). Когда архивная полка включена (категория «Все»), карточка
     // сначала схлопывается на СВОЁМ месте — тогда переезд читается как
     // движение из полки в полку, а не как «пропала и появилась».
-    final archiveMove = _filter == '' && _archiveVisible;
+    // Снятие галки в архиве — это ВОЗВРАТ в активные, а не переезд в
+    // архив: схлопывание на месте плюс волна списка давали «скачет туда-
+    // сюда». Возврат ведёт только волна списка.
+    final archiveMove = _filter == '' && _archiveVisible && !wasDone;
     if (archiveMove) {
       final source = _service.tasks
           .where((t) => wasDone ? t.done : !t.done)
@@ -357,14 +360,21 @@ class _TasksScreenState extends State<TasksScreen>
         }
       });
     }
-    setState(() => _justCompletedId = task.id);
-    _cardDrop.forward(from: 0).whenComplete(() {
-      // Снимаем «анимируемую» метку: карточка больше не оборачивается
-      // переходом (иначе один лишний набор слоёв висел бы на ней всегда).
-      if (mounted && _justCompletedId == task.id) {
-        setState(() => _justCompletedId = null);
-      }
-    });
+    // «Приезд» сверху — только для отметки (активная полка → архив).
+    // При снятии галки карточка возвращается из архива ВВЕРХ: если гнать
+    // её тем же спуском сверху, она прыгает над списком и «скачет туда-сюда».
+    // Возврат идёт обычной волной списка ([_revealSlide]) — плавно и вниз-
+    // вверх, без перелёта.
+    if (!wasDone) {
+      setState(() => _justCompletedId = task.id);
+      _cardDrop.forward(from: 0).whenComplete(() {
+        // Снимаем «анимируемую» метку: карточка больше не оборачивается
+        // переходом (иначе один лишний набор слоёв висел бы на ней всегда).
+        if (mounted && _justCompletedId == task.id) {
+          setState(() => _justCompletedId = null);
+        }
+      });
+    }
     await _service.toggle(task.id);
     if (!mounted) return;
     // Похвалу выдаём только за ОТМЕТКУ, не за снятие галки.
@@ -1190,11 +1200,7 @@ class _TasksScreenState extends State<TasksScreen>
     final estLabel = est == null
         ? null
         : est < 60
-        ? Translations.t(
-            'durMin',
-            context,
-            '{n} мин',
-          ).replaceAll('{n}', '$est')
+        ? Translations.t('durMin', context, '{n} мин').replaceAll('{n}', '$est')
         : Translations.t(
             'durHour',
             context,
