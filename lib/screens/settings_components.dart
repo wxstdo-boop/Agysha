@@ -41,97 +41,99 @@ class _RealityCheckToggleCard extends StatelessWidget {
         // Внутренняя карточка: плавно перетекают фон, радиус и цвет текста.
         // Обводку-кольцо рисует родитель (см. ниже) — она ОДНА и совпадает
         // по стилю с кольцом на карточке нормы питания.
+        // Все слои карточки идут одним шагом (420 мс): фон, текст, значок
+        // и обводка. Разные длительности читались как дрожание — фон
+        // догонял текст и на миг мигал.
         final inner = AnimatedContainer(
-          duration: const Duration(milliseconds: 320),
+          duration: const Duration(milliseconds: 420),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(22.7),
+            borderRadius: BorderRadius.circular(22.4),
           ),
           clipBehavior: Clip.antiAlias,
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              onTap: () => _toggle(context, rc, !on),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 14, 18),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Бейдж иконки: круг плавно перекрашивается, значок
-                    // остаётся ОДНИМ и тем же — меняется только его цвет и
-                    // размер. Подмена outlined→rounded читалась как «нервное
-                    // и неправильное» мигание двух разных картинок.
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 320),
+          // Без Material/InkWell: волна нажатия вспыхивала поверх
+          // анимирующегося фона и выглядела как мигание. Отклик даёт
+          // PressScale ниже — вдавливанием и лёгким затемнением.
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _toggle(context, rc, !on),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 14, 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Бейдж иконки: круг плавно перекрашивается, значок
+                  // остаётся ОДНИМ и тем же — меняется только его цвет и
+                  // размер. Подмена outlined→rounded читалась как «нервное
+                  // и неправильное» мигание двух разных картинок.
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 420),
+                    curve: Curves.easeOutCubic,
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: badgeBg,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color:
+                            (on
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.outlineVariant)
+                                .withValues(alpha: on ? 0.55 : 0.35),
+                        width: 1.2,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: on ? 1 : 0),
+                      duration: const Duration(milliseconds: 420),
                       curve: Curves.easeOutCubic,
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: badgeBg,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: (on
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.outlineVariant)
-                              .withValues(alpha: on ? 0.55 : 0.35),
-                          width: 1.2,
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween<double>(
-                          begin: on ? 1 : 0,
-                          end: on ? 1 : 0,
-                        ),
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, t, _) => Icon(
-                          Icons.psychology_rounded,
-                          size: 26 + 1.2 * t,
-                          color: Color.lerp(
-                            theme.colorScheme.onSurfaceVariant,
-                            theme.colorScheme.primary,
-                            t,
-                          ),
+                      builder: (context, t, _) => Icon(
+                        Icons.psychology_rounded,
+                        size: 26 + 1.2 * t,
+                        color: Color.lerp(
+                          theme.colorScheme.onSurfaceVariant,
+                          theme.colorScheme.primary,
+                          t,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 360),
-                            curve: Curves.easeOutCubic,
-                            style: theme.textTheme.titleMedium!.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: fgColor,
-                            ),
-                            child: Text(title),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 420),
+                          curve: Curves.easeOutCubic,
+                          style: theme.textTheme.titleMedium!.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: fgColor,
                           ),
-                          const SizedBox(height: 4),
-                          AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 360),
-                            curve: Curves.easeOutCubic,
-                            style: theme.textTheme.bodySmall!.copyWith(
-                              color: fgMuted,
-                            ),
-                            child: Text(body),
+                          child: Text(title),
+                        ),
+                        const SizedBox(height: 4),
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 420),
+                          curve: Curves.easeOutCubic,
+                          style: theme.textTheme.bodySmall!.copyWith(
+                            color: fgMuted,
                           ),
-                        ],
-                      ),
+                          child: Text(body),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    VolumetricSwitch(
-                      value: on,
-                      onChanged: (v) => _toggle(context, rc, v),
-                      activeColor: theme.colorScheme.primary,
-                      semanticLabel: title,
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  VolumetricSwitch(
+                    value: on,
+                    onChanged: (v) => _toggle(context, rc, v),
+                    activeColor: theme.colorScheme.primary,
+                    semanticLabel: title,
+                  ),
+                ],
               ),
             ),
           ),
@@ -142,32 +144,30 @@ class _RealityCheckToggleCard extends StatelessWidget {
         // выглядела без границ), у включённой — акцентная с третичным
         // отливом. Цвет плавно перетекает, а не появляется рывком.
         final card = TweenAnimationBuilder<double>(
-          tween: Tween<double>(begin: on ? 1 : 0, end: on ? 1 : 0),
-          duration: const Duration(milliseconds: 360),
+          tween: Tween<double>(begin: 0, end: on ? 1 : 0),
+          duration: const Duration(milliseconds: 420),
           curve: Curves.easeOutCubic,
           builder: (context, t, child) {
             final cs = theme.colorScheme;
-            final accent = Color.lerp(cs.outline, cs.primary, t)!;
-            final hint = Color.lerp(cs.outlineVariant, cs.tertiary, t)!;
+            // Обводка — сплошное кольцо, а не градиент с прозрачными
+            // краями: у градиента при выключении гасли участки, и казалось,
+            // что обводка пропадает. Здесь она видна ВСЕГДА, плавно меняется
+            // только цвет: от нейтрального к цвету темы.
+            final accent = Color.lerp(
+              cs.outline.withValues(alpha: 0.85),
+              cs.primary,
+              t,
+            )!;
             return Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(24),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[
-                    accent.withValues(alpha: 0.80 + 0.20 * t),
-                    accent.withValues(alpha: 0.45 + 0.30 * t),
-                    hint.withValues(alpha: 0.55 + 0.25 * t),
-                  ],
-                  stops: const <double>[0, 0.55, 1],
-                ),
+                border: Border.all(color: accent, width: 1.5),
                 boxShadow: <BoxShadow>[
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: on ? 0.10 : 0.05),
-                    blurRadius: 10,
+                    color: accent.withValues(alpha: 0.08 + 0.16 * t),
+                    blurRadius: 14,
                     spreadRadius: -6,
-                    offset: const Offset(0, 4),
+                    offset: const Offset(0, 5),
                   ),
                 ],
               ),
@@ -282,7 +282,9 @@ class _SupportPillState extends State<_SupportPill> {
         // успевает «просесть» под пальцем и так же плавно вернуться.
         duration: const Duration(milliseconds: 340),
         curve: Curves.easeInOutCubic,
-        height: _pressed ? 60 : 64,
+        // Чуть выше прежних 64 px: подписи из двух строк больше не
+        // срезаются многоточием.
+        height: _pressed ? 68 : 72,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
@@ -297,9 +299,9 @@ class _SupportPillState extends State<_SupportPill> {
             end: Alignment.bottomRight,
             colors: widget.gradient,
           ),
-          border: Border.all(color: fg.withValues(alpha: 0.40), width: 1.2),
+          border: Border.all(color: fg.withValues(alpha: 0.22), width: 1),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
             Container(
@@ -315,6 +317,7 @@ class _SupportPillState extends State<_SupportPill> {
             const SizedBox(width: 14),
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -332,16 +335,18 @@ class _SupportPillState extends State<_SupportPill> {
                   ),
                   if (widget.subtitle != null) ...[
                     const SizedBox(height: 2),
+                    // Две строки: на длинных русских подписях одна строка
+                    // обрезалась многоточием посреди слова.
                     Text(
                       widget.subtitle!,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: fg.withValues(alpha: 0.78),
+                        color: fg.withValues(alpha: 0.80),
                         fontWeight: FontWeight.w600,
                         fontSize: 11.5,
                         letterSpacing: 0.1,
-                        height: 1.2,
+                        height: 1.25,
                       ),
                     ),
                   ],
@@ -422,13 +427,12 @@ class _CtaButtonState extends State<_CtaButton> {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    // Обводка строится ИЗ цвета самой кнопки, а не из белой плёнки: на
-    // тёмной теме белая рамка 40 % выглядела грязно-серой, а на почти
-    // чёрной Visitella кнопка вообще сливалась с фоном.
+    // Обводка строится ИЗ цвета самой кнопки, а не из белой плёнки, и она
+    // полупрозрачная: плотная светлая кромка выглядела как наклейка.
     final rimLight = Color.lerp(
       widget.gradient.first,
       Colors.white,
-      dark ? 0.42 : 0.62,
+      dark ? 0.26 : 0.48,
     )!;
     final rimDark = Color.lerp(widget.gradient.last, Colors.black, 0.20)!;
     final iconInk = Color.lerp(widget.gradient.last, Colors.black, 0.15)!;
@@ -441,7 +445,7 @@ class _CtaButtonState extends State<_CtaButton> {
       // обрубком.
       width: double.infinity,
       height: 56,
-      padding: const EdgeInsets.all(1.4),
+      padding: const EdgeInsets.all(1.1),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(19),
         gradient: LinearGradient(
@@ -453,8 +457,8 @@ class _CtaButtonState extends State<_CtaButton> {
         // «подсвечена изнутри», но текст остаётся чистым.
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: widget.glow.withValues(alpha: dark ? 0.30 : 0.22),
-            blurRadius: 18,
+            color: widget.glow.withValues(alpha: dark ? 0.20 : 0.16),
+            blurRadius: 16,
             spreadRadius: -8,
             offset: const Offset(0, 6),
           ),

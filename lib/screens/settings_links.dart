@@ -118,12 +118,15 @@ extension _SettingsLinks on _SettingsScreenState {
                   icon: Icons.shopping_bag_rounded,
                   badge: 'SOON',
                   subtitle: Translations.t('supportOzonSubtitle', context),
+                  // Тот же приглушённый винный тон, что у кнопки
+                  // «Угостить кофе»: два ярко-красных пятна подряд в одном
+                  // окне выглядели как аварийная кнопка.
                   gradient: const [
-                    Color(0xFFFF5A6E),
-                    Color(0xFFE8263C),
-                    Color(0xFFB3152E),
+                    Color(0xFFC98A99),
+                    Color(0xFF8A3550),
+                    Color(0xFF3A1220),
                   ],
-                  glow: const Color(0xFFE8263C),
+                  glow: const Color(0xFF8A3550),
                   onTap: () {
                     showBeautifulSnackBar(
                       context,

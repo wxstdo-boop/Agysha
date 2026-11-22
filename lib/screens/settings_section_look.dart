@@ -300,23 +300,23 @@ extension _SettingsSectionLook on _SettingsScreenState {
               _CtaButton(
                 label: Translations.t('visitellaName', context, 'Visitella'),
                 icon: Icons.rocket_launch_outlined,
-                // Вид Visitella: графитовый градиент. В тёмной теме он
-                // осветлён и светится холодным серым — иначе почти чёрная
-                // кнопка сливалась с фоном карточки.
+                // Вид Visitella: графитовый градиент. В тёмной теме верх
+                // светлее и с холодным отливом, низ — глубокий графит: кнопка
+                // читается как металл, а не как чёрное пятно на карточке.
                 gradient: theme.brightness == Brightness.dark
                     ? const [
-                        Color(0xFF7C8494),
-                        Color(0xFF3B3E46),
-                        Color(0xFF1B1C21),
+                        Color(0xFF9AA4B4),
+                        Color(0xFF545C6B),
+                        Color(0xFF23262C),
                       ]
                     : const [
-                        Color(0xFF4A4D54),
-                        Color(0xFF232428),
-                        Color(0xFF101013),
+                        Color(0xFF525760),
+                        Color(0xFF2A2C31),
+                        Color(0xFF121316),
                       ],
                 glow: theme.brightness == Brightness.dark
                     ? const Color(0xFF8E97A8)
-                    : Colors.black,
+                    : const Color(0xFF2A2C31),
                 onTap: () => _openLink('https://mutilated.pages.dev/#top'),
               ),
               const SizedBox(height: 8),
@@ -397,16 +397,21 @@ extension _SettingsSectionLook on _SettingsScreenState {
               _CtaButton(
                 label: Translations.t('support', context, 'Support'),
                 icon: Icons.favorite,
-                // «Кровавый» вид: топ-стоп тёплого ализарина, середина —
-                // насыщенный багровый, низ — почти вишнёвый, как Запекшаяся
-                // кровь. Свечение в тон середины: кнопка горит изнутри,
-                // а не светится розовым обертоном.
-                gradient: const [
-                  Color(0xFFFF5A66),
-                  Color(0xFFD90D28),
-                  Color(0xFF7E0B1B),
-                ],
-                glow: const Color(0xFFC8102E),
+                // Тёплый винный градиент вместо «кроваво-красного»: алый
+                // верх бил по глазам, особенно на тёмной теме. Здесь
+                // приглушённый розово-винный верх и глубокий бордо.
+                gradient: theme.brightness == Brightness.dark
+                    ? const [
+                        Color(0xFFC98A99),
+                        Color(0xFF8A3550),
+                        Color(0xFF3A1220),
+                      ]
+                    : const [
+                        Color(0xFFD4697F),
+                        Color(0xFF9E2338),
+                        Color(0xFF5A1222),
+                      ],
+                glow: const Color(0xFF9E2338),
                 onTap: _showSupportSheet,
               ),
             ],

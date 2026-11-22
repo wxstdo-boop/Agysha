@@ -156,14 +156,21 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _previewNearest();
   }
 
-  /// Тема под указателем поменялась — сразу применяем её, чтобы прокрутка
+  /// У этих тем есть второй вариант (светлый/тёмный), и предпросмотр его
+  /// сбрасывал: барабан проезжал мимо и сам ставил светлую тему, хотя пальца
+  /// на каморе не было. Их применяем только осознанным выбором.
+  static const Set<String> _variantOnly = <String>{'peach', 'oled'};
+
+  /// Тема под указателем поменялась — применяем её, чтобы прокрутка
   /// выглядела как живое переключение палитры.
   void _previewNearest() {
     final i = _index;
     if (i == _applied) return;
     _applied = i;
+    final entry = widget.entries[i];
+    if (_variantOnly.contains(entry.key)) return;
     Haptics.select();
-    widget.onPreview(widget.entries[i]);
+    widget.onPreview(entry);
   }
 
   int _shortestDelta(int from, int to) {
@@ -174,12 +181,28 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   }
 
   void _settleTo(double goal) {
+    final target = goal.roundToDouble();
     final token = ++_spinToken;
-    _spinAnim = Tween<double>(begin: _pos, end: goal).animate(
-      CurvedAnimation(parent: _spin, curve: Curves.easeOutQuint),
+    final dist = (target - _pos).abs();
+    if (dist < 0.02) {
+      // Барабан уже стоит на каморе: не крутим пустую анимацию, которая
+      // потом 200 мс «висит» у цели и читается как «не доводится».
+      _pos = target;
+      _previewNearest();
+      widget.onCommit(widget.entries[_index]);
+      return;
+    }
+    // easeOutCubic вместо quint: у quint длинный хвост, барабан почти
+    // доехал и надолго замирал в паре пикселей от каморы.
+    _spinAnim = Tween<double>(begin: _pos, end: target).animate(
+      CurvedAnimation(parent: _spin, curve: Curves.easeOutCubic),
+    );
+    _spin.duration = Duration(
+      milliseconds: (260 + 130 * dist).round().clamp(260, 620),
     );
     _spin.forward(from: 0).whenComplete(() {
       if (!mounted || token != _spinToken) return;
+      _pos = target;
       _previewNearest();
       widget.onCommit(widget.entries[_index]);
     });
@@ -199,7 +222,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _onDragEnd(DragEndDetails details) {
     _dragging = false;
     // Инерция: быстрый флик докручивает барабан ещё на камору-две.
-    final fling = (-(details.primaryVelocity ?? 0) / 1400).clamp(-1.6, 1.6);
+    final fling = (-(details.primaryVelocity ?? 0) / 1100).clamp(-2.4, 2.4);
     _settleTo((_pos + fling).roundToDouble());
   }
 
@@ -233,7 +256,6 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final entry = widget.entries[_index];
-    final preview = _ThemePreview.of(entry.key);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -262,15 +284,18 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                     _drumShell(cs, side),
                     for (var i = 0; i < _n; i++)
                       _chamber(cs, i, side, widget.entries[i]),
-                    _hub(cs, entry, preview, hub),
+                    _hub(cs, entry, hub),
                     // Указатель — единственная неподвижная деталь: камора,
                     // вставшая под него, и есть выбранная тема.
                     Positioned(
                       top: 0,
                       child: Icon(
                         Icons.arrow_drop_down,
-                        size: 26,
-                        color: cs.primary,
+                        size: 30,
+                        // Указатель — единственный цветной акцент барабана:
+                        // приглушённо-красный, чтобы сразу читался как
+                        // стрелка, но не спорил с монохромными каморами.
+                        color: const Color(0xFFFF3B30).withValues(alpha: 0.55),
                       ),
                     ),
                   ],
@@ -281,19 +306,13 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
             SizedBox(
               height: 24,
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, anim) => FadeTransition(
-                  opacity: anim,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.25),
-                      end: Offset.zero,
-                    ).animate(anim),
-                    child: child,
-                  ),
-                ),
+                // Только перекрёстное затухание: со сползанием текста
+                // подписи при быстрой прокрутке наезжали друг на друга.
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
                 child: Text(
                   entry.label,
                   key: ValueKey('theme_label_${entry.key}'),
@@ -361,12 +380,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     );
   }
 
-  Widget _hub(
-    ColorScheme cs,
-    _ThemeEntry entry,
-    _ThemePreview preview,
-    double hub,
-  ) {
+  Widget _hub(ColorScheme cs, _ThemeEntry entry, double hub) {
     final hubBody = Semantics(
       button: true,
       label: entry.label,
@@ -377,21 +391,20 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
           curve: Curves.easeOutCubic,
           width: hub,
           height: hub,
+          // Хаб тоже монохромный: цвет даёт только сама тема приложения.
+          // Раньше центр горел градиентом проезжающей темы, и барабан
+          // выглядел пёстрой мозаикой, а не одним механизмом.
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: preview.colors,
-            ),
+            color: cs.surfaceContainerHighest,
             border: Border.all(
-              color: cs.onSurface.withValues(alpha: 0.12),
-              width: 1,
+              color: cs.primary.withValues(alpha: 0.55),
+              width: 1.4,
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: preview.colors.last.withValues(alpha: 0.35),
-                blurRadius: 16,
+                color: cs.shadow.withValues(alpha: 0.14),
+                blurRadius: 14,
                 spreadRadius: -4,
                 offset: const Offset(0, 6),
               ),
@@ -399,13 +412,13 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
           ),
           child: Center(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 320),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
+              duration: const Duration(milliseconds: 240),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
               transitionBuilder: (child, anim) => FadeTransition(
                 opacity: anim,
                 child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.75, end: 1).animate(anim),
+                  scale: Tween<double>(begin: 0.92, end: 1).animate(anim),
                   child: child,
                 ),
               ),
@@ -413,7 +426,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                 entry.icon,
                 key: ValueKey<String>('hub_${entry.key}'),
                 size: hub * 0.34,
-                color: preview.onColor,
+                color: cs.primary,
               ),
             ),
           ),
@@ -458,7 +471,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     final near = (math.cos(delta) + 1) / 2;
     final active = index == _index;
     final dot = active ? 40.0 : 34.0;
-    final preview = _ThemePreview.of(entry.key);
+    // Камора — не мини-палитра, а метка темы: монотонный кружок в цветах
+    // приложения, где цветом выделена только выбранная. Десять разноцветных
+    // градиентов читались как случайные наклейки.
+    final ink = active ? cs.onPrimary : cs.onSurfaceVariant;
 
     return Positioned(
       left: x - dot / 2,
@@ -480,15 +496,13 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                 height: dot,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: preview.colors,
-                  ),
+                  color: active
+                      ? cs.primary
+                      : cs.surfaceContainerHighest,
                   border: Border.all(
                     color: active
                         ? cs.primary
-                        : cs.onSurface.withValues(alpha: 0.16),
+                        : cs.outlineVariant.withValues(alpha: 0.65),
                     width: active ? 2 : 1,
                   ),
                   boxShadow: active
@@ -501,91 +515,12 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                         ]
                       : null,
                 ),
-                child: Icon(
-                  entry.icon,
-                  size: dot * 0.42,
-                  color: preview.onColor,
-                ),
+                child: Icon(entry.icon, size: dot * 0.42, color: ink),
               ),
             ),
           ),
         ),
       ),
     );
-  }
-}
-
-/// Мини-палитра темы: цвета превью и цвет текста/иконки на нём.
-class _ThemePreview {
-  final List<Color> colors;
-  final Color onColor;
-
-  const _ThemePreview(this.colors, this.onColor);
-
-  static const _ink = Color(0xFF1B1B1F);
-
-  static _ThemePreview of(String key) {
-    switch (key) {
-      case 'mutilated':
-        return const _ThemePreview(
-          <Color>[Color(0xFF1A0B10), Color(0xFF8E2A3C)],
-          Color(0xFFFFE3E7),
-        );
-      case 'light':
-        return const _ThemePreview(
-          <Color>[Color(0xFFF8F5F0), Color(0xFFE3D6C6)],
-          _ink,
-        );
-      case 'dark':
-        return const _ThemePreview(
-          <Color>[Color(0xFF171A1F), Color(0xFF39405A)],
-          Color(0xFFE8EAF2),
-        );
-      case 'oled':
-        return const _ThemePreview(
-          <Color>[Color(0xFF0A0E1A), Color(0xFFFFD400)],
-          Color(0xFF0A0E1A),
-        );
-      case 'system':
-        return const _ThemePreview(
-          <Color>[Color(0xFFDCE6F7), Color(0xFF8FA9D6)],
-          _ink,
-        );
-      case 'systemLight':
-        return const _ThemePreview(
-          <Color>[Color(0xFFF1F4FA), Color(0xFFC3D2EC)],
-          _ink,
-        );
-      case 'rose':
-        return const _ThemePreview(
-          <Color>[Color(0xFFFFE6EE), Color(0xFFF2789A)],
-          _ink,
-        );
-      case 'peach':
-        return const _ThemePreview(
-          <Color>[Color(0xFFFFEAD6), Color(0xFFFFA36B)],
-          _ink,
-        );
-      case 'grok':
-        return const _ThemePreview(
-          <Color>[Color(0xFF101010), Color(0xFF3A3A3A)],
-          Color(0xFFF2F2F2),
-        );
-      case 'darkGrok':
-        return const _ThemePreview(
-          <Color>[Color(0xFF040404), Color(0xFF232323)],
-          Color(0xFFEDEDED),
-        );
-      case 'metel':
-        return const _ThemePreview(
-          <Color>[Color(0xFFE7F3FF), Color(0xFF8FC3FF)],
-          _ink,
-        );
-      default:
-        return const _ThemePreview(
-          <Color>[Color(0xFF2A2A2A), Color(0xFF505050)],
-          Color(0xFFF0F0F0),
-        );
-    }
   }
 }
