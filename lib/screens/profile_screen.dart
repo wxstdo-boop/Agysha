@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -2302,6 +2303,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         'Коллекция артефактов',
       ),
       icon: Icons.auto_awesome,
+      // Наклонённая карточка не должна срезаться краем плашки.
+      clipContent: false,
       trailing: Text(
         Translations.t(
           'countShort',
@@ -2330,6 +2333,9 @@ class _ProfileScreenState extends State<ProfileScreen>
             parent: AlwaysScrollableScrollPhysics(),
           ),
           itemExtent: GiftCard3D.defaultWidth + Spacing.sm,
+          // Соседние карточки держим заранее собранными: иначе на быстром
+          // листании крайняя карточка успевала появиться и пропасть.
+          scrollCacheExtent: const ScrollCacheExtent.pixels(420),
           itemCount: gifts.length,
           itemBuilder: (context, i) => Padding(
             padding: const EdgeInsets.only(right: Spacing.sm),
@@ -2525,20 +2531,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  /// «Сейчас играет»: полоса и время идут плавно, а не скачками.
-  /// Прогресс трека в шапке карточки музыки. Вся анимация живёт внутри
-  /// [_MusicScrubber], поэтому тикающая позиция не пересобирает карточку.
-  Widget _musicProgress(ThemeData theme) {
-    final labelStyle = theme.textTheme.labelSmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Spacing.xs),
-      child: _MusicScrubber(music: _music, labelStyle: labelStyle),
-    );
-  }
-
   Widget _musicCard(ThemeData theme) {
     final tracks = _service.tracks;
     final cs = theme.colorScheme;
@@ -2579,12 +2571,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Полоса «сейчас играет» живёт в RepaintBoundary: таймер позиции
-          // перерисовывает только её, а не всю карточку с треками.
-          RepaintBoundary(
-            key: const ValueKey('music_progress'),
-            child: _musicProgress(theme),
-          ),
           // Высота блока тянется ОДНИМ AnimatedSize: и появление первого
           // трека, и удаление последнего идут непрерывно. Пустая подсказка
           // живёт ВНУТРИ этого блока и сама схлопывается/раскрывается по

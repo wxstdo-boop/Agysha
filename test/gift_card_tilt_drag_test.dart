@@ -25,12 +25,13 @@ void main() {
     ),
   );
 
+  /// Углы наклона из матрицы. Перспектива (entry(3, 2)) включена всегда,
+  /// поэтому «плоскость» проверяем именно по повороту, а не по всей матрице.
   Offset tiltOf(WidgetTester tester) {
-    final t = tester.widget<Transform>(
-      find.byKey(const ValueKey('gift_tilt_transform')),
-    );
-    // В матрице с перспективой появляется ненулевой entry(3, 2).
-    return Offset(t.transform.entry(3, 2), t.transform.entry(0, 0));
+    final m = tester
+        .widget<Transform>(find.byKey(const ValueKey('gift_tilt_transform')))
+        .transform;
+    return Offset(m.entry(1, 2), m.entry(0, 2));
   }
 
   testWidgets('нажатие по центру и потяг в бок наклоняют карточку', (
@@ -43,8 +44,8 @@ void main() {
     final gesture = await tester.startGesture(center);
     await tester.pump(const Duration(milliseconds: 32));
     expect(
-      tiltOf(tester).dx,
-      0.0,
+      tiltOf(tester).dx.abs(),
+      lessThan(0.005),
       reason: 'палец по центру — карточка стоит ровно',
     );
 
@@ -53,8 +54,8 @@ void main() {
     await gesture.moveBy(const Offset(10, 0));
     await tester.pump(const Duration(milliseconds: 32));
     expect(
-      tiltOf(tester).dx,
-      isNot(0.0),
+      tiltOf(tester).dy.abs(),
+      greaterThan(0.02),
       reason: 'потяг в бок должен наклонять карточку даже из центра',
     );
 
@@ -74,13 +75,16 @@ void main() {
     await gesture.moveBy(const Offset(40, 0));
     await tester.pump(const Duration(milliseconds: 32));
 
-    final matrix = tester
-        .widget<Transform>(find.byKey(const ValueKey('gift_tilt_transform')))
-        .transform;
+    final tilt = tiltOf(tester);
     expect(
-      matrix,
-      Matrix4.identity(),
-      reason: 'во время листания карточка должна стоять ровно',
+      tilt.dx.abs(),
+      lessThan(0.01),
+      reason: 'во время листания карточка стоит ровно по X',
+    );
+    expect(
+      tilt.dy.abs(),
+      lessThan(0.01),
+      reason: 'во время листания карточка стоит ровно по Y',
     );
 
     await gesture.up();

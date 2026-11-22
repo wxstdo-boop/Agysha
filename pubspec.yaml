@@ -71,6 +71,7 @@ flutter:
   assets:
     - assets/sounds/
     - assets/agysha.png
+    - assets/agysha_art.png
   fonts:
     - family: Caveat
       fonts:

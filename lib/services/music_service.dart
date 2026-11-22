@@ -99,6 +99,13 @@ class MusicService extends ChangeNotifier {
   /// Пути, реально загруженные в плеер сейчас (совпадают с индексами).
   List<String> _playlist = const [];
 
+  /// Отпечаток загруженных источников (пути + подписи). Меняется — значит
+  /// теги в плеере устарели, и уведомление нужно пересобрать.
+  String _sourceSig = '';
+
+  /// Идёт пересборка очереди ради новых подписей.
+  bool _reloading = false;
+
   Timer? _fadeTimer;
 
   /// Поколение фейдов: старый таймер, увидев чужое поколение, тихо выходит,
@@ -118,16 +125,6 @@ class MusicService extends ChangeNotifier {
   /// Активный режим очереди.
   QueueMode get mode => _mode;
 
-  /// Позиция текущего трека — для плавной полосы на карточке музыки.
-  Stream<Duration> get positionStream => _player.positionStream;
-
-  /// Текущая позиция (на случай, когда поток ещё не отдал первое значение).
-  Duration get position => _player.position;
-
-  /// Длительность текущего трека; `null`, пока плеер не разобрал файл.
-  Duration? get duration => _player.duration;
-  Stream<Duration?> get durationStream => _player.durationStream;
-
   /// Включить подъём громкости там, где он есть (Android).
   Future<void> _applyLoudnessBoost() async {
     if (!Platform.isAndroid) return;
@@ -141,9 +138,45 @@ class MusicService extends ChangeNotifier {
 
   /// Установить очередь (порядок подборки) и подписи для уведомления.
   void setQueue(List<String> paths, {Map<String, String>? titles}) {
-    _queue = List<String>.unmodifiable(paths);
-    if (titles != null) _titles = Map<String, String>.unmodifiable(titles);
+    final nextPaths = List<String>.unmodifiable(paths);
+    final nextTitles = titles == null
+        ? _titles
+        : Map<String, String>.unmodifiable(titles);
+    final changed =
+        !listEquals(nextPaths, _queue) || !mapEquals(nextTitles, _titles);
+    _queue = nextPaths;
+    _titles = nextTitles;
+    // Название и обложка в шторке живут в тегах загруженного источника:
+    // пока очередь не пересобрана, уведомление показывает старое имя или
+    // имя файла. Пересобираем только когда подборка правда изменилась —
+    // иначе каждая перестройка профиля дёргала бы плеер.
+    if (changed && _playlist.isNotEmpty) unawaited(_refreshQueueTags());
   }
+
+  /// Обновить теги играющей очереди, не теряя позицию и громкость.
+  Future<void> _refreshQueueTags() async {
+    if (_reloading) return;
+    final current = _path;
+    if (current == null || _playlist.isEmpty) return;
+    final paths = _queue.contains(current) ? _queue : <String>[current];
+    if (_signature(paths) == _sourceSig) return;
+    _reloading = true;
+    try {
+      final position = _player.position;
+      await _ensureSource(current);
+      if (position > Duration.zero) await _player.seek(position);
+      if (_playing) unawaited(_player.play());
+    } catch (_) {
+      // Очередь обновится на следующем запуске трека.
+    } finally {
+      _reloading = false;
+    }
+  }
+
+  /// Отпечаток «путь + подпись»: по нему видно, нужно ли пересобирать
+  /// источник ради новых названий.
+  String _signature(List<String> paths) =>
+      paths.map((p) => '$p\u0001${_titles[p] ?? ''}').join('\u0002');
 
   /// Запустить (или продолжить) трек по пути. Возвращает `false`, если файла
   /// нет или воспроизведение не удалось — вызывающий показывает ошибку.
@@ -263,31 +296,41 @@ class MusicService extends ChangeNotifier {
     await _applyLoopMode();
   }
 
-  /// Следующий трек по режиму.
+  /// Соседний трек в очереди.
   ///
-  /// Индекс берём у самого плеера (`nextIndex`): он уже учитывает и
-  /// перемешивание, и режим зацикливания. `seekToNext()` для этого не
-  /// годится — под `LoopMode.one` он молчит, и кнопка «дальше» в шторке
-  /// не работала.
+  /// Считаем сами, а не берём `player.nextIndex`: под `LoopMode.one` он
+  /// возвращает ТОТ ЖЕ индекс, и кнопка «дальше» в шторке просто начинала
+  /// трек заново. При перемешивании идём по уже готовому порядку плеера.
+  int _step(int offset) {
+    final len = _playlist.length;
+    if (len == 0) return 0;
+    final current = _player.currentIndex ?? _playlist.indexOf(_path ?? '');
+    if (current < 0) return 0;
+    if (_player.shuffleModeEnabled) {
+      final order = _player.effectiveIndices;
+      final pos = order.indexOf(current);
+      if (pos < 0 || order.isEmpty) return current;
+      return order[(pos + offset) % order.length];
+    }
+    return (current + offset) % len;
+  }
+
+  /// Следующий трек — кнопка «дальше» в шторке и в профиле.
   Future<void> next() async {
     if (_playlist.isEmpty) return;
-    final index = _player.nextIndex;
-    if (index == null) return;
-    await _jumpTo(index);
+    await _jumpTo(_step(1));
   }
 
   /// Предыдущий трек — для кнопки «назад» в медиауведомлении.
   Future<void> previous() async {
     if (_playlist.isEmpty) return;
-    final index = _player.previousIndex;
-    if (index == null) return;
     // Как в обычных плеерах: из середины трека «назад» сначала возвращает
     // его начало, и только повторное нажатие уходит на предыдущий.
     if (_player.position > const Duration(seconds: 3)) {
-      await _jumpTo(_player.currentIndex ?? index);
+      await _jumpTo(_player.currentIndex ?? _step(-1));
       return;
     }
-    await _jumpTo(index);
+    await _jumpTo(_step(-1));
   }
 
   /// Перейти к треку [index] с начала, не теряя фейда громкости.
@@ -308,7 +351,8 @@ class MusicService extends ChangeNotifier {
   /// иначе система «дёргала» бы уведомление на каждый тап.
   Future<void> _ensureSource(String current) async {
     final paths = _queue.contains(current) ? _queue : <String>[current];
-    if (listEquals(paths, _playlist) && _player.audioSource != null) {
+    final sig = _signature(paths);
+    if (sig == _sourceSig && _player.audioSource != null) {
       await _applyLoopMode();
       final index = _playlist.indexOf(current);
       if (_player.currentIndex != index ||
@@ -335,6 +379,7 @@ class MusicService extends ChangeNotifier {
         ),
     ];
     _playlist = List<String>.unmodifiable(paths);
+    _sourceSig = sig;
     await _applyLoopMode();
     await _player.setAudioSources(
       sources,
@@ -343,7 +388,8 @@ class MusicService extends ChangeNotifier {
     );
   }
 
-  /// Обложка для медиауведомления: `assets/agysha.png`, выложенная во
+  /// Обложка для медиауведомления: `assets/agysha_art.png` (1024×1024,
+  /// плотный фон и крупная Агюша — в шторке она не мылится), выложенная во
   /// внутреннюю папку приложения. `just_audio_background` умеет принимать
   /// и `file://`, и `content://`, но не `asset://`, поэтому ассет копируем.
   static Uri? _artUri;
@@ -354,9 +400,9 @@ class MusicService extends ChangeNotifier {
     if (cached != null) return cached;
     try {
       final dir = await getApplicationSupportDirectory();
-      final file = File('${dir.path}/notification_art.png');
+      final file = File('${dir.path}/notification_art_v2.png');
       if (!await file.exists() || await file.length() == 0) {
-        final data = await rootBundle.load('assets/agysha.png');
+        final data = await rootBundle.load('assets/agysha_art.png');
         await file.writeAsBytes(data.buffer.asUint8List(), flush: true);
       }
       _artUri = Uri.file(file.path);

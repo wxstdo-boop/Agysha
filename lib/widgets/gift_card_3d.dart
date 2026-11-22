@@ -69,7 +69,7 @@ class _GiftCard3DState extends State<GiftCard3D>
     super.initState();
     _resetController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 460),
+      duration: const Duration(milliseconds: 620),
     );
     _tiltAnimation = Tween<Offset>(begin: Offset.zero, end: Offset.zero)
         .animate(
@@ -118,8 +118,8 @@ class _GiftCard3DState extends State<GiftCard3D>
         ? 0.0
         : (localPosition.dy - start.dy) / widget.height * 2.0;
     final target = Offset(
-      _softClamp(rawDx * 0.60 + dragDx * 1.70),
-      _softClamp(rawDy * 0.60 + dragDy * 1.70),
+      _softClamp(rawDx * 0.85 + dragDx * 1.95),
+      _softClamp(rawDy * 0.85 + dragDy * 1.95),
     );
     final next = Offset.lerp(_tilt, target, 0.55) ?? target;
     if ((next - _tilt).distance > 0.0005) {
@@ -144,9 +144,14 @@ class _GiftCard3DState extends State<GiftCard3D>
 
   void _onPointerMove(PointerMoveEvent event) {
     final start = _downPos;
+    final delta = start == null ? Offset.zero : event.localPosition - start;
+    // Листание отменяет наклон только когда палец ушёл В БОК: случайная
+    // вертикальная дрожь при нажатии раньше гасила наклон, и карточка
+    // «не крутилась» вовсе.
     if (start != null &&
         !_scrolling &&
-        (event.localPosition - start).distance > 16) {
+        delta.dx.abs() > 14 &&
+        delta.dx.abs() > delta.dy.abs() * 1.4) {
       _scrolling = true;
       _flattenNow();
     }
@@ -392,22 +397,17 @@ class _GiftCard3DState extends State<GiftCard3D>
                     : _tilt;
                 // Сочный наклон: 0.34 рад (~19°) — прежняя «пищдатость»,
                 // у 0.26 карточка под пальцем почти не отзывалась.
-                final tiltX = -currentTilt.dy * 0.34;
-                final tiltY = currentTilt.dx * 0.34;
+                final tiltX = -currentTilt.dy * 0.40;
+                final tiltY = currentTilt.dx * 0.40;
 
-                // Пока карточка стоит ровно, матрица — единичная, без
-                // перспективы: перспективный Transform отключает кэш
-                // растра, и при листании полосы артефактов каждая карточка
-                // растеризовалась заново каждый кадр — отсюда рывки.
-                final flat =
-                    currentTilt.dx.abs() < 0.002 &&
-                    currentTilt.dy.abs() < 0.002;
-                final transform = flat
-                    ? Matrix4.identity()
-                    : (Matrix4.identity()
-                        ..setEntry(3, 2, 0.0018)
-                        ..rotateX(tiltX)
-                        ..rotateY(tiltY));
+                // Перспектива стоит постоянно. При нулевом наклоне такая
+                // матрица рисует ровно те же пиксели, что и единичная, но
+                // переключения «плоско ↔ перспектива» на старте нажатия
+                // больше нет — фон карточки не прыгает.
+                final transform = Matrix4.identity()
+                  ..setEntry(3, 2, 0.0018)
+                  ..rotateX(tiltX)
+                  ..rotateY(tiltY);
 
                 // Transform держим всегда, даже с единичной матрицей: раньше
                 // при возврате карточка меняла поддерево (Transform → child),
