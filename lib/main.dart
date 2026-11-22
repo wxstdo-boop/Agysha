@@ -70,6 +70,11 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final JankRouteObserver _jankObserver = JankRouteObserver();
 Timer? _autoSaveTimer;
 bool _autoSaveFailureActive = false;
+
+/// Включено ли автосохранение прямо сейчас. Нужен, чтобы тик, который уже
+/// шёл в момент выключения, не завёл таймер заново, и чтобы уход в фон
+/// мог сохранить данные.
+bool _autoSaveOn = false;
 // Флаг — WakeTaskScreen уже показан, не пушить второй при тапе
 // по уведомлению (onNewIntent → onNewAlarmPayload).
 bool _wakeScreenShowing = false;
@@ -151,12 +156,14 @@ Future<String?> _readAlarmBootPayload() async {
 /// в payload ключи совпадали с именами, которыми пользуется импорт
 /// в settings_screen.
 void startAutoSave() {
+  _autoSaveOn = true;
   _autoSaveTimer?.cancel();
   _autoSaveTimer = null;
   _autoSaveTick();
 }
 
-Future<void> _autoSaveTick() async {
+/// Пишет все локальные данные на диск один раз, без запуска таймера.
+Future<void> _saveAllData() async {
   try {
     // Параллельно — не блокируем UI последовательной записью 5 файлов
     await Future.wait([
@@ -173,6 +180,13 @@ Future<void> _autoSaveTick() async {
       _reportPersistenceFailure(error, stackTrace);
     }
   }
+}
+
+Future<void> _autoSaveTick() async {
+  await _saveAllData();
+  // Тик мог доработать уже после выключения автосохранения — тогда новый
+  // таймер не заводим, иначе оно продолжало бы работать «выключенным».
+  if (!_autoSaveOn) return;
   // Увеличиваем интервал с 3 до 10 секунд, чтобы снизить нагрузку на диск.
   _autoSaveTimer = Timer(const Duration(seconds: 10), _autoSaveTick);
 }
@@ -206,6 +220,7 @@ void _reportPersistenceFailure(Object error, StackTrace stackTrace) {
 }
 
 void stopAutoSave() {
+  _autoSaveOn = false;
   _autoSaveTimer?.cancel();
   _autoSaveTimer = null;
 }
@@ -1464,6 +1479,10 @@ class AgyshaAppState extends State<AgyshaApp>
     // открывается без PIN). Если PIN-экран уже на экране — не дублируем.
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
+      // Сворачивание/закрытие может заморозить процесс в любой момент,
+      // поэтому при включённом автосохранении пишем данные сразу, не
+      // дожидаясь следующего десятисекундного тика.
+      if (_autoSaveOn) _saveAllData();
       if (!systemUiActive &&
           !_wakeScreenShowing &&
           !_locked &&

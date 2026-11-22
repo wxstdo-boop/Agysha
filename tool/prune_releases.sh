@@ -10,13 +10,13 @@
 #
 # Запуск:
 #   ./tool/prune_releases.sh [KEEP] [DRY_RUN]
-# KEEP по умолчанию 10, DRY_RUN по умолчанию 1 (только показать).
+# KEEP по умолчанию 20, DRY_RUN по умолчанию 1 (только показать).
 # В CI вызывается как `... 10 0`.
 #
 # Требует: gh и jq, GITHUB_REPOSITORY, GITHUB_TOKEN.
 set -euo pipefail
 
-KEEP="${1:-10}"
+KEEP="${1:-20}"
 DRY_RUN="${2:-1}"
 
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY не задан (в GitHub Actions есть сам)}"
