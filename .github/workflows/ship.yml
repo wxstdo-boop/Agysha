@@ -234,11 +234,22 @@ jobs:
           # F-Droid отбрасывает пустой changelog — подстраховываемся.
           [ -s "$FILE" ] || printf -- '- Обновление\n' > "$FILE"
           # Лимит F-Droid — 500 символов; длинный текст обрезаем с «...».
-          if [ "$(wc -c < "$FILE")" -gt 500 ]; then
-            head -c 470 "$FILE" > "${FILE}.tmp"
-            printf '\n...\n' >> "${FILE}.tmp"
-            mv "${FILE}.tmp" "$FILE"
-          fi
+          # Режем по границе символа: `head -c` рвал многобайтовую кириллицу
+          # и оставлял файл с битым UTF-8, из-за чего падал release_notes_test.
+          python3 - "$FILE" <<'PY'
+          import sys
+          path = sys.argv[1]
+          lines = [l for l in open(path, encoding='utf-8').read().splitlines() if l.strip()]
+          if len(("\n".join(lines)).encode()) > 500:
+              out, used = [], 0
+              for line in lines:
+                  size = len((line + "\n").encode())
+                  if used + size > 460:
+                      break
+                  out.append(line)
+                  used += size
+              open(path, 'w', encoding='utf-8').write("\n".join(out) + "\n...\n")
+          PY
           echo "Сгенерирован ${FILE}:"
           cat "$FILE"
 
