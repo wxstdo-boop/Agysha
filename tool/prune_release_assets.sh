@@ -12,13 +12,13 @@
 #
 # Запуск:
 #   ./tool/prune_release_assets.sh [KEEP] [DRY_RUN]
-# KEEP по умолчанию 10, DRY_RUN по умолчанию 1 (смета без удалений).
+# KEEP по умолчанию 20, DRY_RUN по умолчанию 1 (смета без удалений).
 # В CI вызывается как `... 10 0`.
 #
 # Требует: gh и jq (есть на ubuntu-latest), GITHUB_REPOSITORY, GITHUB_TOKEN.
 set -euo pipefail
 
-KEEP="${1:-10}"
+KEEP="${1:-20}"
 DRY_RUN="${2:-1}"
 
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY не задан (в GitHub Actions есть сам)}"
@@ -95,7 +95,7 @@ else
 fi
 
 # Затем сами записи релизов — отдельным скриптом, чтобы его можно было
-# запустить и руками: ./tool/prune_releases.sh 10 1
+# запустить и руками: ./tool/prune_releases.sh 20 1
 here="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$here/prune_releases.sh" ]; then
   bash "$here/prune_releases.sh" "$KEEP" "$DRY_RUN"

@@ -246,8 +246,8 @@ jobs:
         if: ${{ inputs.dry_run != 'true' }}
         run: |
           set -euo pipefail
-          git config user.name "agysha-ship"
-          git config user.email "ship@users.noreply.github.com"
+          git config user.name "Wetidom"
+          git config user.email "wxstdo@gmail.com"
           # kAppVersion обновляется бампом вместе с pubspec.yaml — иначе
           # следующий же регрессионный тест упадёт на расхождении версий.
           # changelog кладём в тот же коммит: fdroiddata читает его именно

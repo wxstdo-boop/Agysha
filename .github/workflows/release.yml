@@ -265,7 +265,7 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Сколько релизов с APK оставляем. 10 — это ~800 МБ и запас для
-          # отката на пару версий назад при неудачном релизе.
-          KEEP: '10'
+          # Сколько релизов с APK оставляем. 20 — это ~1.6 ГБ и запас
+          # для отката на несколько версий назад при неудачном релизе.
+          KEEP: '20'
         run: bash tool/prune_release_assets.sh "$KEEP" 0
