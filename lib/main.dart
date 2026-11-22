@@ -778,7 +778,6 @@ Future<void> _restoreStartupBackup(Map<String, dynamic> backup) async {
     'setting_ada_proactive',
     'setting_ai_tracking',
     'setting_agnes_key',
-    'setting_zen_key',
     'setting_gemini_key',
     'setting_modal_url',
     'setting_modal_key',
@@ -937,6 +936,9 @@ Future<void> _startApp() async {
     // системы (Play Protect и т. п.) — понятной подсказкой. В F-Droid
     // самообновления нет, поэтому и слушатель не нужен.
     _watchInstallOutcome();
+    // Удаляем APK, которым уже установлена эта версия: после автообновления
+    // он оставался на телефоне и копил мегабайты.
+    unawaited(Installer.cleanupInstalledApk());
     unawaited(_adoptBackgroundUpdate());
   }
   // Повторный edge-to-edge ПОСЛЕ первого кадра — на MIUI/HyperOS вызов  // до runApp не применяется (Flutter сбрасывает системный UI при старте).

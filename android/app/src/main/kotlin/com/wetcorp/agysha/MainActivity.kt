@@ -25,7 +25,9 @@ import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
+import flutter.overlay.window.flutter_overlay_window.FlutterOverlayWindowPlugin
 import java.security.MessageDigest
 import java.io.File
 import java.io.FileOutputStream
@@ -258,33 +260,14 @@ class MainActivity : FlutterActivity() {
         // Контекст экрана для Ады: текст активного окна другого приложения
         // читает ScreenReaderService (Специальные возможности). Канал только
         // отвечает на вопросы «есть разрешение?» и «дай свежий снимок».
-        MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            "com.wetcorp.agysha/screen_reader",
-        ).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "hasPermission" -> result.success(isScreenReaderEnabled())
-                "getScreenText" -> {
-                    result.success(
-                        mapOf(
-                            "text" to ScreenReaderService.latestText,
-                            "package" to ScreenReaderService.latestPackage,
-                            "at" to ScreenReaderService.latestAt,
-                        ),
-                    )
-                }
-                "openAccessibilitySettings" -> {
-                    try {
-                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                        result.success(true)
-                    } catch (e: Exception) {
-                        Log.e("MainActivity", "openAccessibilitySettings failed: $e")
-                        result.success(false)
-                    }
-                }
-                else -> result.notImplemented()
+        registerScreenReaderChannel(flutterEngine.dartExecutor.binaryMessenger)
+        // Мини-окно Ады живёт в ОТДЕЛЬНОМ Flutter-движке: каналы, объявленные
+        // здесь, ему не видны (MissingPluginException → «Ада не видит экран»).
+        // Плагин оверлея сообщает о создании движка — вешаем тот же канал и там.
+        FlutterOverlayWindowPlugin.engineReadyListener =
+            FlutterOverlayWindowPlugin.EngineReadyListener { engine ->
+                registerScreenReaderChannel(engine.dartExecutor.binaryMessenger)
             }
-        }
 
         // Системные экраны, которым нужна нативная цепочка: на realme/ColorOS
         // `android_intent_plus` то молча ничего не открывает, то уводит в
@@ -361,6 +344,43 @@ class MainActivity : FlutterActivity() {
         // одноразовые setAlarmClock — просим Dart перепланировать будильники
         // и проверки реальности. Задержка: Dart ещё регистрирует обработчик.
         maybeNotifyBootReschedule()
+    }
+
+    /**
+     * Канал «Ада видит экран». Вешается и на ГЛАВНЫЙ движок, и на движок
+     * мини-окна: каналы, созданные в configureFlutterEngine, оверлею не
+     * видны — там вызов падал с MissingPluginException, снимок всегда был
+     * пустым, и функция не работала именно там, где нужна.
+     */
+    private fun registerScreenReaderChannel(messenger: BinaryMessenger) {
+        MethodChannel(messenger, "com.wetcorp.agysha/screen_reader")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "hasPermission" -> result.success(isScreenReaderEnabled())
+                    "getScreenText" -> result.success(
+                        mapOf(
+                            "text" to ScreenReaderService.latestText,
+                            "package" to ScreenReaderService.latestPackage,
+                            "at" to ScreenReaderService.latestAt,
+                        ),
+                    )
+                    "openAccessibilitySettings" -> {
+                        try {
+                            // FLAG_ACTIVITY_NEW_TASK: окно может открыть настройки
+                            // и тогда, когда Activity уже не на переднем плане.
+                            applicationContext.startActivity(
+                                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                            result.success(true)
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "openAccessibilitySettings failed: $e")
+                            result.success(false)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     /** Включён ли ScreenReaderService в системных Спец. возможностях. */
@@ -1009,6 +1029,19 @@ class MainActivity : FlutterActivity() {
                     updatePrefs.edit().putLong("id", -1L).apply()
                     result.success(true)
                 }
+                // После успешной установки APK больше не нужен: удаляем его
+                // при первом запуске НОВОЙ версии. Имя файла содержит версию,
+                // поэтому удаляем только файлы текущей версии — загрузку
+                // следующего обновления это не задевает.
+                "cleanupUpdates" -> {
+                    try {
+                        val removed = cleanupInstalledApks()
+                        result.success(removed)
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "cleanupUpdates failed: $e")
+                        result.success(0)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -1017,6 +1050,40 @@ class MainActivity : FlutterActivity() {
     /** Настройки нативного загрузчика обновлений: id загрузки и её файл. */
     private val updatePrefs by lazy {
         getSharedPreferences("agysha_updater", Context.MODE_PRIVATE)
+    }
+
+    /**
+     * Удаляет APK, которым уже установлена текущая версия, и чистит прочие
+     * файлы обновлений. Возвращает число удалённых файлов.
+     */
+    private fun cleanupInstalledApks(): Int {
+        val dir = File(
+            getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+            "updates",
+        )
+        if (!dir.exists()) return 0
+        val version = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (_: Exception) {
+            null
+        }
+        var removed = 0
+        dir.listFiles()?.forEach { f ->
+            if (!f.isFile) return@forEach
+            val installed = version != null &&
+                f.name.endsWith("-$version.apk")
+            if (installed) {
+                try {
+                    if (f.delete()) removed++
+                } catch (_: Exception) {}
+            }
+        }
+        // Установленный файл больше не нужен и менеджеру загрузок.
+        val saved = updatePrefs.getString("file", null)
+        if (saved != null && !File(saved).exists()) {
+            updatePrefs.edit().putLong("id", -1L).apply()
+        }
+        return removed
     }
 
     /** Куда DownloadManager кладёт APK: своя папка приложения, не общая. */
