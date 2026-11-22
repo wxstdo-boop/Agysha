@@ -114,7 +114,9 @@ jobs:
 
           # Сколько провалов подряд, включая текущий. Идём от свежих прогонов
           # к старым и останавливаемся на первом не-провале; отмены не считаем.
-          PREV_STREAK=$(gh run list --repo "$REPO" --workflow "$WF_NAME" --limit 15 \
+          BRANCH_ARG=()
+          [ -n "$BRANCH" ] && BRANCH_ARG=(--branch "$BRANCH")
+          PREV_STREAK=$(gh run list --repo "$REPO" --workflow "$WF_NAME" "${BRANCH_ARG[@]}" --limit 15 \
             --json databaseId,status,conclusion \
             --jq "[.[] | select(.status == \"completed\") | select(.databaseId != $RUN_ID) | select(.conclusion != \"cancelled\") | .conclusion]
                  | reduce .[] as \$c ({n: 0, stop: false};
