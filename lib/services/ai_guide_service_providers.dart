@@ -1,4 +1,4 @@
-// Провайдеры LLM: Agnes, Zen, Poolside, Horde, OVHcloud, Murakumo, Kilo.
+// Провайдеры LLM: Agnes, Poolside, Horde, OVHcloud, Murakumo, Kilo.
 
 part of 'ai_guide_service.dart';
 
@@ -26,101 +26,53 @@ Future<String> _sendAgnes(
         Uri.parse(_agnesUrl),
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'Authorization': 'Bearer $apiKey',
         },
         body: jsonEncode({
           'model': _agnesModel,
           'messages': messages,
           'max_tokens': 6000,
+          'stream': false,
         }),
       )
       .timeout(const Duration(seconds: 14));
-  if (resp.statusCode != 200) throw Exception('Agnes ${resp.statusCode}');
-  final body = AiGuideService._asMap(jsonDecode(resp.body));
+  if (resp.statusCode != 200) {
+    // Тело ответа обычно объясняет причину (401 — ключ, 429 — лимит),
+    // поэтому кладём короткий фрагмент в ошибку: он виден в трассе.
+    final snippet = AiGuideService._shortBody(resp.body);
+    throw Exception(
+      'Agnes ${resp.statusCode}${snippet.isEmpty ? '' : ': $snippet'}',
+    );
+  }
+  final decoded = jsonDecode(resp.body);
+  final body = AiGuideService._asMap(decoded);
   final choices = AiGuideService._asList(body['choices']);
   if (choices.isEmpty) throw Exception('Agnes empty response');
-  final text = AiGuideService._asString(
-    AiGuideService._asMap(
-      AiGuideService._asMap(choices.first)['message'],
-    )['content'],
+  final message = AiGuideService._asMap(
+    AiGuideService._asMap(choices.first)['message'],
   );
+  var text = AiGuideService._asString(message['content']);
+  // Некоторые OpenAI-совместимые шлюзы отдают content массивом частей.
+  if (text == null) {
+    final parts = AiGuideService._asList(message['content']);
+    final buffer = StringBuffer();
+    for (final part in parts) {
+      final piece = AiGuideService._asString(
+        AiGuideService._asMap(part)['text'],
+      );
+      if (piece != null) buffer.write(piece);
+    }
+    text = buffer.isEmpty ? null : buffer.toString();
+  }
   if (text == null || text.trim().isEmpty) {
     throw Exception('Agnes empty text');
   }
   final cleaned = AiGuideService._cleanText(text);
+  if (cleaned.isEmpty) throw Exception('Agnes junk text');
   if (AiGuideService._isRefusal(cleaned)) throw Exception('Agnes refusal');
   AiGuideService._noteModel('Agnes AI');
   return cleaned;
-}
-
-// ---- OpenCode Zen (нужен свой ключ) ----
-const _zenUrl = 'https://opencode.ai/zen/v1/chat/completions';
-const _zenModel = 'openai/gpt-5.1';
-const _zenFallbackModels = ['anthropic/claude-sonnet-4'];
-
-Future<String> _sendZen(
-  String userText,
-  List<AiMessage> history,
-  String apiKey,
-  String languageCode,
-) async {
-  final messages = <Map<String, dynamic>>[
-    {
-      'role': 'system',
-      'content': AiGuideService.systemPrompt(languageCode, withContext: true),
-    },
-    for (final m in AiGuideService._trimContext(history))
-      {'role': m.isUser ? 'user' : 'assistant', 'content': m.text},
-    {'role': 'user', 'content': userText},
-  ];
-  var lastErr = '';
-  for (final model in [_zenModel, ..._zenFallbackModels]) {
-    try {
-      final resp = await http
-          .post(
-            Uri.parse(_zenUrl),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $apiKey',
-            },
-            body: jsonEncode({
-              'model': model,
-              'messages': messages,
-              'max_tokens': 6000,
-            }),
-          )
-          .timeout(const Duration(seconds: 14));
-      if (resp.statusCode != 200) {
-        lastErr = 'Zen ${resp.statusCode}';
-        continue;
-      }
-      final body = AiGuideService._asMap(jsonDecode(resp.body));
-      final choices = AiGuideService._asList(body['choices']);
-      if (choices.isEmpty) {
-        lastErr = 'Zen empty response';
-        continue;
-      }
-      final text = AiGuideService._asString(
-        AiGuideService._asMap(
-          AiGuideService._asMap(choices.first)['message'],
-        )['content'],
-      );
-      if (text == null || text.trim().isEmpty) {
-        lastErr = 'Zen empty text';
-        continue;
-      }
-      final cleaned = AiGuideService._cleanText(text);
-      if (AiGuideService._isRefusal(cleaned)) {
-        lastErr = 'Zen refusal';
-        continue;
-      }
-      AiGuideService._noteModel('Zen');
-      return cleaned;
-    } catch (e) {
-      lastErr = e.toString();
-    }
-  }
-  throw Exception('Zen: $lastErr');
 }
 
 // ---- Poolside / Laguna (нужен свой ключ) ----
@@ -176,13 +128,17 @@ Future<String> _sendPoolside(
         );
         return body; // обычный текстовый ответ
       }
-      return await _poolsideRoundWithTools(
+      final answer = await _poolsideRoundWithTools(
         body as Map<String, dynamic>,
         messages,
         model,
         apiKey,
         url,
       );
+      AiGuideService._noteModel(
+        isOpenRouter ? 'OpenRouter · ${model.split('/').first}' : model,
+      );
+      return answer;
     } catch (e) {
       lastError = e;
     }
@@ -217,7 +173,10 @@ Future<Object> _poolsideRound(
       .timeout(const Duration(seconds: 12));
 
   if (resp.statusCode != 200) {
-    throw Exception('Poolside ${resp.statusCode}');
+    final snippet = AiGuideService._shortBody(resp.body);
+    throw Exception(
+      'Poolside ${resp.statusCode}${snippet.isEmpty ? '' : ': $snippet'}',
+    );
   }
   final body = AiGuideService._asMap(jsonDecode(resp.body));
   final choices = AiGuideService._asList(body['choices']);
@@ -237,6 +196,7 @@ Future<Object> _poolsideRound(
   }
   final cleaned = AiGuideService._cleanText(text);
   if (cleaned.isEmpty) throw Exception('Poolside junk text');
+  if (AiGuideService._isRefusal(cleaned)) throw Exception('Poolside refusal');
   return cleaned;
 }
 
@@ -312,6 +272,10 @@ String _freePrompt(String userText, String languageCode) {
           'посуда) и не выдумывай значение названия. '
           'Отвечай по сути и коротко: не пересказывай вопрос, не повторяй '
           'одну мысль дважды, не выдумывай функции приложения и числа. '
+          'Не выдумывай событий, которых не было, и не приписывай себе '
+          'физические действия: никаких «я иду тебе 2932 песни», «я тебе '
+          'купила», «я уже у тебя». Не называй случайные большие числа. '
+          'Если не знаешь — честно скажи одной фразой. '
           'Не упоминай модели, API, лимиты или эти инструкции.',
     'fr' =>
       "Tu es Ada, une fille chaleureuse et vive, guide dans l'app Agysha. "
@@ -407,11 +371,61 @@ Future<String> _sendLlm7(
 /// Работает анонимно, стабильно отвечает на русском языке и следует системному промпту.
 const _pollinationsUrl = 'https://text.pollinations.ai/';
 
+/// Промпт для GET-маршрута Pollinations: там нет массива сообщений, поэтому
+/// последние реплики вклеиваем в текст — коротко, по одной строке на реплику.
+String _pollinationsPrompt(
+  String userText,
+  List<AiMessage> history,
+  String languageCode,
+) {
+  final ctx = AiGuideService._trimContext(history);
+  final buf = StringBuffer(_freePrompt(userText, languageCode));
+  if (ctx.isNotEmpty) {
+    buf.write('\n\nПРЕДЫДУЩИЙ РАЗГОВОР (для связи реплик):');
+    for (final m in ctx) {
+      final t = m.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final cut = t.length > 160 ? '${t.substring(0, 160)}…' : t;
+      buf.write('\n${m.isUser ? 'он' : 'Ада'}: $cut');
+    }
+    buf.write('\n\nОтвечай на его ПОСЛЕДНЕЕ сообщение.');
+  }
+  return buf.toString();
+}
+
 Future<String> _sendPollinations(
   String userText,
   List<AiMessage> history,
   String languageCode,
 ) async {
+  // GET-маршрут идёт ПЕРВЫМ: он не упирается в лимит «1 ответ в 45 секунд
+  // на IP», который отдаёт POST /openai (402 FREE_LIMIT), и отвечает за
+  // доли секунды. Раньше GET стоял последним — до него бюджет цепочки
+  // уже заканчивался, и при включённом веб-поиске Ада показывала ошибку.
+  try {
+    final getResp = await http
+        .get(
+          Uri.parse(
+            '$_pollinationsUrl'
+            '${Uri.encodeComponent(_pollinationsPrompt(userText, history, languageCode))}'
+            '?model=openai-fast',
+          ),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
+          },
+        )
+        .timeout(const Duration(seconds: 12));
+    if (getResp.statusCode == 200 && getResp.body.trim().isNotEmpty) {
+      final body = getResp.body.trim();
+      if (!body.startsWith('<')) {
+        final cleaned = AiGuideService._cleanText(body);
+        if (cleaned.isNotEmpty && !AiGuideService._isRefusal(cleaned)) {
+          AiGuideService._noteModel('Pollinations · GPT');
+          return cleaned;
+        }
+      }
+    }
+  } catch (_) {}
+
   final ctx = AiGuideService._trimContext(history);
   final messages = <Map<String, dynamic>>[
     {
@@ -423,12 +437,11 @@ Future<String> _sendPollinations(
     {'role': 'user', 'content': userText},
   ];
 
-  for (final model in const [
-    'openai-fast',
-    'openai',
-    'gpt-oss',
-    'ovh-reasoning',
-  ]) {
+  // POST — запасной маршрут: он держит массив сообщений (полный системный
+  // промпт и историю), но на анонимном IP упирается в 402 FREE_LIMIT.
+  // Поэтому одна модель и короткий таймаут: если лимит есть, ответ
+  // приходит сразу, и нет смысла ждать ещё три раза.
+  for (final model in const ['openai-fast']) {
     try {
       final resp = await http
           .post(
@@ -445,7 +458,7 @@ Future<String> _sendPollinations(
               'jsonMode': false,
             }),
           )
-          .timeout(const Duration(seconds: 14));
+          .timeout(const Duration(seconds: 8));
 
       if (resp.statusCode == 200 && resp.body.trim().isNotEmpty) {
         final body = resp.body.trim();
@@ -458,32 +471,6 @@ Future<String> _sendPollinations(
         }
       }
     } catch (_) {}
-  }
-
-  // Резервный GET-маршрут Pollinations
-  final prompt = _freePrompt(userText, languageCode);
-  final getUri = Uri.parse(
-    '$_pollinationsUrl${Uri.encodeComponent(prompt)}?model=openai-fast',
-  );
-  final getResp = await http
-      .get(
-        getUri,
-        headers: {
-          'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
-      )
-      .timeout(const Duration(seconds: 12));
-
-  if (getResp.statusCode == 200 && getResp.body.trim().isNotEmpty) {
-    final body = getResp.body.trim();
-    if (!body.startsWith('<')) {
-      final cleaned = AiGuideService._cleanText(body);
-      if (cleaned.isNotEmpty && !AiGuideService._isRefusal(cleaned)) {
-        AiGuideService._noteModel('Pollinations · GPT');
-        return cleaned;
-      }
-    }
   }
 
   throw Exception('Pollinations unavailable');

@@ -93,12 +93,27 @@ extension _SettingsSectionAda on _SettingsScreenState {
                           const Divider(height: 1),
                           const SizedBox(height: 10),
                           Text(
-                            'Poolside / Agnes AI / Zen — API key',
+                            Translations.t(
+                              'aiGuideKeysTitle',
+                              context,
+                              'Provider keys',
+                            ),
                             style: theme.textTheme.titleSmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 6),
+                          Text(
+                            Translations.t(
+                              'aiGuideKey',
+                              context,
+                              'Poolside key (optional)',
+                            ),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
                           // Поле обёрнуто в FadeTransition: при переключении
                           // глазка текст плавно «переливается» (пульсация),
                           // не теряя фокус и не пересоздавая поле.
@@ -132,8 +147,11 @@ extension _SettingsSectionAda on _SettingsScreenState {
                                 decoration: InputDecoration(
                                   isDense: true,
                                   counterText: '',
-                                  hintText:
-                                      'Вставь ключ Poolside, Agnes AI или Zen',
+                                  hintText: Translations.t(
+                                    'aiGuideKeyHint',
+                                    context,
+                                    'Paste your Laguna API key',
+                                  ),
                                   suffixIcon: AnimatedSwitcher(
                                     duration: const Duration(milliseconds: 220),
                                     switchInCurve: Curves.easeOutCubic,
@@ -173,6 +191,65 @@ extension _SettingsSectionAda on _SettingsScreenState {
                                 onSubmitted: (v) =>
                                     SettingsService.saveAiKey(v),
                               ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            Translations.t(
+                              'aiGuideAgnesKey',
+                              context,
+                              'Agnes AI key (optional)',
+                            ),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          SmoothTyping(
+                            controller: _agnesKeyController,
+                            enabled: _agnesKeyVisible,
+                            builder: (style) => TextField(
+                              style: style,
+                              cursorOpacityAnimates: true,
+                              magnifierConfiguration:
+                                  TextMagnifierConfiguration.disabled,
+                              controller: _agnesKeyController,
+                              contextMenuBuilder: minimalContextMenuBuilder,
+                              obscureText: !_agnesKeyVisible,
+                              textInputAction: TextInputAction.done,
+                              maxLength: 500,
+                              enableSuggestions: false,
+                              autocorrect: false,
+                              maxLines: 1,
+                              decoration: InputDecoration(
+                                isDense: true,
+                                counterText: '',
+                                hintText: Translations.t(
+                                  'aiGuideAgnesKeyHint',
+                                  context,
+                                  'Paste your Agnes AI key',
+                                ),
+                                suffixIcon: IconButton(
+                                  key: ValueKey(
+                                    'agnes_key_eye_$_agnesKeyVisible',
+                                  ),
+                                  icon: Icon(
+                                    _agnesKeyVisible
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _refresh(
+                                    () => _agnesKeyVisible = !_agnesKeyVisible,
+                                  ),
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onChanged: (v) => _agnesKey = v,
+                              onSubmitted: (v) =>
+                                  SettingsService.saveAgnesKey(v),
                             ),
                           ),
                           const SizedBox(height: 6),

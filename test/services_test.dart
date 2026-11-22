@@ -1134,4 +1134,21 @@ void main() {
       expect(ru, isNot(en));
     });
   });
+
+  group('Provider keys', () {
+    test('ключ сохраняется без Bearer, кавычек и пробелов', () async {
+      await SettingsService.saveAiKey(' Bearer sk-test-123\n');
+      expect(await SettingsService.loadAiKey(), 'sk-test-123');
+      await SettingsService.saveAgnesKey('"agnes-key"');
+      expect(await SettingsService.loadAgnesKey(), 'agnes-key');
+    });
+
+    test('Poolside и Agnes не затирают ключи друг друга', () async {
+      await SettingsService.saveAiKey('sk-poolside');
+      await SettingsService.saveAgnesKey('agnes-secret');
+      await SettingsService.saveAiKey('sk-poolside-2');
+      expect(await SettingsService.loadAiKey(), 'sk-poolside-2');
+      expect(await SettingsService.loadAgnesKey(), 'agnes-secret');
+    });
+  });
 }

@@ -502,7 +502,10 @@ const Map<String, String> _en = {
   'aiGuideToggle': 'Enable AI guide',
   'aiGuideDesc':
       'A small circle appears next to the “+” button and opens a mini chat.',
+  'aiGuideKeysTitle': 'Provider keys',
   'aiGuideKey': 'Poolside key (optional)',
+  'aiGuideAgnesKey': 'Agnes AI key (optional)',
+  'aiGuideAgnesKeyHint': 'Paste your Agnes AI key',
   'aiGuideKeyHint': 'Paste your Laguna API key',
   'aiGuideKeyNote':
       'Free anonymous models: LLM7, Pollinations and AI Horde — no key or sign-up needed. Your own key is only for premium models.',

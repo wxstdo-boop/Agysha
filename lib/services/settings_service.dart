@@ -378,8 +378,24 @@ class SettingsService {
 
   static Future<void> saveAiKey(String value) async {
     final map = await _loadSettings();
-    map[_keyAiKey] = value.trim();
+    map[_keyAiKey] = _normalizeKey(value);
     await _saveSettings(map);
+  }
+
+  /// Ключи часто вставляют из чата/скриншота: с «Bearer », кавычками или
+  /// переводом строки внутри. Всё это ломает заголовок Authorization, поэтому
+  /// чистим один раз при сохранении.
+  static String _normalizeKey(String value) {
+    var key = value.replaceAll(RegExp(r'\s'), '').trim();
+    if (key.toLowerCase().startsWith('bearer')) {
+      key = key.substring(6);
+    }
+    if (key.length >= 2 &&
+        ((key.startsWith('"') && key.endsWith('"')) ||
+            (key.startsWith("'") && key.endsWith("'")))) {
+      key = key.substring(1, key.length - 1);
+    }
+    return key;
   }
 
   static const _keyAgnesKey = 'setting_agnes_key';
@@ -391,19 +407,7 @@ class SettingsService {
 
   static Future<void> saveAgnesKey(String value) async {
     final map = await _loadSettings();
-    map[_keyAgnesKey] = value.trim();
-    await _saveSettings(map);
-  }
-
-  static const _keyZenKey = 'setting_zen_key';
-  static Future<String> loadZenKey() async {
-    final map = await _loadSettings();
-    return (map[_keyZenKey] as String?) ?? '';
-  }
-
-  static Future<void> saveZenKey(String value) async {
-    final map = await _loadSettings();
-    map[_keyZenKey] = value.trim();
+    map[_keyAgnesKey] = _normalizeKey(value);
     await _saveSettings(map);
   }
 

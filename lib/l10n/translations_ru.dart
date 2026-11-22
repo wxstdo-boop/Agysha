@@ -509,7 +509,10 @@ const Map<String, String> _ru = {
   'aiGuideToggle': 'Включить проводника',
   'aiGuideDesc':
       'Рядом с кнопкой «+» появится мелкий кружок — он открывает мини-чат.',
+  'aiGuideKeysTitle': 'Ключи провайдеров',
   'aiGuideKey': 'Ключ Poolside (необязательно)',
+  'aiGuideAgnesKey': 'Ключ Agnes AI (необязательно)',
+  'aiGuideAgnesKeyHint': 'Вставь ключ Agnes AI',
   'aiGuideKeyHint': 'Вставь свой ключ Laguna',
   'aiGuideKeyNote':
       'Бесплатные анонимные модели: LLM7, Pollinations и AI Horde — без ключа и регистрации. Свой ключ нужен только для премиум-моделей.',

@@ -508,7 +508,10 @@ const Map<String, String> _fr = {
   'aiGuideToggle': 'Activer le guide IA',
   'aiGuideDesc':
       'Un petit cercle apparaît à côté du bouton « + » et ouvre un mini-chat.',
+  'aiGuideKeysTitle': 'Clés des fournisseurs',
   'aiGuideKey': 'Clé Poolside (optionnelle)',
+  'aiGuideAgnesKey': 'Clé Agnes AI (optionnelle)',
+  'aiGuideAgnesKeyHint': 'Colle ta clé Agnes AI',
   'aiGuideKeyHint': 'Collez votre clé Laguna',
   'aiGuideKeyNote':
       'Modèles anonymes gratuits : LLM7, Pollinations et AI Horde — sans clé ni inscription. Votre clé ne sert qu’aux modèles premium.',

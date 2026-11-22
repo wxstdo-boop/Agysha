@@ -134,6 +134,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _aiKey = '';
   final TextEditingController _aiKeyController = TextEditingController();
   bool _aiKeyVisible = false;
+  String _agnesKey = '';
+  final TextEditingController _agnesKeyController = TextEditingController();
+  bool _agnesKeyVisible = false;
   bool _aiTracking = true;
   bool _autoExport = false;
   bool _experimental = false;
@@ -237,9 +240,11 @@ class _SettingsScreenState extends State<SettingsScreen>
     // Сохраняем введённый AI-ключ, даже если пользователь не нажал
     // «готово» на клавиатуре.
     SettingsService.saveAiKey(_aiKey);
+    SettingsService.saveAgnesKey(_agnesKey);
     _perfController.dispose();
     _keyPulse.dispose();
     _aiKeyController.dispose();
+    _agnesKeyController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     notificationService.removeListener(_onNotificationChanged);
     super.dispose();
@@ -249,6 +254,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     _aiGuide = await SettingsService.loadAiGuide();
     _aiKey = await SettingsService.loadAiKey();
     _aiKeyController.text = _aiKey;
+    _agnesKey = await SettingsService.loadAgnesKey();
+    _agnesKeyController.text = _agnesKey;
   }
 
   Future<void> _loadAiTracking() async {

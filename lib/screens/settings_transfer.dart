@@ -186,7 +186,6 @@ extension _SettingsTransfer on _SettingsScreenState {
         'setting_ada_proactive',
         'setting_ai_tracking',
         'setting_agnes_key',
-        'setting_zen_key',
         'setting_gemini_key',
         'setting_modal_url',
         'setting_modal_key',

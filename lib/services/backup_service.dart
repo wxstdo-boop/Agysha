@@ -191,7 +191,6 @@ Future<Map<String, dynamic>> buildBackupPayload() async {
     'setting_font_family',
     'setting_ai_key',
     'setting_agnes_key',
-    'setting_zen_key',
     'setting_gemini_key',
     'setting_modal_url',
     'setting_modal_key',
