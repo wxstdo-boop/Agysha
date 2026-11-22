@@ -325,7 +325,13 @@ class _SupportPillState extends State<_SupportPill> {
                     width: 1,
                   ),
                 ),
-                child: Icon(widget.icon, color: fg, size: 20),
+                // Значок в кружке так же полупрозрачен, как подпись
+                // таблетки: плотная иконка выбивалась из матового стекла.
+                child: Icon(
+                  widget.icon,
+                  color: fg.withValues(alpha: fg.a * 0.72),
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -460,7 +466,9 @@ class _CtaButtonState extends State<_CtaButton> {
               height: 31,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.94),
+                // Значок — часть стеклянной кнопки: белый диск и сама
+                // иконка просвечивают так же, как подпись.
+                color: Colors.white.withValues(alpha: 0.62),
                 boxShadow: <BoxShadow>[
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.18),
@@ -469,7 +477,11 @@ class _CtaButtonState extends State<_CtaButton> {
                   ),
                 ],
               ),
-              child: Icon(widget.icon, color: iconInk, size: 17),
+              child: Icon(
+                widget.icon,
+                color: iconInk.withValues(alpha: 0.72),
+                size: 17,
+              ),
             ),
             const SizedBox(width: 12),
             Flexible(

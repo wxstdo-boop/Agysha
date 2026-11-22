@@ -54,6 +54,9 @@ class TaskService extends ChangeNotifier {
   Future<void> _save() async {
     if (!_loaded) return;
     final value = tasksToJson(_tasks);
+    // Автосохранение тикает каждые 10 секунд: если ничего не изменилось,
+    // не переписываем файл (шифрование + полная запись) зря.
+    if (_tasksSnapshot != null && value == _tasksSnapshot) return;
     final resolved = await JsonFile.writeWithSnapshot(
       _key,
       value,

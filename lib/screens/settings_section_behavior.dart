@@ -2,6 +2,30 @@ part of 'settings_screen.dart';
 
 /// Поведение: автосохранение, экспериментальное, вибрация, звуки, «убрать анимации».
 extension _SettingsSectionBehavior on _SettingsScreenState {
+  /// Включение/выключение автосохранения. При включении сразу пишем все
+  /// данные и подтверждаем это плашкой: раньше флаг включался, а первый тик
+  /// мог молча упасть, и выглядело так, будто автосохранение не работает.
+  Future<void> _applyAutoSave(bool value) async {
+    await SettingsService.saveAutoSave(value);
+    _refresh(() => _autoSave = value);
+    if (!value) {
+      stopAutoSave();
+      return;
+    }
+    startAutoSave();
+    await flushAutoSaveNow();
+    if (!mounted) return;
+    showBeautifulSnackBar(
+      context,
+      message: Translations.t(
+        'autoSaveDone',
+        context,
+        'Данные сохранены · автосохранение включено',
+      ),
+      icon: Icons.save_outlined,
+    );
+  }
+
   /// Раздел списка настроек. Живёт отдельно, чтобы build оставался читаемым.
   List<Widget> _settingsBehaviorSection(
     BuildContext context,
@@ -52,7 +76,10 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                 },
                 trailing: VolumetricSwitch(
                   value: _experimental,
-                  semanticLabel: Translations.t('experimentalSettings', context),
+                  semanticLabel: Translations.t(
+                    'experimentalSettings',
+                    context,
+                  ),
                   onChanged: (v) async {
                     await SettingsService.saveExperimental(v);
                     _refresh(() => _experimental = v);
@@ -79,28 +106,11 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                onTap: () async {
-                  final newVal = !_autoSave;
-                  await SettingsService.saveAutoSave(newVal);
-                  _refresh(() => _autoSave = newVal);
-                  if (newVal) {
-                    startAutoSave();
-                  } else {
-                    stopAutoSave();
-                  }
-                },
+                onTap: () => _applyAutoSave(!_autoSave),
                 trailing: VolumetricSwitch(
                   value: _autoSave,
                   semanticLabel: Translations.t('autoSave', context),
-                  onChanged: (v) async {
-                    await SettingsService.saveAutoSave(v);
-                    _refresh(() => _autoSave = v);
-                    if (v) {
-                      startAutoSave();
-                    } else {
-                      stopAutoSave();
-                    }
-                  },
+                  onChanged: _applyAutoSave,
                   activeColor: theme.colorScheme.primary,
                 ),
               ),

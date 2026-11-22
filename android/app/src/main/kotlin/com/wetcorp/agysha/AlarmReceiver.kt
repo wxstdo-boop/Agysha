@@ -106,6 +106,18 @@ class AlarmReceiver : BroadcastReceiver() {
                     "locked=${isKeyguardLocked(context)}",
             )
 
+            // Полноэкранный показ — ТОЛЬКО когда человек его хочет И система
+            // право дала. Приложение с Android 14 не может выдать это право
+            // само, но пост уведомления с fullScreenIntent БЕЗ права — это
+            // ровно то, за что система снижает app-op (а на Realme/ColorOS
+            // ещё и подсказывает «ограничить»). Так приложение само себя
+            // лишало полноэкранного будильника. Без права показываем
+            // громкую карточку будильника, экран откроет launchAlarmActivity.
+            val useFullScreen = fullscreen && fsGranted
+            if (fullscreen && !fsGranted) {
+                logToFile(context, "FSI SKIPPED no grant — headline only")
+            }
+
             // ЕДИНСТВЕННЫЙ источник звука будильника.
             //
             // Раньше звук шёл откуда угодно: из сигнала канала уведомления,
@@ -131,7 +143,7 @@ class AlarmReceiver : BroadcastReceiver() {
                     // остановка (удаление/выключение будильника во время
                     // звонка) гасит именно этот звонок.
                     ringCode = id,
-                    fullscreen = fullscreen,
+                    fullscreen = useFullScreen,
                 )
                 logToFile(context, "RING START id=$id started=$ringStarted")
             }
@@ -147,7 +159,7 @@ class AlarmReceiver : BroadcastReceiver() {
             } else {
                 showNotification(
                     context, id, shownTitle, shownBody, channelName, soundName,
-                    vibrate, payload, fullscreen, customPath,
+                    vibrate, payload, useFullScreen, customPath,
                     isRealityCheck,
                     // Сервис — основной звонок. Если система отказала ему в
                     // старте (ограничения фоновых сервисов Android 12+), звук

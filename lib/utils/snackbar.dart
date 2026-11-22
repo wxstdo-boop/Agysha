@@ -9,11 +9,25 @@ import 'design_tokens.dart';
 // поэтому быстрые тапы не превращаются в шторм overlay-entries.
 OverlayEntry? _activeSnackBar;
 _AnimatedSnackBarState? _activeSnackState;
+// Группа текущей плашки: по ней её можно закрыть программно, когда причина
+// появления исчезла (например, человек выдал системное право).
+String? _activeSnackGroup;
 // Вставка нового снекбара отложена на время ухода старого.
 Timer? _pendingInsert;
 DateTime? _lastSnackTime;
 String? _lastSnackMessage;
 final Duration _snackCooldown = const Duration(milliseconds: 1200);
+
+/// Закрывает текущую плашку досрочно. [groupKey] ограничивает закрытие
+/// своей группой: чужая плашка (например, «задача выполнена») останется.
+void dismissBeautifulSnackBar({String? groupKey}) {
+  final state = _activeSnackState;
+  if (state == null || !state.mounted) return;
+  if (groupKey != null && _activeSnackGroup != groupKey) return;
+  _pendingInsert?.cancel();
+  _pendingInsert = null;
+  state.dismissOut(ms: 260);
+}
 
 void showBeautifulSnackBar(
   BuildContext context, {
@@ -60,11 +74,13 @@ void showBeautifulSnackBar(
     );
     _lastSnackTime = now;
     _lastSnackMessage = message;
+    _activeSnackGroup = groupKey;
     return;
   }
 
   _lastSnackTime = now;
   _lastSnackMessage = message;
+  _activeSnackGroup = groupKey;
 
   final theme = Theme.of(context);
   final colorScheme = theme.colorScheme;
@@ -89,6 +105,7 @@ void showBeautifulSnackBar(
           if (_activeSnackBar == entry) {
             _activeSnackBar = null;
             _activeSnackState = null;
+            _activeSnackGroup = null;
           }
           entry.remove();
         },
@@ -96,6 +113,7 @@ void showBeautifulSnackBar(
           if (_activeSnackBar == entry) {
             _activeSnackBar = null;
             _activeSnackState = null;
+            _activeSnackGroup = null;
           }
         },
       ),

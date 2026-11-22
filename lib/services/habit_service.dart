@@ -151,6 +151,7 @@ class HabitService extends ChangeNotifier {
   Future<void> _save() async {
     if (!_loaded) return;
     final value = habitsToJson(_habits);
+    if (_snapshot != null && value == _snapshot) return;
     final resolved = await JsonFile.writeWithSnapshot(_key, value, _snapshot);
     if (resolved == value) _snapshot = resolved;
   }

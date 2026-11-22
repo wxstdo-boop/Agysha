@@ -1053,31 +1053,42 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Удаляет APK, которым уже установлена текущая версия, и чистит прочие
-     * файлы обновлений. Возвращает число удалённых файлов.
+     * Чистит папку обновлений и кэш от APK прошлых релизов.
+     *
+     * Раньше удалялся только APK текущей версии, и после каждого обновления
+     * в папке оставался APK предыдущего релиза (arm64 ~50 МБ), копились
+     * десятки мегабайт. Теперь удаляем ВСЁ, кроме файла идущей прямо сейчас
+     * загрузки: установленный APK приложению больше не нужен.
+     * Возвращает число удалённых файлов.
      */
     private fun cleanupInstalledApks(): Int {
-        val dir = File(
-            getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-            "updates",
-        )
-        if (!dir.exists()) return 0
-        val version = try {
-            packageManager.getPackageInfo(packageName, 0).versionName
-        } catch (_: Exception) {
-            null
-        }
+        val activePath = updatePrefs.getString("file", null)
+        val activeId = updatePrefs.getLong("id", -1L)
+        // Докачка в процессе — её файл не трогаем.
+        val keep = if (activeId != -1L) activePath else null
         var removed = 0
-        dir.listFiles()?.forEach { f ->
-            if (!f.isFile) return@forEach
-            val installed = version != null &&
-                f.name.endsWith("-$version.apk")
-            if (installed) {
+
+        fun sweep(dir: File?) {
+            dir?.listFiles()?.forEach { f ->
+                if (!f.isFile) return@forEach
+                if (keep != null && f.absolutePath == keep) return@forEach
+                val isPart = f.name.endsWith(".part")
+                val fresh = System.currentTimeMillis() - f.lastModified() < 10 * 60_000L
+                // Свежий .part — незавершённая докачка; её не сносим.
+                if (isPart && fresh) return@forEach
+                if (!f.name.endsWith(".apk") && !isPart) return@forEach
                 try {
                     if (f.delete()) removed++
                 } catch (_: Exception) {}
             }
         }
+
+        sweep(File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "updates"))
+        // Flutter качал APK в getTemporaryDirectory() — там остаются файлы
+        // прежних версий, если обновление шло через фоновый загрузчик.
+        sweep(File(cacheDir, "agysha-downloads"))
+        sweep(cacheDir)
+
         // Установленный файл больше не нужен и менеджеру загрузок.
         val saved = updatePrefs.getString("file", null)
         if (saved != null && !File(saved).exists()) {
