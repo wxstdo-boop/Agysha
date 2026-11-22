@@ -71,6 +71,29 @@ class AiGuideService {
   /// или пустом ответе — помечает кулдаун и возвращает null (цепочка идёт
   /// дальше). При успехе — возвращает текст ответа (метку модели провайдер
   /// выставляет сам).
+  /// Текущий запрос пользователя — нужен проверке «ответ не одно слово».
+  /// Цепочка провайдеров идёт строго по одному запросу за раз.
+  static String _gatePrompt = '';
+
+  /// Ответ из одного короткого слова («Готово», «...», «Ответ») — это не
+  /// ответ Ады, а обрубок бесплатной модели. Такой результат уходит
+  /// следующему провайдеру, а не показывается пользователю.
+  static bool _tooShortAnswer(String answer) {
+    final a = answer.trim();
+    if (a.isEmpty) return true;
+    if (a.length >= 28) return false;
+    if (_gatePrompt.trim().length < 12) return false;
+    final words = a
+        .split(RegExp(r'\s+'))
+        .where(
+          (w) => w
+              .replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '')
+              .isNotEmpty,
+        )
+        .length;
+    return words <= 2 && a.length < 24;
+  }
+
   static Future<String?> _tryProvider(
     String name,
     Future<String> Function() fn,
@@ -101,6 +124,13 @@ class AiGuideService {
         _markCooldown(name);
         _recordProviderTrace(
           '$name: \u043f\u0443\u0441\u0442\u043e\u0439 \u043e\u0442\u0432\u0435\u0442',
+        );
+        _resetAnswering(name);
+        return null;
+      }
+      if (_tooShortAnswer(result)) {
+        _recordProviderTrace(
+          '$name: \u043e\u0442\u0432\u0435\u0442 \u043e\u0431\u0440\u0443\u0431\u043b\u0435\u043d',
         );
         _resetAnswering(name);
         return null;
@@ -326,7 +356,23 @@ class AiGuideService {
 
   static List<AiMessage> _trimContext(List<AiMessage> history) {
     if (history.length <= contextWindow) return history;
-    return history.sublist(history.length - contextWindow);
+    final cut = history.length - contextWindow;
+    // Раньше всё, что старше окна, просто отрезалось — Ада «забывала»
+    // начало разговора и переспрашивала. Теперь о старых сообщениях
+    // остаётся сжатая память: по одной короткой строке на реплику.
+    final digest = StringBuffer('Память о начале разговора (сжато):\n');
+    final from = cut > 16 ? cut - 16 : 0;
+    for (final m in history.sublist(from, cut)) {
+      final text = m.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (text.isEmpty) continue;
+      digest.write(m.isUser ? '— он: ' : '— ты: ');
+      digest.write(text.length > 90 ? '${text.substring(0, 90)}…' : text);
+      digest.write('\n');
+    }
+    return <AiMessage>[
+      AiMessage(isUser: false, text: digest.toString().trim()),
+      ...history.sublist(cut),
+    ];
   }
 
   /// Убирает невидимые символы (BOM, zero-width) и лишние пробелы в начале
@@ -616,6 +662,7 @@ class AiGuideService {
   }) async {
     // 'system' (язык устройства) резолвим в конкретный код — иначе
     // промпт и награды могут оказаться на английском при русском UI.
+    _gatePrompt = userText;
     if (languageCode == 'system') {
       languageCode = await SettingsService.resolveLanguageCode();
     }

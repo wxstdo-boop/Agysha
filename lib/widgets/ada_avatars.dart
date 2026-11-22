@@ -125,6 +125,43 @@ List<AdaVariant> _buildAdaVariants() {
     Icons.psychology_alt,
     Icons.heart_broken,
     Icons.emoji_objects,
+    // Второй эшелон: пул разросся с 40 до 74, поэтому подряд идущие
+    // варианты больше не повторяют глиф через каждые 40 значков.
+    Icons.local_drink,
+    Icons.wine_bar,
+    Icons.cake,
+    Icons.icecream,
+    Icons.ramen_dining,
+    Icons.restaurant,
+    Icons.coffee,
+    Icons.cruelty_free,
+    Icons.pets,
+    Icons.catching_pokemon,
+    Icons.sports_martial_arts,
+    Icons.sunny,
+    Icons.wb_twilight,
+    Icons.thermostat,
+    Icons.ac_unit,
+    Icons.tornado,
+    Icons.cyclone,
+    Icons.water_drop,
+    Icons.cloud,
+    Icons.thunderstorm,
+    Icons.foggy,
+    Icons.nights_stay,
+    Icons.brightness_2,
+    Icons.brightness_7,
+    Icons.flare,
+    Icons.auto_awesome,
+    Icons.stars,
+    Icons.favorite_border,
+    Icons.volunteer_activism,
+    Icons.back_hand,
+    Icons.front_hand,
+    Icons.bolt,
+    Icons.flash_on,
+    Icons.tips_and_updates,
+    Icons.lightbulb,
   ];
   // Пул «горячих» эмодзи для сгенерированных вариантов: он короче списка
   // иконок, поэтому глифы повторяются, но вместе с уникальным градиентом и
@@ -494,7 +531,10 @@ class AdaAvatar extends StatelessWidget {
       color: cs.primary.withValues(alpha: dark ? 0.34 : 0.20),
       blurRadius: size * 0.18,
     );
-    if (v.emoji != null) {
+    // Эмодзи — только у ЦВЕТНЫХ медальонов. Монохромная кнопка у «+»
+    // обязана быть однотонной: цветной смайлик разбивал её вид и читался
+    // «наклейкой» рядом с монохромной таблеткой разделов.
+    if (v.emoji != null && !monochrome) {
       return Text(
         v.emoji!,
         style: TextStyle(

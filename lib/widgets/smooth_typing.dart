@@ -74,7 +74,9 @@ class SmoothTyping extends StatefulWidget {
     this.style,
     this.color,
     this.cursorColor,
-    this.duration = const Duration(milliseconds: 190),
+    // Чуть медленнее прежних 190 мс: буква успевает «проявиться», а не
+    // мигнуть. Это общий темп для всех полей приложения.
+    this.duration = const Duration(milliseconds: 280),
     this.ghosts = true,
     this.enabled = true,
   });

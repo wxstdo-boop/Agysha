@@ -135,7 +135,9 @@ void main() {
       expect(span.style?.fontFamily, 'Caveat');
     });
 
-    testWidgets('подчёркивание зоны составления сохраняется', (tester) async {
+    testWidgets('зона составления не подчёркивается (жёлтый спеллчек)', (
+      tester,
+    ) async {
       final c = WideDashController();
       c.value = const TextEditingValue(
         text: 'ab\u2014cd',
@@ -168,9 +170,11 @@ void main() {
         return true;
       });
       expect(
-        underlined.join(),
-        'ab',
-        reason: 'подчёркнут должен быть только composing',
+        underlined,
+        isEmpty,
+        reason:
+            'подчёркивание composing рисовало жёлтую линию спеллчека '
+            'поверх текста пузыря',
       );
     });
   });

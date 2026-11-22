@@ -1138,6 +1138,27 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
     duration: _kOut,
   );
 
+  /// 3D-наклон клавиши под палец. Внутренний [PressScale] давал лишь
+  /// 0.10 рад (~6°) и терялся за уменьшением клавиши — на полупрозрачной
+  /// цифровой клавише это читалось как «наклона нет вовсе». Здесь наклон
+  /// свой, заметно сильнее, с перспективой и отдельным плавным возвратом.
+  late final AnimationController _tiltCtrl = AnimationController(
+    vsync: this,
+    value: 0,
+    duration: const Duration(milliseconds: 150),
+    reverseDuration: const Duration(milliseconds: 520),
+  );
+  final ValueNotifier<Offset> _tilt = ValueNotifier(Offset.zero);
+
+  /// Куда палец стоит внутри клавиши: −1..1 по каждой оси.
+  void _aim(Offset local) {
+    const side = 80.0;
+    final nx = ((local.dx / side) - 0.5).clamp(-1.0, 1.0) * 2.0;
+    final ny = ((local.dy / side) - 0.5).clamp(-1.0, 1.0) * 2.0;
+    final target = Offset(nx, ny);
+    _tilt.value = Offset.lerp(_tilt.value, target, 0.55) ?? target;
+  }
+
   /// Уровень пигмента по прогрессу удержания: налилось до 1 за первые 30%
   /// хода, дальше ПОД ПАЛЬЦЕМ плавно остывает до 0.45.
   ///
@@ -1154,12 +1175,16 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _tilt.dispose();
+    _tiltCtrl.dispose();
     _in.dispose();
     _out.dispose();
     super.dispose();
   }
 
-  void _down() {
+  void _down(PointerDownEvent e) {
+    _aim(e.localPosition);
+    _tiltCtrl.forward();
     _out.reset();
     // Ход ОБЯЗАТЕЛЬНО с нуля: `_up()` оставляет контроллер остановленным на
     // пике (0.30), и `forward()` без `from: 0` продолжал бы с этой точки —
@@ -1170,7 +1195,8 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
     _in.forward(from: 0);
   }
 
-  void _up() {
+  void _up(PointerUpEvent _) {
+    _tiltCtrl.reverse();
     // Если палец ушёл раньше пика, короткий тап всё равно дорастает до максимума
     // (остальное время — уже спад). Долгое зажатие замораживается на своём
     // остывшем уровне и оттуда плавно дотухает.
@@ -1184,6 +1210,11 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
       _in.stop();
     }
     _out.forward(from: 0);
+  }
+
+  void _cancel(PointerCancelEvent e) {
+    _tiltCtrl.reverse();
+    _up(PointerUpEvent());
   }
 
   @override
@@ -1200,69 +1231,104 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               .withSaturation(math.max(0.55, hsl.saturation))
               .toColor()
         : cs.primary;
+    // Полупрозрачная «стеклянная» обводка: тон темы (primary подмешан к
+    // нейтральному контуру), поэтому на любой палитре клавиша читается
+    // своей, а не серой рамкой. На тёмной теме чуть плотнее — иначе
+    // контур растворялся в фоне.
+    final outline = Color.lerp(
+      cs.outlineVariant,
+      cs.primary,
+      isDark ? 0.30 : 0.22,
+    )!.withValues(alpha: isDark ? 0.62 : 0.50);
     return Listener(
-      onPointerDown: (_) => _down(),
-      onPointerUp: (_) => _up(),
-      onPointerCancel: (_) => _up(),
+      onPointerDown: _down,
+      onPointerMove: (e) => _aim(e.localPosition),
+      onPointerUp: _up,
+      onPointerCancel: _cancel,
       child: RepaintBoundary(
         child: GestureDetector(
           onTap: widget.onTap,
-          // 3D-наклон под палец, как у остальных кнопок приложения.
-          // Уменьшение делает внутренний Transform.scale ниже (у него
-          // transformHitTests: false, чтобы палец не «срывал» тап).
-          child: PressScale(
-          pressedScale: 1.0,
-          enableTilt: true,
-          maxTiltAngle: 0.10,
-          duration: const Duration(milliseconds: 150),
-          releaseDuration: const Duration(milliseconds: 300),
+          // Уменьшение и 3D-наклон — одной матрицей: отдельный PressScale
+          // внутри давал вдвое более слабый наклон, который на клавише
+          // терялся. transformHitTests: false, чтобы палец у края не
+          // «срывал» тап уменьшенной клавишей.
           child: AnimatedBuilder(
-          animation: Listenable.merge([_in, _out]),
-          builder: (context, _) {
-            final level = _level(_in.value);
-            final fall = Curves.easeInOut.transform(_out.value);
-            final t = level * (1 - fall);
-            // Пока палец прижат, пятно продолжает медленно расползаться — это
-            // и есть «плавное появление»; на спаде геометрия уже стоит.
-            final spread = Curves.easeOutCubic.transform(_in.value);
-            // Клавиша вдавливается мгновенно и возвращается пружиной, а не
-            // ждёт 700мс высыхания.
-            final press = Curves.easeOutCubic.transform(
-              (_in.value / 0.16).clamp(0.0, 1.0),
-            );
-            final lift = Curves.easeOutCubic.transform(
-              (_out.value / 0.26).clamp(0.0, 1.0),
-            );
-            return Transform.scale(
-              scale: 1 - 0.12 * press * (1 - lift),
-              // transformHitTests: false — критично. По умолчанию Transform
-              // ТРАНСФОРМИРУЕТ и попадания, а клавиша на нажатии тут же
-              // садится до 0.88: палец, взятый у самого края (внешние 12%
-              // = ~5 логических пикселя), к моменту отпускания оказывался
-              // ВНЕ уменьшенной клавиши — GestureDetector рвал onTap, и цифра
-              // просто не вводилась. Вид тот же, попадания — по исходному
-              // прямоугольнику 80x80.
-              transformHitTests: false,
-              child: SizedBox(
-                width: 80,
-                height: 80,
-                child: CustomPaint(
-                  painter: _SplatHighlightPainter(
-                    t: t,
-                    spread: spread,
-                    color: pigment,
-                    seed: widget.seed,
+            animation: Listenable.merge([_in, _out, _tilt, _tiltCtrl]),
+            builder: (context, _) {
+              final level = _level(_in.value);
+              final fall = Curves.easeInOut.transform(_out.value);
+              final t = level * (1 - fall);
+              // Пока палец прижат, пятно продолжает медленно расползаться —
+              // это и есть «плавное появление»; на спаде геометрия уже стоит.
+              final spread = Curves.easeOutCubic.transform(_in.value);
+              // Клавиша вдавливается мгновенно и возвращается пружиной, а не
+              // ждёт 700мс высыхания.
+              final press = Curves.easeOutCubic.transform(
+                (_in.value / 0.16).clamp(0.0, 1.0),
+              );
+              final lift = Curves.easeOutCubic.transform(
+                (_out.value / 0.26).clamp(0.0, 1.0),
+              );
+              final tilt = Curves.easeOutCubic.transform(_tiltCtrl.value);
+              final matrix = Matrix4.identity();
+              if (tilt > 0.001) {
+                matrix.setEntry(3, 2, 0.0021);
+                matrix.rotateX(-_tilt.value.dy * 0.34 * tilt);
+                matrix.rotateY(_tilt.value.dx * 0.34 * tilt);
+              }
+              final scale = 1 - 0.12 * press * (1 - lift);
+              matrix.scaleByDouble(scale, scale, 1.0, 1.0);
+              return Transform(
+                transform: matrix,
+                alignment: Alignment.center,
+                transformHitTests: false,
+                child: SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(color: outline, width: 1.4),
+                      boxShadow: [
+                        // Мягкий подъём под обводкой: клавиша «стеклянная», а
+                        // не плоский квадрат. Тень статична (без blur-фильтра
+                        // на кадр) и не спорит с наклоном.
+                        BoxShadow(
+                          color: cs.shadow.withValues(
+                            alpha: isDark ? 0.22 : 0.10,
+                          ),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          cs.surfaceContainerHighest.withValues(
+                            alpha: isDark ? 0.14 : 0.30,
+                          ),
+                          cs.surface.withValues(alpha: isDark ? 0.05 : 0.14),
+                        ],
+                      ),
+                    ),
+                    child: CustomPaint(
+                      painter: _SplatHighlightPainter(
+                        t: t,
+                        spread: spread,
+                        color: pigment,
+                        seed: widget.seed,
+                      ),
+                      child: Center(child: widget.child),
+                    ),
                   ),
-                  child: Center(child: widget.child),
                 ),
-              ),
-            );
-          },
-        ),
+              );
+            },
           ),
+        ),
       ),
-    ),
-  );
+    );
   }
 }
 

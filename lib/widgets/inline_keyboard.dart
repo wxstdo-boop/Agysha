@@ -507,7 +507,7 @@ class _CaseGlyph extends StatelessWidget {
     style: theme.textTheme.titleMedium?.copyWith(
       // Крупнее системного titleMedium: на 46-пиксельных клавишах буква
       // должна читаться с ходу, а не выглядеть мелкой нашлёпкой.
-      fontSize: 19,
+      fontSize: 22,
       fontWeight: Weights.medium,
       letterSpacing: 0.2,
       color: theme.colorScheme.onSurface,

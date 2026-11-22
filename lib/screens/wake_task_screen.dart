@@ -1675,7 +1675,10 @@ class _RedPillButtonState extends State<_RedPillButton>
   /// цифры в задаче) состояние сбрасывалось — фон вспыхивал кадром.
   late final AnimationController _glow = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 320),
+    // Отсвет не «вспыхивает»: 520 мс в обе стороны и симметричная кривая.
+    // Прежние 320 мс с easeOut на исчезании читались рывком (владелец:
+    // «фон при вводе цифр резко появляется и так же исчезает»).
+    duration: const Duration(milliseconds: 520),
     value: widget.onPressed != null ? 1 : 0,
   );
 
@@ -1685,7 +1688,7 @@ class _RedPillButtonState extends State<_RedPillButton>
     final on = widget.onPressed != null;
     final target = on ? 1.0 : 0.0;
     if ((_glow.value - target).abs() > 0.001) {
-      _glow.animateTo(target, curve: Curves.easeOutCubic);
+      _glow.animateTo(target, curve: Curves.easeInOutCubic);
     }
   }
 
@@ -1706,7 +1709,7 @@ class _RedPillButtonState extends State<_RedPillButton>
     return AnimatedBuilder(
       animation: _glow,
       builder: (context, _) {
-        final t = Curves.easeOutCubic.transform(_glow.value);
+        final t = Curves.easeInOutCubic.transform(_glow.value);
         final child = Container(
           // Компактная кнопка задачи больше не «обрубок» по центру: у неё та же
           // кровная таблетка, что у разделов, но с собственной минимальной
@@ -1729,17 +1732,17 @@ class _RedPillButtonState extends State<_RedPillButton>
               color: const Color(0xFFE02436).withValues(
                 alpha:
                     (dark ? 0.30 : 0.26) +
-                    ((dark ? 0.92 : 0.88) - (dark ? 0.30 : 0.26)) * t,
+                    ((dark ? 0.96 : 0.92) - (dark ? 0.30 : 0.26)) * t,
               ),
-              width: 1.5,
+              width: 1.7,
             ),
             boxShadow: [
               BoxShadow(
                 color: BrandColors.blood.withValues(
-                  alpha: (dark ? 0.24 : 0.16) * t,
+                  alpha: (dark ? 0.38 : 0.26) * t,
                 ),
-                blurRadius: 16,
-                spreadRadius: -6,
+                blurRadius: 22,
+                spreadRadius: -2,
                 offset: const Offset(0, 5),
               ),
             ],
