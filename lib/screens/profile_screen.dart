@@ -2068,11 +2068,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                         ),
                         child: _isSearchingHardtekk
-                            ? const Row(
-                                key: ValueKey('searching_mode'),
+                            ? Row(
+                                key: const ValueKey('searching_mode'),
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  SizedBox(
+                                  const SizedBox(
                                     width: 14,
                                     height: 14,
                                     child: CircularProgressIndicator(
@@ -2080,7 +2080,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                       valueColor: AlwaysStoppedAnimation<Color>(BrandColors.red),
                                     ),
                                   ),
-                                  SizedBox(width: 8),
+                                  const SizedBox(width: 8),
                                   Text(
                                     Translations.t(
                                       'searching',
