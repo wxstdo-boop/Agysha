@@ -300,14 +300,15 @@ extension _SettingsSectionLook on _SettingsScreenState {
               _CtaButton(
                 label: Translations.t('visitellaName', context, 'Visitella'),
                 icon: Icons.rocket_launch_outlined,
-                // Вид Visitella: графитовый градиент. В тёмной теме верх
-                // светлее и с холодным отливом, низ — глубокий графит: кнопка
-                // читается как металл, а не как чёрное пятно на карточке.
+                // Вид Visitella: графитовый градиент. В тёмной теме держим
+                // тот же графит, что и на светлой, только чуть поднятый:
+                // прежний белёсый верх выцветал на тёмной карточке, и кнопка
+                // выглядела «вымытой» по сравнению со светлой темой.
                 gradient: theme.brightness == Brightness.dark
                     ? const [
-                        Color(0xFF9AA4B4),
-                        Color(0xFF545C6B),
-                        Color(0xFF23262C),
+                        Color(0xFF5A5F69),
+                        Color(0xFF2E3036),
+                        Color(0xFF15161A),
                       ]
                     : const [
                         Color(0xFF525760),
@@ -315,7 +316,7 @@ extension _SettingsSectionLook on _SettingsScreenState {
                         Color(0xFF121316),
                       ],
                 glow: theme.brightness == Brightness.dark
-                    ? const Color(0xFF8E97A8)
+                    ? const Color(0xFF7D8494)
                     : const Color(0xFF2A2C31),
                 onTap: () => _openLink('https://mutilated.pages.dev/#top'),
               ),
@@ -402,16 +403,16 @@ extension _SettingsSectionLook on _SettingsScreenState {
                 // приглушённый розово-винный верх и глубокий бордо.
                 gradient: theme.brightness == Brightness.dark
                     ? const [
-                        Color(0xFFC98A99),
-                        Color(0xFF8A3550),
-                        Color(0xFF3A1220),
+                        Color(0xFFE093A4),
+                        Color(0xFF9B3A56),
+                        Color(0xFF40131F),
                       ]
                     : const [
                         Color(0xFFD4697F),
                         Color(0xFF9E2338),
                         Color(0xFF5A1222),
                       ],
-                glow: const Color(0xFF9E2338),
+                glow: const Color(0xFFB04258),
                 onTap: _showSupportSheet,
               ),
             ],

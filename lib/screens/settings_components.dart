@@ -22,7 +22,7 @@ class _RealityCheckToggleCard extends StatelessWidget {
           // Аббревиатура из перевода (RC/РП/CR), чтобы даже фолбэк не
           // показывал кириллицу в нерусских языках.
           'Adds or removes the section entirely: the '
-              '${Translations.rcOf(context)} tab in Home, schedule and notifications.',
+              '${Translations.rcOf(context)} tab on the main screen, schedule and notifications.',
         );
         // Плавный переход цвета карточки и текста вместо мгновенного прыжка.
         final bgColor = on
@@ -481,8 +481,8 @@ class _CtaButtonState extends State<_CtaButton> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             Container(
-              width: 28,
-              height: 28,
+              width: 31,
+              height: 31,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.94),
@@ -494,9 +494,9 @@ class _CtaButtonState extends State<_CtaButton> {
                   ),
                 ],
               ),
-              child: Icon(widget.icon, color: iconInk, size: 16),
+              child: Icon(widget.icon, color: iconInk, size: 17),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Flexible(
               // Длинные подписи («Угостить автора», «Offrir un café»)
               // ужимаются многоточием, а не распирают кнопку и не
@@ -509,7 +509,7 @@ class _CtaButtonState extends State<_CtaButton> {
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
-                  fontSize: 16.5,
+                  fontSize: 18.4,
                   height: 1.1,
                   letterSpacing: 0.4,
                   shadows: <Shadow>[

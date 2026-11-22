@@ -228,6 +228,19 @@ void _watchInstallOutcome() {
 
 bool _watchingInstallOutcome = false;
 
+/// Догоняет загрузку обновления, пережившую перезапуск приложения.
+///
+/// Пользователь нажал «Обновить» и ушёл из приложения; APK при этом
+/// докачался системным менеджером загрузок. Здесь доводим дело до установки,
+/// чтобы обновление не оставалось «скачанным, но не поставленным».
+Future<void> _adoptBackgroundUpdate() async {
+  // Не мешаем сплэшу и первому кадру.
+  await Future<void>.delayed(const Duration(seconds: 3));
+  try {
+    await UpdateService.instance.adoptBackgroundDownload();
+  } catch (_) {}
+}
+
 /// Показывает итог, дожидаясь готовности дерева.
 ///
 /// На старте результат может прийти ДО первого кадра (pull-запрос уходит
@@ -902,6 +915,7 @@ Future<void> _startApp() async {
     // системы (Play Protect и т. п.) — понятной подсказкой. В F-Droid
     // самообновления нет, поэтому и слушатель не нужен.
     _watchInstallOutcome();
+    unawaited(_adoptBackgroundUpdate());
   }
   // Повторный edge-to-edge ПОСЛЕ первого кадра — на MIUI/HyperOS вызов  // до runApp не применяется (Flutter сбрасывает системный UI при старте).
   // Без него сверху остаётся чёрная квадратная полоса статус-бара, и
@@ -1136,6 +1150,12 @@ class AgyshaAppState extends State<AgyshaApp>
       case 'grok':
         return ThemeMode.light;
       case 'darkGrok':
+        return ThemeMode.dark;
+      // «Системная» — ТЁМНЫЙ системный вариант (обои Material You),
+      // «Сист. свет.» — светлый. Раньше первая следовала за телефоном, и
+      // при светлой системе выбор «Системной» давал светлое приложение, хотя
+      // в барабане это отдельная тёмная тема.
+      case 'system':
         return ThemeMode.dark;
       case 'systemLight':
         return ThemeMode.light;
