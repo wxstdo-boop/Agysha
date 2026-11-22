@@ -125,16 +125,24 @@ extension _SettingsLinks on _SettingsScreenState {
                   label: 'Ozon',
                   icon: Icons.shopping_bag_rounded,
                   subtitle: Translations.t('supportOzonSubtitle', context),
-                  // Стеклянный алый, как у кнопки «Угостить кофе»: два
-                  // ярко-красных пятна подряд читаются спокойно, пока они
-                  // полупрозрачные.
-                  gradient: const [
-                    Color(0xE6EC4560),
-                    Color(0xD9C41E3E),
-                    Color(0xCC8A0F26),
-                  ],
-                  glow: const Color(0xFFD42A45),
-                  foreground: const Color(0x73FFFFFF),
+                  // Первая плашка — графит, как кнопка Visitella: два алых
+                  // пятна подряд спорили друг с другом, и окно поддержки
+                  // выглядело «пожаром». Ниже Boosty остаётся алым акцентом.
+                  gradient: theme.brightness == Brightness.dark
+                      ? const [
+                          Color(0x8C5A5F69),
+                          Color(0x7A2E3036),
+                          Color(0x6615161A),
+                        ]
+                      : const [
+                          Color(0x8C525760),
+                          Color(0x7A2A2C31),
+                          Color(0x66121316),
+                        ],
+                  glow: theme.brightness == Brightness.dark
+                      ? const Color(0xFF7D8494)
+                      : const Color(0xFF2A2C31),
+                  foreground: const Color(0x99FFFFFF),
                   onTap: () => _openLink(
                     'https://finance.ozon.ru/apps/sbp/ozonbankpay/ccccb061-0a35-4e1b-8607-79c369b40b37',
                   ),

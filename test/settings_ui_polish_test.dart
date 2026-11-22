@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -151,6 +152,60 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
 
     expect(AgyshaApp.of(tester.element(revolver)).themeKey, isNot(before));
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('барабан идёт за пальцем по кругу, а не «туда-сюда»', (
+    tester,
+  ) async {
+    await openSettings(tester);
+    final revolver = find.byKey(const ValueKey('theme_revolver'));
+    await tester.ensureVisible(revolver);
+    await tester.pump(const Duration(milliseconds: 200));
+    final appState = AgyshaApp.of(tester.element(revolver));
+    final before = appState.themeKey;
+
+    final rect = tester.getRect(revolver);
+    final center = rect.center;
+    final radius = rect.width * 0.36;
+
+    // Палец обводит дугу ВОКРУГ центра: раньше поворот считался по
+    // горизонтальному смещению, и на верхней половине круга барабан уезжал
+    // в обратную сторону. Одна камора = 2π / n, то есть 36° при десяти
+    // темах — но дугу задаём по факту: ровно один шаг колеса.
+    Future<void> arc(
+      WidgetTester tester,
+      double startDeg,
+      double sweepDeg,
+    ) async {
+      final gesture = await tester.startGesture(
+        center +
+            Offset(
+              radius * math.cos(startDeg * math.pi / 180),
+              radius * math.sin(startDeg * math.pi / 180),
+            ),
+      );
+      const steps = 12;
+      for (var i = 1; i <= steps; i++) {
+        final a = (startDeg + sweepDeg * i / steps) * math.pi / 180;
+        await gesture.moveTo(
+          center + Offset(radius * math.cos(a), radius * math.sin(a)),
+        );
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 900));
+    }
+
+    // По часовой стрелке от верхней точки — ровно одна камора вперёд.
+    await arc(tester, -90, 36);
+    final afterForward = appState.themeKey;
+    expect(afterForward, isNot(before));
+
+    // Тем же движением назад — возврат туда же, без «перескока» через тему.
+    await arc(tester, -90, -36);
+    expect(appState.themeKey, before);
     await tester.pump(const Duration(seconds: 1));
   });
 

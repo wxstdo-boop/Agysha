@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import '../services/haptics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
@@ -113,6 +111,12 @@ class _AlarmsScreenState extends State<AlarmsScreen>
   bool get _timersVisible =>
       SettingsService.experimentalEnabled.value || _timerSvc.timers.isNotEmpty;
 
+  /// Таймер сейчас удаляют свайпом: его строку схлопывает сам `SwipeToDelete`
+  /// (320 мс). Пока это идёт, внешняя `AnimatedSize` секции работает без
+  /// задержки — иначе она догоняла уже ужавшуюся строку вторым, более
+  /// долгим движением, и удаление выглядело как двойной рывок.
+  bool _timerCollapsing = false;
+
   /// Раздел стал активным — форсируем ресинк офсета таблетки (keep-alive
   /// вкладка не присылает событий скролла, а общий notifier мог остаться с
   /// устаревшей высотой: таблетка разделов исчезала до первого скролла).
@@ -180,16 +184,8 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       (t) => t.id == id,
       orElse: () => AppTimer(id: '', totalSeconds: 0),
     );
-    // Вибрация при завершении таймера — только если она включена у самого
-    // таймера. Раньше били всегда и коротким `heavy()`: тумблер вибрации
-    // ни на что не влиял, а 26 мс в кармане не слышно.
-    if (t.vibrate &&
-        !kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android) {
-      try {
-        Haptics.alert();
-      } catch (_) {}
-    }
+    // Вибрацию конца таймера бьёт сам TimerService: экран к этому моменту
+    // может быть уже закрыт.
     notificationService.showInstant(
       70000 + id.hashCode % 10000,
       Translations.t('timers', context),
@@ -651,7 +647,9 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           ListenableBuilder(
             listenable: _timerSvc,
             builder: (context, _) => AnimatedSize(
-              duration: const Duration(milliseconds: 320),
+              duration: _timerCollapsing
+                  ? Duration.zero
+                  : const Duration(milliseconds: 320),
               curve: Curves.easeInOutCubic,
               alignment: Alignment.topCenter,
               child: _timersVisible
@@ -1061,20 +1059,28 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       key: ValueKey('item_timer_${timer.id}'),
       dismissKey: ValueKey('dismiss_${timer.id}'),
       borderRadius: 16,
-      // Высоту схлопывает внешний AnimatedSize секции. Своя анимация размера
-      // у свайпа позже давала ВТОРОЙ рывок снизу — окошко дёргалось дважды.
-      resizeDuration: null,
+      // Строка ужимается сама, как у будильников (320 мс), а не исчезает
+      // кадром. Внешний AnimatedSize секции в это время стоит без задержки
+      // (`_timerCollapsing`), поэтому рывок один, а не два.
+      resizeDuration: const Duration(milliseconds: 320),
       // Фон удаления = границы карточки (у неё горизонтальный margin 12).
       inset: const EdgeInsets.symmetric(horizontal: 12),
-      confirmDismiss: (_) async => await showAgyshaConfirm(
-        context,
-        title: Translations.deleteOf(context),
-        body: timer.displayLabel,
-        icon: Icons.delete_outline_rounded,
-        confirmLabel: Translations.deleteOf(context),
-        destructive: true,
-      ),
-      onDismissed: (_) => _timerSvc.remove(timer.id),
+      confirmDismiss: (_) async {
+        final ok = await showAgyshaConfirm(
+          context,
+          title: Translations.deleteOf(context),
+          body: timer.displayLabel,
+          icon: Icons.delete_outline_rounded,
+          confirmLabel: Translations.deleteOf(context),
+          destructive: true,
+        );
+        if (ok == true && mounted) setState(() => _timerCollapsing = true);
+        return ok;
+      },
+      onDismissed: (_) {
+        setState(() => _timerCollapsing = false);
+        _timerSvc.remove(timer.id);
+      },
       child: Card(
         key: ValueKey('card_${timer.id}'),
         clipBehavior: Clip.antiAlias,
