@@ -703,6 +703,10 @@ class _SectionPillState extends State<SectionPill>
                         pressTintStrength: 0.13,
                         pressTintRadius: BorderRadius.circular(18),
                         enableTilt: true,
+                        // Если pointer-up потеряется при быстрых тапах и
+                        // переключениях, красная подложка снимется сама:
+                        // раньше она иногда «заедала» нажатой навсегда.
+                        maxPressDuration: const Duration(milliseconds: 1200),
                         // Отдача как у кнопок Ады и «плюсика»: вдавливание
                         // 220 мс, возврат 1100 мс. Возврат заметно длиннее:
                         // красноватая подложка при тапе должна растворяться

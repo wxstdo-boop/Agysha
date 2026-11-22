@@ -106,7 +106,7 @@ class _AnimatedStrikeTextState extends State<AnimatedStrikeText>
   @override
   Widget build(BuildContext context) {
     final baseColor = widget.style.color ?? const Color(0xFF000000);
-    final struckColor = widget.struckColor ?? baseColor.withValues(alpha: 0.55);
+    final struckColor = widget.struckColor ?? baseColor.withValues(alpha: 0.44);
     // Линия — СПЛОШНАЯ и непрозрачная. Полупрозрачная линия ложилась на
     // буквы: над глифом суммарная плотность выше, в промежутках ниже — и
     // ровная по толщине линия читалась «то тонкая, то толстая». Держим тот
@@ -282,7 +282,9 @@ class _StrikePainter extends CustomPainter {
       //
       // Толщина: заметно толще прежних 0.26·fontSize (на 19.5px это было
       // 5.07). Тонкая линия тонула в буквах и на светлой, и на тёмной теме.
-      ..strokeWidth = math.max(6.0, fontSize * 0.34)
+      // Дальше 0.34 (≈6.6px на 19.5) линия всё ещё читалась тонкой рядом
+      // с крупными буквами — держим 0.42 и пол минимум 7px.
+      ..strokeWidth = math.max(7.0, fontSize * 0.42)
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
@@ -300,16 +302,18 @@ class _StrikePainter extends CustomPainter {
       // (раньше 0.42/0.45 уходили к верху строки).
       final y = m.baseline - m.ascent * 0.38;
       // ЗМЕЙКА, а не «пупырки»: одна длинная синусоида с постоянной
-      // толщиной пера. Амплитуда низкая, период длинный — изгибы читаются
-      // ровной волной, а не «то тонко, то жирно».
-      final amp = math.max(0.5, fontSize * 0.020);
-      final period = math.max(36.0, fontSize * 3.6);
+      // толщиной пера. Амплитуда была 0.02·fontSize (0.4px на 19.5) и при
+      // шаге 1.5px перо «топталось» на месте: круглые стыки ложились друг
+      // на друга, и волна читалась то тонкой, то жирной. Теперь изгиб
+      // заметный (~1.4px), а шаг — четверть периода, поэтому изгибы ровные.
+      final amp = math.max(1.3, fontSize * 0.070);
+      final period = math.max(30.0, fontSize * 4.6);
       final phase = 2 * math.pi / period;
       double waveAt(double x) => math.sin(x * phase) * amp;
 
-      // Мелкий шаг и lineTo: одна непрерывная полилиния без стыков-петель.
+      // Ровный шаг и lineTo: одна непрерывная полилиния без стыков-петель.
+      final step = math.max(2.0, period / 24);
       final path = Path()..moveTo(m.left, y + waveAt(0));
-      const step = 1.5;
       for (var x = step; x < lineWidth; x += step) {
         path.lineTo(m.left + x, y + waveAt(x));
       }

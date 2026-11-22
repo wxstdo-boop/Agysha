@@ -134,9 +134,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _aiKey = '';
   final TextEditingController _aiKeyController = TextEditingController();
   bool _aiKeyVisible = false;
-  String _agnesKey = '';
-  final TextEditingController _agnesKeyController = TextEditingController();
-  bool _agnesKeyVisible = false;
+  /// Отложенная запись ключа: пишем через паузу в наборе, а не на каждую
+  /// букву, но и не ждём «готово»/выхода с экрана (раньше ключ, введённый
+  /// без Enter, терялся, и Ада отвечала бесплатными моделями).
+  Timer? _keySaveTimer;
   bool _aiTracking = true;
   bool _autoExport = false;
   bool _experimental = false;
@@ -237,14 +238,14 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   @override
   void dispose() {
+    _keySaveTimer?.cancel();
     // Сохраняем введённый AI-ключ, даже если пользователь не нажал
     // «готово» на клавиатуре.
     SettingsService.saveAiKey(_aiKey);
-    SettingsService.saveAgnesKey(_agnesKey);
+    SettingsService.saveAgnesKey(_aiKey);
     _perfController.dispose();
     _keyPulse.dispose();
     _aiKeyController.dispose();
-    _agnesKeyController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     notificationService.removeListener(_onNotificationChanged);
     super.dispose();
@@ -253,9 +254,20 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _loadAiGuide() async {
     _aiGuide = await SettingsService.loadAiGuide();
     _aiKey = await SettingsService.loadAiKey();
+    // Старые сборки хранили ключ Agnes отдельно — подхватываем его, чтобы
+    // после обновления единственное поле не оказалось пустым.
+    if (_aiKey.isEmpty) _aiKey = await SettingsService.loadAgnesKey();
     _aiKeyController.text = _aiKey;
-    _agnesKey = await SettingsService.loadAgnesKey();
-    _agnesKeyController.text = _agnesKey;
+  }
+
+  /// Ключ пишется в оба хранилища (Poolside и Agnes) с короткой паузой:
+  /// вставленный ключ сохраняется сразу, без Enter и без выхода с экрана.
+  void _scheduleKeySave(String value) {
+    _keySaveTimer?.cancel();
+    _keySaveTimer = Timer(const Duration(milliseconds: 400), () {
+      SettingsService.saveAiKey(value);
+      SettingsService.saveAgnesKey(value);
+    });
   }
 
   Future<void> _loadAiTracking() async {

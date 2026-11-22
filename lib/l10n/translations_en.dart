@@ -508,7 +508,9 @@ const Map<String, String> _en = {
   'aiGuideKeyHint': 'Paste your Laguna API key',
   'aiGuideKeyNote':
       'Free anonymous models: LLM7, Pollinations and AI Horde — no key or sign-up needed. Your own key is only for premium models.',
-  'aiGuideKeyNoteProviders': 'LLM7 · Pollinations · AI Horde',
+  'aiGuideKeyNoteProviders': 'Kilo · Pollinations · LLM7 · OVH · Horde',
+  'aiGuideSharedKey':
+      'One key works for both Poolside (Laguna) and Agnes AI. Ada tries it first and falls back to the free models only if the key is rejected.',
   'adaFreeProviders': 'Free, no key',
   'adaFreeProvidersDesc':
       'LLM7, Pollinations and AI Horde. If one gateway is busy, Ada quietly tries the next.',

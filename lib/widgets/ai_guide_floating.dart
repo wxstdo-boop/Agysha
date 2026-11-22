@@ -17,12 +17,12 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   // чужое приложение, а подсказку всё равно видно.
   // Ещё меньше: 168 px в высоту и не шире 202 px — окошко перестаёт
   // закрывать половину экрана, но строка ввода и две строки ответа влезают.
-  static const double _expandedHeight = 118;
-  static const double _collapsedSize = 42;
+  static const double _expandedHeight = 100;
+  static const double _collapsedSize = 40;
 
   /// Ширина развёрнутого окошка: заметно уже прежней, ближе к квадрату.
   static double _windowWidth(double screenWidth) =>
-      (screenWidth * 0.34).clamp(126.0, 150.0);
+      (screenWidth * 0.31).clamp(116.0, 138.0);
 
   Offset _pos = Offset.zero;
   // Позиция окошка — ValueNotifier: драг двигает только Positioned
@@ -297,8 +297,10 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
       // всплывает — как в полном чате, без резкого щелчка.
       _dotsCtrlMini.stop();
       setState(() => _typingFade = true);
-      await Future.delayed(const Duration(milliseconds: 180));
+      await Future.delayed(const Duration(milliseconds: 220));
       if (!mounted || gen != adaChatGeneration) return;
+      // Ответ вставляем, пока слот «печатает…» ещё сворачивается: он гасит
+      // высоту, а пузырь поднимается из нуля — без прыжка ленты.
       setState(() {
         _messages.add(
           AiMessage(
@@ -307,11 +309,15 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
             ts: DateTime.now().millisecondsSinceEpoch,
           ),
         );
+      });
+      _scrollToBottom();
+      await Future.delayed(const Duration(milliseconds: 240));
+      if (!mounted || gen != adaChatGeneration) return;
+      setState(() {
         _busy = false;
         _typingFade = false;
       });
       _saveHistory();
-      _scrollToBottom();
     } catch (_) {
       if (!mounted || gen != adaChatGeneration) return;
       setState(() {
@@ -445,139 +451,151 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
       valueListenable: aiLockScreenVisible,
       builder: (context, locked, _) {
         if (locked) return const SizedBox.shrink();
-        return AnimatedBuilder(
-          animation: Listenable.merge([_ctrl, _morph]),
-          // Тяжёлый контент (лента сообщений, поле ввода) строится ОДИН раз
-          // и живёт как готовый child — при анимации появления/закрытия
-          // пересоздаётся только Opacity/Scale (готовый слой двигается),
-          // а не весь чат на каждый кадр. Раньше на Redmi Note 12 каждый
-          // тик 260-мс анимации перестраивал весь ListView — тормозило.
-          //
-          // RepaintBoundary: пузырь живёт отдельным слоем перерисовки —
-          // его драг/анимации не перекрашивают окна приложений под ним
-          // и наоборот; на слабых телефонах дёрганье устраняется.
+        // Material обязателен: окошко живёт в корневом Stack НАД Navigator,
+        // без Material-предка текст наследует отладочный стиль Flutter —
+        // красный с ЖЁЛТЫМ ДВОЙНЫМ подчёркиванием. Свой цвет/размер его
+        // перекрывали, а decoration наследовался: отсюда «жёлтые подчёркивания»
+        // в пузыре и в подсказке поля.
+        return Material(
+          type: MaterialType.transparency,
           child: AnimatedBuilder(
-            animation: _morph,
-            builder: (context, _) {
-              // Размер ведём из того же контроллера, что и позицию:
-              // AnimatedContainer с левым верхним якорем в конце скрутки
-              // дёргался, потому что окно сжималось в угол.
-              final mt = Curves.easeInOutCubic.transform(_morph.value);
-              final cw = w + (_collapsedSize - w) * mt;
-              final ch =
-                  _expandedHeight + (_collapsedSize - _expandedHeight) * mt;
-              // Контент меняем на середине морфа, а не мгновенно: иначе
-              // при скрутке чат исчезал, пока коробка ещё большая, и
-              // пузырь «дёргался» в последний момент.
-              final shownCollapsed = _collapsed;
-              return RepaintBoundary(
-                child: Container(
-                  width: cw,
-                  height: ch,
-                  decoration: _bubbleDecoration(cs, shownCollapsed),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        // Свой layout: уходящий слой остаётся позиционированным
-                        // УЖЕ, а не всплывает центром стека. Закрытие/скрутка
-                        // читаются как жалюзи одного окна, а не «новый белый
-                        // фон» из-под прозрачного пузыря.
-                        layoutBuilder: (currentChild, previousChildren) =>
-                            Stack(
-                              fit: StackFit.expand,
-                              alignment: Alignment.center,
-                              children: <Widget>[
-                                ...previousChildren,
-                                ?currentChild,
-                              ],
-                            ),
-                        transitionBuilder: (child, anim) => FadeTransition(
-                          opacity: anim,
-                          // Меньше «сжатости» при разворачивании: чат больше не
-                          // вылезает из «сжатой» 0.9-копии, а мягко проявляется.
-                          child: ScaleTransition(
-                            scale: Tween(begin: 0.965, end: 1.0).animate(anim),
-                            child: child,
-                          ),
-                        ),
-                        child: shownCollapsed
-                            ? _buildCollapsedCircle(
-                                cs,
-                                key: const ValueKey('circle'),
-                              )
-                            : _buildExpanded(
-                                cs,
-                                screen,
-                                key: const ValueKey('expanded'),
-                              ),
-                      ),
-                      // Блик поверх любого состояния.
-                      _glassHighlight(cs, shownCollapsed),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          builder: (context, child) {
-            // Смена анимаций появления/исчезания: была голая пульсация
-            // (масштаб 0.85→1), теперь пузырь ПРИЛЕТАЕТ мягко справа:
-            // сдвиг + масштаб + фейд на easeOutCubic, исчезание — тем же
-            // ходом в обратную сторону.
-            final t = Curves.easeOutCubic.transform(_ctrl.value);
-            if (t <= 0.001) return const SizedBox.shrink();
-            return ValueListenableBuilder<Offset>(
-              valueListenable: _posNotifier,
-              builder: (context, pos, _) {
-                // МЕСТО ПОД КЛАВИАТУРУ: в развёрнутом виде при открытой
-                // клавиатуре окошко поднимается НАД ней (как полный чат),
-                // а после закрытия клавиатуры возвращается к сохранённой
-                // позиции — сама позиция при этом не перезаписывается.
-                // Инсет приходит покадрово вместе с анимацией клавиатуры,
-                // поэтому подъём читается плавным.
-                // sizeOf/viewInsetsOf вместо MediaQuery.of: окошко зависит
-                // только от размера экрана и клавиатуры, а полный `of`
-                // подписывал его на ЛЮБОЕ изменение метрик и пересобирал
-                // каждый кадр анимации клавиатуры целиком.
-                final mqSize = MediaQuery.sizeOf(context);
-                // Позиция считается от ЦЕНТРА: при скрутке окно уменьшается
-                // в обе стороны, а не убегает в левый верхний угол и не
-                // «стопорится» на последнем кадре.
+            animation: Listenable.merge([_ctrl, _morph]),
+            // Тяжёлый контент (лента сообщений, поле ввода) строится ОДИН раз
+            // и живёт как готовый child — при анимации появления/закрытия
+            // пересоздаётся только Opacity/Scale (готовый слой двигается),
+            // а не весь чат на каждый кадр. Раньше на Redmi Note 12 каждый
+            // тик 260-мс анимации перестраивал весь ListView — тормозило.
+            //
+            // RepaintBoundary: пузырь живёт отдельным слоем перерисовки —
+            // его драг/анимации не перекрашивают окна приложений под ним
+            // и наоборот; на слабых телефонах дёрганье устраняется.
+            child: AnimatedBuilder(
+              animation: _morph,
+              builder: (context, _) {
+                // Размер ведём из того же контроллера, что и позицию:
+                // AnimatedContainer с левым верхним якорем в конце скрутки
+                // дёргался, потому что окно сжималось в угол.
                 final mt = Curves.easeInOutCubic.transform(_morph.value);
                 final cw = w + (_collapsedSize - w) * mt;
                 final ch =
                     _expandedHeight + (_collapsedSize - _expandedHeight) * mt;
-                var left = pos.dx + (w - cw) / 2;
-                left = left.clamp(8.0, mqSize.width - cw - 8.0);
-                // Клавиатура НЕ двигает окошко: оно остаётся там, куда его
-                // поставил палец. Раньше подъём над клавиатурой читался
-                // рывком и «дёргал» пузырь на каждом кадре.
-                final top = pos.dy + (_expandedHeight - ch) / 2;
-                return Positioned(
-                  left: left,
-                  top: top,
-                  child: IgnorePointer(
-                    ignoring: !aiFloating.value || t < 1.0,
-                    child: Opacity(
-                      opacity: t,
-                      child: Transform.translate(
-                        offset: Offset((1 - t) * 34, (1 - t) * -12),
-                        child: Transform.scale(
-                          scale: 0.9 + 0.1 * t,
-                          child: child,
+                // Контент меняем ИМЕННО на середине морфа. Раньше он
+                // подменялся сразу по флагу, то есть в первом кадре: при
+                // скрутке чат исчезал, пока коробка ещё большая, и в конце
+                // пузырь «дёргался и стопорился».
+                final shownCollapsed = mt > 0.5;
+                return RepaintBoundary(
+                  child: Container(
+                    width: cw,
+                    height: ch,
+                    decoration: _bubbleDecoration(cs, shownCollapsed),
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 260),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          // Свой layout: уходящий слой остаётся позиционированным
+                          // УЖЕ, а не всплывает центром стека. Закрытие/скрутка
+                          // читаются как жалюзи одного окна, а не «новый белый
+                          // фон» из-под прозрачного пузыря.
+                          layoutBuilder: (currentChild, previousChildren) =>
+                              Stack(
+                                fit: StackFit.expand,
+                                alignment: Alignment.center,
+                                children: <Widget>[
+                                  ...previousChildren,
+                                  ?currentChild,
+                                ],
+                              ),
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            // Меньше «сжатости» при разворачивании: чат больше не
+                            // вылезает из «сжатой» 0.9-копии, а мягко проявляется.
+                            child: ScaleTransition(
+                              scale: Tween(
+                                begin: 0.965,
+                                end: 1.0,
+                              ).animate(anim),
+                              child: child,
+                            ),
+                          ),
+                          child: shownCollapsed
+                              ? _buildCollapsedCircle(
+                                  cs,
+                                  key: const ValueKey('circle'),
+                                )
+                              : _buildExpanded(
+                                  cs,
+                                  screen,
+                                  key: const ValueKey('expanded'),
+                                ),
                         ),
-                      ),
+                        // Блик поверх любого состояния.
+                        _glassHighlight(cs, shownCollapsed),
+                      ],
                     ),
                   ),
                 );
               },
-            );
-          },
+            ),
+            builder: (context, child) {
+              // Смена анимаций появления/исчезания: была голая пульсация
+              // (масштаб 0.85→1), теперь пузырь ПРИЛЕТАЕТ мягко справа:
+              // сдвиг + масштаб + фейд на easeOutCubic, исчезание — тем же
+              // ходом в обратную сторону.
+              final t = Curves.easeOutCubic.transform(_ctrl.value);
+              if (t <= 0.001) return const SizedBox.shrink();
+              return ValueListenableBuilder<Offset>(
+                valueListenable: _posNotifier,
+                builder: (context, pos, _) {
+                  // МЕСТО ПОД КЛАВИАТУРУ: в развёрнутом виде при открытой
+                  // клавиатуре окошко поднимается НАД ней (как полный чат),
+                  // а после закрытия клавиатуры возвращается к сохранённой
+                  // позиции — сама позиция при этом не перезаписывается.
+                  // Инсет приходит покадрово вместе с анимацией клавиатуры,
+                  // поэтому подъём читается плавным.
+                  // sizeOf/viewInsetsOf вместо MediaQuery.of: окошко зависит
+                  // только от размера экрана и клавиатуры, а полный `of`
+                  // подписывал его на ЛЮБОЕ изменение метрик и пересобирал
+                  // каждый кадр анимации клавиатуры целиком.
+                  final mqSize = MediaQuery.sizeOf(context);
+                  // Позиция считается от ЦЕНТРА: при скрутке окно уменьшается
+                  // в обе стороны, а не убегает в левый верхний угол и не
+                  // «стопорится» на последнем кадре.
+                  final mt = Curves.easeInOutCubic.transform(_morph.value);
+                  final cw = w + (_collapsedSize - w) * mt;
+                  final ch =
+                      _expandedHeight + (_collapsedSize - _expandedHeight) * mt;
+                  var left = pos.dx + (w - cw) / 2;
+                  left = left.clamp(8.0, mqSize.width - cw - 8.0);
+                  // Клавиатура НЕ двигает окошко: оно остаётся там, куда его
+                  // поставил палец. Раньше подъём над клавиатурой читался
+                  // рывком и «дёргал» пузырь на каждом кадре.
+                  final top = pos.dy + (_expandedHeight - ch) / 2;
+                  return Positioned(
+                    left: left,
+                    top: top,
+                    child: IgnorePointer(
+                      ignoring: !aiFloating.value || t < 1.0,
+                      child: Opacity(
+                        opacity: t,
+                        child: Transform.translate(
+                          offset: Offset((1 - t) * 34, (1 - t) * -12),
+                          child: Transform.scale(
+                            scale: 0.9 + 0.1 * t,
+                            child: child,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         );
       },
     );
@@ -751,10 +769,23 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                       if (_busy && i == 0) {
                         // «Печатает…»: точки гаснут плавно перед ответом
                         // (эстафета как в полном чате — _typingFade).
-                        return AnimatedOpacity(
-                          opacity: _typingFade ? 0.0 : 1.0,
-                          duration: const Duration(milliseconds: 200),
-                          curve: Curves.easeOutCubic,
+                        // Слот гаснет и теряет высоту: без этого точка
+                        // исчезала кадром и лента дёргалась вверх.
+                        return TweenAnimationBuilder<double>(
+                          key: ValueKey('mini_typing_${_typingFade ? 1 : 0}'),
+                          tween: Tween(
+                            begin: 1.0,
+                            end: _typingFade ? 0.0 : 1.0,
+                          ),
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeInOutCubic,
+                          builder: (context, fade, child) => ClipRect(
+                            child: Align(
+                              alignment: Alignment.bottomLeft,
+                              heightFactor: fade,
+                              child: Opacity(opacity: fade, child: child),
+                            ),
+                          ),
                           child: _TypingDotsMini(animation: _dotsCtrlMini),
                         );
                       }

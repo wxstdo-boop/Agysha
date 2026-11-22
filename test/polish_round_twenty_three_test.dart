@@ -50,7 +50,7 @@ void main() {
   test('зачёркивание — одна толстая змейка с ровным пером', () {
     final src = read('lib/widgets/animated_strike_text.dart');
     expect(
-      src.contains('strokeWidth = math.max(6.0, fontSize * 0.34)'),
+      src.contains('strokeWidth = math.max(7.0, fontSize * 0.42)'),
       isTrue,
     );
     // Сплошная линия: цвет пера на полной непрозрачности, иначе над
@@ -58,8 +58,8 @@ void main() {
     // то толстой».
     expect(src.contains('.withValues('), isTrue);
     expect(src.contains('alpha: 1.0'), isTrue);
-    expect(src.contains('fontSize * 0.020'), isTrue);
-    expect(src.contains('fontSize * 3.6'), isTrue);
+    expect(src.contains('fontSize * 0.070'), isTrue);
+    expect(src.contains('fontSize * 4.6'), isTrue);
     // Линия поверх текста: под глифами она выглядела рваной.
     expect(src.contains('foregroundPainter: _StrikePainter('), isTrue);
     // Толщина одна на всю линию: непрерывная полилиния с постоянным

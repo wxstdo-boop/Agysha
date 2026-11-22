@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -65,6 +66,11 @@ class PressScale extends StatefulWidget {
   /// «изнутри» самой плашки.
   final Widget Function(BuildContext context, double progress)? pressOverlay;
 
+  /// Страховка от «залипшей» отдачи: если по каким-то причинам pointer-up
+  /// до элемента не дошёл (виджет переехал в дереве, жест отобрал родитель),
+  /// отдача снимается сама через это время. `null` — без страховки.
+  final Duration? maxPressDuration;
+
   const PressScale({
     super.key,
     required this.child,
@@ -81,6 +87,7 @@ class PressScale extends StatefulWidget {
     this.pressTintStrength = 0.12,
     this.pressTintRadius,
     this.pressOverlay,
+    this.maxPressDuration,
   });
 
   @override
@@ -115,6 +122,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(
     Offset.zero,
   );
+
+  /// Страховка от залипшей отдачи (см. [PressScale.maxPressDuration]).
+  Timer? _stuckGuard;
 
   /// Мягкое асимптотическое сглаживание к границе наклона:
   /// в пределах карточки (abs <= 0.90) угол передаётся 1:1 без срезания,
@@ -166,6 +176,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _stuckGuard?.cancel();
     _tiltNotifier.dispose();
     _tiltFade.dispose();
     _swipeCtrl.dispose();
@@ -205,6 +216,22 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     // после первого же нажатия он запомнил бы длину отпускания.
     _ctrl.duration = widget.duration;
     _ctrl.forward();
+    _armStuckGuard();
+  }
+
+  /// Если pointer-up потерялся, снимаем отдачу сами — иначе подложка
+  /// раздела остаётся «нажатой» навсегда.
+  void _armStuckGuard() {
+    _stuckGuard?.cancel();
+    final limit = widget.maxPressDuration;
+    if (limit == null) return;
+    _stuckGuard = Timer(limit, () {
+      if (!mounted || _ctrl.value <= 0) return;
+      _releaseTilt = _tilt;
+      _ctrl.duration = widget.releaseDuration ?? widget.duration;
+      _ctrl.reverse();
+      _tiltFade.reverse();
+    });
   }
 
   void _move(PointerMoveEvent e) {
@@ -227,6 +254,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   }
 
   void _up(PointerUpEvent _) {
+    _stuckGuard?.cancel();
     if (!mounted || _ctrl.value <= 0) return;
     _releaseTilt = _tilt;
     _ctrl.duration = widget.releaseDuration ?? widget.duration;
@@ -238,6 +266,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   }
 
   void _cancel(PointerCancelEvent _) {
+    _stuckGuard?.cancel();
     if (!mounted || _ctrl.value <= 0) return;
     _releaseTilt = _tilt;
     _ctrl.duration = widget.releaseDuration ?? widget.duration;

@@ -515,7 +515,9 @@ const Map<String, String> _ru = {
   'aiGuideKeyHint': 'Вставь свой ключ Laguna',
   'aiGuideKeyNote':
       'Бесплатные анонимные модели: LLM7, Pollinations и AI Horde — без ключа и регистрации. Свой ключ нужен только для премиум-моделей.',
-  'aiGuideKeyNoteProviders': 'LLM7 · Pollinations · AI Horde',
+  'aiGuideKeyNoteProviders': 'Kilo · Pollinations · LLM7 · OVH · Horde',
+  'aiGuideSharedKey':
+      'Один ключ подходит и для Poolside (Laguna), и для Agnes AI. Ада сначала пробует его, а к бесплатным моделям переходит только если ключ отклонён.',
   'adaFreeProviders': 'Бесплатные без ключа',
   'adaFreeProvidersDesc':
       'LLM7, Pollinations и AI Horde. Если один шлюз устал — Ада молча пробует следующий.',

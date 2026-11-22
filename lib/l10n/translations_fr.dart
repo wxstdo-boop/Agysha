@@ -514,7 +514,9 @@ const Map<String, String> _fr = {
   'aiGuideKeyHint': 'Collez votre clé Laguna',
   'aiGuideKeyNote':
       'Modèles anonymes gratuits : LLM7, Pollinations et AI Horde — sans clé ni inscription. Votre clé ne sert qu’aux modèles premium.',
-  'aiGuideKeyNoteProviders': 'LLM7 · Pollinations · AI Horde',
+  'aiGuideKeyNoteProviders': 'Kilo · Pollinations · LLM7 · OVH · Horde',
+  'aiGuideSharedKey':
+      'Une seule clé suffit pour Poolside (Laguna) et Agnes AI. Ada l’essaie d’abord et ne bascule sur les modèles gratuits que si la clé est refusée.',
   'adaFreeProviders': 'Gratuit, sans clé',
   'adaFreeProvidersDesc':
       'LLM7, Pollinations et AI Horde. Si une passerelle est occupée, Ada essaie la suivante.',

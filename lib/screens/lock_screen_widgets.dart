@@ -1128,8 +1128,8 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
   /// секунды — клавиша «догоняла» палец уже после отпускания, и набор
   /// читался дёрганым. Пик теперь на ~150 мс, остывание под пальцем и
   /// высыхание — тоже короче, но с той же кривой без щелчков на стыке.
-  static const _kIn = Duration(milliseconds: 520);
-  static const _kOut = Duration(milliseconds: 420);
+  static const _kIn = Duration(milliseconds: 640);
+  static const _kOut = Duration(milliseconds: 520);
 
   /// Доля хода, за которую пятно наливается до максимума.
   static const _kPeak = 0.30;
@@ -1301,10 +1301,10 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               // читался дёрганым. Рампы растянуты до ~200 мс и сглажены
               // по краям, поэтому ход пальца не «щёлкает».
               final press = Curves.easeInOutCubic.transform(
-                (_in.value / 0.22).clamp(0.0, 1.0),
+                (_in.value / 0.26).clamp(0.0, 1.0),
               );
               final lift = Curves.easeInOutCubic.transform(
-                (_out.value / 0.34).clamp(0.0, 1.0),
+                (_out.value / 0.38).clamp(0.0, 1.0),
               );
               final tilt = Curves.easeInOutCubic.transform(_tiltCtrl.value);
               // Показываемый наклон подтягивается к цели по кадрам: между
@@ -1321,7 +1321,7 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
                 matrix.rotateX(-aim.dy * 0.21 * tilt);
                 matrix.rotateY(aim.dx * 0.44 * tilt);
               }
-              final scale = 1 - 0.12 * press * (1 - lift);
+              final scale = 1 - 0.155 * press * (1 - lift);
               matrix.scaleByDouble(scale, scale, 1.0, 1.0);
               return Transform(
                 transform: matrix,

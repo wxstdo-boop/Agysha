@@ -123,10 +123,16 @@ class _Ghost {
   final double from;
   final double t0;
 
-  _Ghost(this.ch, this.pos, this.from, this.t0, {this.to});
+  /// Сколько живёт ИМЕННО ЭТА буква. При удержании «стереть» призраки
+  /// копятся и каждый кадр их десяток: они гаснут короче (см. rapid в
+  /// [_rebuild]) и сменяют друг друга без провалов, а одиночное удаление
+  /// сохраняет прежний мягкий темп.
+  final double life;
 
-  double alphaAt(double now, double dur) {
-    final t = ((now - t0) / dur).clamp(0.0, 1.0);
+  _Ghost(this.ch, this.pos, this.from, this.t0, {this.to, this.life = 0.28});
+
+  double alphaAt(double now) {
+    final t = ((now - t0) / life).clamp(0.0, 1.0);
     // easeOut, а НЕ easeIn. С easeIn удалённая буква почти всё время гасла
     // на полной плотности (к 40 мс из 190 она теряла меньше процента
     // непрозрачности) и пропадала рывком в конце — именно это при удержании
@@ -136,10 +142,10 @@ class _Ghost {
   }
 
   /// Положение буквы в текущий момент: от старой точки к началу дыры.
-  Offset posAt(double now, double dur) {
+  Offset posAt(double now) {
     final target = to;
     if (target == null) return pos;
-    final t = ((now - t0) / dur).clamp(0.0, 1.0);
+    final t = ((now - t0) / life).clamp(0.0, 1.0);
     return Offset.lerp(pos, target, Curves.easeOutCubic.transform(t)) ?? pos;
   }
 }
@@ -182,6 +188,11 @@ class _SmoothTypingState extends State<SmoothTyping>
 
   final List<_Glyph> _glyphs = <_Glyph>[];
   final List<_Ghost> _ghosts = <_Ghost>[];
+
+  /// Когда последний раз удаляли буквы (секунды наших часов). Нужен, чтобы
+  /// отличить одиночное стирание от удержания «стереть»: во втором случае
+  /// призраки живут короче и не наслаиваются друг на друга.
+  double _lastDeleteAt = -1;
 
   /// Рамки букв прошлого кадра (в координатах слоя). Из них рождаются
   /// «призраки» в момент удаления — своей геометрии у удалённой буквы уже нет.
@@ -295,6 +306,13 @@ class _SmoothTypingState extends State<SmoothTyping>
         } else if (p > 0 && p - 1 < _boxes.length && _boxes[p - 1] != null) {
           gap = _boxes[p - 1]!.topRight;
         }
+        // Удержание «стереть» присылает изменения чаще, чем раз в 90 мс.
+        // Тогда буквы гаснут короче: следующий кадр уже добавляет новую,
+        // и плотный поток сменяющих друг друга призраков читается
+        // непрерывным исчезновением, без «заедания» на скопившейся пачке.
+        final rapid = _lastDeleteAt >= 0 && now - _lastDeleteAt < 0.09;
+        final ghostLife = rapid ? math.min(0.12, _dur) : _dur;
+        _lastDeleteAt = now;
         for (var i = p; i < n - s; i++) {
           final box = i < _boxes.length ? _boxes[i] : null;
           if (box == null) continue;
@@ -305,6 +323,7 @@ class _SmoothTypingState extends State<SmoothTyping>
               old[i].alphaAt(now, _dur),
               now,
               to: gap,
+              life: ghostLife,
             ),
           );
         }
@@ -355,7 +374,7 @@ class _SmoothTypingState extends State<SmoothTyping>
         active = true;
       }
     }
-    _ghosts.removeWhere((gh) => now - gh.t0 >= dur);
+    _ghosts.removeWhere((gh) => now - gh.t0 >= gh.life);
     if (_ghosts.isNotEmpty) active = true;
     if (!active) _ticker.stop();
     // Перерисовываем только слой букв через RepaintBoundary — без setState,
@@ -678,14 +697,14 @@ class _SmoothTypingPainter extends CustomPainter {
     }
     for (final gh in ghosts) {
       final now = nowGetter();
-      final a = gh.alphaAt(now, duration);
+      final a = gh.alphaAt(now);
       if (a <= 0.01) continue;
       _ghostPainter(
         editable,
         gh.ch,
         a,
         base,
-      ).paint(canvas, gh.posAt(now, duration));
+      ).paint(canvas, gh.posAt(now));
     }
     canvas.restore();
   }

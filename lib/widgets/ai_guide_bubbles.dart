@@ -654,132 +654,132 @@ class _AnimatedErrorPlaque extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return AnimatedSwitcher(
-      // Появление — короткий мягкий подъём снизу, без пружины: плашка
-      // должна читаться как снекбар, а не «выпрыгивать» из-под ввода.
+    // Слот плашки растёт и сжимается по ВЫСОТЕ (AnimatedSize) и только
+    // гаснет по прозрачности — без сдвига снизу. Раньше плашка въезжала
+    // на 8px вверх, и при повторе (когда лента/поле уже сдвинуты) она
+    // словно «поднималась» из-под ввода; теперь она всегда занимает одно
+    // и то же поднятое место над чипами и мягко проявляется на нём.
+    return AnimatedSize(
       duration: const Duration(milliseconds: 260),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (child, anim) {
-        final t = Curves.easeOutCubic.transform(anim.value);
-        return FadeTransition(
-          opacity: anim,
-          child: Transform.translate(
-            offset: Offset(0, 8 * (1 - t)),
-            child: child,
-          ),
-        );
-      },
-      child: visible
-          ? Padding(
-              key: const ValueKey('ai_error_plaque'),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
-                decoration: BoxDecoration(
-                  // Монотонный «стеклянный» снекбар в цветах темы: раньше
-                  // это была жёлто-оранжевая плашка, которая спорила с
-                  // тёмной темой и выглядела как предупреждение системы.
-                  color: cs.surfaceContainerHighest.withValues(alpha: 0.96),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: cs.outlineVariant.withValues(alpha: 0.5),
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.bottomCenter,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, anim) =>
+            FadeTransition(opacity: anim, child: child),
+        child: visible
+            ? Padding(
+                key: const ValueKey('ai_error_plaque'),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+                  decoration: BoxDecoration(
+                    // Монотонный «стеклянный» снекбар в цветах темы: раньше
+                    // это была жёлто-оранжевая плашка, которая спорила с
+                    // тёмной темой и выглядела как предупреждение системы.
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.96),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: theme.brightness == Brightness.dark
+                              ? 0.35
+                              : 0.08,
+                        ),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: theme.brightness == Brightness.dark
-                            ? 0.35
-                            : 0.08,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: cs.error.withValues(alpha: 0.9),
+                        ),
                       ),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: cs.error.withValues(alpha: 0.9),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            Translations.t(
-                              'aiResort',
-                              context,
-                              'AI is on vacation, wait a bit',
-                            ),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: cs.onSurface,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (errorMsg.isNotEmpty)
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              errorMsg,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: cs.onSurfaceVariant.withValues(
-                                  alpha: 0.7,
-                                ),
-                                fontSize: 11,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    // Фиксированный слот 34×34: смена иконки на спиннер не
-                    // меняет размер плашки и не двигает ленту.
-                    SizedBox(
-                      width: 34,
-                      height: 34,
-                      child: retrying
-                          ? Center(
-                              child: SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: cs.primary,
-                                ),
-                              ),
-                            )
-                          : IconButton(
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 34,
-                                minHeight: 34,
-                              ),
-                              icon: Icon(
-                                Icons.refresh_rounded,
-                                color: cs.primary,
-                                size: 18,
-                              ),
-                              tooltip: Translations.t(
-                                'retry',
+                              Translations.t(
+                                'aiResort',
                                 context,
-                                'Retry',
+                                'AI is on vacation, wait a bit',
                               ),
-                              onPressed: onRetry,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: cs.onSurface,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                    ),
-                  ],
+                            if (errorMsg.isNotEmpty)
+                              Text(
+                                errorMsg,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: cs.onSurfaceVariant.withValues(
+                                    alpha: 0.7,
+                                  ),
+                                  fontSize: 11,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      // Фиксированный слот 34×34: смена иконки на спиннер не
+                      // меняет размер плашки и не двигает ленту.
+                      SizedBox(
+                        width: 34,
+                        height: 34,
+                        child: retrying
+                            ? Center(
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: cs.primary,
+                                  ),
+                                ),
+                              )
+                            : IconButton(
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 34,
+                                  minHeight: 34,
+                                ),
+                                icon: Icon(
+                                  Icons.refresh_rounded,
+                                  color: cs.primary,
+                                  size: 18,
+                                ),
+                                tooltip: Translations.t(
+                                  'retry',
+                                  context,
+                                  'Retry',
+                                ),
+                                onPressed: onRetry,
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            )
-          : const SizedBox.shrink(key: ValueKey('ai_error_hidden')),
+              )
+            : const SizedBox.shrink(key: ValueKey('ai_error_hidden')),
+      ),
     );
   }
 }

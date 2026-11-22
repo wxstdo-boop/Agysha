@@ -84,17 +84,32 @@ void main() {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 50)),
     );
-    await tester.pump(const Duration(milliseconds: 600));
+    // Переезд карточки в архив идёт в два шага (схлопывание 320 мс, затем
+    // «приезд» 420 мс), поэтому нужны кадры на всём протяжении, а не один
+    // большой прыжок: иначе мутация ещё не успевает отрисоваться.
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    // Запись списка на диск идёт настоящим I/O: без реального ожидания
+    // setState от сервиса приходит уже после последнего кадра.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 40)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
   }
 
   /// Относительная яркость цвета (WCAG 2.1).
   double luminance(Color c) {
     double ch(double v) {
       v = v / 255.0;
-      return v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+      return v <= 0.03928
+          ? v / 12.92
+          : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
     }
 
-    return 0.2126 * ch(c.r * 255) + 0.7152 * ch(c.g * 255) + 0.0722 * ch(c.b * 255);
+    return 0.2126 * ch(c.r * 255) +
+        0.7152 * ch(c.g * 255) +
+        0.0722 * ch(c.b * 255);
   }
 
   double contrast(Color a, Color b) {
@@ -115,7 +130,18 @@ void main() {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 50)),
     );
-    await tester.pump(const Duration(milliseconds: 600));
+    // Переезд карточки в архив идёт в два шага (схлопывание 320 мс, затем
+    // «приезд» 420 мс), поэтому нужны кадры на всём протяжении, а не один
+    // большой прыжок: иначе мутация ещё не успевает отрисоваться.
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    // Запись списка на диск идёт настоящим I/O: без реального ожидания
+    // setState от сервиса приходит уже после последнего кадра.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 40)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
   }
 
   testWidgets('без выполненных задач полок нет — один список', (tester) async {
@@ -145,9 +171,7 @@ void main() {
     expect(card('a2'), findsOneWidget);
   });
 
-  testWidgets('отметка задачи переносит её в архив', (
-    tester,
-  ) async {
+  testWidgets('отметка задачи переносит её в архив', (tester) async {
     await seedAndPump(tester, [
       Task(id: 'a1', title: 'Купить молоко'),
       Task(id: 'a2', title: 'Позвонить маме', done: true),
@@ -155,17 +179,13 @@ void main() {
 
     expect(find.byIcon(Icons.check), findsOneWidget);
 
-    await tapAndSettle(
-      tester,
-      find.byKey(const ValueKey('task_toggle_a1')),
-    );
+    await tapAndSettle(tester, find.byKey(const ValueKey('task_toggle_a1')));
 
     expect(
       TaskService().tasks.firstWhere((t) => t.id == 'a1').done,
       isTrue,
       reason: 'тап отмечает задачу выполненной',
     );
-    // Обе задачи теперь в архиве: две галки.
     expect(find.byIcon(Icons.check), findsNWidgets(2));
   });
 
@@ -176,10 +196,7 @@ void main() {
       Task(id: 'a1', title: 'Купить молоко', done: true),
     ]);
 
-    await tapAndSettle(
-      tester,
-      find.byKey(const ValueKey('task_toggle_a1')),
-    );
+    await tapAndSettle(tester, find.byKey(const ValueKey('task_toggle_a1')));
 
     expect(
       TaskService().tasks.firstWhere((t) => t.id == 'a1').done,
@@ -203,14 +220,10 @@ void main() {
             brightness: dark ? Brightness.dark : Brightness.light,
           ),
         );
-        await seedAndPump(
-          tester,
-          [
-            Task(id: 'a1', title: 'Купить молоко'),
-            Task(id: 'a2', title: 'Позвонить маме', done: true),
-          ],
-          theme: base,
-        );
+        await seedAndPump(tester, [
+          Task(id: 'a1', title: 'Купить молоко'),
+          Task(id: 'a2', title: 'Позвонить маме', done: true),
+        ], theme: base);
 
         final bg = base.scaffoldBackgroundColor;
         // Единственный заголовок полки — «Архивные»: он и должен читаться

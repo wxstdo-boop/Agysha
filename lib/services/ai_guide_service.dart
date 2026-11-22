@@ -1047,12 +1047,20 @@ class AiGuideService {
       return want < seconds ? want : seconds;
     }
 
-    final poolsideKey = await SettingsService.loadAiKey();
-    final poolsideBudget = budget(10);
-    if (poolsideKey.isNotEmpty && poolsideBudget > 0) {
+    // Один ключ на оба платных провайдера: поле в настройках одно, и
+    // вставленный ключ пробуется и у Poolside/Laguna, и у Agnes. Раньше два
+    // поля путали: ключ Agnes, вставленный в первое, не срабатывал, и Ада
+    // молча отвечала бесплатными моделями — владелец видел «ключ не работает».
+    final savedKey = await SettingsService.loadAiKey();
+    final userKey = savedKey.isNotEmpty
+        ? savedKey
+        : await SettingsService.loadAgnesKey();
+
+    final poolsideBudget = budget(8);
+    if (userKey.isNotEmpty && poolsideBudget > 0) {
       final answer = await _tryProvider(
         'Poolside',
-        () => _sendPoolside(userText, history, poolsideKey, languageCode),
+        () => _sendPoolside(userText, history, userKey, languageCode),
         poolsideBudget,
       );
       if (answer != null) {
@@ -1063,12 +1071,11 @@ class AiGuideService {
       _recordProviderTrace('Poolside: пропущен, ключ не задан');
     }
 
-    final agnesKey = await SettingsService.loadAgnesKey();
-    final agnesBudget = budget(7);
-    if (agnesKey.isNotEmpty && agnesBudget > 0) {
+    final agnesBudget = budget(6);
+    if (userKey.isNotEmpty && agnesBudget > 0) {
       final answer = await _tryProvider(
         'Agnes AI',
-        () => _sendAgnes(userText, history, agnesKey, languageCode),
+        () => _sendAgnes(userText, history, userKey, languageCode),
         agnesBudget,
       );
       if (answer != null) {

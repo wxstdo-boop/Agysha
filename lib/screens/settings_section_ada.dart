@@ -96,7 +96,7 @@ extension _SettingsSectionAda on _SettingsScreenState {
                             Translations.t(
                               'aiGuideKeysTitle',
                               context,
-                              'Provider keys',
+                              'Provider key',
                             ),
                             style: theme.textTheme.titleSmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
@@ -107,7 +107,7 @@ extension _SettingsSectionAda on _SettingsScreenState {
                             Translations.t(
                               'aiGuideKey',
                               context,
-                              'Poolside key (optional)',
+                              'Poolside / Agnes key (optional)',
                             ),
                             style: theme.textTheme.labelMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
@@ -150,7 +150,7 @@ extension _SettingsSectionAda on _SettingsScreenState {
                                   hintText: Translations.t(
                                     'aiGuideKeyHint',
                                     context,
-                                    'Paste your Laguna API key',
+                                    'Paste your Poolside or Agnes key',
                                   ),
                                   suffixIcon: AnimatedSwitcher(
                                     duration: const Duration(milliseconds: 220),
@@ -187,69 +187,28 @@ extension _SettingsSectionAda on _SettingsScreenState {
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
-                                onChanged: (v) => _aiKey = v,
+                                onChanged: (v) {
+                                  _aiKey = v;
+                                  _scheduleKeySave(v);
+                                },
                                 onSubmitted: (v) =>
                                     SettingsService.saveAiKey(v),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 6),
+                          // Одно поле на оба ключа: Poolside (Laguna) и Agnes
+                          // пробуются одним и тем же ключом, поэтому второй
+                          // пустой ввод больше не сбивает с толку и не мешает
+                          // Аде отвечать платной моделью.
                           Text(
                             Translations.t(
-                              'aiGuideAgnesKey',
+                              'aiGuideSharedKey',
                               context,
-                              'Agnes AI key (optional)',
+                              'One key works for both Poolside (Laguna) and Agnes AI.',
                             ),
-                            style: theme.textTheme.labelMedium?.copyWith(
+                            style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          SmoothTyping(
-                            controller: _agnesKeyController,
-                            enabled: _agnesKeyVisible,
-                            builder: (style) => TextField(
-                              style: style,
-                              cursorOpacityAnimates: true,
-                              magnifierConfiguration:
-                                  TextMagnifierConfiguration.disabled,
-                              controller: _agnesKeyController,
-                              contextMenuBuilder: minimalContextMenuBuilder,
-                              obscureText: !_agnesKeyVisible,
-                              textInputAction: TextInputAction.done,
-                              maxLength: 500,
-                              enableSuggestions: false,
-                              autocorrect: false,
-                              maxLines: 1,
-                              decoration: InputDecoration(
-                                isDense: true,
-                                counterText: '',
-                                hintText: Translations.t(
-                                  'aiGuideAgnesKeyHint',
-                                  context,
-                                  'Paste your Agnes AI key',
-                                ),
-                                suffixIcon: IconButton(
-                                  key: ValueKey(
-                                    'agnes_key_eye_$_agnesKeyVisible',
-                                  ),
-                                  icon: Icon(
-                                    _agnesKeyVisible
-                                        ? Icons.visibility_off_outlined
-                                        : Icons.visibility_outlined,
-                                    size: 20,
-                                  ),
-                                  onPressed: () => _refresh(
-                                    () => _agnesKeyVisible = !_agnesKeyVisible,
-                                  ),
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              onChanged: (v) => _agnesKey = v,
-                              onSubmitted: (v) =>
-                                  SettingsService.saveAgnesKey(v),
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -309,7 +268,7 @@ extension _SettingsSectionAda on _SettingsScreenState {
                                         Translations.t(
                                           'adaFreeProvidersDesc',
                                           context,
-                                          'LLM7, Pollinations and AI Horde.',
+                                          'Kilo Gateway, Pollinations, LLM7, OVHcloud and AI Horde.',
                                         ),
                                         style: theme.textTheme.bodySmall
                                             ?.copyWith(

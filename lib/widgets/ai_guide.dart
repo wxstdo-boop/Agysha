@@ -1110,7 +1110,11 @@ class _AiChatBodyState extends State<_AiChatBody>
             'попадает в Аду только вместе с твоим сообщением.',
       ),
       icon: Icons.visibility_outlined,
-      confirmLabel: Translations.t('openSettings', context, 'Открыть настройки'),
+      confirmLabel: Translations.t(
+        'openSettings',
+        context,
+        'Открыть настройки',
+      ),
       cancelLabel: Translations.t('notNow', context, 'Не сейчас'),
     );
     if (go == true && mounted) {
@@ -1343,8 +1347,12 @@ class _AiChatBodyState extends State<_AiChatBody>
       // потом ответ всплывает (его собственная анимация входа).
       _dotsCtrl.stop();
       setState(() => _typingFade = true);
-      await Future.delayed(const Duration(milliseconds: 210));
+      await Future.delayed(const Duration(milliseconds: 230));
       if (!mounted || gen != adaChatGeneration) return;
+      // Ответ вставляем, ПОКА индикатор ещё сворачивается: он остаётся
+      // верхним (i == 0) и гасит высоту, а пузырь растёт снизу из нулевой
+      // высоты. Лента не прыгает на высоту индикатора — переход
+      // «Сочиняю…» → полный ответ идёт одним движением.
       setState(() {
         // Пустой ответ («три точки») никогда не показываем — вместо него
         // запасная фраза, чтобы не выглядело, будто Ада «промолчала».
@@ -1365,9 +1373,14 @@ class _AiChatBodyState extends State<_AiChatBody>
         if (_messages.length > 1000) {
           _messages.removeRange(0, _messages.length - 1000);
         }
-        _busy = false;
         _error = false;
         _retrying = false;
+      });
+      _scrollToBottom();
+      await Future.delayed(const Duration(milliseconds: 240));
+      if (!mounted || gen != adaChatGeneration) return;
+      setState(() {
+        _busy = false;
         _typingFade = false;
       });
       _saveHistory();
@@ -1840,12 +1853,26 @@ class _AiChatBodyState extends State<_AiChatBody>
                       itemBuilder: (context, i) {
                         if (_busy && i == 0) {
                           // «Печатает…» — самый нижний элемент, прямо у поля.
-                          // AnimatedOpacity: при ответе индикатор плавно гаснет,
-                          // а не выпадает резко (см. _typingFade в _send).
-                          return AnimatedOpacity(
-                            opacity: _typingFade ? 0.0 : 1.0,
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOutCubic,
+                          // При ответе слот не пропадает кадром: он гасит
+                          // ПРОЗРАЧНОСТЬ и ВЫСОТУ (heightFactor). Раньше
+                          // индикатор исчезал мгновенно вместе с появлением
+                          // пузыря, и лента прыгала вверх на его высоту —
+                          // переход «Сочиняю…» → полный ответ читался рывком.
+                          return TweenAnimationBuilder<double>(
+                            key: ValueKey('typing_slot_${_typingFade ? 1 : 0}'),
+                            tween: Tween(
+                              begin: 1.0,
+                              end: _typingFade ? 0.0 : 1.0,
+                            ),
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeInOutCubic,
+                            builder: (context, fade, child) => ClipRect(
+                              child: Align(
+                                alignment: Alignment.bottomCenter,
+                                heightFactor: fade,
+                                child: Opacity(opacity: fade, child: child),
+                              ),
+                            ),
                             // Вход мягкий и длинный: раньше индикатор
                             // «щёлкал» из 70% с ростом за 280 мс — при
                             // ответе на полное сообщение это читалось как

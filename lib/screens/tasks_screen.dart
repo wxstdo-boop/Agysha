@@ -122,6 +122,33 @@ class _TasksScreenState extends State<TasksScreen>
   /// полку анимированно; остальные рисуются сразу.
   String? _justCompletedId;
 
+  /// Карточка, которая прямо сейчас «уезжает» из СВОЕЙ полки в соседнюю.
+  /// Пока идёт [_cardExit], она остаётся отрисованной в исходном списке и
+  /// схлопывается по высоте. Без этого карточка исчезала из активных кадром,
+  /// а в архиве появлялась с нуля — переезд читался как «пропала/возникла»,
+  /// а не как движение (владелец просил плавный переезд в обе стороны).
+  Task? _leavingTask;
+  bool _leavingWasDone = false;
+  int _leavingIndex = 0;
+
+  /// Схлопывание уезжающей карточки: высота вниз, лёгкий уход вниз и фейд.
+  late final AnimationController _cardExit = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+  late final Animation<double> _cardExitSize = Tween<double>(
+    begin: 1,
+    end: 0,
+  ).animate(CurvedAnimation(parent: _cardExit, curve: Curves.easeInCubic));
+  late final Animation<double> _cardExitFade = CurvedAnimation(
+    parent: _cardExit,
+    curve: Curves.easeInCubic,
+  );
+  late final Animation<Offset> _cardExitSlide = Tween<Offset>(
+    begin: Offset.zero,
+    end: const Offset(0, 0.10),
+  ).animate(CurvedAnimation(parent: _cardExit, curve: Curves.easeInCubic));
+
   /// Показывать ли архивную полку. Держим флагом, а не «done не пуст»: когда
   /// последняя архивная задача уходит (снята галка или удалена), полку надо
   /// ещё успеть плавно свернуть, прежде чем убрать из дерева.
@@ -227,6 +254,7 @@ class _TasksScreenState extends State<TasksScreen>
     _reveal.dispose();
     _splitReveal.dispose();
     _cardDrop.dispose();
+    _cardExit.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -306,7 +334,29 @@ class _TasksScreenState extends State<TasksScreen>
     Sounds.success();
     // Показываем переезд ДО мутации: карточка в новой полке должна приехать
     // анимированно (иначе полка уже стоит на экране, и вставка читается как
-    // рывок).
+    // рывок). Когда архивная полка включена (категория «Все»), карточка
+    // сначала схлопывается на СВОЁМ месте — тогда переезд читается как
+    // движение из полки в полку, а не как «пропала и появилась».
+    final archiveMove = _filter == '' && _archiveVisible;
+    if (archiveMove) {
+      final source = _service.tasks
+          .where((t) => wasDone ? t.done : !t.done)
+          .toList();
+      final idx = source.indexWhere((t) => t.id == task.id);
+      setState(() {
+        _leavingTask = task;
+        _leavingWasDone = wasDone;
+        _leavingIndex = idx < 0 ? 0 : idx;
+      });
+      // Схлопывание идёт ПАРАЛЛЕЛЬНО с мутацией, а не перед ней: две копии
+      // (исчезающая в старой полке и приезжающая в новой) в течение 320 мс
+      // читаются как один переезд, а список обновляется без задержки.
+      _cardExit.forward(from: 0).whenComplete(() {
+        if (mounted && _leavingTask?.id == task.id) {
+          setState(() => _leavingTask = null);
+        }
+      });
+    }
     setState(() => _justCompletedId = task.id);
     _cardDrop.forward(from: 0).whenComplete(() {
       // Снимаем «анимируемую» метку: карточка больше не оборачивается
@@ -571,6 +621,14 @@ class _TasksScreenState extends State<TasksScreen>
     final done = archiveEnabled
         ? tasks.where((t) => t.done).toList()
         : const <Task>[];
+    // Уезжающая карточка ещё живёт в СВОЁМ списке, пока схлопывается:
+    // иначе она исчезала бы кадром до того, как начнётся переезд.
+    final leaving = _leavingTask;
+    if (leaving != null && archiveEnabled) {
+      final shelf = _leavingWasDone ? done : active;
+      final at = _leavingIndex.clamp(0, shelf.length);
+      shelf.insert(at, leaving);
+    }
 
     // Архивная полка (заголовок + её список) появляется ПЛАВНО: фейд
     // целиком, а верхний зазор растёт через SizeTransition — список ниже не
@@ -656,6 +714,9 @@ class _TasksScreenState extends State<TasksScreen>
         proxyDecorator: (child, index, animation) =>
             buildDragProxy(child, theme, animation),
         onReorderItem: (oldLocal, newLocal) {
+          // Пока карточка уезжает, её место в полке занято анимацией —
+          // перетаскивание в этот момент сдвигало бы индексы не туда.
+          if (_leavingTask != null) return;
           // Локальный индекс (в полке) → глобальный (в полном списке),
           // чтобы reorder сохранял порядок и при активном фильтре категории.
           final oldGlobal = all.indexOf(list[oldLocal]);
@@ -673,6 +734,27 @@ class _TasksScreenState extends State<TasksScreen>
         },
         itemBuilder: (context, i) {
           final task = list[i];
+          // Уезжающая карточка схлопывается на своём месте: высота вниз,
+          // лёгкий уход и фейд. Вместе с «приездом» в соседней полке это
+          // читается как один переезд, а не как исчезновение.
+          if (task.id == _leavingTask?.id) {
+            return KeyedSubtree(
+              key: ValueKey('item_task_${task.id}'),
+              child: SizeTransition(
+                sizeFactor: _cardExitSize,
+                alignment: Alignment.topCenter,
+                child: FadeTransition(
+                  opacity: _cardExitFade,
+                  child: SlideTransition(
+                    position: _cardExitSlide,
+                    child: IgnorePointer(
+                      child: _buildTaskCard(context, theme, task, i),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
           // Только что выполненная задача «приезжает» на полку выполненных:
           // мягко съезжает сверху и проявляется. Остальные карточки рисуются
           // сразу — анимируется ровно одна, переезд читается как движение.

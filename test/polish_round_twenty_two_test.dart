@@ -58,10 +58,10 @@ void main() {
     final src = read('lib/widgets/animated_strike_text.dart');
     // Толщина поднята по претензии «слишком тонкие»: линия жирная и одна
     // на всю длину, а не «тонкая-толстая-тонкая».
-    expect(RegExp(r'fontSize \* 0\.34').hasMatch(src), isTrue);
-    expect(RegExp(r'math\.max\(6\.0,').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 0\.020').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 3\.6').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.42').hasMatch(src), isTrue);
+    expect(RegExp(r'math\.max\(7\.0,').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.070').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 4\.6').hasMatch(src), isTrue);
     // Непрерывная полилиния: одна толщина на всю длину, без стыков.
     expect(RegExp(r'path\.lineTo\(').hasMatch(src), isTrue);
     expect(RegExp(r'amp \* 0\.28').hasMatch(src), isFalse);
