@@ -625,7 +625,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             catalogCandidate = item;
             finalAudioBytes = itemWav;
             fingerprint = itemFp;
-            title = item.title;
+            title = Translations.t(item.titleKey, context, item.title);
             break;
           }
         }
