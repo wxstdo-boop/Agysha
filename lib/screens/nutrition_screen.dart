@@ -564,12 +564,13 @@ class _NutritionScreenState extends State<NutritionScreen>
     final over = today > norm;
     return PressScale(
       pressedScale: 0.96,
+      // Ровно как у трендов: ни внешнего Padding, ни margin — отступ до
+      // края экрана даёт общий ListView. Лишние бока читались как
+      // «обводку расширили».
       child: _ringed(
         accent: cs.primary,
         child: Card(
-          // Боковые поля карточки нормы вернули: без них она растягивалась
-          // до краёв и кольцо с цифрами «скукоживалось».
-          margin: const EdgeInsets.symmetric(horizontal: 16),
+          margin: EdgeInsets.zero,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(_ringInner),

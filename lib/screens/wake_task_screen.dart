@@ -1681,7 +1681,7 @@ class _PopNumber extends StatelessWidget {
 /// читались чужими. Теперь это та же стеклянная кровавая таблетка, что у
 /// разделов: постоянная форма, винный градиент, верхний блик, мягкая тень,
 /// 3D-наклон по пальцу и плавная отдача уменьшения (PressScale).
-class _RedPillButton extends StatefulWidget {
+class _RedPillButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
@@ -1692,175 +1692,119 @@ class _RedPillButton extends StatefulWidget {
     this.icon,
   });
 
-  @override
-  State<_RedPillButton> createState() => _RedPillButtonState();
-}
-
-class _RedPillButtonState extends State<_RedPillButton>
-    with SingleTickerProviderStateMixin {
-  /// Отсвет доступности живёт на своём контроллере: раньше его анимировал
-  /// `AnimatedContainer`, и при пересоздании кнопки (например, при вводе
-  /// цифры в задаче) состояние сбрасывалось — фон вспыхивал кадром.
-  late final AnimationController _glow = AnimationController(
-    vsync: this,
-    // Отсвет не «вспыхивает»: 520 мс в обе стороны и симметричная кривая.
-    // Прежние 320 мс с easeOut на исчезании читались рывком (владелец:
-    // «фон при вводе цифр резко появляется и так же исчезает»).
-    duration: const Duration(milliseconds: 520),
-    value: widget.onPressed != null ? 1 : 0,
-  );
-
-  @override
-  void didUpdateWidget(_RedPillButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final on = widget.onPressed != null;
-    final target = on ? 1.0 : 0.0;
-    if ((_glow.value - target).abs() > 0.001) {
-      _glow.animateTo(target, curve: Curves.easeInOutCubic);
-    }
-  }
-
-  @override
-  void dispose() {
-    _glow.dispose();
-    super.dispose();
-  }
+  static const Color _red = Color(0xFFE02436);
 
   @override
   Widget build(BuildContext context) {
-    final label = widget.label;
-    final onPressed = widget.onPressed;
-    final icon = widget.icon;
     final enabled = onPressed != null;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final radius = BorderRadius.circular(999);
-    return AnimatedBuilder(
-      animation: _glow,
-      builder: (context, _) {
-        final t = Curves.easeInOutCubic.transform(_glow.value);
-        final child = Container(
-          // Компактная кнопка задачи больше не «обрубок» по центру: у неё та же
-          // кровная таблетка, что у разделов, но с собственной минимальной
-          // шириной — на узком экране она читается как полноценная кнопка.
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            // ПРОЗРАЧНЫЙ фон внутри: та самая «пиздатая» кнопка, которую
-            // пользователь просил вернуть. Раньше здесь лежал плотный винный
-            // градиент, и на светлой теме кнопка читалась тяжёлой серой
-            // плашкой, а серые полосы градиента «вылезали» по краям.
-            // Теперь — только красная кромка и красный текст; зажатие
-            // подкрашивает внутренность мягким красным через PressScale.
-            // Отсвет внутри появляется/исчезает вместе с доступностью
-            // (320 мс в обе стороны) — без «вспышки» кадром.
-            color: const Color(
-              0xFFE02436,
-            ).withValues(alpha: (dark ? 0.12 : 0.09) * t),
-            border: Border.all(
-              color: const Color(0xFFE02436).withValues(
-                alpha:
-                    (dark ? 0.30 : 0.26) +
-                    ((dark ? 0.96 : 0.92) - (dark ? 0.30 : 0.26)) * t,
-              ),
-              width: 1.7,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: BrandColors.blood.withValues(
-                  alpha: (dark ? 0.38 : 0.26) * t,
+    final glowDur = const Duration(milliseconds: 520);
+    final curve = Curves.easeInOutCubic;
+    // Анимации — на свойствах: AnimatedContainer и AnimatedDefaultTextStyle
+    // перетекают на уровне рендера и НЕ пересобирают всё поддерево кнопки
+    // 60 раз в секунду. Прежний AnimatedBuilder каждый кадр строил Row,
+    // текст и PressScale заново — на слабом телефоне «Проверить» читалась
+    // тормозной.
+    return RepaintBoundary(
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: label,
+        child: PressScale(
+          enabled: enabled,
+          pressedScale: 0.95,
+          enableTilt: true,
+          pressTint: _red,
+          pressTintStrength: 0.16,
+          pressTintRadius: radius,
+          duration: const Duration(milliseconds: 140),
+          // Отдача больше не «ползёт» 760 мс: короткий мягкий возврат
+          // читается отзывчивым, а не заторможенным.
+          releaseDuration: const Duration(milliseconds: 340),
+          releaseCurve: Curves.easeOutCubic,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onPressed,
+            child: AnimatedContainer(
+              duration: glowDur,
+              curve: curve,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                color: _red.withValues(
+                  alpha: enabled ? (dark ? 0.12 : 0.09) : 0.0,
                 ),
-                blurRadius: 22,
-                spreadRadius: -2,
-                offset: const Offset(0, 5),
+                border: Border.all(
+                  color: _red.withValues(
+                    alpha: enabled ? (dark ? 0.96 : 0.92) : 0.28,
+                  ),
+                  width: 1.7,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: BrandColors.blood.withValues(
+                      alpha: enabled ? (dark ? 0.38 : 0.26) : 0.0,
+                    ),
+                    blurRadius: 22,
+                    spreadRadius: -2,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                // Значок в лёгком светлом кружке — тот же ритм, что у кружка
-                // привычки: кнопка не выглядит «текстом с иконкой сбоку».
-                Container(
-                  width: 21,
-                  height: 21,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.transparent,
-                    border: Border.all(
-                      color: const Color(
-                        0xFFE02436,
-                      ).withValues(alpha: 0.35 + 0.40 * t),
-                      width: 1.1,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: enabled ? 1 : 0),
+                      duration: glowDur,
+                      curve: curve,
+                      builder: (context, t, _) => Container(
+                        width: 21,
+                        height: 21,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _red.withValues(alpha: 0.35 + 0.40 * t),
+                            width: 1.1,
+                          ),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: 14,
+                          color: _red.withValues(alpha: 0.45 + 0.55 * t),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: AnimatedDefaultTextStyle(
+                      duration: glowDur,
+                      curve: curve,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                        color: _red.withValues(alpha: enabled ? 1.0 : 0.45),
+                        shadows: null,
+                      ),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
-                  child: Icon(
-                    icon,
-                    size: 14,
-                    color: const Color(
-                      0xFFE02436,
-                    ).withValues(alpha: 0.45 + 0.55 * t),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                  style: TextStyle(
-                    // Кнопка мельче: прежние 15/14 выглядели крупной плашкой
-                    // рядом с компактной карточкой.
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                    color: const Color(
-                      0xFFE02436,
-                    ).withValues(alpha: 0.45 + 0.55 * t),
-                    shadows: null,
-                  ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+                ],
               ),
-            ],
-          ),
-        );
-
-        return Semantics(
-          button: true,
-          enabled: enabled,
-          label: label,
-          child: PressScale(
-            enabled: enabled,
-            pressedScale: 0.965,
-            enableTilt: true,
-            // Красноватый отсвет ВНУТРИ фона под пальцем: винная подложка
-            // заливает таблетку и плавно растворяется после отпускания
-            // (760 мс), а не гаснет рывком.
-            // Отсвет ВНУТРИ — только мягкий красноватый тон под пальцем.
-            // Радиальный «кровавый» слой убран: он «окровавливал» фон всей
-            // таблетки, и владелец просил вернуть прежний вид.
-            pressTint: const Color(0xFFE02436),
-            pressTintStrength: 0.16,
-            pressTintRadius: radius,
-            duration: const Duration(milliseconds: 160),
-            releaseDuration: const Duration(milliseconds: 760),
-            releaseCurve: Curves.easeOutCubic,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              // Нажатие по недоступной кнопке не должно давать отклика.
-              onTap: onPressed,
-              child: child,
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

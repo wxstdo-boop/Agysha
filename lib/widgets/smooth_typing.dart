@@ -228,8 +228,13 @@ class _SmoothTypingState extends State<SmoothTyping>
 
   void _onControllerChanged() {
     if (!mounted) return;
+    // Без setState: само поле перерисовывается контроллером, а наш слой
+    // букв — через _repaint. Раньше каждый введённый/стёртый символ
+    // пересобирал всё дерево поля, и при быстром стирании это читалось
+    // как «заедает». Признак «нужны новые рамки» теперь считается
+    // пейнтером в момент рисования, а не в build.
     _rebuild(animate: true);
-    setState(() {});
+    _repaint.ping();
   }
 
   /// Пересобирает список букв: вычитает общий префикс/суффикс и анимирует
@@ -271,8 +276,8 @@ class _SmoothTypingState extends State<SmoothTyping>
             _Ghost(old[i].ch, box.topLeft, old[i].alphaAt(now, _dur), now),
           );
         }
-        if (_ghosts.length > 60) {
-          _ghosts.removeRange(0, _ghosts.length - 60);
+        if (_ghosts.length > 28) {
+          _ghosts.removeRange(0, _ghosts.length - 28);
         }
       }
     }
@@ -445,7 +450,7 @@ class _SmoothTypingState extends State<SmoothTyping>
                         style: effective.copyWith(color: visible),
                         nowGetter: () => _now,
                         duration: _dur,
-                        needBoxes: _boxedText != widget.controller.text,
+                        needBoxes: () => _boxedText != widget.controller.text,
                         onBoxes: _storeBoxes,
                         onOffset: _attachOffset,
                       ),
@@ -490,7 +495,7 @@ class _SmoothTypingPainter extends CustomPainter {
   final TextStyle style;
   final double Function() nowGetter;
   final double duration;
-  final bool needBoxes;
+  final bool Function() needBoxes;
   final void Function(String text, List<Rect?> boxes) onBoxes;
   final void Function(ViewportOffset offset) onOffset;
 
@@ -550,7 +555,7 @@ class _SmoothTypingPainter extends CustomPainter {
         ? tp.height > editable.size.height
         : tp.width + caretMargin > editable.size.width;
 
-    if (needBoxes) {
+    if (needBoxes()) {
       final boxes = <Rect?>[];
       var cu = 0;
       for (final g in glyphs) {
