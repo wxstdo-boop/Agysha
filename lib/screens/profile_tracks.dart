@@ -10,14 +10,20 @@ class _TrackRow extends StatefulWidget {
   final MusicTrack track;
   final bool playing;
   final bool growFromZero;
+
+  /// Как играет подборка: один трек по кругу, по порядку или вперемешку.
+  final QueueMode mode;
   final VoidCallback onToggle;
+  final VoidCallback onCycleMode;
   final VoidCallback onRemove;
 
   const _TrackRow({
     required this.track,
     required this.playing,
     required this.growFromZero,
+    required this.mode,
     required this.onToggle,
+    required this.onCycleMode,
     required this.onRemove,
   });
 
@@ -103,10 +109,7 @@ class _TrackRowState extends State<_TrackRow>
                     transitionBuilder: (child, anim) => FadeTransition(
                       opacity: anim,
                       child: ScaleTransition(
-                        scale: Tween<double>(
-                          begin: 0.75,
-                          end: 1,
-                        ).animate(anim),
+                        scale: Tween<double>(begin: 0.75, end: 1).animate(anim),
                         child: child,
                       ),
                     ),
@@ -127,6 +130,63 @@ class _TrackRowState extends State<_TrackRow>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            // Переключатель порядка рядом с корзиной: значок сам меняется
+            // на повтор/очередь/перемешку и перетекает, а не подменяется
+            // кадром.
+            PressScale(
+              pressedScale: 0.86,
+              child: IconButton(
+                onPressed: widget.onCycleMode,
+                tooltip: switch (widget.mode) {
+                  QueueMode.repeat => Translations.t(
+                    'musicModeRepeat',
+                    context,
+                    'Повторять этот трек',
+                  ),
+                  QueueMode.order => Translations.t(
+                    'musicModeOrder',
+                    context,
+                    'Треки по порядку',
+                  ),
+                  QueueMode.shuffle => Translations.t(
+                    'musicModeShuffle',
+                    context,
+                    'Треки вперемешку',
+                  ),
+                },
+                style: IconButton.styleFrom(
+                  shape: const CircleBorder(),
+                  highlightColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                ),
+                icon: AnimatedSwitcher(
+                  duration: reduce
+                      ? Duration.zero
+                      : const Duration(milliseconds: 280),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: RotationTransition(
+                      turns: Tween<double>(begin: -0.25, end: 0).animate(anim),
+                      child: child,
+                    ),
+                  ),
+                  child: Icon(
+                    switch (widget.mode) {
+                      QueueMode.repeat => Icons.repeat_one_rounded,
+                      QueueMode.order => Icons.repeat_rounded,
+                      QueueMode.shuffle => Icons.shuffle_rounded,
+                    },
+                    key: ValueKey(widget.mode),
+                    size: 20,
+                    color: widget.mode == QueueMode.repeat
+                        ? cs.onSurfaceVariant
+                        : cs.primary,
+                  ),
+                ),
               ),
             ),
             PressScale(

@@ -90,42 +90,45 @@ void main() {
     expect(globalPrefs.getBool('profile_online'), isTrue);
   });
 
-  test('рейтинг сортирует себя по очкам и считает свой счёт из активности', () async {
-    // Реальная активность: привычка со стриком 10 и выполненная задача.
-    await HabitService().load();
-    for (final h in HabitService().habits.toList()) {
-      await HabitService().remove(h.id);
-    }
-    await HabitService().add(
-      Habit(
-        id: 'h1',
-        name: 'Зарядка',
-        iconCodePoint: 57690,
-        activeDays: const [1, 2, 3, 4, 5, 6, 7],
-        streak: 10,
-        // Живой стрик: отметка сегодня. Без даты `streak: 10` — это ровно
-        // «мёртвые данные», которые сервис честно обнуляет при добавлении
-        // (см. тест «осиротевший стрик»), и очков за них быть не должно.
-        doneToday: true,
-        lastDoneDate: HabitService.mskToday(),
-      ),
-    );
-    await TaskService().load();
-    for (final t in TaskService().tasks.toList()) {
-      await TaskService().remove(t.id);
-    }
-    await TaskService().add(Task(id: 't1', title: 'Дело', done: true));
+  test(
+    'рейтинг сортирует себя по очкам и считает свой счёт из активности',
+    () async {
+      // Реальная активность: привычка со стриком 10 и выполненная задача.
+      await HabitService().load();
+      for (final h in HabitService().habits.toList()) {
+        await HabitService().remove(h.id);
+      }
+      await HabitService().add(
+        Habit(
+          id: 'h1',
+          name: 'Зарядка',
+          iconCodePoint: 57690,
+          activeDays: const [1, 2, 3, 4, 5, 6, 7],
+          streak: 10,
+          // Живой стрик: отметка сегодня. Без даты `streak: 10` — это ровно
+          // «мёртвые данные», которые сервис честно обнуляет при добавлении
+          // (см. тест «осиротевший стрик»), и очков за них быть не должно.
+          doneToday: true,
+          lastDoneDate: HabitService.mskToday(),
+        ),
+      );
+      await TaskService().load();
+      for (final t in TaskService().tasks.toList()) {
+        await TaskService().remove(t.id);
+      }
+      await TaskService().add(Task(id: 't1', title: 'Дело', done: true));
 
-    final svc = ProfileService();
-    await svc.load();
-    await svc.setName('Я');
-    await svc.addFriend(name: 'Слабак', colorIndex: 1, score: 1);
+      final svc = ProfileService();
+      await svc.load();
+      await svc.setName('Я');
+      await svc.addFriend(name: 'Слабак', colorIndex: 1, score: 1);
 
-    final board = svc.leaderboard();
-    expect(board.first.id, 'me', reason: 'свой счёт должен быть выше');
-    expect(svc.localScore(), greaterThanOrEqualTo(11));
-    expect(board.last.name, 'Слабак');
-  });
+      final board = svc.leaderboard();
+      expect(board.first.id, 'me', reason: 'свой счёт должен быть выше');
+      expect(svc.localScore(), greaterThanOrEqualTo(11));
+      expect(board.last.name, 'Слабак');
+    },
+  );
 
   testWidgets('кружок онлайна справа от последней буквы и открывает профиль', (
     tester,
@@ -236,9 +239,11 @@ void main() {
 
     // Остальные блоки ниже сгиба — доскролливаем, а не притворяемся, что
     // они на первом экране.
+    // Внутри профиля есть и горизонтальная лента артефактов, поэтому
+    // берём именно вертикальный список экрана — первый ListView.
     await tester.dragUntilVisible(
       find.text('События'),
-      find.byType(ListView),
+      find.byType(ListView).first,
       const Offset(0, -200),
     );
     await tester.pumpAndSettle();

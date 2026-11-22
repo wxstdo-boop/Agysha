@@ -86,11 +86,17 @@ class _Card extends StatelessWidget {
     );
     if (!pressable) return card;
     // Мягкое вдавливание и тактильный 3D-наклон карточки
+    // Вдавливание + тот же наклон за пальцем, что у карточек-артефактов:
+    // без наклона кнопки ивента выпадали из общего языка экрана.
     return PressScale(
       pressedScale: 0.975,
       duration: const Duration(milliseconds: 220),
       releaseDuration: const Duration(milliseconds: 320),
       pressedOpacity: 0.96,
+      maxTiltAngle: 0.22,
+      pressTint: theme.colorScheme.primary,
+      pressTintStrength: 0.07,
+      pressTintRadius: BorderRadius.circular(Radii.md),
       child: card,
     );
   }

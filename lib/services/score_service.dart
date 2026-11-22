@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import 'prefs.dart';
@@ -54,6 +56,11 @@ class ScoreService extends ChangeNotifier {
 
   static const String _prefix = 'score_';
 
+  /// Потолок копилки. Дальше очки не растут: проценты в разборе и общая
+  /// цифра считаются от одного и того же предела, поэтому «полная» шкала
+  /// не уезжает за край.
+  static const int maxTotal = 10000000000;
+
   /// Кэш значений в памяти: prefs читается синхронно, но с диска, а рейтинг
   /// опрашивается на каждой перерисовке профиля.
   final Map<ScoreKind, int> _cache = {};
@@ -79,7 +86,7 @@ class ScoreService extends ChangeNotifier {
     for (final kind in ScoreKind.values) {
       sum += pointsOf(kind);
     }
-    return sum;
+    return math.min(sum, maxTotal);
   }
 
   /// Разбор по категориям для интерфейса: «за что начислено».
@@ -112,7 +119,7 @@ class ScoreService extends ChangeNotifier {
   /// не уменьшает — достижения не отбираем.
   Future<void> award(ScoreKind kind, [int count = 1]) async {
     if (count <= 0) return;
-    final next = pointsOf(kind) + count * weightOf(kind);
+    final next = math.min(pointsOf(kind) + count * weightOf(kind), maxTotal);
     _cache[kind] = next;
     notifyListeners();
     try {

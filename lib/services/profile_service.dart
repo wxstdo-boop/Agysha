@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -541,7 +542,7 @@ class ProfileService extends ChangeNotifier {
       if (d.habits > 0 || d.tasks > 0) active++;
     }
     score += active * ScoreWeight.activeDay;
-    return score;
+    return math.min(score, ScoreService.maxTotal);
   }
 
   /// Разбор «за что очки»: по каждой категории — сколько накоплено и сколько

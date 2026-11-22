@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/locale_provider.dart';
 import '../l10n/translations.dart';
+import '../services/app_version.dart';
 import '../services/haptics.dart';
 import '../services/music_service.dart';
 import '../services/new_year_event_service.dart';
@@ -30,6 +31,7 @@ import '../widgets/music_pulse_ring.dart';
 import '../widgets/online_dot.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/profile_avatar.dart';
+import 'changelog_screen.dart';
 import '../widgets/smooth_digits.dart';
 import '../widgets/new_year_event_banner.dart';
 import '../widgets/smooth_tooltip.dart';
@@ -248,8 +250,21 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (mounted) setState(() {});
   }
 
+  /// Отдаём плееру подборку целиком: без этого в медиауведомлении нет ни
+  /// названия трека, ни кнопки «дальше» — сервису нечего переключать.
+  void _syncMusicQueue() {
+    final tracks = _service.tracks;
+    _music.setQueue(
+      [for (final t in tracks) t.path],
+      titles: {for (final t in tracks) t.path: t.title},
+    );
+  }
+
   void _onServiceChanged() {
     if (mounted) setState(() {});
+    // Список треков мог измениться (добавили/удалили) — держим очередь
+    // плеера и медиауведомление в том же составе.
+    _syncMusicQueue();
   }
 
   void _toast(String message, {IconData icon = Icons.check_circle_outline}) {
@@ -455,78 +470,29 @@ class _ProfileScreenState extends State<ProfileScreen>
     // context через async-разрыв нельзя.
     final langCode = LocaleProvider.of(context).languageCode;
     try {
-      final existingTitles =
-          _service.tracks.map((t) => t.title.toLowerCase().trim()).toSet();
+      final existingTitles = _service.tracks
+          .map((t) => t.title.toLowerCase().trim())
+          .toSet();
       final existingFingerprints = _service.tracks
           .map((t) => t.fingerprint)
           .where((f) => f.isNotEmpty)
           .toSet();
 
-      const atmosphericQuestions = [
-        'Тебе нравится этот бэнгер?',
-        'Куда ведёт этот смертельный занос?',
-        'Чувствуешь дрожь ночного Найт-Сити?',
-        'Слышишь, как взрывается сабвуфер?',
-        'Готов разогнаться до предела?',
-        'Зачем ты гонишь по мокрому асфальту?',
-        'Поймал этот бешеный мемфисский ритм?',
-        'Чувствуешь этот плотный перегруз?',
-        'Слышишь этот фирменный 808 слайд?',
-        'Кто остановит тебя на этой трассе?',
-        'Помнишь первый занос на Сакуре?',
-        'Вкатывает этот холодный дисторшн?',
-        'Чувствуешь, как закипает адреналин?',
-        'Слышишь этот хлёсткий ковбелл в ночи?',
-        'Видишь эти неоновые вспышки в зеркале?',
-        'Готов войти в поворот боком?',
-        'Зацепил этот безжалостный дроп?',
-        'Чувствуешь этот подземный вайб?',
-        'Куда летит эта турбина на рассвете?',
-        'Слышишь рёв прямоточного выхлопа?',
-        'Знаешь, почему этот трек не отпускает?',
-        'Тебе знаком этот свист турбины?',
-        'Готов сорвать сцепление на сотне?',
-        'Слышишь, как плавится резина на треке?',
-        'Успеешь затормозить перед бездной?',
-        'Зачем смотреть назад на такой скорости?',
-        'Поймал этот глубокий аналоговый гул?',
-        'Ощущаешь этот яростный бас?',
-        'Готов раствориться в неоновом дыму?',
-        'Слышишь, как пробивает этот кик?',
-        'Хочешь выжать максимум из мотора?',
-        'Видишь, как гаснут огни автострады?',
-        'Узнаёшь этот дикий саундтрек ночи?',
-        'Готов сжечь полный бак за один заезд?',
-        'Чувствуешь, как дрожит этот асфальт?',
-        'Слышишь, как бьёт этот саб-бас в грудь?',
-        'Тебе по душе этот ночной вайб?',
-        'Готов втопить в пол до самого упора?',
-        'Заценил эту мемфисскую классику?',
-        'Слышишь эти перегруженные верха?',
-        'Качает этот сырой подземный грув?',
-        'Готов покорить ночную кольцевую?',
-        'Чувствуешь, как затягивает этот ритм?',
-        'Знаешь этот фирменный 808 слайд?',
-        'Слышишь, как звенит ночной металл?',
-        'Поймал эту волну чистого разгона?',
-        'Ощущаешь этот сумасшедший напор?',
-        'Готов оставить всех далеко позади?',
-        'Слышишь этот низкий ревущий дисторшн?',
-        'Нравится, как разносит этот бит?',
-        'Чувствуешь эту скорость в темноте?',
-        'Готов к новому кругу без тормозов?',
-        'Слышишь это холодное эхо ночи?',
-      ];
-
+      // Название берём из общего пула «как назвал бы человек»: сначала
+      // первое ещё не занятое в подборке, иначе — по отпечатку.
       String title = '';
-      for (final q in atmosphericQuestions) {
-        if (!existingTitles.contains(q.toLowerCase().trim())) {
-          title = q;
+      for (var i = 0; i < _kSongTitles.length; i++) {
+        final candidate = _songTitleAt(i, context);
+        if (!existingTitles.contains(candidate.toLowerCase().trim())) {
+          title = candidate;
           break;
         }
       }
       if (title.isEmpty) {
-        title = 'Тебе нравится этот ночной бэнгер?';
+        title = _funSongTitle(
+          'phonk_${DateTime.now().microsecondsSinceEpoch}',
+          context,
+        );
       }
 
       final dir = await getApplicationDocumentsDirectory();
@@ -549,18 +515,15 @@ class _ProfileScreenState extends State<ProfileScreen>
           'phonk+bass+AND+mediatype:audio',
           'cyber+phonk+AND+mediatype:audio',
         ];
-        final sorts = [
-          'downloads+desc',
-          'publicdate+desc',
-          'week+desc',
-        ];
+        final sorts = ['downloads+desc', 'publicdate+desc', 'week+desc'];
         final q = queries[DateTime.now().millisecond % queries.length];
         final s = sorts[DateTime.now().second % sorts.length];
         final searchUri = Uri.parse(
           'https://archive.org/advancedsearch.php?q=$q&fl[]=identifier,title&sort[]=$s&rows=50&output=json',
         );
-        final searchRes =
-            await http.get(searchUri).timeout(const Duration(seconds: 6));
+        final searchRes = await http
+            .get(searchUri)
+            .timeout(const Duration(seconds: 6));
         if (searchRes.statusCode == 200) {
           final data = json.decode(searchRes.body) as Map<String, dynamic>;
           final docs = (data['response']?['docs'] as List<dynamic>?) ?? [];
@@ -574,25 +537,32 @@ class _ProfileScreenState extends State<ProfileScreen>
           for (final doc in freshDocs.take(5)) {
             final id = doc['identifier'].toString();
             final metaUri = Uri.parse('https://archive.org/metadata/$id/files');
-            final metaRes =
-                await http.get(metaUri).timeout(const Duration(seconds: 5));
+            final metaRes = await http
+                .get(metaUri)
+                .timeout(const Duration(seconds: 5));
             if (metaRes.statusCode == 200) {
-              final metaData = json.decode(metaRes.body) as Map<String, dynamic>;
-              final files = (metaData['result'] as List<dynamic>?) ??
+              final metaData =
+                  json.decode(metaRes.body) as Map<String, dynamic>;
+              final files =
+                  (metaData['result'] as List<dynamic>?) ??
                   (metaData['files'] as List<dynamic>?) ??
                   [];
               final audioFile = files.firstWhere(
-                (f) =>
-                    (f['name']?.toString() ?? '').toLowerCase().endsWith('.mp3'),
+                (f) => (f['name']?.toString() ?? '').toLowerCase().endsWith(
+                  '.mp3',
+                ),
                 orElse: () => null,
               );
               if (audioFile != null) {
-                final fileName =
-                    Uri.encodeComponent(audioFile['name'].toString());
-                final dlUri =
-                    Uri.parse('https://archive.org/download/$id/$fileName');
-                final dlRes =
-                    await http.get(dlUri).timeout(const Duration(seconds: 15));
+                final fileName = Uri.encodeComponent(
+                  audioFile['name'].toString(),
+                );
+                final dlUri = Uri.parse(
+                  'https://archive.org/download/$id/$fileName',
+                );
+                final dlRes = await http
+                    .get(dlUri)
+                    .timeout(const Duration(seconds: 15));
                 if (dlRes.statusCode == 200 && dlRes.bodyBytes.length > 5000) {
                   final fp = _fingerprintOf(dlRes.bodyBytes);
                   if (!existingFingerprints.contains(fp) &&
@@ -638,7 +608,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           final uniqueCounter = _service.tracks.length + 1;
           final mode = uniqueCounter % 4;
           final double chosenBpm = [156.0, 142.0, 148.0, 158.0][mode];
-          final altSeed = 1000 +
+          final altSeed =
+              1000 +
               uniqueCounter * 73 +
               mode * 137 +
               DateTime.now().millisecond;
@@ -649,16 +620,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                   _service.hasTrackWithFingerprint(fingerprint)) &&
               retry < 60) {
             retry++;
-            final rerollSeed = altSeed + retry * 397 + DateTime.now().millisecond;
-            finalAudioBytes =
-                _synthesizePhonkWav(bpm: chosenBpm, seed: rerollSeed);
+            final rerollSeed =
+                altSeed + retry * 397 + DateTime.now().millisecond;
+            finalAudioBytes = _synthesizePhonkWav(
+              bpm: chosenBpm,
+              seed: rerollSeed,
+            );
             fingerprint = _fingerprintOf(finalAudioBytes);
           }
         }
       }
 
-      final filePath =
-          '${soundsDir.path}/${trackId}_$fingerprint.$fileExt';
+      final filePath = '${soundsDir.path}/${trackId}_$fingerprint.$fileExt';
       final file = File(filePath);
       await file.writeAsBytes(finalAudioBytes);
 
@@ -672,8 +645,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         _toast(Translations.t('profileMusicFull', context, 'Уже 499 треков'));
         return;
       }
-      final fresh =
-          _service.tracks.where((t) => t.path == filePath).firstOrNull;
+      final fresh = _service.tracks
+          .where((t) => t.path == filePath)
+          .firstOrNull;
       if (fresh != null) {
         _newTrackIds.add(fresh.id);
         Future.delayed(const Duration(milliseconds: 760), () {
@@ -718,59 +692,283 @@ class _ProfileScreenState extends State<ProfileScreen>
     const patterns = [
       // 0: Classic Drift Aggression (F# minor)
       [
-        369.99, 0.0, 440.00, 369.99, 0.0, 554.37, 493.88, 0.0,
-        440.00, 0.0, 369.99, 329.63, 369.99, 0.0, 523.25, 554.37,
-        369.99, 0.0, 440.00, 554.37, 0.0, 659.25, 587.33, 0.0,
-        554.37, 0.0, 493.88, 0.0, 440.00, 0.0, 415.30, 369.99,
+        369.99,
+        0.0,
+        440.00,
+        369.99,
+        0.0,
+        554.37,
+        493.88,
+        0.0,
+        440.00,
+        0.0,
+        369.99,
+        329.63,
+        369.99,
+        0.0,
+        523.25,
+        554.37,
+        369.99,
+        0.0,
+        440.00,
+        554.37,
+        0.0,
+        659.25,
+        587.33,
+        0.0,
+        554.37,
+        0.0,
+        493.88,
+        0.0,
+        440.00,
+        0.0,
+        415.30,
+        369.99,
       ],
       // 1: Heavy Memphis Nightmare (D# minor)
       [
-        311.13, 0.0, 311.13, 369.99, 0.0, 466.16, 415.30, 0.0,
-        369.99, 0.0, 311.13, 277.18, 311.13, 0.0, 415.30, 466.16,
-        311.13, 311.13, 0.0, 466.16, 0.0, 554.37, 466.16, 0.0,
-        415.30, 0.0, 369.99, 0.0, 349.23, 329.63, 311.13, 0.0,
+        311.13,
+        0.0,
+        311.13,
+        369.99,
+        0.0,
+        466.16,
+        415.30,
+        0.0,
+        369.99,
+        0.0,
+        311.13,
+        277.18,
+        311.13,
+        0.0,
+        415.30,
+        466.16,
+        311.13,
+        311.13,
+        0.0,
+        466.16,
+        0.0,
+        554.37,
+        466.16,
+        0.0,
+        415.30,
+        0.0,
+        369.99,
+        0.0,
+        349.23,
+        329.63,
+        311.13,
+        0.0,
       ],
       // 2: Cyber Highway Night (A minor)
       [
-        440.00, 0.0, 523.25, 440.00, 0.0, 659.25, 587.33, 0.0,
-        523.25, 0.0, 440.00, 392.00, 440.00, 0.0, 622.25, 659.25,
-        440.00, 0.0, 523.25, 659.25, 0.0, 783.99, 698.46, 0.0,
-        659.25, 0.0, 587.33, 0.0, 523.25, 0.0, 493.88, 440.00,
+        440.00,
+        0.0,
+        523.25,
+        440.00,
+        0.0,
+        659.25,
+        587.33,
+        0.0,
+        523.25,
+        0.0,
+        440.00,
+        392.00,
+        440.00,
+        0.0,
+        622.25,
+        659.25,
+        440.00,
+        0.0,
+        523.25,
+        659.25,
+        0.0,
+        783.99,
+        698.46,
+        0.0,
+        659.25,
+        0.0,
+        587.33,
+        0.0,
+        523.25,
+        0.0,
+        493.88,
+        440.00,
       ],
       // 3: Dark Underworld Bounce (C minor)
       [
-        261.63, 261.63, 0.0, 311.13, 0.0, 392.00, 349.23, 0.0,
-        311.13, 0.0, 261.63, 0.0, 349.23, 392.00, 415.30, 392.00,
-        261.63, 0.0, 311.13, 0.0, 392.00, 466.16, 415.30, 0.0,
-        392.00, 0.0, 349.23, 311.13, 293.66, 0.0, 261.63, 0.0,
+        261.63,
+        261.63,
+        0.0,
+        311.13,
+        0.0,
+        392.00,
+        349.23,
+        0.0,
+        311.13,
+        0.0,
+        261.63,
+        0.0,
+        349.23,
+        392.00,
+        415.30,
+        392.00,
+        261.63,
+        0.0,
+        311.13,
+        0.0,
+        392.00,
+        466.16,
+        415.30,
+        0.0,
+        392.00,
+        0.0,
+        349.23,
+        311.13,
+        293.66,
+        0.0,
+        261.63,
+        0.0,
       ],
       // 4: Toxic Devil Riff (E minor)
       [
-        329.63, 0.0, 392.00, 329.63, 0.0, 493.88, 440.00, 0.0,
-        392.00, 0.0, 329.63, 293.66, 329.63, 0.0, 440.00, 493.88,
-        329.63, 0.0, 392.00, 493.88, 0.0, 587.33, 523.25, 0.0,
-        493.88, 0.0, 440.00, 0.0, 392.00, 0.0, 370.00, 329.63,
+        329.63,
+        0.0,
+        392.00,
+        329.63,
+        0.0,
+        493.88,
+        440.00,
+        0.0,
+        392.00,
+        0.0,
+        329.63,
+        293.66,
+        329.63,
+        0.0,
+        440.00,
+        493.88,
+        329.63,
+        0.0,
+        392.00,
+        493.88,
+        0.0,
+        587.33,
+        523.25,
+        0.0,
+        493.88,
+        0.0,
+        440.00,
+        0.0,
+        392.00,
+        0.0,
+        370.00,
+        329.63,
       ],
       // 5: G-Shit Street Demon (G# minor)
       [
-        415.30, 415.30, 0.0, 493.88, 415.30, 0.0, 622.25, 554.37,
-        0.0, 493.88, 415.30, 0.0, 554.37, 622.25, 659.25, 622.25,
-        415.30, 0.0, 493.88, 0.0, 622.25, 739.99, 659.25, 0.0,
-        622.25, 0.0, 554.37, 493.88, 415.30, 0.0, 392.00, 415.30,
+        415.30,
+        415.30,
+        0.0,
+        493.88,
+        415.30,
+        0.0,
+        622.25,
+        554.37,
+        0.0,
+        493.88,
+        415.30,
+        0.0,
+        554.37,
+        622.25,
+        659.25,
+        622.25,
+        415.30,
+        0.0,
+        493.88,
+        0.0,
+        622.25,
+        739.99,
+        659.25,
+        0.0,
+        622.25,
+        0.0,
+        554.37,
+        493.88,
+        415.30,
+        0.0,
+        392.00,
+        415.30,
       ],
       // 6: Shadow Stalker (B minor)
       [
-        493.88, 0.0, 587.33, 493.88, 0.0, 739.99, 659.25, 0.0,
-        587.33, 0.0, 493.88, 440.00, 493.88, 0.0, 698.46, 739.99,
-        493.88, 0.0, 587.33, 739.99, 0.0, 880.00, 783.99, 0.0,
-        739.99, 0.0, 659.25, 0.0, 587.33, 0.0, 554.37, 493.88,
+        493.88,
+        0.0,
+        587.33,
+        493.88,
+        0.0,
+        739.99,
+        659.25,
+        0.0,
+        587.33,
+        0.0,
+        493.88,
+        440.00,
+        493.88,
+        0.0,
+        698.46,
+        739.99,
+        493.88,
+        0.0,
+        587.33,
+        739.99,
+        0.0,
+        880.00,
+        783.99,
+        0.0,
+        739.99,
+        0.0,
+        659.25,
+        0.0,
+        587.33,
+        0.0,
+        554.37,
+        493.88,
       ],
       // 7: Midnight Doom Rider (D minor)
       [
-        293.66, 0.0, 349.23, 293.66, 0.0, 440.00, 392.00, 0.0,
-        349.23, 0.0, 293.66, 261.63, 293.66, 0.0, 392.00, 440.00,
-        293.66, 0.0, 349.23, 440.00, 0.0, 523.25, 466.16, 0.0,
-        440.00, 0.0, 392.00, 0.0, 349.23, 0.0, 329.63, 293.66,
+        293.66,
+        0.0,
+        349.23,
+        293.66,
+        0.0,
+        440.00,
+        392.00,
+        0.0,
+        349.23,
+        0.0,
+        293.66,
+        261.63,
+        293.66,
+        0.0,
+        392.00,
+        440.00,
+        293.66,
+        0.0,
+        349.23,
+        440.00,
+        0.0,
+        523.25,
+        466.16,
+        0.0,
+        440.00,
+        0.0,
+        392.00,
+        0.0,
+        349.23,
+        0.0,
+        329.63,
+        293.66,
       ],
     ];
     final pIdx = (seed.abs()) % patterns.length;
@@ -786,7 +984,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   /// 1: Тяжелый Doom Phonk с разрушительным Reese-басом и гигантским снейром
   /// 2: Ночной Tokyo / Night City дрифт с синкопированным качающим грувом
   /// 3: Бразильский Hardtekk Phonk с прямой бочкой 4x4 и перегруженными стабами
-  static List<int> _synthesizePhonkWav({required double bpm, required int seed}) {
+  static List<int> _synthesizePhonkWav({
+    required double bpm,
+    required int seed,
+  }) {
     const sampleRate = 44100;
     // 32 шага (2 полных такта 4/4)
     final totalSamples = ((sampleRate * 60 / bpm) * 32 / 4).round();
@@ -814,66 +1015,290 @@ class _ProfileScreenState extends State<ProfileScreen>
     switch (bassMode) {
       case 0: // F#1 -> D1 -> E1 -> C#1
         bassSteps = const [
-          46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25,
-          36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71,
-          41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20,
-          34.65, 34.65, 34.65, 34.65, 43.65, 43.65, 46.25, 46.25,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          34.65,
+          34.65,
+          34.65,
+          34.65,
+          43.65,
+          43.65,
+          46.25,
+          46.25,
         ];
         break;
       case 1: // D#1 -> B0 -> C#1 -> A#0
         bassSteps = const [
-          38.89, 38.89, 38.89, 38.89, 38.89, 38.89, 38.89, 38.89,
-          30.87, 30.87, 30.87, 30.87, 30.87, 30.87, 30.87, 30.87,
-          34.65, 34.65, 34.65, 34.65, 34.65, 34.65, 34.65, 34.65,
-          29.14, 29.14, 29.14, 29.14, 36.71, 36.71, 38.89, 38.89,
+          38.89,
+          38.89,
+          38.89,
+          38.89,
+          38.89,
+          38.89,
+          38.89,
+          38.89,
+          30.87,
+          30.87,
+          30.87,
+          30.87,
+          30.87,
+          30.87,
+          30.87,
+          30.87,
+          34.65,
+          34.65,
+          34.65,
+          34.65,
+          34.65,
+          34.65,
+          34.65,
+          34.65,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          36.71,
+          36.71,
+          38.89,
+          38.89,
         ];
         break;
       case 2: // A1 -> F1 -> G1 -> E1
         bassSteps = const [
-          55.00, 55.00, 55.00, 55.00, 55.00, 55.00, 55.00, 55.00,
-          43.65, 43.65, 43.65, 43.65, 43.65, 43.65, 43.65, 43.65,
-          49.00, 49.00, 49.00, 49.00, 49.00, 49.00, 49.00, 49.00,
-          41.20, 41.20, 41.20, 41.20, 51.91, 51.91, 55.00, 55.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          43.65,
+          43.65,
+          43.65,
+          43.65,
+          43.65,
+          43.65,
+          43.65,
+          43.65,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          51.91,
+          51.91,
+          55.00,
+          55.00,
         ];
         break;
       case 3: // C1 -> G#0 -> A#0 -> G0
         bassSteps = const [
-          32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70,
-          25.96, 25.96, 25.96, 25.96, 25.96, 25.96, 25.96, 25.96,
-          29.14, 29.14, 29.14, 29.14, 29.14, 29.14, 29.14, 29.14,
-          24.50, 24.50, 24.50, 24.50, 30.87, 30.87, 32.70, 32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          25.96,
+          25.96,
+          25.96,
+          25.96,
+          25.96,
+          25.96,
+          25.96,
+          25.96,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          24.50,
+          24.50,
+          24.50,
+          24.50,
+          30.87,
+          30.87,
+          32.70,
+          32.70,
         ];
         break;
       case 4: // E1 -> C1 -> D1 -> B0
         bassSteps = const [
-          41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20,
-          32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70,
-          36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71,
-          30.87, 30.87, 30.87, 30.87, 38.89, 38.89, 41.20, 41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          30.87,
+          30.87,
+          30.87,
+          30.87,
+          38.89,
+          38.89,
+          41.20,
+          41.20,
         ];
         break;
       case 5: // G#1 -> E1 -> F#1 -> D#1
         bassSteps = const [
-          51.91, 51.91, 51.91, 51.91, 51.91, 51.91, 51.91, 51.91,
-          41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20, 41.20,
-          46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25, 46.25,
-          38.89, 38.89, 38.89, 38.89, 49.00, 49.00, 51.91, 51.91,
+          51.91,
+          51.91,
+          51.91,
+          51.91,
+          51.91,
+          51.91,
+          51.91,
+          51.91,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          41.20,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          38.89,
+          38.89,
+          38.89,
+          38.89,
+          49.00,
+          49.00,
+          51.91,
+          51.91,
         ];
         break;
       case 6: // B1 -> G1 -> A1 -> F#1
         bassSteps = const [
-          61.74, 61.74, 61.74, 61.74, 61.74, 61.74, 61.74, 61.74,
-          49.00, 49.00, 49.00, 49.00, 49.00, 49.00, 49.00, 49.00,
-          55.00, 55.00, 55.00, 55.00, 55.00, 55.00, 55.00, 55.00,
-          46.25, 46.25, 46.25, 46.25, 58.27, 58.27, 61.74, 61.74,
+          61.74,
+          61.74,
+          61.74,
+          61.74,
+          61.74,
+          61.74,
+          61.74,
+          61.74,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          49.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          55.00,
+          46.25,
+          46.25,
+          46.25,
+          46.25,
+          58.27,
+          58.27,
+          61.74,
+          61.74,
         ];
         break;
       default: // D1 -> Bb0 -> C1 -> A0
         bassSteps = const [
-          36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71, 36.71,
-          29.14, 29.14, 29.14, 29.14, 29.14, 29.14, 29.14, 29.14,
-          32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70, 32.70,
-          27.50, 27.50, 27.50, 27.50, 34.65, 34.65, 36.71, 36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          36.71,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          29.14,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          32.70,
+          27.50,
+          27.50,
+          27.50,
+          27.50,
+          34.65,
+          34.65,
+          36.71,
+          36.71,
         ];
         break;
     }
@@ -931,7 +1356,10 @@ class _ProfileScreenState extends State<ProfileScreen>
           // Memphis Drift: классический TR-808
           final bellBody = (sine1 + 0.65 * sine2) * 0.60 + (sq1 + sq2) * 0.35;
           final bellEnv = math.exp(-stepT * 14.0);
-          final click = math.exp(-stepT * 90.0) * math.sin(2 * math.pi * 1920.0 * stepT) * 0.45;
+          final click =
+              math.exp(-stepT * 90.0) *
+              math.sin(2 * math.pi * 1920.0 * stepT) *
+              0.45;
           cowbell = (bellBody * bellEnv + click) * 1.45;
         }
       }
@@ -942,7 +1370,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (genreMode == 0) {
         // Memphis: слайды на стыках тактов
         final isSlide = (step == 7 || step == 15 || step == 23 || step == 31);
-        subFreq = isSlide ? baseSubFreq * (1.0 + 0.50 * (stepSample / stepSamples)) : baseSubFreq;
+        subFreq = isSlide
+            ? baseSubFreq * (1.0 + 0.50 * (stepSample / stepSamples))
+            : baseSubFreq;
       } else if (genreMode == 2) {
         // Night City: скачки на октаву
         final isOctave = (step % 4 == 2);
@@ -957,14 +1387,19 @@ class _ProfileScreenState extends State<ProfileScreen>
       double distSub = 0.0;
       if (genreMode == 1) {
         // Doom Phonk: тяжелый перегруженный Reese саб
-        final reese = math.sin(subPhase) * 0.60 + math.sin(reesePhase) * 0.50 + 0.25 * math.sin(subPhase * 2.0);
+        final reese =
+            math.sin(subPhase) * 0.60 +
+            math.sin(reesePhase) * 0.50 +
+            0.25 * math.sin(subPhase * 2.0);
         distSub = (reese * 3.4) / (1.0 + (reese * 1.5).abs());
       } else if (genreMode == 3) {
         // Hardtekk: жесткие оффбит-стабы
         final isOffbeat = (step % 2 == 1);
         if (isOffbeat) {
           final stabEnv = math.exp(-stepT * 18.0);
-          final raw = math.sin(subPhase) + 0.40 * (math.sin(subPhase) >= 0 ? 1.0 : -1.0);
+          final raw =
+              math.sin(subPhase) +
+              0.40 * (math.sin(subPhase) >= 0 ? 1.0 : -1.0);
           distSub = (raw * 3.2 * stabEnv) / (1.0 + (raw * 1.4).abs());
         }
       } else {
@@ -981,19 +1416,22 @@ class _ProfileScreenState extends State<ProfileScreen>
           // Hardtekk: жесткий панч 4x4
           final kickEnv = math.exp(-stepT * 22.0);
           final kickFreq = 52.0 + 190.0 * math.exp(-stepT * 60.0);
-          final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.6;
+          final rawKick =
+              math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.6;
           kick = (rawKick * 1.8) / (1.0 + (rawKick * 0.95).abs());
         } else if (genreMode == 1) {
           // Doom: глубокий низкий удар
           final kickEnv = math.exp(-stepT * 12.0);
           final kickFreq = 38.0 + 120.0 * math.exp(-stepT * 40.0);
-          final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.4;
+          final rawKick =
+              math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.4;
           kick = (rawKick * 1.5) / (1.0 + (rawKick * 0.80).abs());
         } else {
           // 808 Trap Kick
           final kickEnv = math.exp(-stepT * 17.0);
           final kickFreq = 44.0 + 142.0 * math.exp(-stepT * 48.0);
-          final rawKick = math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.2;
+          final rawKick =
+              math.sin(2 * math.pi * kickFreq * stepT) * kickEnv * 2.2;
           kick = (rawKick * 1.6) / (1.0 + (rawKick * 0.85).abs());
         }
       }
@@ -1006,16 +1444,24 @@ class _ProfileScreenState extends State<ProfileScreen>
         isSnareStep = (step == 8 || step == 24);
         if (isSnareStep) {
           final snareEnv = math.exp(-stepT * 9.0);
-          final noise = (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.90;
-          final body = math.sin(2 * math.pi * 175.0 * stepT) * math.exp(-stepT * 15.0);
+          final noise =
+              (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 -
+                  1.0) *
+              0.90;
+          final body =
+              math.sin(2 * math.pi * 175.0 * stepT) * math.exp(-stepT * 15.0);
           snare = (noise * 0.85 + body * 0.60) * snareEnv * 1.4;
         }
       } else {
         isSnareStep = (step == 4 || step == 12 || step == 20 || step == 28);
         if (isSnareStep) {
           final snareEnv = math.exp(-stepT * 24.0);
-          final noise = (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.80;
-          final body = math.sin(2 * math.pi * 215.0 * stepT) * math.exp(-stepT * 30.0);
+          final noise =
+              (((math.sin(i * 12.9898 + seed) * 43758.5453) % 1.0) * 2.0 -
+                  1.0) *
+              0.80;
+          final body =
+              math.sin(2 * math.pi * 215.0 * stepT) * math.exp(-stepT * 30.0);
           snare = (noise * 0.75 + body * 0.55) * snareEnv;
         }
       }
@@ -1026,18 +1472,30 @@ class _ProfileScreenState extends State<ProfileScreen>
         // Doom: темный редкий оффбит-хэт
         if (step % 4 == 2) {
           final hatEnv = math.exp(-stepT * 28.0);
-          hatNoise = (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.35 * hatEnv;
+          hatNoise =
+              (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 -
+                  1.0) *
+              0.35 *
+              hatEnv;
         }
       } else {
         final isRoll = (step == 14 || step == 15 || step == 30 || step == 31);
         final hatRate = isRoll ? 4.0 : 2.0;
         final hatEnv = math.exp(-((stepT * hatRate) % 1.0) * 45.0);
-        hatNoise = (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) * 0.22 * hatEnv;
+        hatNoise =
+            (((math.sin(i * 91.1337 + seed) * 43758.5453) % 1.0) * 2.0 - 1.0) *
+            0.22 *
+            hatEnv;
       }
 
       // Мастеринг: сайдчейн бочки против саб-баса и лимитер
       final sidechain = kick.abs() > 0.3 ? 0.45 : 1.0;
-      final sum = kick * 0.88 + distSub * 0.76 * sidechain + cowbell * 0.64 + snare * 0.58 + hatNoise * 0.26;
+      final sum =
+          kick * 0.88 +
+          distSub * 0.76 * sidechain +
+          cowbell * 0.64 +
+          snare * 0.58 +
+          hatNoise * 0.26;
       final mix = (sum * 1.40) / (1.0 + (sum * 0.55).abs());
       final sampleInt16 = (mix * 32760.0).round().clamp(-32768, 32767);
       pcmBytes.setInt16(i * 2, sampleInt16, Endian.little);
@@ -1090,6 +1548,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   /// Запустить/остановить конкретный трек подборки.
   Future<void> _toggleTrack(MusicTrack track) async {
     Haptics.light();
+    _syncMusicQueue();
     final ok = await _music.toggle(track.path);
     if (!ok && mounted) {
       _toast(
@@ -1112,8 +1571,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (!mounted) return;
     setState(() => _removingTrackIds.remove(track.id));
   }
-
-
 
   /// Открыть окно новогоднего ивента (пункт «Новогодний ивент» в событиях).
   /// Если ивент сейчас неактивен — сообщаем об этом, а не открываем пустое
@@ -1243,33 +1700,33 @@ class _ProfileScreenState extends State<ProfileScreen>
         builder: (context, _) => ListView(
           controller: _scrollCtrl,
           padding: const EdgeInsets.fromLTRB(
-                Spacing.md,
-                Spacing.sm,
-                Spacing.md,
-                Spacing.xxl,
-              ),
-              children: [
-                RepaintBoundary(child: _headerCard(theme)),
-                const SizedBox(height: Spacing.md),
-                RepaintBoundary(child: _nameCard(theme)),
-                const SizedBox(height: Spacing.md),
-                RepaintBoundary(child: _onlineCard(theme)),
-                const SizedBox(height: Spacing.md),
-                RepaintBoundary(child: _musicCard(theme)),
-                const SizedBox(height: Spacing.md),
-                RepaintBoundary(child: _leaderboardCard(theme)),
-                const SizedBox(height: Spacing.md),
-                // Очки — сразу после рейтинга: «за что» читается рядом с «кто
-                // сколько», а карточки музыки и рейтинга остаются на своих местах.
-                RepaintBoundary(child: _scoreCard(theme)),
-                const SizedBox(height: Spacing.md),
-                RepaintBoundary(child: _giftsCard(theme)),
-                const SizedBox(height: Spacing.md),
-                RepaintBoundary(child: _eventsCard(theme)),
-              ],
-            ),
+            Spacing.md,
+            Spacing.sm,
+            Spacing.md,
+            Spacing.xxl,
           ),
-        );
+          children: [
+            RepaintBoundary(child: _headerCard(theme)),
+            const SizedBox(height: Spacing.md),
+            RepaintBoundary(child: _nameCard(theme)),
+            const SizedBox(height: Spacing.md),
+            RepaintBoundary(child: _onlineCard(theme)),
+            const SizedBox(height: Spacing.md),
+            RepaintBoundary(child: _musicCard(theme)),
+            const SizedBox(height: Spacing.md),
+            RepaintBoundary(child: _leaderboardCard(theme)),
+            const SizedBox(height: Spacing.md),
+            // Очки — сразу после рейтинга: «за что» читается рядом с «кто
+            // сколько», а карточки музыки и рейтинга остаются на своих местах.
+            RepaintBoundary(child: _scoreCard(theme)),
+            const SizedBox(height: Spacing.md),
+            RepaintBoundary(child: _giftsCard(theme)),
+            const SizedBox(height: Spacing.md),
+            RepaintBoundary(child: _eventsCard(theme)),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Шапка профиля: крупная аватарка со спектром, размашистыми талисманами вокруг карточки, имя и престижный титул.
@@ -1299,19 +1756,25 @@ class _ProfileScreenState extends State<ProfileScreen>
               switchOutCurve: Curves.easeInCubic,
               child: favGifts.isNotEmpty
                   ? RepaintBoundary(
-                      key: ValueKey('header_talisman_bg_${favGifts.map((g) => g.id).join('_')}'),
+                      key: ValueKey(
+                        'header_talisman_bg_${favGifts.map((g) => g.id).join('_')}',
+                      ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(Radii.xl),
                         child: CustomPaint(
                           painter: _HeaderCardTalismanPainter(
                             color: favGifts.first.rarity.color,
                             accent: BrandColors.red,
-                            colors: favGifts.map((g) => g.rarity.color).toList(),
+                            colors: favGifts
+                                .map((g) => g.rarity.color)
+                                .toList(),
                           ),
                         ),
                       ),
                     )
-                  : const SizedBox.shrink(key: ValueKey('no_talisman_header_bg')),
+                  : const SizedBox.shrink(
+                      key: ValueKey('no_talisman_header_bg'),
+                    ),
             ),
           ),
           // 2. Размашистые парящие NFT-талисманы вокруг карточки на фоне (до 5 избранных)
@@ -1363,7 +1826,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: gift.rarity.color.withValues(alpha: 0.40),
+                                    color: gift.rarity.color.withValues(
+                                      alpha: 0.40,
+                                    ),
                                     blurRadius: 6,
                                     spreadRadius: 0,
                                   ),
@@ -1386,7 +1851,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                         ),
                       )
-                    : const SizedBox.shrink(key: ValueKey('empty_talisman_spot')),
+                    : const SizedBox.shrink(
+                        key: ValueKey('empty_talisman_spot'),
+                      ),
               ),
             );
           }),
@@ -1404,7 +1871,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                     transitionBuilder: (child, animation) => FadeTransition(
                       opacity: animation,
                       child: ScaleTransition(
-                        scale: Tween<double>(begin: 0.85, end: 1.0).animate(animation),
+                        scale: Tween<double>(
+                          begin: 0.85,
+                          end: 1.0,
+                        ).animate(animation),
                         child: child,
                       ),
                     ),
@@ -1453,22 +1923,29 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 duration: const Duration(milliseconds: 320),
                                 switchInCurve: Curves.easeOutCubic,
                                 switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (child, anim) => FadeTransition(
-                                  opacity: anim,
-                                  child: ScaleTransition(
-                                    scale: Tween<double>(begin: 0.92, end: 1.0).animate(anim),
-                                    child: child,
-                                  ),
-                                ),
+                                transitionBuilder: (child, anim) =>
+                                    FadeTransition(
+                                      opacity: anim,
+                                      child: ScaleTransition(
+                                        scale: Tween<double>(
+                                          begin: 0.92,
+                                          end: 1.0,
+                                        ).animate(anim),
+                                        child: child,
+                                      ),
+                                    ),
                                 child: ProfileAvatar(
-                                  key: ValueKey('avatar_${_service.avatarIndex}_${_service.avatarImagePath}'),
+                                  key: ValueKey(
+                                    'avatar_${_service.avatarIndex}_${_service.avatarImagePath}',
+                                  ),
                                   index: _service.avatarIndex,
                                   size: 96,
                                   glow: true,
                                   imagePath: _service.avatarImagePath,
                                   motion: _scrollCtrl,
-                                  motionOf: () =>
-                                      _scrollCtrl.hasClients ? (_scrollCtrl.offset / 140) : 0.0,
+                                  motionOf: () => _scrollCtrl.hasClients
+                                      ? (_scrollCtrl.offset / 140)
+                                      : 0.0,
                                 ),
                               ),
                             ),
@@ -1515,7 +1992,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                 ],
               ),
-          const SizedBox(height: Spacing.md),
+              const SizedBox(height: Spacing.md),
               // Кружок слева от имени
               Center(
                 child: Transform.translate(
@@ -1568,11 +2045,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.bolt_rounded, size: 14, color: BrandColors.red),
+                          const Icon(
+                            Icons.bolt_rounded,
+                            size: 14,
+                            color: BrandColors.red,
+                          ),
                           const SizedBox(width: 4),
                           AnimatedSize(
                             duration: const Duration(milliseconds: 260),
@@ -1583,24 +2067,23 @@ class _ProfileScreenState extends State<ProfileScreen>
                               duration: const Duration(milliseconds: 260),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeInCubic,
-                              layoutBuilder: (currentChild, previousChildren) => Stack(
-                                alignment: Alignment.centerLeft,
-                                children: [
-                                  ...previousChildren.map(
-                                    (p) => Positioned.fill(
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: p,
+                              layoutBuilder: (currentChild, previousChildren) =>
+                                  Stack(
+                                    alignment: Alignment.centerLeft,
+                                    children: [
+                                      ...previousChildren.map(
+                                        (p) => Positioned.fill(
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: p,
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      ?currentChild,
+                                    ],
                                   ),
-                                  ?currentChild,
-                                ],
-                              ),
-                              transitionBuilder: (child, anim) => FadeTransition(
-                                opacity: anim,
-                                child: child,
-                              ),
+                              transitionBuilder: (child, anim) =>
+                                  FadeTransition(opacity: anim, child: child),
                               child: Text(
                                 _service.prestigeTitle,
                                 key: ValueKey(_service.prestigeTitle),
@@ -1623,7 +2106,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                             child: Icon(
                               Icons.keyboard_arrow_down_rounded,
                               size: 16,
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
                             ),
                           ),
                         ],
@@ -1634,8 +2119,64 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          _versionPill(theme),
         ],
       ),
+    );
+  }
+
+  /// Плашка версии под титулом: та же цифра, что в патч-ноутах, и тап
+  /// открывает сам список изменений. Слушаем [AppVersion], а не читаем
+  /// строку один раз — после обновления цифра меняется без перезахода.
+  Widget _versionPill(ThemeData theme) {
+    return ValueListenableBuilder<String>(
+      valueListenable: AppVersion.listenable,
+      builder: (context, version, _) {
+        final label = Translations.t(
+          'profileVersionWhatsNew',
+          context,
+          'Что нового',
+        );
+        return PressScale(
+          pressedScale: 0.94,
+          child: GestureDetector(
+            onTap: () {
+              Haptics.light();
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ChangelogScreen(),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: ShapeDecoration(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+                shape: const StadiumBorder(),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.new_releases_outlined,
+                    size: 13,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '$label · v$version',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1664,8 +2205,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           padding: const EdgeInsets.all(Spacing.lg),
           decoration: BoxDecoration(
             color: dark ? const Color(0xFF12121C) : theme.colorScheme.surface,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             border: Border.all(
               color: BrandColors.red.withValues(alpha: 0.35),
               width: 1.2,
@@ -1682,8 +2222,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                     width: 38,
                     height: 4,
                     decoration: BoxDecoration(
-                      color:
-                          theme.colorScheme.onSurface.withValues(alpha: 0.22),
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.22,
+                      ),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1724,20 +2265,22 @@ class _ProfileScreenState extends State<ProfileScreen>
                             color: isSelected
                                 ? BrandColors.red
                                 : theme.colorScheme.surfaceContainerHighest
-                                    .withValues(alpha: 0.4),
+                                      .withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(Radii.pill),
                             border: Border.all(
                               color: isSelected
                                   ? BrandColors.red
-                                  : theme.colorScheme.outline
-                                      .withValues(alpha: 0.25),
+                                  : theme.colorScheme.outline.withValues(
+                                      alpha: 0.25,
+                                    ),
                               width: isSelected ? 1.4 : 1.0,
                             ),
                             boxShadow: isSelected
                                 ? [
                                     BoxShadow(
-                                      color: BrandColors.red
-                                          .withValues(alpha: 0.35),
+                                      color: BrandColors.red.withValues(
+                                        alpha: 0.35,
+                                      ),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -1795,22 +2338,25 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       child: SizedBox(
         height: 220,
-        child: SingleChildScrollView(
+        // Ленивый список с фиксированной шириной карточки: коллекция на
+        // сотни артефактов раньше строилась вся целиком при каждом кадре
+        // прокрутки — отсюда рывки у краёв. Clamping вместо Bouncing: у
+        // вложенной полосы отскок читался как «застревание».
+        child: ListView.builder(
           scrollDirection: Axis.horizontal,
           clipBehavior: Clip.none,
-          child: Row(
-            children: [
-              for (var i = 0; i < gifts.length; i++) ...[
-                if (i > 0) const SizedBox(width: Spacing.sm),
-                RepaintBoundary(
-                  key: ValueKey('gift_card_${gifts[i].id}'),
-                  child: GiftCard3D(
-                    gift: gifts[i],
-                    onFavoriteToggled: () => setState(() {}),
-                  ),
-                ),
-              ],
-            ],
+          physics: const ClampingScrollPhysics(),
+          itemExtent: GiftCard3D.defaultWidth + Spacing.sm,
+          itemCount: gifts.length,
+          itemBuilder: (context, i) => Padding(
+            padding: const EdgeInsets.only(right: Spacing.sm),
+            child: RepaintBoundary(
+              key: ValueKey('gift_card_${gifts[i].id}'),
+              child: GiftCard3D(
+                gift: gifts[i],
+                onFavoriteToggled: () => setState(() {}),
+              ),
+            ),
           ),
         ),
       ),
@@ -1979,10 +2525,10 @@ class _ProfileScreenState extends State<ProfileScreen>
     return _Card(
       title: Translations.t('profileMusic', context, 'Твоя музыка'),
       icon: Icons.music_note_outlined,
-      // Без общей отдачи: внутри списка треков свои жесты (свайп, драг,
-      // переключение) — крупная плашка не должна отзываться на каждое
-      // касание строки и спорить с ними за палец.
-      pressable: false,
+      // Общая отдача карточки: нажатие вдавливает всю плашку, наклон
+      // ловит палец. Жесты внутри строк трека сами выигрывают хит-тест,
+      // поэтому тап по названию/корзине не спорит с этим эффектом.
+      pressable: true,
       // Счётчик подборки меняется ПО ЦИФРАМ, как очки рейтинга: при
       // добавлении/удалении трека разряд не подменяется кадром, а мягко
       // перетекает. Знаменатель — константа, поэтому он статичен.
@@ -2042,7 +2588,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                     icon: const Icon(Icons.library_music_outlined),
                     label: Text(
                       _service.canAddTrack
-                          ? Translations.t('profileMusicAdd', context, 'Добавить')
+                          ? Translations.t(
+                              'profileMusicAdd',
+                              context,
+                              'Добавить',
+                            )
                           : Translations.t(
                               'profileMusicFull',
                               context,
@@ -2068,7 +2618,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                         transitionBuilder: (child, anim) => FadeTransition(
                           opacity: anim,
                           child: ScaleTransition(
-                            scale: Tween<double>(begin: 0.94, end: 1.0).animate(anim),
+                            scale: Tween<double>(
+                              begin: 0.94,
+                              end: 1.0,
+                            ).animate(anim),
                             child: child,
                           ),
                         ),
@@ -2082,7 +2635,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     height: 14,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(BrandColors.red),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        BrandColors.red,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -2182,7 +2737,12 @@ class _ProfileScreenState extends State<ProfileScreen>
         track: track,
         playing: playing,
         growFromZero: isNew,
+        mode: _music.mode,
         onToggle: () => _toggleTrack(track),
+        onCycleMode: () {
+          Haptics.select();
+          unawaited(_music.cycleQueueMode());
+        },
         onRemove: () => _removeTrack(track),
       ),
     );
@@ -2200,13 +2760,30 @@ class _ProfileScreenState extends State<ProfileScreen>
     return _Card(
       title: Translations.t('scoreTitle', context, 'Твои очки'),
       icon: Icons.workspace_premium_outlined,
-      trailing: SmoothDigits(
-        value: total,
-        sample: '0000',
-        style: theme.textTheme.titleMedium?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: Weights.bold,
-        ),
+      // Итог и его потолок: цифра — как раньше, под ней полупрозрачной
+      // строкой предел копилки, чтобы «сколько ещё осталось» было видно
+      // сразу, а не только когда счётчик упрётся.
+      trailing: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          SmoothDigits(
+            value: total,
+            sample: '0000',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: Weights.bold,
+            ),
+          ),
+          Text(
+            '(${Translations.t('scoreLimitNote', context, 'лимит 10 000 000 000')})',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: 9.5,
+              height: 1.2,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
+            ),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

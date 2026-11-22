@@ -18,6 +18,10 @@ import 'press_scale.dart';
 /// - Четкое разделение серийного номера и кровавой звездочки талисмана (без наездов)
 /// - Плавное открытие детального окна с отдачей кнопок при нажатии
 class GiftCard3D extends StatefulWidget {
+  /// Ширина карточки по умолчанию: по ней полоса артефактов задаёт
+  /// itemExtent и строит только видимые карточки.
+  static const double defaultWidth = 160;
+
   final ProfileGift gift;
   final double width;
   final double height;
@@ -26,7 +30,7 @@ class GiftCard3D extends StatefulWidget {
   const GiftCard3D({
     super.key,
     required this.gift,
-    this.width = 160,
+    this.width = defaultWidth,
     this.height = 210,
     this.onFavoriteToggled,
   });
@@ -283,9 +287,31 @@ class _GiftCard3DState extends State<GiftCard3D>
                     : _tilt;
                 final hasTilt =
                     currentTilt.dx.abs() > 0.0005 || currentTilt.dy.abs() > 0.0005;
-                if (!hasTilt && !_resetController.isAnimating) {
-                  return child!;
-                }
+
+                // Голографический перелив — часть фона карточки, а не эффект
+                // наведения: он лежит поверх контента и в покое, иначе
+                // артефакт «терял» фон, стоило убрать палец.
+                final layered = Stack(
+                  children: [
+                    child!,
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(Radii.lg),
+                        child: CustomPaint(
+                          painter: _HoloFoilPainter(
+                            tilt: currentTilt,
+                            idle: !hasTilt,
+                            rarityColor: widget.gift.isFavorite
+                                ? BrandColors.red
+                                : rarity.color,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+
+                if (!hasTilt) return layered;
 
                 final tiltX = -currentTilt.dy * 0.26;
                 final tiltY = currentTilt.dx * 0.26;
@@ -298,24 +324,7 @@ class _GiftCard3DState extends State<GiftCard3D>
                 return Transform(
                   transform: transform,
                   alignment: FractionalOffset.center,
-                  child: Stack(
-                    children: [
-                      child!,
-                      Positioned.fill(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(Radii.lg),
-                          child: CustomPaint(
-                            painter: _HoloFoilPainter(
-                              tilt: currentTilt,
-                              rarityColor: widget.gift.isFavorite
-                                  ? BrandColors.red
-                                  : rarity.color,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: layered,
                 );
               },
               child: cardContent,
@@ -848,9 +857,14 @@ class _HoloFoilPainter extends CustomPainter {
   final Offset tilt;
   final Color rarityColor;
 
+  /// Карточка стоит ровно: перелив светит чуть плотнее, иначе на светлой
+  /// теме его почти не видно и фон читается «пропавшим».
+  final bool idle;
+
   _HoloFoilPainter({
     required this.tilt,
     required this.rarityColor,
+    this.idle = false,
   });
 
   @override
@@ -865,9 +879,9 @@ class _HoloFoilPainter extends CustomPainter {
       ),
       radius: 0.95,
       colors: [
-        Colors.white.withValues(alpha: 0.16),
-        rarityColor.withValues(alpha: 0.12),
-        BrandColors.red.withValues(alpha: 0.08),
+        Colors.white.withValues(alpha: idle ? 0.22 : 0.16),
+        rarityColor.withValues(alpha: idle ? 0.16 : 0.12),
+        BrandColors.red.withValues(alpha: idle ? 0.11 : 0.08),
         Colors.transparent,
       ],
       stops: const [0.0, 0.35, 0.65, 1.0],
@@ -903,7 +917,9 @@ class _HoloFoilPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HoloFoilPainter oldDelegate) {
-    return oldDelegate.tilt != tilt || oldDelegate.rarityColor != rarityColor;
+    return oldDelegate.tilt != tilt ||
+        oldDelegate.rarityColor != rarityColor ||
+        oldDelegate.idle != idle;
   }
 }
 

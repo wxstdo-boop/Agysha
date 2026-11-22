@@ -69,9 +69,7 @@ void main() {
   test('привычка приносит очки по длине стрика', () async {
     final habits = HabitService();
     await habits.load();
-    await habits.add(
-      Habit(id: 'h1', name: 'Зарядка', type: 'good'),
-    );
+    await habits.add(Habit(id: 'h1', name: 'Зарядка', type: 'good'));
 
     final habit = habits.habits.first;
     await habits.toggle(habit.id);
@@ -115,6 +113,15 @@ void main() {
     expect(profile.localScore(), greaterThanOrEqualTo(ScoreWeight.meal * 2));
   });
 
+  test('копилка упирается в потолок 10 миллиардов', () async {
+    final score = ScoreService();
+    await score.award(ScoreKind.meal, ScoreService.maxTotal);
+    expect(score.total, ScoreService.maxTotal);
+    // Ни одно действие сверх потолка не переполняет счётчик.
+    await score.award(ScoreKind.task, 5);
+    expect(score.total, ScoreService.maxTotal);
+  });
+
   testWidgets('профиль показывает карточку очков с разбором', (tester) async {
     tester.view.physicalSize = const Size(411, 1400) * 3;
     tester.view.devicePixelRatio = 3.0;
@@ -137,6 +144,8 @@ void main() {
     // Нулевые категории не показываем: список пустых строк читался бы
     // «сломанным».
     expect(find.text('Приёмы пищи'), findsNothing);
+    // Потолок копилки виден сразу, полупрозрачной строкой под итогом.
+    expect(find.textContaining('10 000 000 000'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

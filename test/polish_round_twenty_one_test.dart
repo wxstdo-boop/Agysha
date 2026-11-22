@@ -21,7 +21,11 @@ import 'source_scope.dart';
 void main() {
   String read(String path) {
     final f = File(path);
-    expect(f.existsSync(), isTrue, reason: '$path не найден — тест не из корня');
+    expect(
+      f.existsSync(),
+      isTrue,
+      reason: '$path не найден — тест не из корня',
+    );
     return readLibrary(path);
   }
 
@@ -31,7 +35,7 @@ void main() {
     path,
   ).split('\n').where((l) => !l.trimLeft().startsWith('//')).join('\n');
 
-  test('профиль: карточки отзываются вдавливанием, музыка — нет', () {
+  test('профиль: карточки отзываются вдавливанием, музыка — тоже', () {
     final src = code('lib/screens/profile_screen.dart');
     final card = src.substring(
       src.indexOf('class _Card extends StatelessWidget'),
@@ -48,30 +52,54 @@ void main() {
     );
     expect(
       src.contains('pressable: false'),
-      isTrue,
-      reason: 'у карточки музыки свои жесты — общая отдача выключена',
+      isFalse,
+      reason: 'карточка музыки отдаёт нажатием вместе с остальными',
     );
   });
 
-  test('клавиатура: медленная отдача, плавный регистр, без кнопки-действия', () {
-    final src = code('lib/widgets/inline_keyboard.dart');
+  test('строка трека: порядок подборки меняется рядом с корзиной', () {
+    final src = code('lib/screens/profile_tracks.dart');
     expect(
-      src.contains('Duration(milliseconds: 190)') &&
-          src.contains('Duration(milliseconds: 340)'),
+      src.contains('Icons.repeat_one_rounded') &&
+          src.contains('Icons.repeat_rounded') &&
+          src.contains('Icons.shuffle_rounded'),
       isTrue,
-      reason: 'отдача клавиши должна быть медленнее прежних 90/180 мс',
+      reason: 'три значка порядка: повтор, очередь, вперемешку',
     );
     expect(
-      src.contains('class _CaseGlyph'),
+      src.contains('onCycleMode'),
       isTrue,
-      reason: 'буква обязана менять регистр плавным подъёмом/спуском',
+      reason: 'значок обязан переключать режим, а не просто светиться',
     );
     expect(
-      src.contains('_caseAnim'),
+      src.contains('AnimatedSwitcher'),
       isTrue,
-      reason: 'регистр ведёт общий контроллер, а не мгновенная подмена',
+      reason: 'значки сменяются плавно, а не подменой кадра',
     );
   });
+
+  test(
+    'клавиатура: медленная отдача, плавный регистр, без кнопки-действия',
+    () {
+      final src = code('lib/widgets/inline_keyboard.dart');
+      expect(
+        src.contains('Duration(milliseconds: 190)') &&
+            src.contains('Duration(milliseconds: 340)'),
+        isTrue,
+        reason: 'отдача клавиши должна быть медленнее прежних 90/180 мс',
+      );
+      expect(
+        src.contains('class _CaseGlyph'),
+        isTrue,
+        reason: 'буква обязана менять регистр плавным подъёмом/спуском',
+      );
+      expect(
+        src.contains('_caseAnim'),
+        isTrue,
+        reason: 'регистр ведёт общий контроллер, а не мгновенная подмена',
+      );
+    },
+  );
 
   test('окно события: длинный вход и отложенный каскад шапок', () {
     final src = code('lib/widgets/new_year_event_banner.dart');
