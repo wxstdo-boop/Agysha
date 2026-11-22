@@ -2,7 +2,7 @@ part of 'settings_screen.dart';
 
 /// Внешний вид: темы, язык, шрифт, «О приложении» и ссылки.
 extension _SettingsSectionLook on _SettingsScreenState {
-  /// Раздел списка настроек. Живёт отдельно, чтобы uild оставался читаемым.
+  /// Раздел списка настроек. Живёт отдельно, чтобы build оставался читаемым.
   List<Widget> _settingsLookSection(
     BuildContext context,
     AgyshaAppState appState,
@@ -401,18 +401,22 @@ extension _SettingsSectionLook on _SettingsScreenState {
                 // Тёплый винный градиент вместо «кроваво-красного»: алый
                 // верх бил по глазам, особенно на тёмной теме. Здесь
                 // приглушённый розово-винный верх и глубокий бордо.
+                // Полупрозрачный красный вместо бордового: бордо с
+                // коричневым верхом выглядело грязно. Здесь чистый алый
+                // с прозрачностью — кнопка читается как стекло с красным
+                // соком, сквозь неё видно карточку.
                 gradient: theme.brightness == Brightness.dark
                     ? const [
-                        Color(0xFFE093A4),
-                        Color(0xFF9B3A56),
-                        Color(0xFF40131F),
+                        Color(0xE6EC4560),
+                        Color(0xD9C41E3E),
+                        Color(0xCC8A0F26),
                       ]
                     : const [
-                        Color(0xFFD4697F),
-                        Color(0xFF9E2338),
-                        Color(0xFF5A1222),
+                        Color(0xE6F04E67),
+                        Color(0xD9CC2240),
+                        Color(0xCC9E1229),
                       ],
-                glow: const Color(0xFFB04258),
+                glow: const Color(0xFFD42A45),
                 onTap: _showSupportSheet,
               ),
             ],

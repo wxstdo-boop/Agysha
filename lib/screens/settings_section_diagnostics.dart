@@ -2,7 +2,7 @@ part of 'settings_screen.dart';
 
 /// Диагностика и уголок разработчика.
 extension _SettingsSectionDiagnostics on _SettingsScreenState {
-  /// Раздел списка настроек. Живёт отдельно, чтобы uild оставался читаемым.
+  /// Раздел списка настроек. Живёт отдельно, чтобы build оставался читаемым.
   List<Widget> _settingsDiagnosticsSection(
     BuildContext context,
     AgyshaAppState appState,

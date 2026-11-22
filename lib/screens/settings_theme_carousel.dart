@@ -31,7 +31,11 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
             ? Icons.wb_sunny_outlined
             : Icons.brightness_2_outlined,
       ),
-      _ThemeEntry('system', Translations.systemOf(context), Icons.brightness_auto),
+      _ThemeEntry(
+        'system',
+        Translations.systemOf(context),
+        Icons.brightness_auto,
+      ),
       _ThemeEntry(
         'systemLight',
         Translations.t('themeSystemLight', context),
@@ -127,6 +131,12 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// не разворачивала барабан против движения.
   double _recentDrag = 0;
 
+  /// Направление текущего жеста (+1 / -1, 0 — ещё не определено) и сколько
+  /// пикселей палец уже тянет против него. Пока человек крутит в одну
+  /// сторону, мелкая дрожь пальца назад гасится, и барабан не отпружинивает.
+  double _dragDir = 0;
+  double _against = 0;
+
   int get _n => widget.entries.length;
 
   int _norm(int i) => i % _n < 0 ? i % _n + _n : i % _n;
@@ -173,11 +183,19 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// на каморе не было. Их применяем только осознанным выбором.
   static const Set<String> _variantOnly = <String>{'peach', 'oled'};
 
+  /// Насколько барабан должен уйти за середину шага, чтобы тема сменилась.
+  /// Порог больше 0.5 даёт гистерезис: у самой середины палец дрожит, и
+  /// раньше тема перескакивала туда-обратно, читаясь как «крутишь в одну
+  /// сторону, а переводит в другую».
+  static const double _previewHysteresis = 0.66;
+
   /// Тема под указателем поменялась — применяем её, чтобы прокрутка
-  /// выглядела как живое переключение палитры.
-  void _previewNearest() {
+  /// выглядела как живое переключение палитры. [force] — довести тему
+  /// после доводки, когда барабан уже стоит на каморе.
+  void _previewNearest({bool force = false}) {
     final i = _index;
     if (i == _applied) return;
+    if (!force && (_pos - _applied).abs() < _previewHysteresis) return;
     _applied = i;
     final entry = widget.entries[i];
     if (_variantOnly.contains(entry.key)) return;
@@ -200,22 +218,23 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
       // Барабан уже стоит на каморе: не крутим пустую анимацию, которая
       // потом 200 мс «висит» у цели и читается как «не доводится».
       _pos = target;
-      _previewNearest();
+      _previewNearest(force: true);
       widget.onCommit(widget.entries[_index]);
       return;
     }
     // easeOutCubic вместо quint: у quint длинный хвост, барабан почти
     // доехал и надолго замирал в паре пикселей от каморы.
-    _spinAnim = Tween<double>(begin: _pos, end: target).animate(
-      CurvedAnimation(parent: _spin, curve: Curves.easeOutCubic),
-    );
+    _spinAnim = Tween<double>(
+      begin: _pos,
+      end: target,
+    ).animate(CurvedAnimation(parent: _spin, curve: Curves.easeOutCubic));
     _spin.duration = Duration(
       milliseconds: (340 + 150 * dist).round().clamp(340, 780),
     );
     _spin.forward(from: 0).whenComplete(() {
       if (!mounted || token != _spinToken) return;
       _pos = target;
-      _previewNearest();
+      _previewNearest(force: true);
       widget.onCommit(widget.entries[_index]);
     });
   }
@@ -223,12 +242,33 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _onDragStart(DragStartDetails details) {
     _dragging = true;
     _recentDrag = 0;
+    _dragDir = 0;
+    _against = 0;
     _spin.stop();
     _spinToken++;
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
-    final delta = details.primaryDelta ?? 0;
+    var delta = details.primaryDelta ?? 0;
+    if (delta == 0) return;
+    if (_dragDir == 0) {
+      _dragDir = delta.sign;
+      _against = 0;
+    } else if (delta.sign != _dragDir) {
+      // Палец идёт против жеста: короткую дрожь (до 18 px) не показываем
+      // вовсе — барабан крутится только туда, куда ведут. Осознанный
+      // разворот начинается после этих 18 px.
+      _against += delta.abs();
+      if (_against < 18) return;
+      // Засчитываем только то, что палец прошёл СВЕРХ порога, поэтому
+      // разворот начинается с нуля, а не рывком на весь кадр.
+      final excess = _against - 18.0;
+      _dragDir = delta.sign;
+      _against = 0;
+      delta = _dragDir * excess;
+    } else {
+      _against = 0;
+    }
     _recentDrag = delta;
     setState(() => _pos -= delta / _dragStep);
     _previewNearest();
@@ -236,6 +276,8 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
 
   void _onDragEnd(DragEndDetails details) {
     _dragging = false;
+    _dragDir = 0;
+    _against = 0;
     // Инерция короткая и только ПО ходу пальца: телефон на отпускании
     // иногда отдаёт скорость обратного знака (палец «отпружинивает»), и
     // барабан резко уезжал назад. Такой «флик» просто не учитываем.
@@ -249,6 +291,8 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
 
   void _onDragCancel() {
     _dragging = false;
+    _dragDir = 0;
+    _against = 0;
     _settleTo(_pos.roundToDouble());
   }
 
@@ -290,73 +334,75 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-            SizedBox(
-              width: side,
-              height: side,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onHorizontalDragStart: _onDragStart,
-                onHorizontalDragUpdate: _onDragUpdate,
-                onHorizontalDragEnd: _onDragEnd,
-                onHorizontalDragCancel: _onDragCancel,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: <Widget>[
-                    _drumShell(cs, side),
-                    for (var i = 0; i < _n; i++)
-                      _chamber(cs, i, side, widget.entries[i]),
-                    _hub(cs, entry, hub),
-                    // Указатель — единственная неподвижная деталь: камора,
-                    // вставшая под него, и есть выбранная тема.
-                    Positioned(
-                      top: 0,
-                      child: Icon(
-                        Icons.arrow_drop_down,
-                        size: 30,
-                        // Указатель — единственный цветной акцент барабана:
-                        // приглушённо-красный, чтобы сразу читался как
-                        // стрелка, но не спорил с монохромными каморами.
-                        color: const Color(0xFFFF3B30).withValues(alpha: 0.55),
+              SizedBox(
+                width: side,
+                height: side,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragStart: _onDragStart,
+                  onHorizontalDragUpdate: _onDragUpdate,
+                  onHorizontalDragEnd: _onDragEnd,
+                  onHorizontalDragCancel: _onDragCancel,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: <Widget>[
+                      _drumShell(cs, side),
+                      for (var i = 0; i < _n; i++)
+                        _chamber(cs, i, side, widget.entries[i]),
+                      _hub(cs, entry, hub),
+                      // Указатель — единственная неподвижная деталь: камора,
+                      // вставшая под него, и есть выбранная тема.
+                      Positioned(
+                        top: 0,
+                        child: Icon(
+                          Icons.arrow_drop_down,
+                          size: 30,
+                          // Указатель — единственный цветной акцент барабана:
+                          // приглушённо-красный, чтобы сразу читался как
+                          // стрелка, но не спорил с монохромными каморами.
+                          color: const Color(
+                            0xFFFF3B30,
+                          ).withValues(alpha: 0.55),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            SizedBox(
-              height: 24,
-              child: AnimatedSwitcher(
-                // Только перекрёстное затухание: со сползанием текста
-                // подписи при быстрой прокрутке наезжали друг на друга.
-                duration: const Duration(milliseconds: 280),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                transitionBuilder: (child, anim) =>
-                    FadeTransition(opacity: anim, child: child),
-                child: Text(
-                  entry.label,
-                  // В ключе — сама подпись: у Cyberpunk и персика она
-                  // меняется вместе с вариантом, и без этого переключение
-                  // подменялось кадром вместо плавного затухания.
-                  key: ValueKey('theme_label_${entry.key}_${entry.label}'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
+                    ],
                   ),
                 ),
               ),
-            ),
-            Text(
-              Translations.t('themeHint', context, 'Крути барабан'),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 24,
+                child: AnimatedSwitcher(
+                  // Только перекрёстное затухание: со сползанием текста
+                  // подписи при быстрой прокрутке наезжали друг на друга.
+                  duration: const Duration(milliseconds: 280),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (child, anim) =>
+                      FadeTransition(opacity: anim, child: child),
+                  child: Text(
+                    entry.label,
+                    // В ключе — сама подпись: у Cyberpunk и персика она
+                    // меняется вместе с вариантом, и без этого переключение
+                    // подменялось кадром вместо плавного затухания.
+                    key: ValueKey('theme_label_${entry.key}_${entry.label}'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+              Text(
+                Translations.t('themeHint', context, 'Крути барабан'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -467,7 +513,8 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
         if (!mounted) return;
         showBeautifulSnackBar(
           context,
-          message: 'Вы элегантны? 🥀 — Are you elegant? — Êtes-vous élégant·e ?',
+          message:
+              'Вы элегантны? 🥀 — Are you elegant? — Êtes-vous élégant·e ?',
           icon: Icons.diamond_outlined,
           iconColor: const Color(0xFFFFD166),
           duration: const Duration(seconds: 3),
@@ -478,12 +525,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   }
 
   /// Одна камора: кружок в цветах своей темы, стоит на окружности.
-  Widget _chamber(
-    ColorScheme cs,
-    int index,
-    double side,
-    _ThemeEntry entry,
-  ) {
+  Widget _chamber(ColorScheme cs, int index, double side, _ThemeEntry entry) {
     final step = 2 * math.pi / _n;
     final delta = (index - _pos) * step;
     final theta = -math.pi / 2 + delta;

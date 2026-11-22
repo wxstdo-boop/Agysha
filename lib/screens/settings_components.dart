@@ -22,7 +22,7 @@ class _RealityCheckToggleCard extends StatelessWidget {
           // Аббревиатура из перевода (RC/РП/CR), чтобы даже фолбэк не
           // показывал кириллицу в нерусских языках.
           'Adds or removes the section entirely: the '
-              '${Translations.rcOf(context)} tab on the main screen, schedule and notifications.',
+              '${Translations.rcOf(context)} tab on the main screen, in notifications and in statistics.',
         );
         // Плавный переход цвета карточки и текста вместо мгновенного прыжка.
         final bgColor = on
@@ -237,6 +237,10 @@ class _SupportPill extends StatefulWidget {
   final VoidCallback onTap;
   final String? badge;
 
+  /// Цвет иконки и текста. Нужен для полупрозрачного алого: там всегда
+  /// белый, а не «тёмный на светлой теме».
+  final Color? foreground;
+
   /// Вторая строка: чем именно помогает этот способ. Без неё названия
   /// «Ozon» и «Boosty» выглядели ребусом — человек не понимал, что жмёт.
   final String? subtitle;
@@ -249,6 +253,7 @@ class _SupportPill extends StatefulWidget {
     required this.onTap,
     this.badge,
     this.subtitle,
+    this.foreground,
   });
 
   @override
@@ -266,138 +271,150 @@ class _SupportPillState extends State<_SupportPill> {
   Widget build(BuildContext context) {
     // Контраст под текущую тему: на светлых темах градиент светлый →
     // тёмный текст, на тёмных → белый.
-    final fg = Theme.of(context).brightness == Brightness.dark
-        ? Colors.white
-        : const Color(0xDE000000);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _setPressed(true),
-      onTapUp: (_) {
-        _setPressed(false);
-        widget.onTap();
-      },
-      onTapCancel: () => _setPressed(false),
-      child: AnimatedContainer(
-        // «Бусти» зажимается дольше и мягче (340 мс вместо 170): кнопка
-        // успевает «просесть» под пальцем и так же плавно вернуться.
-        duration: const Duration(milliseconds: 340),
-        curve: Curves.easeInOutCubic,
-        // Чуть выше прежних 64 px: подписи из двух строк больше не
-        // срезаются многоточием.
-        height: _pressed ? 68 : 72,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: widget.glow.withValues(alpha: _pressed ? 0.2 : 0.35),
-              blurRadius: _pressed ? 6 : 14,
-              offset: Offset(0, _pressed ? 1 : 4),
-            ),
-          ],
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: widget.gradient,
-          ),
-          border: Border.all(color: fg.withValues(alpha: 0.22), width: 1),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: fg.withValues(alpha: 0.18),
-                border: Border.all(color: fg.withValues(alpha: 0.40), width: 1),
+    final fg =
+        widget.foreground ??
+        (Theme.of(context).brightness == Brightness.dark
+            ? Colors.white
+            : const Color(0xDE000000));
+    // Таблетка наклоняется к пальцу вместе с вдавливанием: без наклона
+    // окно поддержки выглядело плоским рядом с остальными кнопками.
+    return PressScale(
+      pressedScale: 1.0,
+      enableTilt: true,
+      maxTiltAngle: 0.06,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _setPressed(true),
+        onTapUp: (_) {
+          _setPressed(false);
+          widget.onTap();
+        },
+        onTapCancel: () => _setPressed(false),
+        child: AnimatedContainer(
+          // «Бусти» зажимается дольше и мягче (340 мс вместо 170): кнопка
+          // успевает «просесть» под пальцем и так же плавно вернуться.
+          duration: const Duration(milliseconds: 340),
+          curve: Curves.easeInOutCubic,
+          // Чуть выше прежних 64 px: подписи из двух строк больше не
+          // срезаются многоточием.
+          height: _pressed ? 68 : 72,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: widget.glow.withValues(alpha: _pressed ? 0.2 : 0.35),
+                blurRadius: _pressed ? 6 : 14,
+                offset: Offset(0, _pressed ? 1 : 4),
               ),
-              child: Icon(widget.icon, color: fg, size: 20),
+            ],
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: widget.gradient,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: fg,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                      letterSpacing: 0.4,
-                      height: 1.15,
-                    ),
+            border: Border.all(color: fg.withValues(alpha: 0.22), width: 1),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: fg.withValues(alpha: 0.18),
+                  border: Border.all(
+                    color: fg.withValues(alpha: 0.40),
+                    width: 1,
                   ),
-                  if (widget.subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    // Две строки: на длинных русских подписях одна строка
-                    // обрезалась многоточием посреди слова.
+                ),
+                child: Icon(widget.icon, color: fg, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      widget.subtitle!,
-                      maxLines: 2,
+                      widget.label,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: fg.withValues(alpha: 0.80),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11.5,
-                        letterSpacing: 0.1,
-                        height: 1.25,
+                        color: fg,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        letterSpacing: 0.4,
+                        height: 1.15,
                       ),
                     ),
+                    if (widget.subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      // Две строки: на длинных русских подписях одна строка
+                      // обрезалась многоточием посреди слова.
+                      Text(
+                        widget.subtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: fg.withValues(alpha: 0.80),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11.5,
+                          letterSpacing: 0.1,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
-              ),
-            ),
-            if (widget.badge != null)
-              // Плашка «скоро»: светлый стеклянный прямоугольник с
-              // градиентом и мягким свечением, заменяет стрелку у способа,
-              // который ещё не запущен.
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
                 ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(9),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      fg.withValues(alpha: 0.30),
-                      fg.withValues(alpha: 0.14),
+              ),
+              if (widget.badge != null)
+                // Плашка «скоро»: светлый стеклянный прямоугольник с
+                // градиентом и мягким свечением, заменяет стрелку у способа,
+                // который ещё не запущен.
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(9),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        fg.withValues(alpha: 0.30),
+                        fg.withValues(alpha: 0.14),
+                      ],
+                    ),
+                    border: Border.all(color: fg.withValues(alpha: 0.55)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: fg.withValues(alpha: 0.22),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
                     ],
                   ),
-                  border: Border.all(color: fg.withValues(alpha: 0.55)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: fg.withValues(alpha: 0.22),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                  child: Text(
+                    widget.badge!,
+                    style: TextStyle(
+                      color: fg,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      letterSpacing: 2.2,
                     ),
-                  ],
-                ),
-                child: Text(
-                  widget.badge!,
-                  style: TextStyle(
-                    color: fg,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
-                    letterSpacing: 2.2,
                   ),
+                )
+              else
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: fg.withValues(alpha: 0.7),
+                  size: 26,
                 ),
-              )
-            else
-              Icon(
-                Icons.chevron_right_rounded,
-                color: fg.withValues(alpha: 0.7),
-                size: 26,
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -507,7 +524,9 @@ class _CtaButtonState extends State<_CtaButton> {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Colors.white,
+                  // Подпись чуть просвечивает: плотный белый «кричал», а
+                  // полупрозрачный читается как часть стеклянной кнопки.
+                  color: Color(0xD9FFFFFF),
                   fontWeight: FontWeight.w900,
                   fontSize: 18.4,
                   height: 1.1,

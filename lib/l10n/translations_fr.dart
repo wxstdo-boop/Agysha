@@ -10,7 +10,7 @@ const Map<String, String> _fr = {
   'realityChecks': 'Vérifications de réalité',
   'rcSettingsTitle': 'Vérifications de réalité',
   'rcSettingsBody':
-      'Ajoute ou retire entièrement la section : l’onglet « CR » dans Accueil, le planning et les notifications.',
+      'Ajoute ou retire entièrement la section : l’onglet « CR » sur l’écran principal, dans les notifications et dans les statistiques.',
   'rcSettingsOn': 'Section « Vérifications de réalité » activée',
   'rcSettingsOff': 'Section « Vérifications de réalité » masquée',
   'settings': 'Paramètres',

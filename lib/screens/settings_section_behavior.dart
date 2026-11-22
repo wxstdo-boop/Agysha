@@ -2,7 +2,7 @@ part of 'settings_screen.dart';
 
 /// Поведение: автосохранение, экспериментальное, вибрация, звуки, «убрать анимации».
 extension _SettingsSectionBehavior on _SettingsScreenState {
-  /// Раздел списка настроек. Живёт отдельно, чтобы uild оставался читаемым.
+  /// Раздел списка настроек. Живёт отдельно, чтобы build оставался читаемым.
   List<Widget> _settingsBehaviorSection(
     BuildContext context,
     AgyshaAppState appState,

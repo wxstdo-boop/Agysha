@@ -38,13 +38,15 @@ extension _SettingsLinks on _SettingsScreenState {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Ручка-индикатор сверху.
+                // Ручка-индикатор сверху: полупрозрачный красный, как и
+                // маркеры прокрутки во всём приложении — серый читался как
+                // деталь чужого интерфейса.
                 Center(
                   child: Container(
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: cs.outlineVariant,
+                      color: const Color(0xFFE23B4E).withValues(alpha: 0.70),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -84,15 +86,21 @@ extension _SettingsLinks on _SettingsScreenState {
                         ),
                       ),
                     ),
-                    // Крестик — закрыть окно.
-                    IconButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      icon: Icon(
-                        Icons.close_rounded,
-                        color: cs.onSurfaceVariant,
-                        size: 22,
+                    // Крестик — закрыть окно. Зажимается и наклоняется к
+                    // пальцу, как остальные кнопки: раньше он был «мёртвым».
+                    PressScale(
+                      pressedScale: 0.86,
+                      enableTilt: true,
+                      maxTiltAngle: 0.14,
+                      child: IconButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: cs.onSurfaceVariant,
+                          size: 22,
+                        ),
+                        visualDensity: VisualDensity.compact,
                       ),
-                      visualDensity: VisualDensity.compact,
                     ),
                   ],
                 ),
@@ -118,15 +126,16 @@ extension _SettingsLinks on _SettingsScreenState {
                   icon: Icons.shopping_bag_rounded,
                   badge: 'SOON',
                   subtitle: Translations.t('supportOzonSubtitle', context),
-                  // Тот же приглушённый винный тон, что у кнопки
-                  // «Угостить кофе»: два ярко-красных пятна подряд в одном
-                  // окне выглядели как аварийная кнопка.
+                  // Стеклянный алый, как у кнопки «Угостить кофе»: два
+                  // ярко-красных пятна подряд читаются спокойно, пока они
+                  // полупрозрачные.
                   gradient: const [
-                    Color(0xFFC98A99),
-                    Color(0xFF8A3550),
-                    Color(0xFF3A1220),
+                    Color(0xE6EC4560),
+                    Color(0xD9C41E3E),
+                    Color(0xCC8A0F26),
                   ],
-                  glow: const Color(0xFF8A3550),
+                  glow: const Color(0xFFD42A45),
+                  foreground: Color(0xE6FFFFFF),
                   onTap: () {
                     showBeautifulSnackBar(
                       context,
@@ -144,12 +153,15 @@ extension _SettingsLinks on _SettingsScreenState {
                   label: 'Boosty',
                   icon: Icons.rocket_launch_rounded,
                   subtitle: Translations.t('supportBoostySubtitle', context),
-                  gradient: [
-                    Color.lerp(cs.tertiary, Colors.white, 0.30)!,
-                    cs.tertiary,
-                    Color.lerp(cs.tertiary, Colors.black, 0.16)!,
+                  // Тот же стеклянный алый: цвет темы в этой теме уходил
+                  // в грязно-коричневый, и таблетка смотрелась «блевотно».
+                  gradient: const [
+                    Color(0xE6E63950),
+                    Color(0xD9B71A38),
+                    Color(0xCC7C0D22),
                   ],
-                  glow: cs.tertiary,
+                  glow: const Color(0xFFD42A45),
+                  foreground: Color(0xE6FFFFFF),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _openLink(_boostyUrl);

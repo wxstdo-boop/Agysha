@@ -2,7 +2,7 @@ part of 'settings_screen.dart';
 
 /// Доступ и сигналы: ПИН-код, уведомления, полноэкранные уведомления, батарея.
 extension _SettingsSectionAccess on _SettingsScreenState {
-  /// Раздел списка настроек. Живёт отдельно, чтобы uild оставался читаемым.
+  /// Раздел списка настроек. Живёт отдельно, чтобы build оставался читаемым.
   List<Widget> _settingsAccessSection(
     BuildContext context,
     AgyshaAppState appState,
@@ -66,15 +66,9 @@ extension _SettingsSectionAccess on _SettingsScreenState {
                   transitionBuilder: (child, anim) => FadeTransition(
                     opacity: anim,
                     child: RotationTransition(
-                      turns: Tween<double>(
-                        begin: -0.12,
-                        end: 0,
-                      ).animate(anim),
+                      turns: Tween<double>(begin: -0.12, end: 0).animate(anim),
                       child: ScaleTransition(
-                        scale: Tween<double>(
-                          begin: 0.85,
-                          end: 1,
-                        ).animate(anim),
+                        scale: Tween<double>(begin: 0.85, end: 1).animate(anim),
                         child: child,
                       ),
                     ),
@@ -112,9 +106,7 @@ extension _SettingsSectionAccess on _SettingsScreenState {
                         ? PressScale(
                             pressedScale: 0.86,
                             duration: const Duration(milliseconds: 200),
-                            releaseDuration: const Duration(
-                              milliseconds: 320,
-                            ),
+                            releaseDuration: const Duration(milliseconds: 320),
                             child: IconButton(
                               key: const ValueKey('pin_delete_btn'),
                               style: IconButton.styleFrom(
@@ -234,20 +226,47 @@ extension _SettingsSectionAccess on _SettingsScreenState {
                     // будильник приходит только шапкой уведомления, экран
                     // задачи поверх блокировки не появляется. Показываем это
                     // честно и ведём ровно на тот экран, где тумблер живёт.
-                    subtitle: fsBlocked
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              Translations.t(
-                                'fullScreenGrantMissing',
-                                context,
+                    // Строка «система отключила показ» больше не прыгает
+                    // вверх-вниз кадром: она разворачивается по высоте и
+                    // проявляется, а при возврате права так же плавно
+                    // сворачивается.
+                    subtitle: AnimatedSize(
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topLeft,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (child, animation) => SizeTransition(
+                          sizeFactor: animation,
+                          alignment: Alignment.topCenter,
+                          child: FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          ),
+                        ),
+                        child: fsBlocked
+                            ? Padding(
+                                key: const ValueKey('fs_blocked'),
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  Translations.t(
+                                    'fullScreenGrantMissing',
+                                    context,
+                                  ),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.error,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox(
+                                key: ValueKey('fs_ok'),
+                                width: double.infinity,
+                                height: 0,
                               ),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.error,
-                              ),
-                            ),
-                          )
-                        : null,
+                      ),
+                    ),
                     leading: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 240),
                       switchInCurve: Curves.easeOutCubic,
@@ -288,7 +307,9 @@ extension _SettingsSectionAccess on _SettingsScreenState {
                     },
                     trailing: VolumetricSwitch(
                       value: fsOn,
-                      semanticLabel: Translations.fullscreenNotifDescOf(context),
+                      semanticLabel: Translations.fullscreenNotifDescOf(
+                        context,
+                      ),
                       onChanged: (v) => notificationService.setFullscreen(v),
                       activeColor: theme.colorScheme.primary,
                     ),
@@ -328,10 +349,7 @@ extension _SettingsSectionAccess on _SettingsScreenState {
                 onTap: () async {
                   final ctx = context;
                   final batteryText = Translations.batteryOpenedOf(ctx);
-                  final cantOpenText = Translations.t(
-                    'settingsCantOpen',
-                    ctx,
-                  );
+                  final cantOpenText = Translations.t('settingsCantOpen', ctx);
                   final opened = await openAppSettingsAndroid();
                   if (!ctx.mounted) return;
                   if (opened) {
@@ -440,10 +458,7 @@ extension _SettingsSectionAccess on _SettingsScreenState {
             onTap: () async {
               await globalPrefs.setBool('welcome_dismissed', false);
               await globalPrefs.setBool('popup_warning_shown', false);
-              await globalPrefs.setBool(
-                'permission_warning_dismissed',
-                false,
-              );
+              await globalPrefs.setBool('permission_warning_dismissed', false);
               if (context.mounted) {
                 showBeautifulSnackBar(
                   context,
