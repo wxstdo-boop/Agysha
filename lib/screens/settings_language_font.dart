@@ -63,71 +63,76 @@ extension _SettingsLanguageFont on _SettingsScreenState {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     for (final code in codes)
-                      InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () {
-                          appState.setLanguageCode(code);
-                          _refresh(() {});
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 13,
-                          ),
-                          decoration: BoxDecoration(
-                            color: code == appState.languageCode
-                                ? cs.primary.withValues(alpha: 0.16)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeOutCubic,
-                                  style: theme.textTheme.bodyLarge!.copyWith(
-                                    color: code == appState.languageCode
-                                        ? cs.primary
-                                        : cs.onSurface,
-                                    fontWeight: code == appState.languageCode
-                                        ? FontWeight.w700
-                                        : FontWeight.w400,
-                                  ),
-                                  child: Text(_languageLabel(context, code)),
-                                ),
-                              ),
-                              // Галочка плавно появляется/исчезает и
-                              // «проскальзывает» при смене выбранного языка.
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 220),
-                                switchInCurve: Curves.easeOutBack,
-                                switchOutCurve: Curves.easeIn,
-                                transitionBuilder: (child, anim) =>
-                                    ScaleTransition(
-                                      scale: anim,
-                                      child: FadeTransition(
-                                        opacity: anim,
-                                        child: child,
-                                      ),
+                      PressScale(
+                        pressedScale: 0.96,
+                        enableTilt: true,
+                        maxTiltAngle: 0.08,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () {
+                            appState.setLanguageCode(code);
+                            _refresh(() {});
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 13,
+                            ),
+                            decoration: BoxDecoration(
+                              color: code == appState.languageCode
+                                  ? cs.primary.withValues(alpha: 0.16)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: AnimatedDefaultTextStyle(
+                                    duration: const Duration(milliseconds: 220),
+                                    curve: Curves.easeOutCubic,
+                                    style: theme.textTheme.bodyLarge!.copyWith(
+                                      color: code == appState.languageCode
+                                          ? cs.primary
+                                          : cs.onSurface,
+                                      fontWeight: code == appState.languageCode
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
                                     ),
-                                child: code == appState.languageCode
-                                    ? Icon(
-                                        Icons.check_rounded,
-                                        key: const ValueKey('check'),
-                                        size: 20,
-                                        color: cs.primary,
-                                      )
-                                    : const SizedBox(
-                                        key: ValueKey('no_check'),
-                                        width: 20,
-                                        height: 20,
+                                    child: Text(_languageLabel(context, code)),
+                                  ),
+                                ),
+                                // Галочка плавно появляется/исчезает и
+                                // «проскальзывает» при смене выбранного языка.
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 220),
+                                  switchInCurve: Curves.easeOutBack,
+                                  switchOutCurve: Curves.easeIn,
+                                  transitionBuilder: (child, anim) =>
+                                      ScaleTransition(
+                                        scale: anim,
+                                        child: FadeTransition(
+                                          opacity: anim,
+                                          child: child,
+                                        ),
                                       ),
-                              ),
-                            ],
+                                  child: code == appState.languageCode
+                                      ? Icon(
+                                          Icons.check_rounded,
+                                          key: const ValueKey('check'),
+                                          size: 20,
+                                          color: cs.primary,
+                                        )
+                                      : const SizedBox(
+                                          key: ValueKey('no_check'),
+                                          width: 20,
+                                          height: 20,
+                                        ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -196,89 +201,94 @@ extension _SettingsLanguageFont on _SettingsScreenState {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     for (final (f, icon) in fonts)
-                      InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () {
-                          appState.setFontFamily(f);
-                          _refresh(() {});
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 13,
-                          ),
-                          decoration: BoxDecoration(
-                            color: f == appState.fontFamily
-                                ? cs.primary.withValues(alpha: 0.16)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Row(
-                            children: [
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 220),
-                                child: Icon(
-                                  icon,
-                                  key: ValueKey(icon),
-                                  size: 20,
-                                  color: f == appState.fontFamily
-                                      ? cs.primary
-                                      : cs.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: AnimatedDefaultTextStyle(
+                      PressScale(
+                        pressedScale: 0.96,
+                        enableTilt: true,
+                        maxTiltAngle: 0.08,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () {
+                            appState.setFontFamily(f);
+                            _refresh(() {});
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 13,
+                            ),
+                            decoration: BoxDecoration(
+                              color: f == appState.fontFamily
+                                  ? cs.primary.withValues(alpha: 0.16)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeOutCubic,
-                                  style: theme.textTheme.bodyLarge!.copyWith(
+                                  child: Icon(
+                                    icon,
+                                    key: ValueKey(icon),
+                                    size: 20,
                                     color: f == appState.fontFamily
                                         ? cs.primary
-                                        : cs.onSurface,
-                                    fontWeight: f == appState.fontFamily
-                                        ? FontWeight.w700
-                                        : FontWeight.w400,
-                                  ),
-                                  child: Text(
-                                    fontLabel(f),
-                                    style: f == 'caveat'
-                                        ? const TextStyle(
-                                            fontFamily: 'Caveat',
-                                            fontSize: 24,
-                                          )
-                                        : null,
+                                        : cs.onSurfaceVariant,
                                   ),
                                 ),
-                              ),
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 220),
-                                switchInCurve: Curves.easeOutBack,
-                                switchOutCurve: Curves.easeIn,
-                                transitionBuilder: (child, anim) =>
-                                    ScaleTransition(
-                                      scale: anim,
-                                      child: FadeTransition(
-                                        opacity: anim,
-                                        child: child,
-                                      ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: AnimatedDefaultTextStyle(
+                                    duration: const Duration(milliseconds: 220),
+                                    curve: Curves.easeOutCubic,
+                                    style: theme.textTheme.bodyLarge!.copyWith(
+                                      color: f == appState.fontFamily
+                                          ? cs.primary
+                                          : cs.onSurface,
+                                      fontWeight: f == appState.fontFamily
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
                                     ),
-                                child: f == appState.fontFamily
-                                    ? Icon(
-                                        Icons.check_rounded,
-                                        key: const ValueKey('check'),
-                                        size: 20,
-                                        color: cs.primary,
-                                      )
-                                    : const SizedBox(
-                                        key: ValueKey('no_check'),
-                                        width: 20,
-                                        height: 20,
+                                    child: Text(
+                                      fontLabel(f),
+                                      style: f == 'caveat'
+                                          ? const TextStyle(
+                                              fontFamily: 'Caveat',
+                                              fontSize: 24,
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 220),
+                                  switchInCurve: Curves.easeOutBack,
+                                  switchOutCurve: Curves.easeIn,
+                                  transitionBuilder: (child, anim) =>
+                                      ScaleTransition(
+                                        scale: anim,
+                                        child: FadeTransition(
+                                          opacity: anim,
+                                          child: child,
+                                        ),
                                       ),
-                              ),
-                            ],
+                                  child: f == appState.fontFamily
+                                      ? Icon(
+                                          Icons.check_rounded,
+                                          key: const ValueKey('check'),
+                                          size: 20,
+                                          color: cs.primary,
+                                        )
+                                      : const SizedBox(
+                                          key: ValueKey('no_check'),
+                                          width: 20,
+                                          height: 20,
+                                        ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),

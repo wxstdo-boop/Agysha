@@ -277,7 +277,7 @@ const Map<String, String> _en = {
   // Settings card -- whole-section toggle for Reality Checks.
   'rcSettingsTitle': 'Reality Checks',
   'rcSettingsBody':
-      'Adds or removes the section entirely: the “RC” tab in Home, schedule and notifications.',
+      'Adds or removes the section entirely: the “RC” tab on the main screen, in notifications and in statistics.',
   'rcSettingsOn': 'Reality Checks section enabled',
   'rcSettingsOff': 'Reality Checks section hidden',
   'rcChecksPerDay': 'Checks per day',

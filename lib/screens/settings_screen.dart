@@ -438,7 +438,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     // только видимые карточки, а не все сразу.
     final settingsItems = <Widget>[
       // Разделы живут в part-файлах settings_section_*.dart: список остаётся
-      // плоским и ленивым, но без тысяч строк в одном uild.
+      // плоским и ленивым, но без тысяч строк в одном build.
       ..._settingsTopSection(context, appState, theme),
       ..._settingsLookSection(context, appState, theme),
       ..._settingsAccessSection(context, appState, theme),

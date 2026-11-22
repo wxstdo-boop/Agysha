@@ -2,7 +2,7 @@ part of 'settings_screen.dart';
 
 /// Верх настроек: переключатель проверок реальности, предупреждение о разрешениях.
 extension _SettingsSectionTop on _SettingsScreenState {
-  /// Раздел списка настроек. Живёт отдельно, чтобы uild оставался читаемым.
+  /// Раздел списка настроек. Живёт отдельно, чтобы build оставался читаемым.
   List<Widget> _settingsTopSection(
     BuildContext context,
     AgyshaAppState appState,
@@ -63,48 +63,54 @@ extension _SettingsSectionTop on _SettingsScreenState {
             // Шрифт выбирается так же, как язык: тап по плитке открывает
             // меню-квадрат с иконками, плавной обводкой и галочкой —
             // окно не закрывается при выборе, только тапом вне квадрата.
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => _showFontMenu(context, appState),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: theme.colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.3),
-                    border: Border.all(
-                      color: theme.colorScheme.outlineVariant,
+            // Плитка шрифта: та же отдача и 3D-наклон к пальцу.
+            PressScale(
+              pressedScale: 0.965,
+              enableTilt: true,
+              maxTiltAngle: 0.07,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _showFontMenu(context, appState),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        appState.fontFamily == 'caveat'
-                            ? Icons.draw_outlined
-                            : Icons.font_download_outlined,
-                        color: theme.colorScheme.onSurfaceVariant,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.3),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
                           appState.fontFamily == 'caveat'
-                              ? 'Caveat'
-                              : 'Обычный',
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurface,
+                              ? Icons.draw_outlined
+                              : Icons.font_download_outlined,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            appState.fontFamily == 'caveat'
+                                ? 'Caveat'
+                                : 'Обычный',
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurface,
+                            ),
                           ),
                         ),
-                      ),
-                      Icon(
-                        Icons.expand_more,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ],
+                        Icon(
+                          Icons.expand_more,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -155,42 +161,49 @@ extension _SettingsSectionTop on _SettingsScreenState {
             // мелким квадратом и плавно растёт в полный рост (scale +
             // fade), по бокам урезано — компактный квадрат со скруглёнными
             // углами, как просил.
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => _showLanguageMenu(context, appState),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: theme.colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.3),
-                    border: Border.all(
-                      color: theme.colorScheme.outlineVariant,
+            // Плитка языка зажимается и наклоняется к пальцу, как карточки
+            // барабана: раньше она «не отвечала» на нажатие вообще.
+            PressScale(
+              pressedScale: 0.965,
+              enableTilt: true,
+              maxTiltAngle: 0.07,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _showLanguageMenu(context, appState),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.language,
-                        color: theme.colorScheme.onSurfaceVariant,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.3),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _languageLabel(context, appState.languageCode),
-                          style: theme.textTheme.bodyLarge,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.language,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
-                      ),
-                      Icon(
-                        Icons.expand_more,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _languageLabel(context, appState.languageCode),
+                            style: theme.textTheme.bodyLarge,
+                          ),
+                        ),
+                        Icon(
+                          Icons.expand_more,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

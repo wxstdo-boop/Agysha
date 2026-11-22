@@ -229,4 +229,80 @@ void main() {
 
     expect(hasScale(widget), isFalse);
   });
+
+  testWidgets('барабан тем: дрожь пальца назад не откатывает тему', (
+    tester,
+  ) async {
+    await openSettings(tester);
+    final revolver = find.byKey(const ValueKey('theme_revolver'));
+    await tester.ensureVisible(revolver);
+    await tester.pump(const Duration(milliseconds: 200));
+
+    String themeKey() => AgyshaApp.of(tester.element(revolver)).themeKey;
+    final before = themeKey();
+
+    final box = tester.getRect(revolver);
+    final gesture = await tester.startGesture(box.center);
+    // Ведём палец, как настоящий: несколькими событиями по 25 px. Первые
+    // уходят в порог распознавания жеста, остальные проворачивают барабан
+    // за порог предпросмотра (0.66 шага).
+    for (var i = 0; i < 3; i++) {
+      await gesture.moveBy(const Offset(-25, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final forward = themeKey();
+    expect(forward, isNot(before), reason: 'поворот вперёд меняет тему сразу');
+
+    // Положение каморов на круге меняется вместе с поворотом барабана,
+    // поэтому по нему видно, поехал ли барабан назад под пальцем.
+    List<double> drumLefts() {
+      final lefts = <double>[];
+      for (final e
+          in find
+              .descendant(of: revolver, matching: find.byType(Positioned))
+              .evaluate()) {
+        final p = e.widget as Positioned;
+        if (p.left != null && p.top != null) lefts.add(p.left!);
+      }
+      lefts.sort();
+      return lefts;
+    }
+
+    final drumBeforeWobble = drumLefts();
+
+    // Палец «отпружинивает» на 15 px назад: барабан под пальцем не едет
+    // обратно, и тема не откатывается — раньше это читалось как «крутишь
+    // в одну сторону, а переводит в другую».
+    await gesture.moveBy(const Offset(15, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(themeKey(), forward);
+    final drumAfterWobble = drumLefts();
+    expect(drumAfterWobble, hasLength(drumBeforeWobble.length));
+    for (var i = 0; i < drumBeforeWobble.length; i++) {
+      expect(
+        drumAfterWobble[i],
+        moreOrLessEquals(drumBeforeWobble[i], epsilon: 0.5),
+        reason: 'камора $i осталась на месте',
+      );
+    }
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('маркер прокрутки: полупрозрачный красный', (tester) async {
+    final theme = buildAgyshaTheme(
+      ColorScheme.fromSeed(seedColor: const Color(0xFFE23B4E)),
+      isDark: true,
+      isGrokStyle: false,
+    );
+    final thumb = theme.scrollbarTheme.thumbColor;
+    final idle = thumb!.resolve(<WidgetState>{})!;
+    final active = thumb.resolve(<WidgetState>{WidgetState.dragged})!;
+    expect(idle.r, greaterThan(0.7));
+    expect(idle.a, lessThan(0.7)); // полупрозрачный
+    expect(active.a, greaterThan(idle.a)); // при прокрутке плотнее
+  });
 }

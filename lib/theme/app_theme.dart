@@ -256,6 +256,22 @@ ThemeData buildAgyshaTheme(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
     ),
+    // Маркер прокрутки: полупрозрачный красный во всём приложении, вместо
+    // серого системного. При касании становится плотнее, чтобы полосу было
+    // видно во время быстрой прокрутки, но она не «кричит» в покое.
+    scrollbarTheme: ScrollbarThemeData(
+      thickness: const WidgetStatePropertyAll(4),
+      radius: const Radius.circular(4),
+      crossAxisMargin: 2,
+      mainAxisMargin: 2,
+      trackColor: const WidgetStatePropertyAll(Colors.transparent),
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        final active =
+            states.contains(WidgetState.dragged) ||
+            states.contains(WidgetState.hovered);
+        return const Color(0xFFE23B4E).withValues(alpha: active ? 0.85 : 0.55);
+      }),
+    ),
     textSelectionTheme: const TextSelectionThemeData(),
   );
 }
