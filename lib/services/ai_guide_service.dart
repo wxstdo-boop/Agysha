@@ -1321,9 +1321,12 @@ class AiGuideService {
     try {
       final saved = globalPrefs.getString(_modelPrefKey);
       if (saved != null && saved.trim().isNotEmpty) {
-        _lastModel = saved;
-        _lastGoodModel = saved;
-        _shownModel = saved;
+        // В старых сборках в prefs лежало «Agnes AI · agnes-3.0-flash».
+        // Плашке нужно только имя провайдера — подрезаем при чтении.
+        final clean = _shortLabel(saved);
+        _lastModel = clean;
+        _lastGoodModel = clean;
+        _shownModel = clean;
         modelLabelTick.value++;
       }
     } catch (_) {}
@@ -1349,7 +1352,17 @@ class AiGuideService {
     if (label.isNotEmpty) _setModel(label);
   }
 
+  /// Плашка статуса — только имя провайдера. Раньше сюда попадала связка
+  /// «Agnes AI · agnes-3.0-flash», и в шапке чата читалось «Agnes • agnes
+  /// модель». Модель по-прежнему видна в настройках, а в статусе — имя.
+  static String _shortLabel(String label) {
+    final cut = label.indexOf(' · ');
+    final short = cut < 0 ? label : label.substring(0, cut);
+    return short.trim();
+  }
+
   static void _setModel(String label) {
+    label = _shortLabel(label);
     _lastModel = label;
     final transient = label.contains('—');
     if (!transient) _lastGoodModel = label;
@@ -1425,6 +1438,15 @@ class AiGuideService {
 
   static Future<String> currentModelLabel() async => _shownModel;
 
+  /// Оставлять ли сообщение в ленте после очистки чата.
+  ///
+  /// [clearedAt] == 0 — очистки не было: показываем всё, включая старые
+  /// сообщения без метки времени (они писались до появления `ts`). Раньше
+  /// такие сообщения отбрасывались ВСЕГДА, и после перезахода в чат лента
+  /// оказывалась пустой.
+  static bool visibleInChat(AiMessage message, int clearedAt) =>
+      clearedAt == 0 || (message.ts ?? 0) > clearedAt;
+
   // ---- Ада-трекинг: утренний отчёт и вечерний разбор прямо в ЧАТ ----
 
   /// Ключ файла истории чата (тот же, что в ai_guide.dart).
@@ -1454,7 +1476,13 @@ class AiGuideService {
       text = await _offlineNudge(languageCode);
     }
     if (text.isEmpty) return;
-    await _appendToChatHistory([AiMessage(isUser: false, text: text)]);
+    await _appendToChatHistory([
+      AiMessage(
+        isUser: false,
+        text: text,
+        ts: DateTime.now().millisecondsSinceEpoch,
+      ),
+    ]);
     await globalPrefs.setString('ada_proactive_day', day);
     adaReportTick.value++;
   }
@@ -1494,7 +1522,13 @@ class AiGuideService {
         try {
           final text = await morningReportText(languageCode);
           if (text.trim().isNotEmpty) {
-            delivered.add(AiMessage(isUser: false, text: text));
+            delivered.add(
+              AiMessage(
+                isUser: false,
+                text: text,
+                ts: DateTime.now().millisecondsSinceEpoch,
+              ),
+            );
             await globalPrefs.setString('ada_track_morning', today);
           }
         } catch (_) {}
@@ -1505,7 +1539,13 @@ class AiGuideService {
         try {
           final text = await eveningReportText(languageCode);
           if (text.trim().isNotEmpty) {
-            delivered.add(AiMessage(isUser: false, text: text));
+            delivered.add(
+              AiMessage(
+                isUser: false,
+                text: text,
+                ts: DateTime.now().millisecondsSinceEpoch,
+              ),
+            );
             await globalPrefs.setString('ada_track_evening', today);
           }
         } catch (_) {}
@@ -1568,8 +1608,10 @@ class AiGuideService {
           for (final item in decoded) {
             if (item is Map<String, dynamic>) {
               final message = AiMessage.fromJson(item);
-              // Не воскрешаем чат, стёртый уже после этого ответа.
-              if ((message.ts ?? 0) > clearedAt) list.add(message);
+              // Не воскрешаем чат, стёртый уже после этого ответа. Если
+              // очистки не было (clearedAt == 0), оставляем и старые
+              // сообщения без метки времени — иначе они терялись.
+              if (visibleInChat(message, clearedAt)) list.add(message);
             }
           }
         }

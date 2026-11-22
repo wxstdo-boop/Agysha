@@ -165,9 +165,11 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
       if (raw != null && raw.isNotEmpty) {
         final list = jsonDecode(raw) as List;
         final clearedAt = AiGuideService.chatClearedAt();
+        // Как и в полном чате: без явной очистки ничего не отбрасываем,
+        // иначе сообщения без метки времени пропадали при перезаходе.
         final loaded = list
             .map((e) => AiMessage.fromJson(e as Map<String, dynamic>))
-            .where((m) => (m.ts ?? 0) > clearedAt)
+            .where((m) => AiGuideService.visibleInChat(m, clearedAt))
             .toList();
         if (mounted) {
           setState(() {

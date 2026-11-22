@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../models/app_timer.dart';
 import 'haptics.dart';
@@ -238,6 +239,7 @@ class TimerService extends ChangeNotifier {
         _running[id] = false;
         _endsAt.remove(id);
         _vibrateOnDone(id);
+        _playDoneSound(id);
         onTimerDone?.call(id);
       }
       _tickCount++;
@@ -247,6 +249,37 @@ class TimerService extends ChangeNotifier {
       _checkTicker();
       notifyListeners();
     });
+  }
+
+  /// Ассеты выбранных звуков. Ключи совпадают с [AppTimer.sounds].
+  static const _soundAssets = {
+    'Default': 'sounds/default.wav',
+    'Gentle': 'sounds/gentle.wav',
+    'Classic': 'sounds/classic.wav',
+    'Digital': 'sounds/digital.wav',
+    'Nature': 'sounds/nature.wav',
+  };
+
+  AudioPlayer? _donePlayer;
+
+  /// Звук окончания таймера. Раньше здесь была только вибрация и снекбар:
+  /// если телефон лежал экраном вниз или экран был закрыт, таймер
+  /// «заканчивался молча» — владелец жаловался, что звук не сработал.
+  /// Играем выбранный в таймере звук; ошибки плеера глушим, чтобы
+  /// завершение не падало из-за аудио.
+  Future<void> _playDoneSound(String id) async {
+    final idx = _timers.indexWhere((t) => t.id == id);
+    if (idx == -1) return;
+    final asset =
+        _soundAssets[_timers[idx].soundName] ?? _soundAssets['Default']!;
+    try {
+      final player = _donePlayer ??= AudioPlayer();
+      await player.stop();
+      await player.setReleaseMode(ReleaseMode.stop);
+      await player.play(AssetSource(asset));
+    } catch (_) {
+      // Нет плагина/ассета — вибрация и уведомление всё равно сработали.
+    }
   }
 
   /// Вибрация конца таймера — здесь, а не в экране будильников: экран мог
@@ -272,6 +305,7 @@ class TimerService extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    _donePlayer?.dispose();
     super.dispose();
   }
 

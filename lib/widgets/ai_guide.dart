@@ -736,9 +736,12 @@ class _AiChatBodyState extends State<_AiChatBody>
       if (raw != null && raw.isNotEmpty) {
         final list = jsonDecode(raw) as List;
         final clearedAt = AiGuideService.chatClearedAt();
+        // Отсекаем только то, что старше явной очистки чата. При
+        // clearedAt == 0 фильтр по метке выбрасывал ВСЕ старые сообщения
+        // без ts — человек выходил из чата и возвращался в пустую ленту.
         final loaded = list
             .map((e) => AiMessage.fromJson(e as Map<String, dynamic>))
-            .where((m) => (m.ts ?? 0) > clearedAt)
+            .where((m) => AiGuideService.visibleInChat(m, clearedAt))
             .toList();
         if (mounted && epoch == _historyEpoch) {
           setState(() {
@@ -2270,10 +2273,11 @@ class _AiChatBodyState extends State<_AiChatBody>
         // Снизу — запас до скруглённых углов листа: раньше нижний ряд
         // прилипал к углам и «заедал» при наборе.
         Padding(
-          // Бока клавиатуры больше не упираются в скруглённые края листа:
-          // 16 px от края окна + собственные 6 px панели + запас снизу до
-          // нижних углов. Крайние клавиши перестали «резаться» о стенку.
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          // Бока клавиатуры не упираются в скруглённые края листа, но и не
+          // отъедают у клавиш лишние сантиметры: 8 px от края окна хватает,
+          // чтобы крайние клавиши не резались о стенку, а сами шляпки стали
+          // шире — по ним снова легко попадать.
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
           child: InlineKeyboard(
             keyHeight: 46,
             onChar: _insertChar,

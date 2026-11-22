@@ -102,12 +102,16 @@ class _TasksScreenState extends State<TasksScreen>
   /// Запускается на каждую отметку.
   late final AnimationController _cardDrop = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 420),
+    duration: const Duration(milliseconds: 360),
     value: 1,
   );
+  // easeInOutCubic: мягкий старт и мягкое торможение. С easeOutCubic карточка
+  // в первые кадры «выстреливала» вверх и потом ползла — на глаз это и было
+  // «неплавно переползает». Одинаковая длительность с [_cardExit] держит
+  // уход и приезд в одном ритме, без рывка в конце.
   late final Animation<double> _cardDropT = CurvedAnimation(
     parent: _cardDrop,
-    curve: Curves.easeOutCubic,
+    curve: Curves.easeInOutCubic,
   );
 
   /// Вертикальный «приезд» карточки: доля высоты карточки, поэтому сдвиг
@@ -134,20 +138,23 @@ class _TasksScreenState extends State<TasksScreen>
   /// Схлопывание уезжающей карточки: высота вниз, лёгкий уход вниз и фейд.
   late final AnimationController _cardExit = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 320),
+    duration: const Duration(milliseconds: 360),
   );
+  // Та же кривая, что у приезда: easeInCubic «проваливал» конец схлопывания
+  // (карточка висела почти на месте и в последний миг исчезала) — отсюда
+  // ощущение рывка при переезде в архив.
   late final Animation<double> _cardExitSize = Tween<double>(
     begin: 1,
     end: 0,
-  ).animate(CurvedAnimation(parent: _cardExit, curve: Curves.easeInCubic));
+  ).animate(CurvedAnimation(parent: _cardExit, curve: Curves.easeInOutCubic));
   late final Animation<double> _cardExitFade = CurvedAnimation(
     parent: _cardExit,
-    curve: Curves.easeInCubic,
+    curve: Curves.easeInOutCubic,
   );
   late final Animation<Offset> _cardExitSlide = Tween<Offset>(
     begin: Offset.zero,
     end: const Offset(0, 0.10),
-  ).animate(CurvedAnimation(parent: _cardExit, curve: Curves.easeInCubic));
+  ).animate(CurvedAnimation(parent: _cardExit, curve: Curves.easeInOutCubic));
 
   /// Показывать ли архивную полку. Держим флагом, а не «done не пуст»: когда
   /// последняя архивная задача уходит (снята галка или удалена), полку надо
