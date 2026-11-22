@@ -23,4 +23,36 @@ set -uo pipefail
 # и «Bump x from a to b» — это не изменения приложения, и в заметках они
 # выглядели как мусор из чужого бота.
 grep -vE '^- (F-Droid|fdroid|ship|release|Документация|Переименование|docs|chore|ci|style|test|build|refactor|deps)(\([^)]*\))?(:|$)' \
-  | grep -viE 'dependabot|^- bump[ (:]|^- bump$' || true
+  | grep -viE 'dependabot|^- bump[ (:]|^- bump$' \
+  | python3 -c '
+import re, sys
+for raw in sys.stdin:
+    line = raw.rstrip("\n")
+    # Перенос строки длинного пункта из changelog — не заголовок коммита,
+    # отдаём как есть, иначе хвост пункта теряется.
+    if not line.startswith("- "):
+        print(line)
+        continue
+    text = re.sub(r"^(fix|feat|perf|improve|polish)(\([^)]*\))?:\s*", "", line[2:], flags=re.I).strip()
+    if not text:
+        continue
+    text = text[0].upper() + text[1:]
+    low = text.lower()
+    emoji = "✨"
+    rules = [
+        (("наклон", "тилт", "3d", "пин", "pin"), "🫧"),
+        (("клавиат", "ввод", "букв"), "⌨️"),
+        (("поиск", "источник"), "🔎"),
+        (("ада", "ии", "провайдер", "ответ"), "🍑"),
+        (("будильник", "тест"), "⏰"),
+        (("питани", "лимит", "тренд", "приём", "прием"), "🍽️"),
+        (("зачёрк", "зачерк", "зачёркиван"), "✍️"),
+        (("скролл", "прокрут"), "🌊"),
+        (("плавн", "анимац", "отдач"), "🫧"),
+        (("баг", "фикс", "исправ", "чиним"), "🛠️"),
+    ]
+    for keys, icon in rules:
+        if any(k in low for k in keys):
+            emoji = icon
+            break
+    print(f"- {emoji} {text}")' || true

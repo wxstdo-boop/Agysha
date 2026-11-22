@@ -696,7 +696,9 @@ Future<_StartupState> _loadStartupState() async {
     SettingsService.loadBerserk(),
     SettingsService.loadHaptics().then((v) => Haptics.enabled = v),
     SettingsService.loadSounds().then((v) => Sounds.enabled = v),
-    SettingsService.loadReduceMotion().then((v) => MotionPrefs.enabled.value = v),
+    SettingsService.loadReduceMotion().then(
+      (v) => MotionPrefs.enabled.value = v,
+    ),
   ]);
 
   await Future.wait<void>([
@@ -1047,6 +1049,15 @@ class _AppScrollBehavior extends MaterialScrollBehavior {
     // с переполнением, но не крадёт жесты у дочерних pan-виджетов.
     return const BouncingScrollPhysics();
   }
+
+  // Без светящейся «волны» на краях: на Android она подсвечивала и
+  // подтягивала весь экран, из-за чего скролл читался как рывок.
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
 }
 
 class AgyshaApp extends StatefulWidget {
@@ -1488,8 +1499,7 @@ class AgyshaAppState extends State<AgyshaApp>
       // platform-вызовов приходились ровно на кадр возврата и экран мигал.
       final now = DateTime.now();
       final last = _lastResumeReschedule;
-      if (last == null ||
-          now.difference(last) >= kResumeRescheduleGrace) {
+      if (last == null || now.difference(last) >= kResumeRescheduleGrace) {
         _lastResumeReschedule = now;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           unawaited(rescheduleAllNotifications());
@@ -1984,8 +1994,9 @@ class AgyshaAppState extends State<AgyshaApp>
                 SystemUiOverlayStyle(
                   systemNavigationBarColor: Colors.transparent,
                   systemNavigationBarDividerColor: Colors.transparent,
-                  systemNavigationBarIconBrightness:
-                      isDark ? Brightness.light : Brightness.dark,
+                  systemNavigationBarIconBrightness: isDark
+                      ? Brightness.light
+                      : Brightness.dark,
                   // Android 15+ (targetSdk 35+) накладывает СВОЮ контрастную
                   // белую подложку на навбар поверх нашего цвета — отключаем,
                   // иначе внизу всё равно видна белая полоса.
@@ -1996,8 +2007,9 @@ class AgyshaAppState extends State<AgyshaApp>
                   // экрана не выглядят закруглёнными при оттягивании
                   // крайних разделов. С фоном приложения полоса сливается.
                   statusBarColor: theme.scaffoldBackgroundColor,
-                  statusBarIconBrightness:
-                      isDark ? Brightness.light : Brightness.dark,
+                  statusBarIconBrightness: isDark
+                      ? Brightness.light
+                      : Brightness.dark,
                 ),
               );
             });

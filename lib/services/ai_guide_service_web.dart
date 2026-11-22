@@ -98,11 +98,25 @@ List<String> _searchKeywords(String text) {
 /// фразы («расскажи мне про…» → реальные слова). Если содержательных
 /// слов нет — отдаём запрос как есть, без знаков препинания.
 String _searchQuery(String query) {
-  final words = _searchKeywords(query);
-  if (words.isEmpty) {
-    return query.trim().replaceAll(RegExp(r'[?!.,;:«»"()]+$'), '');
-  }
-  return words.take(5).join(' ');
+  // Не выбрасываем все служебные слова: поисковик лучше понимает живую
+  // фразу («как почистить кэш на андроиде»), чем склейку существительных.
+  // Снимаем только вводную «расскажи/найди/подскажи…» — иначе она
+  // уводит выдачу в сторону.
+  var q = query.trim();
+  q = q.replaceFirst(
+    RegExp(
+      r'^(?:а|и|ну|так|please|пожалуйста|скажи(?:-ка)?|расскажи(?:те)?|'
+      r'подскажи(?:те)?|найди(?:те)?|поищи(?:те)?|объясни(?:те)?|'
+      r'помоги(?:те)?|хочу узнать|мне интересно|tell me|find|search for)'
+      r'(?:\s+(?:мне|нам|please))?\s+',
+      caseSensitive: false,
+    ),
+    '',
+  );
+  q = q.replaceAll(RegExp(r'[?!.,;:«»"()]+$'), '').trim();
+  if (q.isEmpty) q = query.trim();
+  final words = q.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  return words.take(12).join(' ');
 }
 
 /// Реальный веб-поиск без ключей: Bing (HTML — настоящие веб-результаты)
@@ -154,7 +168,11 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
       hits++;
       if (kw.length >= 4) strong++;
     }
-    return strong >= 1 || hits >= 2;
+    // Одно длинное слово в обрывке ещё не значит «по теме»: для запроса
+    // из нескольких слов требуем хотя бы два попадания. Иначе Bing
+    // подсовывал «связанные запросы», и Ада отвечала не по запросу.
+    if (keywords.length > 1) return hits >= 2 && strong >= 1;
+    return strong >= 1 || hits >= 1;
   }
 
   /// Не больше [max] результатов с одного домена — иначе контекст
@@ -291,6 +309,55 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
         if (!domainBudget(host, 2)) continue;
         final src = ' [$host]';
         results.add(snip.length >= 40 ? '$title — $snip$src' : '$title$src');
+      }
+    } catch (_) {}
+  }
+
+  /// DuckDuckGo HTML: обычная выдача без ключей. Часто свежее и точнее
+  /// Bing, который из дата-центра отдаёт «связанные запросы».
+  Future<void> ddgHtml() async {
+    try {
+      final resp = await http
+          .post(
+            Uri.parse('https://html.duckduckgo.com/html/'),
+            headers: {
+              ...ua,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: {'q': searchQuery},
+          )
+          .timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) return;
+      final body = utf8.decode(resp.bodyBytes, allowMalformed: true);
+      if (!body.contains('result__a')) return;
+      final blockRe = RegExp(
+        r'<div class="result[^"]*"[^>]*>.*?</div>\s*</div>',
+        dotAll: true,
+      );
+      final linkRe = RegExp(
+        r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+        dotAll: true,
+      );
+      final snipRe = RegExp(
+        r'class="result__snippet"[^>]*>(.*?)</a>',
+        dotAll: true,
+      );
+      for (final m in blockRe.allMatches(body)) {
+        if (results.length >= 10) break;
+        final block = m.group(0)!;
+        final lm = linkRe.firstMatch(block);
+        if (lm == null) continue;
+        final rawUrl = lm.group(1) ?? '';
+        final url = _ddgRealUrl(rawUrl);
+        final host = _hostOf(url);
+        if (host.isEmpty || _junkHosts.contains(host)) continue;
+        final title = clean(lm.group(2) ?? '');
+        final snip = clean(snipRe.firstMatch(block)?.group(1) ?? '');
+        if (title.isEmpty || !relevant('$title $snip')) continue;
+        if (!domainBudget(host, 2)) continue;
+        results.add(
+          snip.length >= 40 ? '$title — $snip [$host]' : '$title [$host]',
+        );
       }
     } catch (_) {}
   }
@@ -454,6 +521,7 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
   await Future.wait([
     bingSearch(),
     bingRss(),
+    ddgHtml(),
     ddgInstant(),
     wiki(),
     newsRss(),
@@ -497,6 +565,18 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
     sb.writeln('${i + 1}. ${unique[i]}');
   }
   return sb.toString().trim();
+}
+
+/// DuckDuckGo отдаёт ссылки через редирект `/l/?uddg=<url>` — достаём
+/// настоящий адрес, иначе источником показывался duckduckgo.com.
+String _ddgRealUrl(String raw) {
+  try {
+    final u = Uri.parse(raw);
+    final target = u.queryParameters['uddg'];
+    return target == null ? raw : Uri.decodeComponent(target);
+  } catch (_) {
+    return raw;
+  }
 }
 
 /// Домен из URL (www. убираем) — для пометки источника в результатах.
