@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+
 import '../models/app_timer.dart';
 import 'json_file.dart';
 
@@ -14,10 +17,19 @@ class TimerService extends ChangeNotifier {
   String? _snapshot;
   bool _loaded = false;
   static const _key = 'app_timers';
+  static const _runtimeKey = 'app_timers_runtime';
 
   final Map<String, int> _remainingSeconds = {};
   final Map<String, bool> _running = {};
+
+  /// Момент окончания идущего таймера. Остаток считается по стенным часам,
+  /// а не вычитанием единицы на каждый тик: в фоне Dart-таймеры засыпают,
+  /// и «секундомер» отставал от реального времени.
+  final Map<String, DateTime> _endsAt = {};
+
   Timer? _ticker;
+  int _tickCount = 0;
+  bool _savingRuntime = false;
 
   List<AppTimer> get timers => List.unmodifiable(_timers);
 
@@ -40,7 +52,38 @@ class TimerService extends ChangeNotifier {
     for (final t in _timers) {
       _remainingSeconds.putIfAbsent(t.id, () => t.totalSeconds);
     }
+    await _restoreRuntime();
     notifyListeners();
+  }
+
+  /// Поднимает идущие таймеры после перезапуска приложения.
+  Future<void> _restoreRuntime() async {
+    final raw = await JsonFile.read(_runtimeKey);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final now = DateTime.now();
+      for (final entry in decoded.entries) {
+        final id = entry.key.toString();
+        if (!_timers.any((t) => t.id == id)) continue;
+        final end = DateTime.tryParse(entry.value.toString());
+        if (end == null) continue;
+        final left = end.difference(now).inMilliseconds;
+        if (left <= 0) {
+          // Таймер истёк, пока приложение было закрыто.
+          _remainingSeconds[id] = 0;
+          _running[id] = false;
+          continue;
+        }
+        _remainingSeconds[id] = (left / 1000).ceil();
+        _running[id] = true;
+        _endsAt[id] = end;
+      }
+      if (_running.values.any((v) => v)) _startTicker();
+    } catch (_) {
+      // Битый снапшот просто игнорируем: таймеры останутся на месте.
+    }
   }
 
   Future<void> _save() async {
@@ -48,6 +91,25 @@ class TimerService extends ChangeNotifier {
     final value = appTimersToJson(_timers);
     final resolved = await JsonFile.writeWithSnapshot(_key, value, _snapshot);
     if (resolved == value) _snapshot = resolved;
+  }
+
+  /// Снапшот «что идёт и до каких часов». Нужен, чтобы после убийства
+  /// процесса таймер продолжил с честного места, а не с нуля.
+  Future<void> _saveRuntime() async {
+    if (!_loaded || !_running.values.any((v) => v)) return;
+    if (_savingRuntime) return;
+    _savingRuntime = true;
+    try {
+      final map = <String, String>{};
+      for (final entry in _endsAt.entries) {
+        if (_running[entry.key] == true) {
+          map[entry.key] = entry.value.toIso8601String();
+        }
+      }
+      await JsonFile.write(_runtimeKey, jsonEncode(map));
+    } finally {
+      _savingRuntime = false;
+    }
   }
 
   Future<void> add(AppTimer timer) async {
@@ -60,12 +122,14 @@ class TimerService extends ChangeNotifier {
 
   Future<void> remove(String id) async {
     _running[id] = false;
+    _endsAt.remove(id);
     _timers.removeWhere((t) => t.id == id);
     _remainingSeconds.remove(id);
     _running.remove(id);
     _checkTicker();
     notifyListeners();
     await _save();
+    await _saveRuntime();
   }
 
   Future<void> update(AppTimer timer) async {
@@ -74,9 +138,11 @@ class TimerService extends ChangeNotifier {
       _timers[idx] = timer;
       _remainingSeconds[timer.id] = timer.totalSeconds;
       _running[timer.id] = false;
+      _endsAt.remove(timer.id);
       _checkTicker();
       notifyListeners();
       await _save();
+      await _saveRuntime();
     }
   }
 
@@ -86,14 +152,19 @@ class TimerService extends ChangeNotifier {
           .firstWhere((t) => t.id == id)
           .totalSeconds;
     }
+    _endsAt[id] = DateTime.now().add(Duration(seconds: _remainingSeconds[id]!));
     _running[id] = true;
     _startTicker();
+    _saveRuntime();
     notifyListeners();
   }
 
   void pauseTimer(String id) {
+    _syncRemaining(id);
     _running[id] = false;
+    _endsAt.remove(id);
     _checkTicker();
+    _saveRuntime();
     notifyListeners();
   }
 
@@ -101,40 +172,48 @@ class TimerService extends ChangeNotifier {
     final t = _timers.firstWhere((t) => t.id == id);
     _remainingSeconds[id] = t.totalSeconds;
     _running[id] = false;
+    _endsAt.remove(id);
     _checkTicker();
+    _saveRuntime();
     notifyListeners();
   }
 
+  /// Пересчитывает остаток по стенным часам. Вызывается и тиком, и при
+  /// возврате приложения из фона, где тики были заморожены.
+  void refreshFromClock() {
+    for (final t in _timers) {
+      if (_running[t.id] == true) _syncRemaining(t.id);
+    }
+    notifyListeners();
+  }
+
+  void _syncRemaining(String id) {
+    final end = _endsAt[id];
+    if (end == null) return;
+    final left = end.difference(DateTime.now()).inMilliseconds;
+    _remainingSeconds[id] = left <= 0 ? 0 : (left / 1000).ceil();
+  }
+
   void _startTicker() {
-    _ticker?.cancel();
+    if (_ticker != null) return;
+    _tickCount = 0;
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      bool anyRunning = false;
       final completed = <String>[];
       for (final t in _timers) {
-        if (_running[t.id] == true) {
-          final rem = (_remainingSeconds[t.id] ?? 0) - 1;
-          _remainingSeconds[t.id] = rem;
-          if (rem <= 0) {
-            completed.add(t.id);
-          } else {
-            anyRunning = true;
-          }
-        }
+        if (_running[t.id] != true) continue;
+        _syncRemaining(t.id);
+        if ((_remainingSeconds[t.id] ?? 0) <= 0) completed.add(t.id);
       }
       for (final id in completed) {
         _running[id] = false;
+        _endsAt.remove(id);
         onTimerDone?.call(id);
       }
-      if (!anyRunning) {
-        _ticker?.cancel();
-        _ticker = null;
-      }
-      // Сохраняем только при завершении таймера, а не каждый тик!
-      if (completed.isNotEmpty) {
-        _save();
-      }
-      // Обновляем UI КАЖДЫЙ тик (1 раз в секунду) — счётчик на карточке
-      // тикает, прогресс-кольцо крутится, а не стоит на месте до конца.
+      _tickCount++;
+      // Раз в 10 секунд (и сразу при завершении) фиксируем снапшот.
+      if (completed.isNotEmpty || _tickCount % 10 == 0) _saveRuntime();
+      if (completed.isNotEmpty) _save();
+      _checkTicker();
       notifyListeners();
     });
   }
@@ -157,5 +236,6 @@ class TimerService extends ChangeNotifier {
 
   Future<void> forceSave() async {
     await _save();
+    await _saveRuntime();
   }
 }

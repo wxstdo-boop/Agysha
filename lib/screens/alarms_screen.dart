@@ -894,42 +894,38 @@ class _AlarmsScreenState extends State<AlarmsScreen>
     ThemeData theme,
     List<AppTimer> timers,
   ) {
+    // Одна анимация высоты на всю секцию. Раньше их было две (внешняя
+    // AnimatedSize + внутренний AnimatedSwitcher с SizeTransition) плюс
+    // жёсткие maxHeight 460/120: удаление последнего таймера прыгало в два
+    // шага, а список обрезался по высоте.
     return AnimatedSize(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      child: Container(
-        constraints: timers.isEmpty
-            // Пустой таймер-секции нужно место под заголовок И текст
-            // «Таймеров пока нет» — иначе текст переполняет контейнер
-            // и «налезает» на будильники ниже при свайпе.
-            ? const BoxConstraints(maxHeight: 120)
-            // С таймерами секция растёт до 5 карточек (максимум)
-            // и все они видны ЦЕЛИКОМ — не обрезаются и не «прилипают»
-            // к будильникам снизу.
-            : const BoxConstraints(maxHeight: 460),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              // Секция таймеров непрокручиваемая и стоит в самом верху —
-              // резервирует под стеклом таблетки столько же, сколько список
-              // резервировал бы, будь она выключена.
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8 + kSectionPillSlotHeight,
-                16,
-                0,
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    Translations.t('timers', context),
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                    ),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.topCenter,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            // Секция непрокручиваемая и стоит в самом верху — резервирует
+            // под стеклом таблетки столько же, сколько список резервировал
+            // бы, будь она выключена.
+            padding: EdgeInsets.fromLTRB(16, 8 + kSectionPillSlotHeight, 16, 0),
+            child: Row(
+              children: [
+                Text(
+                  Translations.t('timers', context),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
                   ),
-                  const Spacer(),
-                  SizedBox(
+                ),
+                const Spacer(),
+                PressScale(
+                  pressedScale: 0.9,
+                  enableTilt: true,
+                  maxTiltAngle: 0.12,
+                  duration: const Duration(milliseconds: 170),
+                  releaseDuration: const Duration(milliseconds: 320),
+                  child: SizedBox(
                     width: 36,
                     height: 36,
                     child: FilledButton(
@@ -946,256 +942,267 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                       ),
                     ),
                   ),
+                ),
+              ],
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: timers.isEmpty
+                ? Padding(
+                    key: const ValueKey('timers_empty'),
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
+                    child: Text(
+                      Translations.t('noTimers', context),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : Column(
+                    key: const ValueKey('timers_list'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final timer in timers)
+                        _buildTimerCard(context, theme, timer),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimerCard(
+    BuildContext context,
+    ThemeData theme,
+    AppTimer timer,
+  ) {
+    final running = _timerSvc.isRunning(timer.id);
+    final rem = _timerSvc.remaining(timer.id);
+    final showProgress = running || rem < timer.totalSeconds;
+
+    // Кнопка-кружок с отдачей и наклоном: play/pause и рефреш раньше были
+    // голыми IconButton — не «отзывались» на нажатие.
+    Widget action({
+      required IconData icon,
+      required Color color,
+      required VoidCallback onTap,
+      double size = 28,
+    }) {
+      return PressScale(
+        pressedScale: 0.84,
+        enableTilt: true,
+        maxTiltAngle: 0.14,
+        duration: const Duration(milliseconds: 150),
+        releaseDuration: const Duration(milliseconds: 300),
+        child: IconButton(
+          iconSize: size,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+          // Плей ⇄ пауза меняются перетеканием, а не щелчком: значок
+          // проявляется и чуть подрастает.
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: ScaleTransition(scale: anim, child: child),
+            ),
+            child: Icon(icon, key: ValueKey<int>(icon.codePoint), color: color),
+          ),
+          onPressed: onTap,
+        ),
+      );
+    }
+
+    return SwipeToDelete(
+      key: ValueKey('item_timer_${timer.id}'),
+      dismissKey: ValueKey('dismiss_${timer.id}'),
+      borderRadius: 16,
+      // Фон удаления = границы карточки (у неё горизонтальный margin 12).
+      inset: const EdgeInsets.symmetric(horizontal: 12),
+      confirmDismiss: (_) async => await showAgyshaConfirm(
+        context,
+        title: Translations.deleteOf(context),
+        body: timer.displayLabel,
+        icon: Icons.delete_outline_rounded,
+        confirmLabel: Translations.deleteOf(context),
+        destructive: true,
+      ),
+      onDismissed: (_) => _timerSvc.remove(timer.id),
+      child: Card(
+        key: ValueKey('card_${timer.id}'),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: PressScale(
+                      pressedScale: 0.985,
+                      enableTilt: true,
+                      maxTiltAngle: 0.05,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _editTimer(timer),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              timer.displayLabel,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: running
+                                    ? theme.colorScheme.primary
+                                    : null,
+                              ),
+                            ),
+                            if (timer.label.isNotEmpty)
+                              Text(
+                                timer.label,
+                                // Полный текст без троеточия.
+                                maxLines: null,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                                overflow: TextOverflow.clip,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Счётчик и кнопки появляются/исчезают плавно, а не
+                  // щёлкают мгновенно при старте и сбросе.
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: SizeTransition(
+                        sizeFactor: anim,
+                        axis: Axis.horizontal,
+                        alignment: Alignment.centerRight,
+                        child: child,
+                      ),
+                    ),
+                    child: showProgress
+                        ? Row(
+                            key: const ValueKey('timer_running_part'),
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _TimerPulse(
+                                active: running,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 2),
+                                  child: ClipRect(
+                                    // Каждая секунда счётчика сменяется
+                                    // плавно: цифры «вкатываются» снизу.
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 320,
+                                      ),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      transitionBuilder: (child, animation) {
+                                        final t = Curves.easeOutCubic.transform(
+                                          animation.value,
+                                        );
+                                        return FadeTransition(
+                                          opacity: animation,
+                                          child: Transform.translate(
+                                            offset: Offset(0, 14 * (1 - t)),
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                      child: Text(
+                                        _timerSvc.remainingDisplay(timer.id),
+                                        key: ValueKey(
+                                          _timerSvc.remainingDisplay(timer.id),
+                                        ),
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                              color: running
+                                                  ? theme.colorScheme.primary
+                                                  : theme
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              action(
+                                icon: running
+                                    ? Icons.pause_circle_filled
+                                    : Icons.play_circle_fill,
+                                color: running
+                                    ? theme.colorScheme.primary
+                                    : const Color(0xFFFFAB91),
+                                onTap: () => running
+                                    ? _timerSvc.pauseTimer(timer.id)
+                                    : _timerSvc.startTimer(timer.id),
+                              ),
+                              if (!running)
+                                action(
+                                  icon: Icons.replay,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  size: 22,
+                                  onTap: () => _timerSvc.resetTimer(timer.id),
+                                ),
+                            ],
+                          )
+                        : Row(
+                            key: const ValueKey('timer_idle_part'),
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              action(
+                                icon: Icons.play_circle_fill,
+                                color: const Color(0xFFFFAB91),
+                                onTap: () => _timerSvc.startTimer(timer.id),
+                              ),
+                            ],
+                          ),
+                  ),
                 ],
               ),
             ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, anim) => FadeTransition(
-                opacity: anim,
-                child: SizeTransition(
-                  sizeFactor: anim,
-                  alignment: Alignment.topCenter,
-                  child: child,
-                ),
-              ),
-              child: timers.isEmpty
-                  ? Padding(
-                      key: const ValueKey('timers_empty'),
-                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
-                      child: Text(
-                        Translations.t('noTimers', context),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+            // Прогресс — тонкая полоска на нижнем краю; её появление тоже
+            // анимировано высотой, а не прыжком.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: showProgress
+                  ? LinearProgressIndicator(
+                      value: timer.totalSeconds > 0
+                          ? (timer.totalSeconds - rem) / timer.totalSeconds
+                          : 0,
+                      minHeight: 3,
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                      color: running
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outline,
                     )
-                  : ListView.builder(
-                      key: const ValueKey('timers_list'),
-                      shrinkWrap: true,
-                      // На случай переполнения карточки прокручиваются
-                      // ВНУТРИ секции, а не вылезают на будильники.
-                      physics: const ClampingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      itemCount: timers.length,
-                      itemBuilder: (context, i) {
-                        final timer = timers[i];
-                        final running = _timerSvc.isRunning(timer.id);
-                        final rem = _timerSvc.remaining(timer.id);
-                        return SwipeToDelete(
-                          key: ValueKey('item_timer_${timer.id}'),
-                          dismissKey: ValueKey('dismiss_${timer.id}'),
-                          borderRadius: 16,
-                          // Фон удаления = границы карточки (у неё горизонтальный
-                          // margin 12, см. Card ниже).
-                          inset: const EdgeInsets.symmetric(horizontal: 12),
-                          confirmDismiss: (_) async => await showAgyshaConfirm(
-                            context,
-                            title: Translations.deleteOf(context),
-                            body: timer.displayLabel,
-                            icon: Icons.delete_outline_rounded,
-                            confirmLabel: Translations.deleteOf(context),
-                            destructive: true,
-                          ),
-                          onDismissed: (_) => _timerSvc.remove(timer.id),
-                          child: Card(
-                            key: ValueKey('card_${timer.id}'),
-                            clipBehavior: Clip.antiAlias,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            margin: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      GestureDetector(
-                                        onTap: () => _editTimer(timer),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              timer.displayLabel,
-                                              style: theme.textTheme.titleMedium
-                                                  ?.copyWith(
-                                                    color: running
-                                                        ? theme
-                                                              .colorScheme
-                                                              .primary
-                                                        : null,
-                                                  ),
-                                            ),
-                                            if (timer.label.isNotEmpty)
-                                              Text(
-                                                timer.label,
-                                                // Полный текст без троеточия:
-                                                maxLines: null,
-                                                style: theme.textTheme.bodySmall
-                                                    ?.copyWith(
-                                                      color: theme
-                                                          .colorScheme
-                                                          .onSurfaceVariant,
-                                                    ),
-                                                overflow: TextOverflow.clip,
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      if (running || rem < timer.totalSeconds)
-                                        // Живой счётчик: пока таймер идёт, цифры
-                                        // мягко «дышат» (лёгкая пульсация) +
-                                        // обновляются каждую секунду.
-                                        _TimerPulse(
-                                          active: running,
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              right: 4,
-                                            ),
-                                            child: ClipRect(
-                                              // Каждая секунда счётчика
-                                              // сменяется ПЛАВНО: цифры
-                                              // «вкатываются» снизу/сверху
-                                              // (fade + slide), а не
-                                              // щёлкают резко.
-                                              child: AnimatedSwitcher(
-                                                duration: const Duration(
-                                                  milliseconds: 320,
-                                                ),
-                                                switchInCurve:
-                                                    Curves.easeOutCubic,
-                                                switchOutCurve:
-                                                    Curves.easeInCubic,
-                                                transitionBuilder:
-                                                    (child, animation) {
-                                                      final t = Curves
-                                                          .easeOutCubic
-                                                          .transform(
-                                                            animation.value,
-                                                          );
-                                                      return FadeTransition(
-                                                        opacity: animation,
-                                                        child:
-                                                            Transform.translate(
-                                                              offset: Offset(
-                                                                0,
-                                                                14 * (1 - t),
-                                                              ),
-                                                              child: child,
-                                                            ),
-                                                      );
-                                                    },
-                                                child: Text(
-                                                  _timerSvc.remainingDisplay(
-                                                    timer.id,
-                                                  ),
-                                                  key: ValueKey(
-                                                    _timerSvc.remainingDisplay(
-                                                      timer.id,
-                                                    ),
-                                                  ),
-                                                  style: theme
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.copyWith(
-                                                        fontFeatures: const [
-                                                          FontFeature.tabularFigures(),
-                                                        ],
-                                                        color: running
-                                                            ? theme
-                                                                  .colorScheme
-                                                                  .primary
-                                                            : theme
-                                                                  .colorScheme
-                                                                  .onSurfaceVariant,
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      if (running)
-                                        IconButton(
-                                          iconSize: 28,
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 36,
-                                          ),
-                                          icon: Icon(
-                                            Icons.pause_circle_filled,
-                                            color: theme.colorScheme.primary,
-                                          ),
-                                          onPressed: () =>
-                                              _timerSvc.pauseTimer(timer.id),
-                                        )
-                                      else
-                                        IconButton(
-                                          iconSize: 28,
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 36,
-                                          ),
-                                          icon: Icon(
-                                            Icons.play_circle_fill,
-                                            color: const Color(0xFFFFAB91),
-                                          ),
-                                          onPressed: () =>
-                                              _timerSvc.startTimer(timer.id),
-                                        ),
-                                      if (rem < timer.totalSeconds && !running)
-                                        IconButton(
-                                          iconSize: 22,
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 36,
-                                          ),
-                                          icon: Icon(
-                                            Icons.replay,
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                          onPressed: () =>
-                                              _timerSvc.resetTimer(timer.id),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                // Прогресс таймера: тонкая полоска на нижнем
-                                // краю карточки плавно заполняется по мере
-                                // отсчёта — у таймера появляется живая
-                                // анимация, а не статичная цифра.
-                                if (running || rem < timer.totalSeconds)
-                                  LinearProgressIndicator(
-                                    value: timer.totalSeconds > 0
-                                        ? (timer.totalSeconds - rem) /
-                                              timer.totalSeconds
-                                        : 0,
-                                    minHeight: 3,
-                                    backgroundColor: theme
-                                        .colorScheme
-                                        .surfaceContainerHighest,
-                                    color: running
-                                        ? theme.colorScheme.primary
-                                        : theme.colorScheme.outline,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                  : const SizedBox(
+                      key: ValueKey('timer_progress_hidden'),
+                      width: double.infinity,
+                      height: 0,
                     ),
             ),
           ],

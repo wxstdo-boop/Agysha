@@ -230,31 +230,19 @@ void main() {
     expect(hasScale(widget), isFalse);
   });
 
-  testWidgets('барабан тем: дрожь пальца назад не откатывает тему', (
+  testWidgets('барабан тем: строго за пальцем, мелкая дрожь его не крутит', (
     tester,
   ) async {
     await openSettings(tester);
     final revolver = find.byKey(const ValueKey('theme_revolver'));
     await tester.ensureVisible(revolver);
     await tester.pump(const Duration(milliseconds: 200));
-
     String themeKey() => AgyshaApp.of(tester.element(revolver)).themeKey;
     final before = themeKey();
 
-    final box = tester.getRect(revolver);
-    final gesture = await tester.startGesture(box.center);
-    // Ведём палец, как настоящий: несколькими событиями по 25 px. Первые
-    // уходят в порог распознавания жеста, остальные проворачивают барабан
-    // за порог предпросмотра (0.66 шага).
-    for (var i = 0; i < 3; i++) {
-      await gesture.moveBy(const Offset(-25, 0));
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    final forward = themeKey();
-    expect(forward, isNot(before), reason: 'поворот вперёд меняет тему сразу');
-
-    // Положение каморов на круге меняется вместе с поворотом барабана,
-    // поэтому по нему видно, поехал ли барабан назад под пальцем.
+    // Положение каморов на круге: по нему видно, поехал ли барабан и в
+    // какую сторону. Раньше короткая дрожь отбрасывалась, а накопленный
+    // хват применялся одним кадром — барабан дёргался.
     List<double> drumLefts() {
       final lefts = <double>[];
       for (final e
@@ -268,23 +256,34 @@ void main() {
       return lefts;
     }
 
-    final drumBeforeWobble = drumLefts();
+    final box = tester.getRect(revolver);
+    final gesture = await tester.startGesture(box.center);
+    for (var i = 0; i < 3; i++) {
+      await gesture.moveBy(const Offset(-25, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final forward = themeKey();
+    expect(forward, isNot(before), reason: 'поворот вперёд меняет тему сразу');
+    final afterForward = drumLefts();
 
-    // Палец «отпружинивает» на 15 px назад: барабан под пальцем не едет
-    // обратно, и тема не откатывается — раньше это читалось как «крутишь
-    // в одну сторону, а переводит в другую».
+    // Палец «отпружинивает» на 15 px назад — это меньше порога
+    // предпросмотра (0.66 шага), поэтому тема не откатывается, но сам
+    // барабан обязан честно поехать за пальцем, без мёртвой зоны.
     await gesture.moveBy(const Offset(15, 0));
     await tester.pump(const Duration(milliseconds: 16));
     expect(themeKey(), forward);
-    final drumAfterWobble = drumLefts();
-    expect(drumAfterWobble, hasLength(drumBeforeWobble.length));
-    for (var i = 0; i < drumBeforeWobble.length; i++) {
-      expect(
-        drumAfterWobble[i],
-        moreOrLessEquals(drumBeforeWobble[i], epsilon: 0.5),
-        reason: 'камора $i осталась на месте',
-      );
-    }
+    final afterWobble = drumLefts();
+    expect(afterWobble, hasLength(afterForward.length));
+    expect(
+      afterWobble,
+      isNot(equals(afterForward)),
+      reason: 'барабан идёт 1:1 за пальцем, а не игнорирует движение',
+    );
+
+    // Осознанный разворот дальше порога — тема возвращается.
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(themeKey(), before, reason: 'разворот за порогом меняет тему назад');
 
     await gesture.up();
     await tester.pump();
