@@ -135,9 +135,7 @@ extension _SettingsSectionAda on _SettingsScreenState {
                                   hintText:
                                       'Вставь ключ Poolside, Agnes AI или Zen',
                                   suffixIcon: AnimatedSwitcher(
-                                    duration: const Duration(
-                                      milliseconds: 220,
-                                    ),
+                                    duration: const Duration(milliseconds: 220),
                                     switchInCurve: Curves.easeOutCubic,
                                     switchOutCurve: Curves.easeInCubic,
                                     transitionBuilder: (child, animation) =>
@@ -160,8 +158,7 @@ extension _SettingsSectionAda on _SettingsScreenState {
                                       ),
                                       onPressed: () {
                                         _refresh(
-                                          () =>
-                                              _aiKeyVisible = !_aiKeyVisible,
+                                          () => _aiKeyVisible = !_aiKeyVisible,
                                         );
                                         // Мягкий «перелив» текста ключа.
                                         _keyPulse.forward(from: 0);
@@ -194,6 +191,61 @@ extension _SettingsSectionAda on _SettingsScreenState {
                                 ),
                               );
                             },
+                          ),
+                          const SizedBox(height: 8),
+                          // Видимый список бесплатных провайдеров: владелец
+                          // спрашивал «анонимные так и не добавил» — теперь
+                          // они не только в коде, но и в настройках.
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHighest
+                                  .withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.auto_awesome_outlined,
+                                  size: 18,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        Translations.t(
+                                          'adaFreeProviders',
+                                          context,
+                                          'Free, no key',
+                                        ),
+                                        style: theme.textTheme.labelLarge,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        Translations.t(
+                                          'adaFreeProvidersDesc',
+                                          context,
+                                          'LLM7, Pollinations and AI Horde.',
+                                        ),
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           const Divider(height: 20),
                           // Ада-трекинг: утренний отчёт + вечерний разбор.

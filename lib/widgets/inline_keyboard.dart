@@ -162,7 +162,7 @@ class _InlineKeyboardState extends State<InlineKeyboard>
         // СЕРОЙ плитой. Красный задаём константой бренда, а не ролью темы.
         color: Color.alphaBlend(
           InlineKeyboard._brandRed.withValues(alpha: 0.16),
-          theme.colorScheme.surfaceContainer.withValues(alpha: 0.40),
+          theme.colorScheme.surfaceContainer.withValues(alpha: 0.22),
         ),
         // Скруглены ВСЕ углы: панель сидит внутри листа, и нижние углы
         // раньше обрезались о скругление окна.
@@ -360,8 +360,8 @@ class _KeyState extends State<_Key> {
         : widget.active
         ? InlineKeyboard._brandRed.withValues(alpha: 0.72)
         : Color.alphaBlend(
-            InlineKeyboard._brandRed.withValues(alpha: 0.16),
-            cs.surfaceContainerHighest.withValues(alpha: 0.42),
+            InlineKeyboard._brandRed.withValues(alpha: 0.10),
+            cs.surfaceContainerHighest.withValues(alpha: 0.24),
           );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
@@ -459,8 +459,8 @@ class _CaseGlyph extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: Color.alphaBlend(
-              InlineKeyboard._brandRed.withValues(alpha: 0.16),
-              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.42),
+              InlineKeyboard._brandRed.withValues(alpha: 0.10),
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.24),
             ),
             borderRadius: BorderRadius.circular(Radii.md),
             border: Border.all(

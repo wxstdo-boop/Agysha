@@ -57,7 +57,7 @@ const Map<String, String> _ru = {
   'profileFriendScoreRandom': 'Случайные очки',
   'profileFriendScoreHint':
       'Очки — за активность: привычки, задачи, дни в логе. '
-          'Чем больше — тем выше в рейтинге.',
+      'Чем больше — тем выше в рейтинге.',
   'profileFriendSetScore': 'Очки',
   'profilePickAvatar': 'Аватарка',
   'profileAvatarFromGallery': 'Своя из галереи',
@@ -65,7 +65,8 @@ const Map<String, String> _ru = {
   'profileAvatarFailed': 'Не удалось загрузить аватарку',
   'profileMe': 'Я',
   'scoreTitle': 'Твои очки',
-  'scoreHint': 'Очки растут за реальные дела: привычки, задачи, общение с Адой, еду и проверки. Их не отбирают — это твои достижения.',
+  'scoreHint':
+      'Очки растут за реальные дела: привычки, задачи, общение с Адой, еду и проверки. Их не отбирают — это твои достижения.',
   'scoreHabit': 'Привычки',
   'scoreTask': 'Задачи',
   'scoreAi': 'Общение с Адой',
@@ -84,8 +85,7 @@ const Map<String, String> _ru = {
   'about': 'О приложении',
   'dataStorageError':
       'Не удалось прочитать или сохранить локальные данные. Исходные файлы не изменены.',
-  'updateHashMissing':
-      'У релиза нет корректного SHA-256. Установка отменена.',
+  'updateHashMissing': 'У релиза нет корректного SHA-256. Установка отменена.',
   'updateInstalled': 'Обновлено до v{v}',
   'updateAvailable': 'Доступно обновление',
   'updateAvailableBody': 'Установить v{v}?',
@@ -100,8 +100,7 @@ const Map<String, String> _ru = {
   'noHabits': 'Привычек пока нет',
   'noTasks': 'Задач пока нет',
   'noRealityChecks': 'Проверок реальности пока нет',
-  'emptyAlarmHint':
-      'Настрой мягкий ритм дня — первый будильник займёт минуту.',
+  'emptyAlarmHint': 'Настрой мягкий ритм дня — первый будильник займёт минуту.',
   'emptyAlarmAdvice':
       'Начни с одного надёжного времени подъёма. Звук и сценарий можно настроить позже.',
   'emptyHabitHint': 'Дай одному небольшому действию место в своём дне.',
@@ -111,8 +110,7 @@ const Map<String, String> _ru = {
       'Держи следующий важный шаг перед глазами — и его будет проще завершить.',
   'emptyTaskAdvice':
       'Формулируй задачу как одно ясное действие. Маленькие победы создают темп.',
-  'emptyRealityHint':
-      'Преврати обычный момент в короткую паузу осознанности.',
+  'emptyRealityHint': 'Преврати обычный момент в короткую паузу осознанности.',
   'emptyRealityAdvice':
       'Выбери вопрос, который тебе действительно захочется вспомнить в течение дня.',
   'noTimers': 'Таймеров пока нет',
@@ -268,7 +266,8 @@ const Map<String, String> _ru = {
   'monthChartHabits': 'Привычки',
   'monthChartTasks': 'Задачи',
   'monthChartBest': 'лучший день',
-  'monthChartHint': 'Каждый столбик — один день. Его высота — сколько выполнено: снизу привычки, сверху задачи. Колонка «сегодня» подсвечена, звезда — лучший день.',
+  'monthChartHint':
+      'Каждый столбик — один день. Его высота — сколько выполнено: снизу привычки, сверху задачи. Колонка «сегодня» подсвечена, звезда — лучший день.',
   'monthChartDays': 'дней выполнено',
   'rcReset': 'Сбросить статистику',
   'rcResetBody': 'Сбросить все счётчики проверок в ноль?',
@@ -408,8 +407,7 @@ const Map<String, String> _ru = {
   'fullScreenGrantMissing':
       'Система отключила полноэкранный показ. Будильник всё равно откроет экран задачи, но право надёжнее вернуть.',
   'autostart': 'Автозапуск',
-  'autostartDesc':
-      'Разрешить будильнику срабатывать, когда приложение закрыто',
+  'autostartDesc': 'Разрешить будильнику срабатывать, когда приложение закрыто',
   'popupWarningTitle': 'Важно!',
   'popupWarningBody':
       'Чтобы будильники срабатывали надёжно, разреши уведомления и полноэкранный режим.',
@@ -492,8 +490,7 @@ const Map<String, String> _ru = {
   'adaTracking': 'Ада-трекинг',
   'adaTrackingDesc':
       'Ада сама пишет утренний отчёт «что сегодня по плану» в 08:00 и вечерний разбор в 21:00 прямо в чат — уведомления не нужны.',
-  'adaTrackingOn':
-      'Ада теперь сама пишет в чат каждый день в 08:00 и 21:00',
+  'adaTrackingOn': 'Ада теперь сама пишет в чат каждый день в 08:00 и 21:00',
   'adaQuota': 'Ада: осталось N бесплатных сегодня',
   'aiChipHabit': 'Привычка',
   'aiChipTask': 'Задача',
@@ -515,8 +512,11 @@ const Map<String, String> _ru = {
   'aiGuideKey': 'Ключ Poolside (необязательно)',
   'aiGuideKeyHint': 'Вставь свой ключ Laguna',
   'aiGuideKeyNote':
-      'Бесплатные провайдеры: Kilo, OVHcloud, Murakumo и AI Horde. Ключ Poolside необязателен.',
-  'aiGuideKeyNoteProviders': 'Kilo, OVHcloud, Murakumo и AI Horde',
+      'Бесплатные анонимные модели: LLM7, Pollinations и AI Horde — без ключа и регистрации. Свой ключ нужен только для премиум-моделей.',
+  'aiGuideKeyNoteProviders': 'LLM7 · Pollinations · AI Horde',
+  'adaFreeProviders': 'Бесплатные без ключа',
+  'adaFreeProvidersDesc':
+      'LLM7, Pollinations и AI Horde. Если один шлюз устал — Ада молча пробует следующий.',
   'aiGuideKeyNoteTail': '',
   'geminiKey': 'Ключ Gemini (необязательно — самая живая и горячая Ада)',
   'geminiKeyHint': 'Вставь ключ из Google AI Studio',
@@ -547,8 +547,7 @@ const Map<String, String> _ru = {
   'tipWalkTitle': 'Прогулка',
   'tipWalkBody': '10 минут ходьбы снимают тягу быстрее, чем сила воли.',
   'tipCoffeeTitle': 'Чёрный кофе',
-  'tipCoffeeBody':
-      'Чашка чёрного кофе глушит тягу к сладкому на 30–40 минут.',
+  'tipCoffeeBody': 'Чашка чёрного кофе глушит тягу к сладкому на 30–40 минут.',
   'tipColdWaterTitle': 'Ледяная вода',
   'tipColdWaterBody':
       'Стакан ледяной воды мгновенно перезагружает тело и голову — холод обрывает цикл тяги.',
@@ -598,8 +597,7 @@ const Map<String, String> _ru = {
   'tipYogurtBody':
       'Натуральный йогурт с ягодами — десерт без стыда, который ощущается как награда.',
   'tipWarmDrinkTitle': 'Тёплый напиток',
-  'tipWarmDrinkBody':
-      'Тёплый напиток без сахара успокаивает тягу к сладкому.',
+  'tipWarmDrinkBody': 'Тёплый напиток без сахара успокаивает тягу к сладкому.',
   'tipReplaceTitle': 'Заменяй, а не запрещай',
   'tipReplaceBody':
       'Мозг сопротивляется запретам; замены работают гораздо лучше.',
@@ -681,8 +679,7 @@ const Map<String, String> _ru = {
   'forgeTitle': 'Кузница',
   'forgeSubtitle': 'Живой чат с агентом: спроси о коде или попроси изменить.',
   'forgeTokenSection': 'ДОСТУП К GITHUB',
-  'forgeTokenHint':
-      'Fine-grained, Contents и Pull requests: read and write.',
+  'forgeTokenHint': 'Fine-grained, Contents и Pull requests: read and write.',
   'startupDiagTitle': 'Agysha остановилась безопасно',
   'startupDiagBody':
       'Agysha не смогла завершить запуск и остановилась до отрисовки '
@@ -704,8 +701,7 @@ const Map<String, String> _ru = {
   'forgeTokenInvalid': 'GitHub отклонил токен',
   'forgeTokenReadOnly': 'Нет права записи — агент не сможет коммитить',
   'forgeTokenEmpty': 'Нужен токен',
-  'forgeTokenSaveFailed':
-      'Не удалось сохранить токен — хранилище недоступно',
+  'forgeTokenSaveFailed': 'Не удалось сохранить токен — хранилище недоступно',
   'forgeTokenForgotten': 'Токен удалён',
   'forgeChatSection': 'ЧАТ',
   'forgeTaskHint': 'Спроси о коде или опиши, что изменить…',
@@ -720,8 +716,7 @@ const Map<String, String> _ru = {
   'forgeSafetyNote':
       'На вопросы агент отвечает сразу. Правки идут в отдельную ветку и pull request — main не трогается. ИИ: встроенные бесплатные провайдеры.',
   'forgeThinking': 'Агент думает…',
-  'forgeChatEmpty':
-      'Спроси что-нибудь о проекте или напиши, что изменить.',
+  'forgeChatEmpty': 'Спроси что-нибудь о проекте или напиши, что изменить.',
   'forgeClearChat': 'Очистить чат',
   'forgeChatCleared': 'Чат очищен',
   'forgeChanges': 'Правки',
@@ -736,20 +731,17 @@ const Map<String, String> _ru = {
   'changeSmoothAnim':
       'Плавные анимации везде: переходы разделов, настройки, карточки, переключатели',
   'changeStreakFix': 'Исправлены стрики и отметки привычек',
-  'changePinBlur':
-      'PIN-код теперь размывает приложение в недавних приложениях',
+  'changePinBlur': 'PIN-код теперь размывает приложение в недавних приложениях',
   'changeNotifIcon': 'Иконка уведомлений — фирменный бейдж с K',
   'changeAlarmFix':
       'Будильники: восстановлены звуки, выбор времени работает зажатием',
   'changeTaskShelvesContrast':
       'Полки задач: заголовки теперь читаются и в светлой, и в тёмной теме',
-  'changeLintCleanup':
-      'Прибрались внутри — приложение стало чуть надёжнее',
+  'changeLintCleanup': 'Прибрались внутри — приложение стало чуть надёжнее',
   'changeTaskShelves': 'Задачи разделены на полки «Активные» и «Выполненные»',
   'changeTaskMarkFinal':
       'Выполнение задачи окончательно — она переезжает на полку выполненных',
-  'changeCIUpdate':
-      'Выпуски выходят ровнее — переделали сборку',
+  'changeCIUpdate': 'Выпуски выходят ровнее — переделали сборку',
   'changeCategoryDrag':
       'Категории можно перетаскивать, меняя их порядок в редакторе задачи',
   'changeCategoryReorder': 'Порядок категорий меняется плавно и запоминается',
@@ -757,8 +749,7 @@ const Map<String, String> _ru = {
       '«Вспомнить всё» теперь того же тона, что и соседние кнопки',
   'changePinSmooth': 'Экран блокировки и круг привычек анимируются плавно',
   'changeFlockEdges': 'Стая птиц мягко входит и гаснет, а не обрезается',
-  'changeForgeTokenSave':
-      'Кузница: токен GitHub сохраняется — кнопка оживает',
+  'changeForgeTokenSave': 'Кузница: токен GitHub сохраняется — кнопка оживает',
   'changeForgeAgent':
       'Кузница — полноценный чат-агент: отвечает на вопросы и правит код',
   'changeForgePr':
@@ -784,8 +775,7 @@ const Map<String, String> _ru = {
       'Чат Ады плавно держит фокус на последнем сообщении при стриме и открытии',
   'changeLangSmooth': 'Переключение языков теперь плавнее',
   'changeEmDash': 'В приложении все видимые тире стали длинными (em-dash)',
-  'changeSplashFix':
-      'Аватарка на сплеш больше не мигает при холодном старте',
+  'changeSplashFix': 'Аватарка на сплеш больше не мигает при холодном старте',
   'aboutAuthorTitle': 'Об авторе',
   'visitellaName': 'Визителла',
   'visitellaDesc': 'Проекты, игры, новости',
@@ -822,13 +812,11 @@ const Map<String, String> _ru = {
       'Карточки питания теперь с ежедневным набором случайных цветов и иконок',
   'changeDropdowns': 'Выпадающие списки закруглены в настройках и задачах',
   'changeSnackbar': 'Улучшена анимация снекбаров',
-  'changeSwipeSnap':
-      'Свайп между разделами теперь плавно прилипает к точке',
+  'changeSwipeSnap': 'Свайп между разделами теперь плавно прилипает к точке',
   'changeCornerSwipe': 'Верхние края закругляются при свайпе',
   'changeRoundedTiles': 'Плитки настроек теперь закруглены',
   'changeCategoryLimit': 'Лимит названия категории уменьшен до 15 символов',
-  'changeAuthorLinks':
-      'Добавлены ссылки на приложения автора: Ataraxy и MSoc',
+  'changeAuthorLinks': 'Добавлены ссылки на приложения автора: Ataraxy и MSoc',
   'changePrev1': 'Улучшения привычек, задач и будильников',
   'changePrev2': 'Добавлен PIN-замок',
   'changePrev3': 'Экспорт/импорт данных',
@@ -840,7 +828,8 @@ const Map<String, String> _ru = {
   'motivationQuote5': 'Позволь себе отдыхать, не заслужив этого.',
   'motivationQuote6': 'Простое утро делает лёгким весь день.',
   'motivationQuote7': 'Тебе не нужно быть лучшим — достаточно быть настоящим.',
-  'motivationQuote8': 'Отпусти то, что не в твоих руках, и станет легче дышать.',
+  'motivationQuote8':
+      'Отпусти то, что не в твоих руках, и станет легче дышать.',
   'motivationQuote9': 'Тишина — не пустота, а место для себя.',
   'motivationQuote10': 'Делай меньше, но спокойнее.',
   'motivationQuote11': 'Лёгкость — это не лень, а верный ритм.',

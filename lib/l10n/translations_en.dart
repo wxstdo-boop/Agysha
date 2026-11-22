@@ -25,8 +25,7 @@ const Map<String, String> _en = {
   'createCategory': 'Create',
   'deleteCategory': 'Delete category',
   'deleteMealConfirmTitle': 'Delete meal?',
-  'deleteMealConfirmBody':
-      'This meal will be removed. This cannot be undone.',
+  'deleteMealConfirmBody': 'This meal will be removed. This cannot be undone.',
   'deleteMealConfirm': 'Delete meal',
   'profile': 'Profile',
   'profileAnonymous': 'Anonymous',
@@ -55,7 +54,7 @@ const Map<String, String> _en = {
   'profileFriendScoreRandom': 'Random points',
   'profileFriendScoreHint':
       'Points come from activity: habits, tasks, days in the log. '
-          'More points — higher in the ranking.',
+      'More points — higher in the ranking.',
   'profileFriendSetScore': 'Points',
   'profilePickAvatar': 'Avatar',
   'profileAvatarFromGallery': 'Your own from the gallery',
@@ -63,7 +62,8 @@ const Map<String, String> _en = {
   'profileAvatarFailed': 'Could not load the avatar',
   'profileMe': 'Me',
   'scoreTitle': 'Your points',
-  'scoreHint': 'Points grow from real activity: habits, tasks, talking to Ada, meals and check-ins. They are never taken away — they are your achievements.',
+  'scoreHint':
+      'Points grow from real activity: habits, tasks, talking to Ada, meals and check-ins. They are never taken away — they are your achievements.',
   'scoreHabit': 'Habits',
   'scoreTask': 'Tasks',
   'scoreAi': 'Talking to Ada',
@@ -101,12 +101,10 @@ const Map<String, String> _en = {
   'emptyAlarmHint': 'Set a gentle rhythm for your day in one minute.',
   'emptyAlarmAdvice':
       'Start with one reliable wake-up time. You can refine the sound and routine later.',
-  'emptyHabitHint':
-      'Give one small, repeatable action a place in your day.',
+  'emptyHabitHint': 'Give one small, repeatable action a place in your day.',
   'emptyHabitAdvice':
       'A habit becomes stronger when it is easy enough to repeat on an ordinary day.',
-  'emptyTaskHint':
-      'Keep the next important step visible and easy to finish.',
+  'emptyTaskHint': 'Keep the next important step visible and easy to finish.',
   'emptyTaskAdvice':
       'Write tasks as a single clear action. Small wins create momentum.',
   'emptyRealityHint': 'Turn an ordinary moment into a mindful pause.',
@@ -264,7 +262,8 @@ const Map<String, String> _en = {
   'monthChartHabits': 'Habits',
   'monthChartTasks': 'Tasks',
   'monthChartBest': 'best day',
-  'monthChartHint': 'Each bar is one day. Its height is how much got done — habits at the bottom, tasks on top. Today’s column is highlighted; the star marks the best day.',
+  'monthChartHint':
+      'Each bar is one day. Its height is how much got done — habits at the bottom, tasks on top. Today’s column is highlighted; the star marks the best day.',
   'monthChartDays': 'days done',
   'rcReset': 'Reset stats',
   'rcResetBody': 'Reset all check counts to zero?',
@@ -458,8 +457,7 @@ const Map<String, String> _en = {
   'diagSent': 'Notification sent!',
   'diagSoundPlayed': 'Sound played!',
   'diagNotEnabled': 'Notifications are disabled',
-  'diagEnableNotif':
-      'Notifications are off — open settings to enable them.',
+  'diagEnableNotif': 'Notifications are off — open settings to enable them.',
   'diagError': 'Error',
   'resetWarnings': 'Reset warnings',
   'warningsResetDone': 'Warnings reset — they will appear again',
@@ -485,8 +483,7 @@ const Map<String, String> _en = {
   'adaTracking': 'Ada tracking',
   'adaTrackingDesc':
       'Ada writes the morning report at 08:00 and the evening review at 21:00 right into the chat — no notifications needed.',
-  'adaTrackingOn':
-      'Ada now writes to the chat every day at 08:00 and 21:00',
+  'adaTrackingOn': 'Ada now writes to the chat every day at 08:00 and 21:00',
   'adaQuota': 'Ada: N free left today',
   'aiChipHabit': 'Habit',
   'aiChipTask': 'Task',
@@ -508,8 +505,11 @@ const Map<String, String> _en = {
   'aiGuideKey': 'Poolside key (optional)',
   'aiGuideKeyHint': 'Paste your Laguna API key',
   'aiGuideKeyNote':
-      'Free providers: Kilo, OVHcloud, Murakumo and AI Horde. Poolside key is optional.',
-  'aiGuideKeyNoteProviders': 'Kilo, OVHcloud, Murakumo and AI Horde',
+      'Free anonymous models: LLM7, Pollinations and AI Horde — no key or sign-up needed. Your own key is only for premium models.',
+  'aiGuideKeyNoteProviders': 'LLM7 · Pollinations · AI Horde',
+  'adaFreeProviders': 'Free, no key',
+  'adaFreeProvidersDesc':
+      'LLM7, Pollinations and AI Horde. If one gateway is busy, Ada quietly tries the next.',
   'aiGuideKeyNoteTail': '',
   'geminiKey': 'Gemini key (optional — the best, hottest Ada)',
   'geminiKeyHint': 'Paste your Google AI Studio key',
@@ -540,8 +540,7 @@ const Map<String, String> _en = {
   'tipWalkTitle': 'Take a walk',
   'tipWalkBody': 'A 10-minute walk kills a craving faster than willpower.',
   'tipCoffeeTitle': 'Black coffee',
-  'tipCoffeeBody':
-      'One black coffee can kill sugar craving for 30-40 minutes.',
+  'tipCoffeeBody': 'One black coffee can kill sugar craving for 30-40 minutes.',
   'tipColdWaterTitle': 'Ice-cold water',
   'tipColdWaterBody':
       'A glass of ice water instantly resets mind and body — the cold shock breaks the craving loop.',
@@ -593,11 +592,9 @@ const Map<String, String> _en = {
   'tipWarmDrinkTitle': 'Hot drink',
   'tipWarmDrinkBody': 'A warm sugar-free drink calms sweet cravings.',
   'tipReplaceTitle': 'Replace, don’t ban',
-  'tipReplaceBody':
-      'The brain resists bans; it reacts better to replacement.',
+  'tipReplaceBody': 'The brain resists bans; it reacts better to replacement.',
   'tipStressSugarTitle': 'Stress ≠ Sugar',
-  'tipStressSugarBody':
-      'Stress spikes sugar cravings. Walk it off instead.',
+  'tipStressSugarBody': 'Stress spikes sugar cravings. Walk it off instead.',
   'tipWaitTitle': '10-minute rule',
   'tipWaitBody':
       'Wait 10 minutes before giving in to a craving — most of them fade on their own.',
@@ -672,7 +669,8 @@ const Map<String, String> _en = {
   'devPromptSaveError': 'Could not save. Tap Save to try again.',
   'devPromptSave': 'Save',
   'forgeTitle': 'Forge',
-  'forgeSubtitle': 'Chat with the agent: ask about the code or ask it to change it.',
+  'forgeSubtitle':
+      'Chat with the agent: ask about the code or ask it to change it.',
   'forgeTokenSection': 'GITHUB ACCESS',
   'forgeTokenHint': 'Fine-grained: Contents, Pull requests — read and write.',
   'startupDiagTitle': 'Agysha stopped safely',
@@ -741,12 +739,10 @@ const Map<String, String> _en = {
       'Releases go out more smoothly — we reworked the build pipeline',
   'changeCategoryDrag':
       'Categories can be dragged to reorder them in the task editor',
-  'changeCategoryReorder':
-      'Category order changes smoothly and is remembered',
+  'changeCategoryReorder': 'Category order changes smoothly and is remembered',
   'changeRemindAllCircle':
       '"Remind all" now matches the tone of the buttons next to it',
-  'changePinSmooth':
-      'The lock screen and habit ring animate smoothly',
+  'changePinSmooth': 'The lock screen and habit ring animate smoothly',
   'changeFlockEdges':
       'The flock of birds fades in and out instead of being cut off',
   'changeForgeTokenSave':
@@ -766,8 +762,7 @@ const Map<String, String> _en = {
       'Signing secrets are checked upfront, with a clear error instead of a crash',
   'changeAutoUpdateName':
       'Auto-update compares versions by name, so it works with split APKs',
-  'changeHamster':
-      'Hamster: statistics, search and a faster PIN screen',
+  'changeHamster': 'Hamster: statistics, search and a faster PIN screen',
   'changeMutilatedTheme':
       'New theme MUTILATED — light bloody red with faint splatter overlay',
   'changeElegantEgg':
@@ -776,8 +771,7 @@ const Map<String, String> _en = {
   'changeChatScroll':
       'AI chat now sticks to the last message while streaming and on open',
   'changeLangSmooth': 'Smoother language switching transition',
-  'changeEmDash':
-      'All visible dashes are now long em-dashes across the app',
+  'changeEmDash': 'All visible dashes are now long em-dashes across the app',
   'changeSplashFix': 'Splash avatar no longer flickers on cold start',
   'aboutAuthorTitle': 'About the author',
   'visitellaName': 'Visitella',
@@ -798,16 +792,12 @@ const Map<String, String> _en = {
       'Habit cards redesigned: completion checkbox on top, habit type icon below',
   'changeHabitFit':
       'Habit rows now fit long titles, notes and day labels nicely',
-  'changePerfectionismTitle':
-      'Perfectionism plaques now use proper title case',
-  'changeHabitStreak':
-      'Brought back the 7-day streak dots on each habit card',
+  'changePerfectionismTitle': 'Perfectionism plaques now use proper title case',
+  'changeHabitStreak': 'Brought back the 7-day streak dots on each habit card',
   'changeHabitSections':
       'Habits now split into Useful / Harmful sections when you have both types',
-  'changeAlarmSounds':
-      'Removed alarm sounds stay removed across new alarms',
-  'changeTimerSounds':
-      'Removed timer sounds stay removed across new timers',
+  'changeAlarmSounds': 'Removed alarm sounds stay removed across new alarms',
+  'changeTimerSounds': 'Removed timer sounds stay removed across new timers',
   'changeRcRandom':
       'Reality check notifications now fire at random times with random built-in question texts',
   'changeGrokTheme': 'Grok theme switched to monochrome light/dark',
@@ -817,8 +807,7 @@ const Map<String, String> _en = {
   'changeSnackbar': 'Snackbar animation polished',
   'changeSwipeSnap':
       'Swipe between sections now snaps smoothly instead of free-floating',
-  'changeCornerSwipe':
-      'Top corners are rounded during the swipe transition',
+  'changeCornerSwipe': 'Top corners are rounded during the swipe transition',
   'changeRoundedTiles': 'Settings tiles are now rounded',
   'changeCategoryLimit': 'Category name limit reduced to 15 characters',
   'changeAuthorLinks': 'Author app links added: Ataraxy and MSoc',
@@ -827,18 +816,22 @@ const Map<String, String> _en = {
   'changePrev3': 'Data export / import',
   'changePrev4': 'Nutrition module with 7-day history',
   'motivationQuote1': 'An easy life begins with a simple “enough”.',
-  'motivationQuote2': 'You don’t have to fit everything in — a lot can simply be let go.',
-  'motivationQuote3': 'Breathe deeper: hurry doesn’t speed things up, it only tires you.',
+  'motivationQuote2':
+      'You don’t have to fit everything in — a lot can simply be let go.',
+  'motivationQuote3':
+      'Breathe deeper: hurry doesn’t speed things up, it only tires you.',
   'motivationQuote4': 'A small step without strain lasts longer than a sprint.',
   'motivationQuote5': 'Let yourself rest without earning it first.',
   'motivationQuote6': 'A simple morning makes the whole day lighter.',
   'motivationQuote7': 'You don’t need to be the best — being real is enough.',
-  'motivationQuote8': 'Let go of what isn’t in your hands, and breathing gets easier.',
+  'motivationQuote8':
+      'Let go of what isn’t in your hands, and breathing gets easier.',
   'motivationQuote9': 'Silence isn’t emptiness — it’s room for yourself.',
   'motivationQuote10': 'Do less, but more calmly.',
   'motivationQuote11': 'Ease isn’t laziness — it’s the right rhythm.',
   'motivationQuote12': 'One kind deed is enough for today.',
-  'motivationQuote13': 'Don’t compare your path to someone else’s: everyone has their own pace.',
+  'motivationQuote13':
+      'Don’t compare your path to someone else’s: everyone has their own pace.',
   'motivationQuote14': 'Allow yourself not to know every answer.',
   'motivationQuote15': 'A calm mind solves things faster than a tired one.',
   'motivationQuote16': 'Clear away the extra, and life gets roomier.',
@@ -850,7 +843,8 @@ const Map<String, String> _en = {
   'motivationQuote22': 'Start small and don’t rush the ending.',
   'motivationQuote23': 'Your worth doesn’t depend on your speed.',
   'motivationQuote24': 'Leave one worry behind today.',
-  'motivationQuote25': 'Live so that in the evening you want to exhale with a smile.',
+  'motivationQuote25':
+      'Live so that in the evening you want to exhale with a smile.',
   'motivationQuote26': 'Simplicity is the most underrated luxury.',
   'motivationQuote27': 'Don’t drag yesterday into a new day.',
   'motivationQuote28': 'A smile is the shortest path to lightness.',

@@ -206,8 +206,8 @@ class _OverlayChatState extends State<_OverlayChat>
   /// Ширина панели — почти во весь экран; высота — 44% экрана, но не выше
   /// 460 и не ниже 300. Такой «нижний лист» оставляет место клавиатуре и
   /// не выглядит отдельным плавающим окном.
-  double get _chatW => (_screenW - 16).clamp(280.0, 560.0);
-  double get _chatH => (_screenH * 0.44).clamp(300.0, 460.0);
+  double get _chatW => (_screenW - 32).clamp(272.0, 520.0);
+  double get _chatH => (_screenH * 0.36).clamp(260.0, 380.0);
 
   /// Текущий подъём над клавиатурой (dp): 0 — клавиатуры нет.
   double _kbInset = 0;
@@ -252,6 +252,9 @@ class _OverlayChatState extends State<_OverlayChat>
   double _vx = 0.8;
   double _vy = 0.6;
   Offset _pos = Offset.zero;
+  // Автопрокрутка к последнему сообщению только если пользователь и так
+  // внизу: иначе новый ответ выдёргивал ленту из-под пальца.
+  bool _stickToBottom = true;
 
   // Лента изолирована от viewInsets, а при получении фокуса сохраняет
   // позицию чтения, чтобы не добавлять скачок к анимации клавиатуры.
@@ -262,6 +265,11 @@ class _OverlayChatState extends State<_OverlayChat>
     _initialized = true;
     WidgetsBinding.instance.addObserver(this);
     _inputFocus.addListener(_onFocusChange);
+    _scrollCtrl.addListener(() {
+      if (!_scrollCtrl.hasClients) return;
+      final pos = _scrollCtrl.position;
+      _stickToBottom = pos.maxScrollExtent - pos.pixels < 72;
+    });
     // Стартовый fade: onHostReset (command от main при первом open) или
     // lifecycle resumed. Страховка — свой таймер: если ни та, ни другая
     // команда не пришла, окно ВСЁ РАВНО плавно появится через ~300мс
@@ -663,6 +671,31 @@ class _OverlayChatState extends State<_OverlayChat>
     _pos = Offset((_screenW - _chatW) / 2, _screenH - _chatH - 16);
   }
 
+  /// Плавно переставляет окно: резкий MethodChannel-прыжок на подъёме
+  /// клавиатуры читался как рывок. Тик на каждый кадр, ~180 мс.
+  void _animatePosTo(Offset target) {
+    final start = _pos;
+    final from = DateTime.now();
+    _kbTicker?.dispose();
+    _kbTicker = createTicker((_) {
+      if (!mounted) return;
+      final t = (DateTime.now().difference(from).inMilliseconds / 180.0).clamp(
+        0.0,
+        1.0,
+      );
+      final e = Curves.easeOutCubic.transform(t);
+      _pos = Offset.lerp(start, target, e) ?? target;
+      _sendPos();
+      if (t >= 1.0) {
+        _kbTicker?.dispose();
+        _kbTicker = null;
+      }
+    });
+    _kbTicker!.start();
+  }
+
+  Ticker? _kbTicker;
+
   /// Клавиатура: панель ПОДНИМАЕТСЯ над ней, сохраняя высоту (пока хватает
   /// места). Окно оверлея с ADJUST_NOTHING само не сжимается, поэтому
   /// двигаем его вручную по фактическому IME-инсету.
@@ -675,7 +708,6 @@ class _OverlayChatState extends State<_OverlayChat>
       _topKeepout,
       (_screenH - h - 8) < _topKeepout ? _topKeepout : _screenH - h - 8,
     );
-    _pos = Offset((_screenW - _chatW) / 2, y);
     // Размер меняем только при реальной нехватке места; иначе просто
     // поднимаем окно — меньше native-ресайзов, меньше дёрганья.
     if ((h - _chatH).abs() > 2) {
@@ -685,7 +717,7 @@ class _OverlayChatState extends State<_OverlayChat>
         false,
       ).catchError((_) => false);
     }
-    _sendPos();
+    _animatePosTo(Offset((_screenW - _chatW) / 2, y));
     _persistPosition();
   }
 
@@ -761,9 +793,10 @@ class _OverlayChatState extends State<_OverlayChat>
     } catch (_) {}
   }
 
-  void _scrollToBottom({bool animate = true}) {
+  void _scrollToBottom({bool animate = true, bool force = false}) {
     // Новые сообщения — ПЛАВНЫЙ скролл к концу (список уже построен).
     if (animate) {
+      if (!force && !_stickToBottom) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_scrollCtrl.hasClients) return;
         final pos = _scrollCtrl.position;
@@ -825,7 +858,7 @@ class _OverlayChatState extends State<_OverlayChat>
       _typingFade = false;
     });
     await _saveHistory();
-    _scrollToBottom();
+    _scrollToBottom(force: true);
 
     try {
       final lang = await SettingsService.resolveLanguageCode();
@@ -867,7 +900,7 @@ class _OverlayChatState extends State<_OverlayChat>
       if (used.isNotEmpty) {
         writeAdaSyncState(model: used);
       }
-      _scrollToBottom();
+      _scrollToBottom(force: false);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -891,7 +924,7 @@ class _OverlayChatState extends State<_OverlayChat>
         _typingFade = false;
       });
       _saveHistory();
-      _scrollToBottom();
+      _scrollToBottom(force: false);
     }
   }
 
@@ -997,6 +1030,7 @@ class _OverlayChatState extends State<_OverlayChat>
     _inputCtrl.dispose();
     _inputFocus.removeListener(_onFocusChange);
     _inputFocus.dispose();
+    _kbTicker?.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
@@ -1032,7 +1066,10 @@ class _OverlayChatState extends State<_OverlayChat>
 
   Widget _buildBubble() {
     final sz = _bubbleSize - 2;
-    final colors = themeAdaColors(context);
+    final cs = Theme.of(context).colorScheme;
+    // Пузырь — монотонный, в цветах темы: раньше переливался сиреневым и
+    // выбивался из интерфейса.
+    final colors = [cs.surfaceContainerHighest, cs.surfaceContainerLow];
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _toggleSize,
@@ -1055,7 +1092,7 @@ class _OverlayChatState extends State<_OverlayChat>
                   colors: colors,
                 ),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.55),
+                  color: cs.outlineVariant.withValues(alpha: 0.55),
                   width: 1.2,
                 ),
               ),

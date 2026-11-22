@@ -17,12 +17,12 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   // чужое приложение, а подсказку всё равно видно.
   // Ещё меньше: 168 px в высоту и не шире 202 px — окошко перестаёт
   // закрывать половину экрана, но строка ввода и две строки ответа влезают.
-  static const double _expandedHeight = 146;
-  static const double _collapsedSize = 46;
+  static const double _expandedHeight = 118;
+  static const double _collapsedSize = 42;
 
-  /// Ширина развёрнутого окошка: компактная, ближе к квадрату.
+  /// Ширина развёрнутого окошка: заметно уже прежней, ближе к квадрату.
   static double _windowWidth(double screenWidth) =>
-      (screenWidth * 0.40).clamp(148.0, 178.0);
+      (screenWidth * 0.34).clamp(126.0, 150.0);
 
   Offset _pos = Offset.zero;
   // Позиция окошка — ValueNotifier: драг двигает только Positioned
@@ -45,6 +45,16 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   bool _swipedClosed = false;
   final _inputCtrl = WideDashController();
   final _scrollCtrl = ScrollController();
+  // Плавное следование за пальцем: палец задаёт цель, окно догоняет её
+  // коротким сглаживанием. Сырой onPanUpdate шёл «ступеньками» от частоты
+  // тач-событий, и пузырь мелко дёргался при медленном перетаскивании.
+  Ticker? _dragTicker;
+  Offset _dragTarget = Offset.zero;
+  Size _dragScreen = Size.zero;
+  // Автопрокрутка к низу только когда пользователь и так у низа: иначе
+  // новый ответ выдёргивал ленту из-под пальца (владелец: «при скролле
+  // дёргает экран»).
+  bool _stickToBottom = true;
   // Плавное появление/исчезание окошка при переключении режима «в окне».
   // Всегда стартуем с 0 — если включено из prefs, анимируем к 1.0 медленно
   // (очень плавно, без рывка после сплэша).
@@ -65,7 +75,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   /// пересчитывается от ЦЕНТРА — превращение идёт из того же места.
   late final AnimationController _morph = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 460),
+    duration: const Duration(milliseconds: 520),
     value: 0.0,
   );
 
@@ -74,6 +84,11 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadHistory();
+    _dragTicker = createTicker(_onDragTick);
+    _scrollCtrl.addListener(() {
+      if (!_scrollCtrl.hasClients) return;
+      _stickToBottom = _scrollCtrl.position.pixels < 72;
+    });
     aiFloating.addListener(_onFloatChanged);
     // Первый запуск: если режим «в окне» включён из prefs, плюсик с Адой
     // проявляется очень медленно и плавно (не вспыхивает сразу после сплэша).
@@ -111,7 +126,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   void _setCollapsed(bool value) {
     if (_collapsed == value) return;
     setState(() => _collapsed = value);
-    _morph.animateTo(value ? 1.0 : 0.0, curve: Curves.easeInOutQuart);
+    _morph.animateTo(value ? 1.0 : 0.0, curve: Curves.easeInOutCubic);
   }
 
   /// [_pos] всегда хранит левый верхний угол РАЗВЁРНУТОГО окна — так
@@ -161,7 +176,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
               ..addAll(loaded);
             _openedCount = _messages.length;
           });
-          _scrollToBottom(animate: false);
+          _scrollToBottom(animate: false, force: true);
         }
       }
     } catch (error, stackTrace) {
@@ -206,9 +221,10 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
     }
   }
 
-  void _scrollToBottom({bool animate = true}) {
+  void _scrollToBottom({bool animate = true, bool force = false}) {
     // Лента с reverse:true — индекс 0 это низ; открытие сразу показывает
     // последние сообщения без ретрай-цикла jumpTo (тот дёргал layout).
+    if (!force && !_stickToBottom) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollCtrl.hasClients) return;
       final pos = _scrollCtrl.position;
@@ -319,19 +335,42 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     _posNotifier.dispose();
+    _dragTicker?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  void _drag(Offset delta, Size screen) {
+  Offset _clamped(Offset candidate, Size screen) {
     final box = _visibleBox(screen);
     final maxY = math.max(_topKeepout, screen.height - box.ch - 8.0);
-    final left = (_pos.dx + box.ox + delta.dx).clamp(
+    final left = (candidate.dx + box.ox).clamp(
       8.0,
       screen.width - box.cw - 8.0,
     );
-    final top = (_pos.dy + box.oy + delta.dy).clamp(_topKeepout, maxY);
-    _pos = Offset(left - box.ox, top - box.oy);
+    final top = (candidate.dy + box.oy).clamp(_topKeepout, maxY);
+    return Offset(left - box.ox, top - box.oy);
+  }
+
+  void _drag(Offset delta, Size screen) {
+    _dragScreen = screen;
+    if (_dragTicker == null) return;
+    if (!_dragTicker!.isActive) {
+      _dragTarget = _pos;
+      _dragTicker!.start();
+    }
+    _dragTarget = _clamped(_dragTarget + delta, screen);
+  }
+
+  void _onDragTick(Duration _) {
+    final target = _clamped(_dragTarget, _dragScreen);
+    final next = Offset.lerp(_pos, target, 0.55)!;
+    if ((next - target).distance < 0.35) {
+      _pos = target;
+      _posNotifier.value = _pos;
+      _dragTicker?.stop();
+      return;
+    }
+    _pos = next;
     _posNotifier.value = _pos;
   }
 
@@ -423,14 +462,14 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
               // Размер ведём из того же контроллера, что и позицию:
               // AnimatedContainer с левым верхним якорем в конце скрутки
               // дёргался, потому что окно сжималось в угол.
-              final mt = Curves.easeInOutQuart.transform(_morph.value);
+              final mt = Curves.easeInOutCubic.transform(_morph.value);
               final cw = w + (_collapsedSize - w) * mt;
               final ch =
                   _expandedHeight + (_collapsedSize - _expandedHeight) * mt;
               // Контент меняем на середине морфа, а не мгновенно: иначе
               // при скрутке чат исчезал, пока коробка ещё большая, и
               // пузырь «дёргался» в последний момент.
-              final shownCollapsed = mt >= 0.45;
+              final shownCollapsed = _collapsed;
               return RepaintBoundary(
                 child: Container(
                   width: cw,
@@ -441,7 +480,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                     fit: StackFit.expand,
                     children: [
                       AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
+                        duration: const Duration(milliseconds: 260),
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
                         // Свой layout: уходящий слой остаётся позиционированным
@@ -509,7 +548,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                 // Позиция считается от ЦЕНТРА: при скрутке окно уменьшается
                 // в обе стороны, а не убегает в левый верхний угол и не
                 // «стопорится» на последнем кадре.
-                final mt = Curves.easeInOutQuart.transform(_morph.value);
+                final mt = Curves.easeInOutCubic.transform(_morph.value);
                 final cw = w + (_collapsedSize - w) * mt;
                 final ch =
                     _expandedHeight + (_collapsedSize - _expandedHeight) * mt;
@@ -933,7 +972,11 @@ class _MiniBubble extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 2),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.55,
+          maxWidth:
+              _AiFloatingBubbleState._windowWidth(
+                MediaQuery.sizeOf(context).width,
+              ) *
+              0.88,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
@@ -946,11 +989,11 @@ class _MiniBubble extends StatelessWidget {
           ),
         ),
         child: buildMarkdownText(
-          message.text,
+          // Служебные блоки рассуждений не показываем и в мини-окне.
+          isUser ? message.text : AiGuideService.cleanAnswerText(message.text),
           TextStyle(
-            // Сообщения в мини-оверлее тоже увеличены, markdown не растёт.
-            fontSize: 16,
-            height: 1.3,
+            fontSize: 12.5,
+            height: 1.28,
             color: isUser ? cs.onPrimary : cs.onSurface,
           ),
         ),
