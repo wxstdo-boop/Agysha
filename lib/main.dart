@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'screens/splash_screen.dart';
 import 'utils/android_settings.dart' show setSecureWindow;
 import 'screens/lock_screen.dart';
@@ -841,7 +842,28 @@ Future<void> _restoreStartupBackup(Map<String, dynamic> backup) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await _initBackgroundAudio();
   await _startApp();
+}
+
+/// Медиауведомление для «своей музыки» профиля: без этой инициализации
+/// трек по-прежнему играет, но в шторке нет ни названия, ни кнопок.
+/// Ошибка инициализации не должна мешать приложению стартовать.
+Future<void> _initBackgroundAudio() async {
+  if (kIsWeb) return;
+  try {
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'com.wetcorp.agysha.music',
+      androidNotificationChannelName: 'Музыка',
+      // Пауза из шторки не убирает уведомление: трек можно вернуть тем же
+      // тапом, а кнопка «дальше» остаётся под рукой.
+      androidStopForegroundOnPause: false,
+      androidNotificationOngoing: true,
+      androidNotificationClickStartsActivity: true,
+    );
+  } catch (_) {
+    // Платформа без фонового сервиса — музыка работает как раньше.
+  }
 }
 
 /// Локаль для экрана диагностики сбоя старта.
