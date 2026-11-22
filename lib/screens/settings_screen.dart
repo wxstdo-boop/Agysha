@@ -351,12 +351,20 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _setHaptics(bool value) async {
-    await SettingsService.saveHaptics(value);
+    // Переключатель отвечает сразу, не дожидаясь записи на диск: иначе
+    // кружок «думает» до конца файлового ввода-вывода. Если запись сорвалась —
+    // возвращаем как было, чтобы настройка не врала.
     Haptics.enabled = value;
     if (mounted) setState(() => _haptics = value);
     // Отклик на само включение: когда включаем — даём короткий клик, чтобы
     // человек сразу услышал/почувствовал, что стало иначе.
     if (value) Haptics.select();
+    try {
+      await SettingsService.saveHaptics(value);
+    } catch (_) {
+      Haptics.enabled = !value;
+      if (mounted) setState(() => _haptics = !value);
+    }
   }
 
   Future<void> _loadSounds() async {
@@ -365,11 +373,16 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _setSounds(bool value) async {
-    await SettingsService.saveSounds(value);
     Sounds.enabled = value;
     if (mounted) setState(() => _sounds = value);
     // Отклик на само включение: короткий клик подтверждает, что звук жив.
     if (value) Sounds.click();
+    try {
+      await SettingsService.saveSounds(value);
+    } catch (_) {
+      Sounds.enabled = !value;
+      if (mounted) setState(() => _sounds = !value);
+    }
   }
 
   Future<void> _loadReduceMotion() async {

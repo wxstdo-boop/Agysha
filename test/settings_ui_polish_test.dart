@@ -8,9 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:agysha/main.dart';
 import 'package:agysha/screens/settings_screen.dart';
+import 'package:agysha/services/haptics.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/reality_check_service.dart';
+import 'package:agysha/services/sounds.dart';
 import 'package:agysha/theme/app_theme.dart';
 
 /// Второй раунд полировки настроек:
@@ -48,6 +50,32 @@ void main() {
       await tmpDir.delete(recursive: true);
     } catch (_) {}
   });
+
+  /// Прокрутка настроек за левое поле карточки. Барабан тем теперь
+  /// забирает вертикальный драг на себе (иначе страница уезжала под пальцем,
+  /// пока крутишь колесо), поэтому жест берём вне круга.
+  Future<void> scrollSettings(WidgetTester tester, Finder scrollable) async {
+    final rect = tester.getRect(scrollable);
+    await tester.dragFrom(
+      Offset(rect.left + 12, rect.center.dy),
+      const Offset(0, -320),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+  }
+
+  Future<void> revealInSettings(
+    WidgetTester tester,
+    Finder target,
+    Finder scrollable,
+  ) async {
+    for (var i = 0; i < 20 && target.evaluate().isEmpty; i++) {
+      await scrollSettings(tester, scrollable);
+    }
+    if (target.evaluate().isNotEmpty) {
+      await tester.ensureVisible(target.first);
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+  }
 
   Future<void> openSettings(WidgetTester tester) async {
     tester.view.physicalSize = const Size(411, 891) * 3;
@@ -209,6 +237,130 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets('барабан: кольцо не схлопывается за оборот и не листает экран', (
+    tester,
+  ) async {
+    await openSettings(tester);
+    final revolver = find.byKey(const ValueKey('theme_revolver'));
+    await tester.ensureVisible(revolver);
+    await tester.pump(const Duration(milliseconds: 200));
+    final rect = tester.getRect(revolver);
+
+    // Каморы — кружки с маленькими значками (крупные — хаб и указатель).
+    Offset chamberCenterOf(Element e) => e.renderObject is RenderBox
+        ? (e.renderObject! as RenderBox).localToGlobal(Offset.zero) +
+              (e.renderObject! as RenderBox).size.center(Offset.zero)
+        : Offset.zero;
+
+    List<Offset> dots() => find
+        .descendant(of: revolver, matching: find.byType(Icon))
+        .evaluate()
+        .where((e) => ((e.widget as Icon).size ?? 24) <= 20)
+        .map(chamberCenterOf)
+        .toList();
+
+    // Центр и радиус берём по самим каморам: у карточки ещё есть подпись
+    // и подсказка снизу, и её центр — не центр круга.
+    final start = dots();
+    final center = start.reduce((a, b) => a + b) / start.length.toDouble();
+    final radius =
+        start.map((o) => (o - center).distance).reduce((a, b) => a + b) /
+        start.length;
+
+    final scrollPos = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .pixels;
+
+    // Два полных оборота по каморам: раньше позиция уходила за границу
+    // колеса, и все каморы съезжались в один сектор — это и читалось как
+    // «дёргает и тупо останавливается».
+    for (var lap = 0; lap < 12; lap++) {
+      final gesture = await tester.startGesture(
+        center +
+            Offset(
+              radius * math.cos(-math.pi / 2),
+              radius * math.sin(-math.pi / 2),
+            ),
+      );
+      const steps = 6;
+      for (var i = 1; i <= steps; i++) {
+        final a = (-90 + 36 * i / steps) * math.pi / 180;
+        await gesture.moveTo(
+          center + Offset(radius * math.cos(a), radius * math.sin(a)),
+        );
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      // Первый кадр запускает доводку, второй доводит её до конца.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1100));
+      // Каждый оборот заканчивается ровно на каморе: если позиция копит
+      // дробный сдвиг, барабан замирает между двумя и не подсвечивает ни одну.
+      final lapTop = center + Offset(0, -radius);
+      final lapNearest = dots()
+          .map((o) => (o - lapTop).distance)
+          .reduce((a, b) => a < b ? a : b);
+      expect(
+        lapNearest,
+        lessThan(radius * 0.12),
+        reason: 'оборот ${lap + 1}: камора должна встать под указатель',
+      );
+    }
+
+    final positions = dots();
+    expect(positions.length, greaterThanOrEqualTo(8));
+    final distinct = positions
+        .map((o) => '${o.dx.toStringAsFixed(1)}:${o.dy.toStringAsFixed(1)}')
+        .toSet();
+    expect(
+      distinct.length,
+      positions.length,
+      reason: 'каморы должны стоять по кругу, а не в одной точке',
+    );
+    // И стоять по всему кругу: при съехавшей позиции каморы сбиваются в
+    // узкий сектор.
+    var spread = 0.0;
+    for (final a in positions) {
+      for (final b in positions) {
+        final d = (a - b).distance;
+        if (d > spread) spread = d;
+      }
+    }
+    expect(
+      spread,
+      greaterThan(rect.width * 0.5),
+      reason: 'каморы должны быть разнесены по окружности барабана',
+    );
+
+    // Главное: под указателем (верх круга) стоит камора выбранной темы.
+    // Если позиция уехала за границу колеса, ни одна камора туда не встаёт
+    // и барабан «тупо останавливается» без подсветки.
+    final centroid =
+        positions.reduce((a, b) => a + b) / positions.length.toDouble();
+    final orbit =
+        positions.map((o) => (o - centroid).distance).reduce((a, b) => a + b) /
+        positions.length;
+    final top = centroid + Offset(0, -orbit);
+    final nearest = positions
+        .map((o) => (o - top).distance)
+        .reduce((a, b) => a < b ? a : b);
+    expect(
+      nearest,
+      lessThan(radius * 0.12),
+      reason: 'выбранная камора должна стоять под указателем барабана',
+    );
+
+    // Кручение барабана не должно прокручивать сам список настроек.
+    final after = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .pixels;
+    expect(after, moreOrLessEquals(scrollPos, epsilon: 1));
+
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   testWidgets('кнопки «Визителла» и «Угостить кофе»: 56 px, текст по центру', (
     tester,
   ) async {
@@ -216,7 +368,7 @@ void main() {
     final list = find.byType(Scrollable).first;
     for (final label in <String>['Визителла', 'Угостить кофе']) {
       final text = find.text(label);
-      await tester.scrollUntilVisible(text, 320, scrollable: list);
+      await revealInSettings(tester, text, list);
       await tester.pump(const Duration(milliseconds: 400));
 
       final button = find
@@ -364,5 +516,55 @@ void main() {
     expect(idle.r, greaterThan(0.7));
     expect(idle.a, lessThan(0.7)); // полупрозрачный
     expect(active.a, greaterThan(idle.a)); // при прокрутке плотнее
+  });
+
+  testWidgets('вибрация и звуки — один пункт, оба отклика работают', (
+    tester,
+  ) async {
+    await openSettings(tester);
+    final scrollable = find.byType(Scrollable).first;
+    final title = find.text('Вибрация и звуки');
+    await revealInSettings(tester, title, scrollable);
+    expect(title, findsOneWidget, reason: 'пункт объединён и подписан');
+    expect(
+      find.text('Вибрация'),
+      findsNothing,
+      reason: 'отдельной строки «Вибрация» больше нет',
+    );
+    expect(
+      find.text('Звуки'),
+      findsNothing,
+      reason: 'отдельной строки «Звуки» больше нет',
+    );
+
+    final tile = find.ancestor(of: title, matching: find.byType(ListTile)).first;
+    final vib = find.descendant(
+      of: tile,
+      matching: find.byIcon(Icons.vibration),
+    );
+    final snd = find.descendant(
+      of: tile,
+      matching: find.byIcon(Icons.volume_up_outlined),
+    );
+    expect(vib, findsOneWidget);
+    expect(snd, findsOneWidget);
+
+    final wasHaptics = Haptics.enabled;
+    await tester.tap(vib);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(Haptics.enabled, !wasHaptics, reason: 'переключатель вибрации жив');
+
+    final wasSounds = Sounds.enabled;
+    await tester.tap(snd);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(Sounds.enabled, !wasSounds, reason: 'переключатель звука жив');
+
+    // Возвращаем как было, чтобы не влиять на другие тесты.
+    await tester.tap(vib);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(snd);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(Haptics.enabled, wasHaptics);
+    expect(Sounds.enabled, wasSounds);
   });
 }

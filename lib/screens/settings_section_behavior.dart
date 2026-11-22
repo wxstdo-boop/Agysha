@@ -212,9 +212,10 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
               ),
             ),
             const Divider(height: 1),
-            // Вибрация: гасит ВСЕ отклики — и прямые вызовы, и плеск
-            // кнопок. Тот же объёмный переключатель, что у соседних
-            // строк, чтобы карточка читалась единым блоком.
+            // Вибрация и звуки — один пункт: два отклика на нажатие жили
+            // отдельными строками и читались как разные настройки. Теперь
+            // одна строка и две круглые кнопки-переключателя справа: каждая
+            // гасит свой отклик и сразу запоминается.
             PressScale(
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -222,57 +223,33 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 leading: Icon(
-                  Icons.vibration,
+                  Icons.touch_app_outlined,
                   color: theme.colorScheme.primary,
                 ),
-                title: Text(Translations.t('haptics', context)),
+                title: Text(Translations.t('feel', context)),
                 subtitle: Text(
-                  Translations.t('hapticsDesc', context),
+                  Translations.t('feelDesc', context),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                onTap: () async {
-                  final v = !_haptics;
-                  await _setHaptics(v);
-                },
-                trailing: VolumetricSwitch(
-                  value: _haptics,
-                  onChanged: _setHaptics,
-                  activeColor: theme.colorScheme.primary,
-                  semanticLabel: Translations.t('haptics', context),
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-            // «Звуки»: короткие системные отклики на подтверждениях.
-            // Выключены по умолчанию — звук навязчивее вибрации.
-            PressScale(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                leading: Icon(
-                  Icons.volume_up_outlined,
-                  color: theme.colorScheme.primary,
-                ),
-                title: Text(Translations.t('sounds', context)),
-                subtitle: Text(
-                  Translations.t('soundsDesc', context),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                onTap: () async {
-                  final v = !_sounds;
-                  await _setSounds(v);
-                },
-                trailing: VolumetricSwitch(
-                  value: _sounds,
-                  onChanged: _setSounds,
-                  activeColor: theme.colorScheme.primary,
-                  semanticLabel: Translations.t('sounds', context),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _FeelToggle(
+                      icon: Icons.vibration,
+                      active: _haptics,
+                      semanticLabel: Translations.t('haptics', context),
+                      onTap: () => _setHaptics(!_haptics),
+                    ),
+                    const SizedBox(width: 8),
+                    _FeelToggle(
+                      icon: Icons.volume_up_outlined,
+                      active: _sounds,
+                      semanticLabel: Translations.t('sounds', context),
+                      onTap: () => _setSounds(!_sounds),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -314,6 +291,70 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
       ),
     ),
   ];
+}
+
+/// Круглая кнопка-переключатель отклика: включённый отклик залит мягким
+/// акцентом, выключенный — только контуром. Размер 40 px, чтобы пара кнопок
+/// не выходила за высоту строки и попадала в палец без промахов.
+class _FeelToggle extends StatelessWidget {
+  const _FeelToggle({
+    required this.icon,
+    required this.active,
+    required this.onTap,
+    required this.semanticLabel,
+  });
+
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+  final String semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      toggled: active,
+      label: semanticLabel,
+      child: PressScale(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: active
+                  ? cs.primary.withValues(alpha: 0.16)
+                  : Colors.transparent,
+              border: Border.all(
+                color: active
+                    ? cs.primary.withValues(alpha: 0.55)
+                    : cs.onSurfaceVariant.withValues(alpha: 0.28),
+                width: 1.4,
+              ),
+            ),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: Icon(
+                icon,
+                key: ValueKey<bool>(active),
+                size: 20,
+                color: active
+                    ? cs.primary
+                    : cs.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Строка «Последнее сохранение: ЧЧ:ММ:СС».

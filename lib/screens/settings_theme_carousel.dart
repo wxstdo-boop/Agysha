@@ -118,13 +118,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// два касания выдают по очереди противоположные углы и барабан дёргается.
   int? _pointerId;
   Offset _lastLocal = Offset.zero;
-  Offset _downLocal = Offset.zero;
   double _lastAngle = 0;
-
-  /// Жест оказался прокруткой страницы, а не вращением барабана. Вертикальные
-  /// драги мы НЕ перехватываем (иначе список настроек не листался бы с
-  /// барабана), поэтому распознаём прокрутку сами и просто не крутим колесо.
-  bool _scrollGesture = false;
   double _lastRadius = 0;
 
   int get _n => widget.entries.length;
@@ -159,7 +153,9 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// Довод без осознанного выбора: анимируем позицию, тему не трогаем.
   void _glideTo(int target) {
     final token = ++_spinToken;
-    final goal = target.toDouble();
+    // Идём по короткой дуге: от каморы 9 к каморе 0 барабан проворачивается
+    // на одну позицию, а не на девять назад через весь круг.
+    final goal = _index.toDouble() + _shortestDelta(_index, target);
     final dist = (goal - _pos).abs();
     _spin.stop();
     if (dist < 0.02) {
@@ -236,9 +232,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _onPointerDown(PointerDownEvent event) {
     if (_pointerId != null) return;
     _pointerId = event.pointer;
-    _scrollGesture = false;
     _lastLocal = event.localPosition;
-    _downLocal = event.localPosition;
     final v = event.localPosition - Offset(_side / 2, _side / 2);
     _lastRadius = v.distance;
     _lastAngle = math.atan2(v.dy, v.dx);
@@ -257,17 +251,8 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// берём угол пальца относительно центра: барабан идёт строго за пальцем,
   /// в какую бы сторону его ни вели.
   void _onPointerMove(PointerMoveEvent event) {
-    if (_pointerId != event.pointer || _scrollGesture) return;
+    if (_pointerId != event.pointer) return;
     final local = event.localPosition;
-    final total = local - _downLocal;
-    if (total.distance > 12 && total.dy.abs() > total.dx.abs() * 1.2) {
-      // Палец пошёл вверх/вниз — это листание настроек. Барабан отпускаем
-      // без довода и остаёмся на прежней каморе.
-      _scrollGesture = true;
-      _dragging = false;
-      setState(() => _pos = _dragStartPos);
-      return;
-    }
     final v = local - Offset(_side / 2, _side / 2);
     final radius = v.distance;
     final stepAngle = 2 * math.pi / _n;
@@ -360,35 +345,44 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
               SizedBox(
                 width: side,
                 height: side,
-                child: Listener(
+                child: GestureDetector(
+                  // Пока палец на барабане, список настроек не листается:
+                  // иначе страница уезжала под пальцем и мешала крутить.
+                  // За пределами круга прокрутка работает как обычно.
                   behavior: HitTestBehavior.opaque,
-                  onPointerDown: _onPointerDown,
-                  onPointerMove: _onPointerMove,
-                  onPointerUp: _onPointerUp,
-                  onPointerCancel: _onPointerUp,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: <Widget>[
-                      _drumShell(cs, side),
-                      for (var i = 0; i < _n; i++)
-                        _chamber(cs, i, side, widget.entries[i]),
-                      _hub(cs, entry, hub),
-                      // Указатель — единственная неподвижная деталь: камора,
-                      // вставшая под него, и есть выбранная тема.
-                      Positioned(
-                        top: 0,
-                        child: Icon(
-                          Icons.arrow_drop_down,
-                          size: 30,
-                          // Указатель — единственный цветной акцент барабана:
-                          // приглушённо-красный, чтобы сразу читался как
-                          // стрелка, но не спорил с монохромными каморами.
-                          color: const Color(
-                            0xFFFF3B30,
-                          ).withValues(alpha: 0.55),
+                  onVerticalDragStart: (_) {},
+                  onVerticalDragUpdate: (_) {},
+                  onVerticalDragEnd: (_) {},
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: _onPointerDown,
+                    onPointerMove: _onPointerMove,
+                    onPointerUp: _onPointerUp,
+                    onPointerCancel: _onPointerUp,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        _drumShell(cs, side),
+                        for (var i = 0; i < _n; i++)
+                          _chamber(cs, i, side, widget.entries[i]),
+                        _hub(cs, entry, hub),
+                        // Указатель — единственная неподвижная деталь: камора,
+                        // вставшая под него, и есть выбранная тема.
+                        Positioned(
+                          top: 0,
+                          child: Icon(
+                            Icons.arrow_drop_down,
+                            size: 30,
+                            // Указатель — единственный цветной акцент барабана:
+                            // приглушённо-красный, чтобы сразу читался как
+                            // стрелка, но не спорил с монохромными каморами.
+                            color: const Color(
+                              0xFFFF3B30,
+                            ).withValues(alpha: 0.55),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -560,7 +554,13 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// Одна камора: кружок в цветах своей темы, стоит на окружности.
   Widget _chamber(ColorScheme cs, int index, double side, _ThemeEntry entry) {
     final step = 2 * math.pi / _n;
-    final delta = (index - _pos) * step;
+    // Смещение берём по КОРОТКОЙ дуге и через остаток: барабан можно крутить
+    // сколько угодно в любую сторону, и кольцо не «схлопывается» в один
+    // сектор в тот момент, когда позиция переваливает за последнюю камору.
+    var off = (index - _pos) % _n;
+    if (off > _n / 2) off -= _n;
+    if (off < -_n / 2) off += _n;
+    final delta = off * step;
     final theta = -math.pi / 2 + delta;
     final orbit = side / 2 - 24;
     final center = side / 2;

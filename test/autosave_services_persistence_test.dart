@@ -9,6 +9,7 @@ import 'package:agysha/models/alarm.dart';
 import 'package:agysha/models/task.dart';
 import 'package:agysha/services/alarm_service.dart';
 import 'package:agysha/services/json_file.dart';
+import 'package:agysha/services/nutrition_service.dart';
 import 'package:agysha/services/task_service.dart';
 
 /// Автосохранение пишет все разделы, а не только привычки: правка задачи и
@@ -116,6 +117,36 @@ void main() {
       saved['note'],
       'моя правка',
       reason: 'правка из приложения должна попасть в файл',
+    );
+  });
+
+  test('автосохранение не стирает питание до открытия раздела', () async {
+    // Реальный баг: питание не читалось при старте, а forceSave писал файл из
+    // памяти — пустой список затирал сохранённые приёмы пищи.
+    final meal = Meal(
+      id: 'm-auto-1',
+      name: 'Суп',
+      calories: 320,
+      date: DateTime.now(),
+    );
+    await JsonFile.write('nutrition_meals', jsonEncode([meal.toJson()]));
+
+    await NutritionService().forceSave();
+
+    final raw = await JsonFile.read('nutrition_meals');
+    expect(raw, isNotNull, reason: 'файл питания не должен исчезнуть');
+    expect(jsonDecode(raw!), hasLength(1));
+  });
+
+  test('питание читается до старта автосохранения', () async {
+    final source = File('lib/main.dart').readAsStringSync();
+    final load = source.indexOf('NutritionService().load()');
+    final start = source.indexOf('startAutoSave()');
+    expect(load, greaterThan(0), reason: 'старт должен читать питание');
+    expect(
+      load,
+      lessThan(start),
+      reason: 'питание грузится раньше, чем включается автосохранение',
     );
   });
 }

@@ -24,6 +24,7 @@ import '../utils/design_tokens.dart';
 import '../utils/motion_prefs.dart';
 import '../utils/snackbar.dart';
 import '../widgets/audio_spectrum_ring.dart';
+import '../widgets/auto_save_on_exit.dart';
 import '../widgets/gift_card_3d.dart';
 import '../widgets/inline_keyboard.dart';
 import '../widgets/music_pulse_ring.dart';
@@ -283,6 +284,19 @@ class _ProfileScreenState extends State<ProfileScreen>
   void _toast(String message, {IconData icon = Icons.check_circle_outline}) {
     if (!mounted) return;
     showBeautifulSnackBar(context, message: message, icon: icon);
+  }
+
+  /// Автосохранение: на выходе тихо записываем отредактированное имя.
+  void _exitWithAutoSave() {
+    final name = _nameCtrl.text.trim();
+    if (name == _service.name) {
+      Navigator.of(context).pop();
+      return;
+    }
+    // Как и кнопка «Сохранить», но без снекбара — человек уже уходит.
+    _service.setName(name).whenComplete(() {
+      if (mounted) Navigator.of(context).pop();
+    });
   }
 
   Future<void> _saveName() async {
@@ -1702,47 +1716,50 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(Translations.t('profile', context, 'Профиль')),
-        leading: const BackButtonTooltip(),
-        centerTitle: true,
-      ),
-      body: AnimatedBuilder(
-        animation: _service,
-        // Ленивый список, а НЕ список готовых детей: раньше все девять
-        // карточек (вместе с сотнями строк треков и полусотней строк
-        // рейтинга) собирались ещё до первого кадра. Теперь строятся только
-        // видимые, и открытие профиля не зависит от размера коллекции.
-        builder: (context, _) {
-          final cards = <Widget Function(ThemeData)>[
-            _headerCard,
-            _nameCard,
-            _onlineCard,
-            _musicCard,
-            _leaderboardCard,
-            // Очки — сразу после рейтинга: «за что» читается рядом с «кто
-            // сколько», а карточки музыки и рейтинга остаются на своих местах.
-            _scoreCard,
-            _giftsCard,
-            _eventsCard,
-          ];
-          return ListView.builder(
-            controller: _scrollCtrl,
-            padding: const EdgeInsets.fromLTRB(
-              Spacing.md,
-              Spacing.sm,
-              Spacing.md,
-              Spacing.xxl,
-            ),
-            itemCount: cards.length * 2 - 1,
-            itemBuilder: (context, i) {
-              if (i.isOdd) return const SizedBox(height: Spacing.md);
-              final card = cards[i ~/ 2];
-              return RepaintBoundary(child: card(theme));
-            },
-          );
-        },
+    return AutoSaveOnExit(
+      onExit: _exitWithAutoSave,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(Translations.t('profile', context, 'Профиль')),
+          leading: const BackButtonTooltip(),
+          centerTitle: true,
+        ),
+        body: AnimatedBuilder(
+          animation: _service,
+          // Ленивый список, а НЕ список готовых детей: раньше все девять
+          // карточек (вместе с сотнями строк треков и полусотней строк
+          // рейтинга) собирались ещё до первого кадра. Теперь строятся только
+          // видимые, и открытие профиля не зависит от размера коллекции.
+          builder: (context, _) {
+            final cards = <Widget Function(ThemeData)>[
+              _headerCard,
+              _nameCard,
+              _onlineCard,
+              _musicCard,
+              _leaderboardCard,
+              // Очки — сразу после рейтинга: «за что» читается рядом с «кто
+              // сколько», а карточки музыки и рейтинга остаются на своих местах.
+              _scoreCard,
+              _giftsCard,
+              _eventsCard,
+            ];
+            return ListView.builder(
+              controller: _scrollCtrl,
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.md,
+                Spacing.sm,
+                Spacing.md,
+                Spacing.xxl,
+              ),
+              itemCount: cards.length * 2 - 1,
+              itemBuilder: (context, i) {
+                if (i.isOdd) return const SizedBox(height: Spacing.md);
+                final card = cards[i ~/ 2];
+                return RepaintBoundary(child: card(theme));
+              },
+            );
+          },
+        ),
       ),
     );
   }

@@ -23,6 +23,7 @@ import '../widgets/smooth_typing.dart';
 import '../widgets/smooth_keyboard_body.dart';
 import '../widgets/blood_speck.dart' show BloodSpeck, BloodSpeckPainter;
 import '../widgets/press_scale.dart';
+import '../widgets/auto_save_on_exit.dart';
 
 class AddAlarmScreen extends StatefulWidget {
   final Alarm? existing;
@@ -34,6 +35,8 @@ class AddAlarmScreen extends StatefulWidget {
 
 class _AddAlarmScreenState extends State<AddAlarmScreen> {
   late TimeOfDay _time;
+  /// Время на момент открытия формы: по нему видно, трогал ли человек что-то.
+  late TimeOfDay _initialTime;
   late List<int> _repeatDays;
   late TextEditingController _labelCtrl;
   late WakeUpTask _taskType;
@@ -73,6 +76,8 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
       _vibrate = true;
       _soundName = 'Default';
     }
+
+    _initialTime = _time;
 
     // ВАЖНО: при редактировании существующего будильника НЕ перезагружаем
     // список из Alarm.sounds. Иначе удалённые звуки вернутся.
@@ -486,6 +491,26 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
     });
   }
 
+  /// Выход с формы при включённом автосохранении: сохраняем только то, что
+  /// человек реально менял. Просто открыть «новый будильник» и уйти назад
+  /// по-прежнему ничего не создаёт.
+  void _exitWithAutoSave() {
+    final touched =
+        _editing ||
+        _time != _initialTime ||
+        _repeatDays.isNotEmpty ||
+        _labelCtrl.text.trim().isNotEmpty ||
+        _taskType != WakeUpTask.none ||
+        _vibrate != true ||
+        _soundName != 'Default' ||
+        _customSoundPath != null;
+    if (!touched) {
+      Navigator.of(context).pop();
+      return;
+    }
+    _save();
+  }
+
   void _save() {
     final alarm = Alarm(
       id: widget.existing?.id ?? const Uuid().v4(),
@@ -511,12 +536,8 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
     final theme = Theme.of(context);
     final dayNames = Translations.dayNames(context);
 
-    return PopScope(
-      canPop: true,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        _save();
-      },
+    return AutoSaveOnExit(
+      onExit: _exitWithAutoSave,
       child: Scaffold(
         appBar: AppBar(
           title: Text(

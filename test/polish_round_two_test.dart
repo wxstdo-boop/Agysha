@@ -74,16 +74,22 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Доскроллить до блока «О приложении» и убедиться, что ссылки
-    // обёрнуты в PressScale (плавная отдача), а не голым InkWell.
-    await tester.dragUntilVisible(
-      find.text('GitLab'),
-      find.byType(Scrollable).last,
-      const Offset(0, -200),
+    // Доскроллить до блока «О приложении» и убедиться, что ссылки обёрнуты
+    // в PressScale (плавная отдача), а не голым InkWell. Тянем список за
+    // точку ниже карусели тем: барабан сам забирает вертикальный драг
+    // (экран под ним не прокручивается), а блок «О приложении» ленивый.
+    final list = find.byWidgetPredicate(
+      (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
     );
-    await tester.pump(const Duration(milliseconds: 300));
+    expect(list, findsWidgets);
+    for (var i = 0; i < 40 && find.text('GitFlic').evaluate().isEmpty; i++) {
+      await tester.dragFrom(const Offset(205, 820), const Offset(0, -300));
+      await tester.pump(const Duration(milliseconds: 200));
+    }
 
     for (final label in ['GitFlic', 'GitHub', 'GitLab']) {
+      await tester.ensureVisible(find.text(label));
+      await tester.pump(const Duration(milliseconds: 200));
       final pressScales = find.ancestor(
         of: find.text(label),
         matching: find.byType(PressScale),

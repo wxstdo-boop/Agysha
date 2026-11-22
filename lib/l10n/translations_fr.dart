@@ -664,6 +664,8 @@ const Map<String, String> _fr = {
   'clearCache': 'Vider le cache',
   'clearCacheDesc': 'Libérer l’espace des fichiers temporaires',
   'clearCacheDone': 'Cache vidé !',
+  'feel': 'Vibration et sons',
+  'feelDesc': 'Retour au toucher : vibration et son',
   'haptics': 'Vibration',
   'hapticsDesc': 'Courte vibration lors des appuis et bascules',
   'sounds': 'Sons',
