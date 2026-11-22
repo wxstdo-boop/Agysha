@@ -615,6 +615,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         finalAudioBytes = downloadedBytes;
         fingerprint = _fingerprintOf(finalAudioBytes);
       } else {
+        if (!mounted) return;
         _PhonkItem? catalogCandidate;
         for (final item in _PhonkCatalog.items) {
           final itemWav = _synthesizePhonkWav(bpm: item.bpm, seed: item.seed);
