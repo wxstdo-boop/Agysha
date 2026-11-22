@@ -449,6 +449,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
 
             // Cache the created FlutterEngine for future use
             FlutterEngineCache.getInstance().put(OverlayConstants.CACHED_TAG, flutterEngine);
+            FlutterOverlayWindowPlugin.notifyEngineReady(flutterEngine);
         }
 
         // Create the MethodChannel with the properly initialized FlutterEngine

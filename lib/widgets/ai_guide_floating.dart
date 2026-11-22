@@ -806,6 +806,8 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                         textInputAction: TextInputAction.send,
                         onSubmitted: (_) => _send(),
                         // Автопробел клавиатуры — убираем подсказки.
+                        spellCheckConfiguration:
+                            SpellCheckConfiguration.disabled(),
                         enableSuggestions: false,
                         autocorrect: false,
                         // Каретка мигает плавно (fade), а не резко вкл/выкл.

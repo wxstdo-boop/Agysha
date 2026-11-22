@@ -1148,7 +1148,9 @@ class _OverlayChatState extends State<_OverlayChat>
             color: const Color(0xFF0A0A0C),
             borderRadius: BorderRadius.circular(26),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.12),
+              // Обводка как у маркера перемещения (пузыря Ады), но тоньше:
+              // окно читается «своим» элементом оверлея, а не белой рамкой.
+              color: cs.outlineVariant.withValues(alpha: 0.45),
               width: 1,
             ),
             // Тени НЕ кладём: оверлей рисуется на поверхности, обрезанной
@@ -1365,6 +1367,16 @@ class _OverlayChatState extends State<_OverlayChat>
                     ),
                     builder: (style) => TextField(
                       style: style,
+                      // Никаких жёлтых «спеллчек»-подчёркиваний от IME:
+                      // в мини-окне они выглядели как артефакт вёрстки.
+                      // enableSuggestions гасит подсказки, а
+                      // spellCheckConfiguration — сам спеллчекер Android.
+                      spellCheckConfiguration:
+                          SpellCheckConfiguration.disabled(),
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
                       magnifierConfiguration:
                           TextMagnifierConfiguration.disabled,
                       // Поле мини-окна не должно открывать выделение/тулбар:

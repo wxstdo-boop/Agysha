@@ -426,6 +426,10 @@ class _AiChatBodyState extends State<_AiChatBody>
   final Set<String> _liked = {};
   bool _busy = false;
   bool _error = false;
+  // Повтор с плашки: плашка остаётся на месте (только кнопка становится
+  // спиннером), иначе при нажатии «обновить» лента прыгала вверх — плашка
+  // исчезала на мгновение и лэйаут пересобирался.
+  bool _retrying = false;
   String _errorMsg = '';
   bool _storageErrorShown = false;
   // Веб-поиск: значок перед быстрыми чипами плавно включает режим,
@@ -927,9 +931,16 @@ class _AiChatBodyState extends State<_AiChatBody>
           // easeInOutCubic «раскачивался» и первые ~150 мс стоял на месте —
           // это читалось как «дёрнуло и только потом поехало». easeOutCubic
           // трогается сразу и мягко тормозит у низа.
+          // Далёкий прыжок (больше ~полутора экранов) не анимируем: 380 мс
+          // проезда через всю историю читались как «авто и неплавный
+          // скролл». На короткой дистанции — мягкий проезд 260 мс.
+          if (pos.pixels > 1400) {
+            _scrollCtrl.jumpTo(0);
+            return;
+          }
           _scrollCtrl.animateTo(
             0,
-            duration: const Duration(milliseconds: 380),
+            duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
           );
         }
@@ -1269,13 +1280,17 @@ class _AiChatBodyState extends State<_AiChatBody>
         );
       }
       _busy = true;
-      _error = false;
+      // При повторе с плашки плашку НЕ убираем: её исчезновение сдвигало
+      // ленту вверх и читалось как «рефреш дёргает окно».
+      if (!keepUserBubble) _error = false;
     });
     _dotsCtrl.repeat();
     // Сохраняем ДО сетевого запроса: если окно закроют, фоновый ответ
     // допишется в уже сохранённую историю и не потеряет сообщение.
     await _saveHistory();
-    _scrollToBottom();
+    // На повторе с плашки ленту НЕ трогаем: прыжок к низу дёргал окно
+    // вверх под пальцем. Ответ сам мягко доедет, когда придёт.
+    if (!keepUserBubble) _scrollToBottom();
     try {
       final answer = await AiGuideService.send(
         userText: message,
@@ -1324,6 +1339,8 @@ class _AiChatBodyState extends State<_AiChatBody>
           _messages.removeRange(0, _messages.length - 1000);
         }
         _busy = false;
+        _error = false;
+        _retrying = false;
         _typingFade = false;
       });
       _saveHistory();
@@ -1346,6 +1363,7 @@ class _AiChatBodyState extends State<_AiChatBody>
       setState(() {
         _busy = false;
         _error = true;
+        _retrying = false;
         _errorMsg = _friendlyAiError(e);
         _typingFade = false;
       });
@@ -1367,7 +1385,9 @@ class _AiChatBodyState extends State<_AiChatBody>
       orElse: () => AiMessage(isUser: true, text: ''),
     );
     if (lastUser.text.isEmpty) return;
-    setState(() => _error = false);
+    if (_busy) return;
+    // Плашку не прячем: она гаснет только когда ответ реально пришёл.
+    setState(() => _retrying = true);
     _send(text: lastUser.text, keepUserBubble: true);
   }
 
@@ -1910,6 +1930,7 @@ class _AiChatBodyState extends State<_AiChatBody>
         // Плашка «ИИ на курорте» (с кодом ошибки для диагностики).
         _AnimatedErrorPlaque(
           visible: _error,
+          retrying: _retrying,
           errorMsg: _errorMsg,
           onRetry: _retryLast,
         ),
@@ -2097,6 +2118,8 @@ class _AiChatBodyState extends State<_AiChatBody>
                               maxLines: 4,
                               maxLength: 13000,
                               inputFormatters: [WideDashFormatter()],
+                              spellCheckConfiguration:
+                                  SpellCheckConfiguration.disabled(),
                               enableSuggestions: false,
                               autocorrect: false,
                               contextMenuBuilder: minimalContextMenuBuilder,

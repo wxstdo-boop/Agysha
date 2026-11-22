@@ -640,10 +640,12 @@ class _TypingIndicator extends StatelessWidget {
 /// Плавная плашка «ИИ на курорте, подожди немного» с кнопкой повтора.
 class _AnimatedErrorPlaque extends StatelessWidget {
   final bool visible;
+  final bool retrying;
   final String errorMsg;
   final VoidCallback onRetry;
   const _AnimatedErrorPlaque({
     required this.visible,
+    this.retrying = false,
     this.errorMsg = '',
     required this.onRetry,
   });
@@ -737,20 +739,41 @@ class _AnimatedErrorPlaque extends StatelessWidget {
                         ],
                       ),
                     ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 34,
-                        minHeight: 34,
-                      ),
-                      icon: Icon(
-                        Icons.refresh_rounded,
-                        color: cs.primary,
-                        size: 18,
-                      ),
-                      tooltip: Translations.t('retry', context, 'Retry'),
-                      onPressed: onRetry,
+                    // Фиксированный слот 34×34: смена иконки на спиннер не
+                    // меняет размер плашки и не двигает ленту.
+                    SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: retrying
+                          ? Center(
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: cs.primary,
+                                ),
+                              ),
+                            )
+                          : IconButton(
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 34,
+                                minHeight: 34,
+                              ),
+                              icon: Icon(
+                                Icons.refresh_rounded,
+                                color: cs.primary,
+                                size: 18,
+                              ),
+                              tooltip: Translations.t(
+                                'retry',
+                                context,
+                                'Retry',
+                              ),
+                              onPressed: onRetry,
+                            ),
                     ),
                   ],
                 ),

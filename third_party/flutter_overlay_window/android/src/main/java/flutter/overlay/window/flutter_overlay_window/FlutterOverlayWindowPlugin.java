@@ -45,6 +45,28 @@ public class FlutterOverlayWindowPlugin implements
     private Result pendingResult;
     final int REQUEST_CODE_FOR_OVERLAY_PERMISSION = 1248;
 
+    /**
+     * Хук для приложения: движок оверлея создан. Каналы, объявленные в
+     * MainActivity, живут только в ГЛАВНОМ движке, поэтому оверлею нужен
+     * этот колбэк, чтобы зарегистрировать свои (например, чтение экрана).
+     */
+    public interface EngineReadyListener {
+        void onOverlayEngineReady(FlutterEngine engine);
+    }
+
+    public static EngineReadyListener engineReadyListener;
+
+    static void notifyEngineReady(FlutterEngine engine) {
+        EngineReadyListener listener = engineReadyListener;
+        if (listener != null && engine != null) {
+            try {
+                listener.onOverlayEngineReady(engine);
+            } catch (RuntimeException error) {
+                android.util.Log.e("OverlayPlugin", "engineReady listener failed", error);
+            }
+        }
+    }
+
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
         this.context = flutterPluginBinding.getApplicationContext();
@@ -150,6 +172,7 @@ public class FlutterOverlayWindowPlugin implements
                     "overlayMain");
             FlutterEngine engine = enn.createAndRunEngine(context, dEntry);
             FlutterEngineCache.getInstance().put(OverlayConstants.CACHED_TAG, engine);
+            notifyEngineReady(engine);
         }
     }
 

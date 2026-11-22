@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -47,5 +49,53 @@ void main() {
     expect(prompt, contains('ТОЛЬКО НА РУССКОМ'));
     // Служебные секции запрещены и не должны встречаться как заголовок.
     expect(prompt, isNot(contains('\n### ')));
+  });
+
+  test('бредовое «я йду тебе 2932 песни» не показывается', () {
+    expect(
+      AiGuideService.looksLikeNonsense('Милый, я йду тебе 2932 песни'),
+      isTrue,
+    );
+    expect(
+      AiGuideService.looksLikeNonsense('Я уже купила тебе 120 роз, встречай'),
+      isTrue,
+    );
+  });
+
+  test('честные числа из данных пользователя не режутся', () {
+    expect(
+      AiGuideService.looksLikeNonsense('У тебя 120 сообщений в чате с Адой'),
+      isFalse,
+    );
+    expect(
+      AiGuideService.looksLikeNonsense(
+        'Сегодня 300 шагов и 4 привычки закрыто',
+      ),
+      isFalse,
+    );
+  });
+
+  test('анти-бред есть и в коротком промпте бесплатных моделей', () {
+    final src = File(
+      'lib/services/ai_guide_service_providers.dart',
+    ).readAsStringSync();
+    expect(src, contains('я иду тебе 2932 песни'));
+    expect(src, contains('Не называй случайные большие числа'));
+  });
+
+  test('Pollinations сначала GET: он не упирается в лимит POST', () {
+    final src = File(
+      'lib/services/ai_guide_service_providers.dart',
+    ).readAsStringSync();
+    final fn = src.indexOf('Future<String> _sendPollinations(');
+    expect(fn, greaterThan(0));
+    final body = src.substring(fn);
+    final get = body.indexOf('.get(');
+    final post = body.indexOf('.post(');
+    expect(get, greaterThan(0));
+    expect(post, greaterThan(0));
+    // GET-маршрут стоит ПЕРВЫМ, POST — только запасной.
+    expect(get, lessThan(post));
+    expect(body, contains('_pollinationsPrompt('));
   });
 }

@@ -226,7 +226,9 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
       final body = utf8.decode(resp.bodyBytes, allowMalformed: true);
       // Бот-челлендж: если блоков результатов нет — выходим тихо.
       if (!body.contains('b_algo')) return;
-      final blockRe = RegExp(r'<li class="b_algo"[^>]*>.*?</li>', dotAll: true);
+      final blockRe = RegExp(
+        r'<li class="b_algo"[^>]*>[\s\S]*?(?=<li class="b_algo"|</ol>)',
+      );
       final titleRe = RegExp(r'<h2[^>]*>\s*<a[^>]*>(.*?)</a>', dotAll: true);
       final hrefRe = RegExp(r'<h2[^>]*>\s*<a[^>]*href="([^"]+)"');
       final snipRe = RegExp(r'<p[^>]*>(.*?)</p>', dotAll: true);

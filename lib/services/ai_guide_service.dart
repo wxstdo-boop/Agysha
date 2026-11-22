@@ -128,6 +128,15 @@ class AiGuideService {
         _resetAnswering(name);
         return null;
       }
+      if (_isNonsense(result)) {
+        // Модель «действует» вместо ответа — этот текст не показываем.
+        _markCooldown(name);
+        _recordProviderTrace(
+          '$name: \u0431\u0440\u0435\u0434 \u0432 \u043e\u0442\u0432\u0435\u0442\u0435',
+        );
+        _resetAnswering(name);
+        return null;
+      }
       if (_tooShortAnswer(result)) {
         _recordProviderTrace(
           '$name: \u043e\u0442\u0432\u0435\u0442 \u043e\u0431\u0440\u0443\u0431\u043b\u0435\u043d',
@@ -252,6 +261,11 @@ class AiGuideService {
         'Не заканчивай многоточием или обрубком — последнее слово должно '
         'быть целым. Если ответ про приложение Agysha — назови конкретный '
         'раздел, кнопку или шаг.\n'
+        'АНТИ-БРЕД: не выдумывай событий, которых не было, и не приписывай '
+        'себе физические действия («я иду тебе 2932 песни», «я тебе купила», '
+        '«я уже у тебя»). Не называй случайные большие числа и не сочиняй '
+        'факты о пользователе. Если чего-то не знаешь — скажи прямо и '
+        'коротко, без фантазий.\n'
         '$context$liked';
   }
 
@@ -435,6 +449,27 @@ class AiGuideService {
     if (s.length > 300) return false;
     return _refusalRe.hasMatch(s);
   }
+
+  /// Бредовые «действия», которые модель приписывает себе: «я йду тебе
+  /// 2932 песни», «я уже купила тебе 120 роз». Это не ответ на вопрос —
+  /// такой текст уводит к следующему провайдеру.
+  ///
+  /// Ловим только связку «я + глагол действия + тебе/ему + число + предмет»:
+  /// без неё правило срезало бы честные числа из данных пользователя
+  /// («120 сообщений», «300 шагов»).
+  static final RegExp _nonsenseRe = RegExp(
+    r'я\s+(?:уже\s+)?(?:иду|йду|шлю|отправляю|дарю|подарю|принесу|'
+    r'куплю|купила|насчитала|посчитала|приготовила|включила|поставила)\s+'
+    r'(?:тебе|ему|ей|тебя)\s+[\d\s.,]{2,}\s*[а-яёa-z]+',
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  static bool _isNonsense(String t) => _nonsenseRe.hasMatch(t.trim());
+
+  /// Обёртка над [_isNonsense] для тестов: правило должно ловить «я йду тебе
+  /// 2932 песни» и не трогать честные числа из данных пользователя.
+  static bool looksLikeNonsense(String t) => _isNonsense(t);
 
   /// Публичная обёртка над [cleanAnswerText] для тестов чистки ответа:
   /// служебные строки вырезаются, а живая фраза Ады остаётся.
@@ -660,6 +695,13 @@ class AiGuideService {
 
   static String? _asString(dynamic value) => value is String ? value : null;
 
+  /// Короткий фрагмент тела ошибки для трассы провайдера: без ключей и
+  /// длинных полотен, только суть (401/429/лимит).
+  static String _shortBody(String body) {
+    final flat = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return flat.length <= 120 ? flat : '${flat.substring(0, 120)}…';
+  }
+
   static Map<String, dynamic> _decodeArguments(dynamic value) {
     if (value is Map) return _asMap(value);
     if (value is! String || value.trim().isEmpty) {
@@ -705,7 +747,12 @@ class AiGuideService {
     var webCtx = '';
     if (useWebSearch) {
       try {
-        webCtx = await webSearch(userText, languageCode);
+        // Поиск не должен съедать бюджет ответа: 7 с на выдачу, иначе
+        // Ада «думает» полминуты и выглядит сломанной.
+        webCtx = await webSearch(
+          userText,
+          languageCode,
+        ).timeout(const Duration(seconds: 7));
         if (webCtx.isNotEmpty) {
           effectiveText =
               'ВЕБ-ПОИСК по запросу пользователя включён. Ниже — свежие '
@@ -756,7 +803,7 @@ class AiGuideService {
             effectiveText,
             history,
             languageCode,
-          ).timeout(const Duration(seconds: 22));
+          ).timeout(const Duration(seconds: 18));
         } catch (_) {
           answer = '';
         }
@@ -766,7 +813,7 @@ class AiGuideService {
             userText,
             history,
             languageCode,
-          ).timeout(const Duration(seconds: 20));
+          ).timeout(const Duration(seconds: 14));
           webCtx = '';
         }
       } else {
@@ -774,7 +821,7 @@ class AiGuideService {
           effectiveText,
           history,
           languageCode,
-        ).timeout(const Duration(seconds: 25));
+        ).timeout(const Duration(seconds: 18));
       }
       // Гарантируем список источников: если Ада не перечислила их сама,
       // добавляем домены из найденного контекста в конец ответа.
@@ -807,7 +854,14 @@ class AiGuideService {
       }
       return answer;
     } on TimeoutException {
+      // Веб-поиск уже нашёл факты — показать их полезнее, чем плашку
+      // «ИИ на курорте». Раньше при занятых бесплатных каналах веб-поиск
+      // выглядел полностью сломанным.
+      if (webCtx.isNotEmpty) return _webDigest(webCtx);
       throw Exception('timeout');
+    } catch (_) {
+      if (webCtx.isNotEmpty) return _webDigest(webCtx);
+      rethrow;
     } finally {
       // «Отвечает…» живёт ровно столько, сколько идёт подготовка ответа.
       _inChain = false;
@@ -823,6 +877,23 @@ class AiGuideService {
     for (final key in _cooldownUntil.keys.toList()) {
       _cooldownUntil.remove(key);
     }
+  }
+
+  /// Запасной ответ, когда ИИ-каналы недоступны, а веб-выдача есть:
+  /// короткая сводка найденного + источники. Без «служебного» тона.
+  static String _webDigest(String webCtx) {
+    final lines = webCtx
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .take(3)
+        .toList();
+    if (lines.isEmpty) return '';
+    final buf = StringBuffer('Вот что нашлось по твоему вопросу:\n');
+    for (final line in lines) {
+      buf.write('— $line\n');
+    }
+    return _appendSources(buf.toString().trim(), webCtx);
   }
 
   /// Источники в веб-поиске ВСЕГДА переписываем в едином формате:
@@ -955,12 +1026,26 @@ class AiGuideService {
     providerTrace.value = <String>[];
     _inChain = true;
 
+    // Общий бюджет цепочки. Раньше таймауты складывались: 12+8+18+14+14,
+    // потом повтор Pollinations и второй заход — до ~2 минут. Внешний
+    // `.timeout(25s)` обрубал цепочку, и пользователь видел «ИИ на курорте»
+    // вместо ответа (а с веб-поиском — тем более). Теперь каждый провайдер
+    // получает не больше остатка бюджета, и цепочка честно завершается.
+    final deadline = DateTime.now().add(const Duration(seconds: 16));
+    int budget(int want) {
+      final left = deadline.difference(DateTime.now()).inMilliseconds;
+      if (left <= 1200) return 0;
+      final seconds = (left / 1000).floor();
+      return want < seconds ? want : seconds;
+    }
+
     final poolsideKey = await SettingsService.loadAiKey();
-    if (poolsideKey.isNotEmpty) {
+    final poolsideBudget = budget(10);
+    if (poolsideKey.isNotEmpty && poolsideBudget > 0) {
       final answer = await _tryProvider(
         'Poolside',
         () => _sendPoolside(userText, history, poolsideKey, languageCode),
-        12,
+        poolsideBudget,
       );
       if (answer != null) {
         _setModel('Poolside · Laguna');
@@ -971,11 +1056,12 @@ class AiGuideService {
     }
 
     final agnesKey = await SettingsService.loadAgnesKey();
-    if (agnesKey.isNotEmpty) {
+    final agnesBudget = budget(7);
+    if (agnesKey.isNotEmpty && agnesBudget > 0) {
       final answer = await _tryProvider(
         'Agnes AI',
         () => _sendAgnes(userText, history, agnesKey, languageCode),
-        8,
+        agnesBudget,
       );
       if (answer != null) {
         _setModel('Agnes AI');
@@ -985,51 +1071,41 @@ class AiGuideService {
       _recordProviderTrace('Agnes AI: пропущен, ключ не задан');
     }
 
-    final zenKey = await SettingsService.loadZenKey();
-    if (zenKey.isNotEmpty) {
-      final answer = await _tryProvider(
-        'Zen',
-        () => _sendZen(userText, history, zenKey, languageCode),
-        8,
-      );
-      if (answer != null) {
-        _setModel('Zen');
-        return answer;
-      }
-    } else {
-      _recordProviderTrace('Zen: пропущен, ключ не задан');
-    }
-
     // Бесплатные провайдеры без ключа: LLM7.io (самый быстрый из троих),
     // Pollinations AI и AI Horde — запасные.
-    final providers = <(String, Future<String?> Function())>[
+    final providers = <(String, int, Future<String?> Function(int))>[
       (
         'LLM7',
-        () => _tryProvider(
+        10,
+        (s) => _tryProvider(
           'LLM7',
           () => _sendLlm7(userText, history, languageCode),
-          18,
+          s,
         ),
       ),
       (
         'Pollinations',
-        () => _tryProvider(
+        9,
+        (s) => _tryProvider(
           'Pollinations',
           () => _sendPollinations(userText, history, languageCode),
-          14,
+          s,
         ),
       ),
       (
         'AI Horde',
-        () => _tryProvider(
+        8,
+        (s) => _tryProvider(
           'AI Horde',
           () => _sendHorde(userText, languageCode),
-          14,
+          s,
         ),
       ),
     ];
-    for (final (name, send) in providers) {
-      final answer = await send();
+    for (final (name, want, send) in providers) {
+      final left = budget(want);
+      if (left <= 0) break;
+      final answer = await send(left);
       if (answer != null) {
         _recordProviderTrace('Selected: $name');
         commitStaged(name);
@@ -1037,13 +1113,16 @@ class AiGuideService {
       }
     }
 
-    // Второй заход: резервный повтор Pollinations
+    // Второй заход: резервный повтор Pollinations (только если бюджет цел).
     _cooldownUntil.remove('Pollinations');
-    final retryPollinations = await _tryProvider(
-      'Pollinations',
-      () => _sendPollinations(userText, history, languageCode),
-      12,
-    );
+    final retryBudget = budget(9);
+    final retryPollinations = retryBudget <= 0
+        ? null
+        : await _tryProvider(
+            'Pollinations',
+            () => _sendPollinations(userText, history, languageCode),
+            retryBudget,
+          );
     if (retryPollinations != null) {
       _recordProviderTrace('Selected: Pollinations (повтор)');
       commitStaged('Pollinations');
@@ -1054,14 +1133,18 @@ class AiGuideService {
     // (429, таймаут, пустой ответ) — самая частая причина плашки «ИИ на
     // курорте». Одна пауза и повтор убирают большинство таких ошибок без
     // участия пользователя.
-    _cooldownUntil.clear();
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    for (final (name, send) in providers) {
-      final answer = await send();
-      if (answer != null) {
-        _recordProviderTrace('Selected: $name (повтор)');
-        commitStaged(name);
-        return answer;
+    if (budget(6) > 0) {
+      _cooldownUntil.clear();
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      for (final (name, want, send) in providers) {
+        final left = budget(want);
+        if (left <= 0) break;
+        final answer = await send(left);
+        if (answer != null) {
+          _recordProviderTrace('Selected: $name (повтор)');
+          commitStaged(name);
+          return answer;
+        }
       }
     }
 
@@ -1143,7 +1226,7 @@ class AiGuideService {
 
   /// Цепочка провайдеров идёт прямо сейчас. Пока она идёт, метка модели не
   /// откатывается к прошлому имени на каждой неудаче: иначе при старте
-  /// плашка мигала «Ада → AI Horde → Ада → AI Zen». Откат происходит один
+  /// плашка мигала «Ада → AI Horde → Ада → AI Horde». Откат происходит один
   /// раз — когда цепочка закончилась.
   static bool _inChain = false;
 
@@ -1158,7 +1241,7 @@ class AiGuideService {
 
   /// Показанная метка отстаёт от реальной на [_labelDebounce]: за время
   /// цепочки провайдеров имя может смениться два-три раза подряд, и плашка
-  /// «моргала» Ада → AI Horde → AI Zen прямо на глазах. Теперь рисуется
+  /// «моргала» Ада → AI Horde → AI Horde прямо на глазах. Теперь рисуется
   /// только то имя, что продержалось дольше паузы.
   static const _labelDebounce = Duration(milliseconds: 900);
   static Timer? _labelTimer;
@@ -1182,7 +1265,7 @@ class AiGuideService {
   ///
   /// Раньше провайдеры звали [_setModel] ДО запроса, и при каждом старте
   /// или отправке плашка проматывала всю цепочку («Ада», «AI Horde · …»,
-  /// «AI Zen»…) — статус скакал. Теперь имя запоминается здесь и
+  /// «AI Horde»…) — статус скакал. Теперь имя запоминается здесь и
   /// публикуется только после реального ответа (см. [commitStaged]).
   static String _stagedModel = '';
 
