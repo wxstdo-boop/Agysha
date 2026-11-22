@@ -122,6 +122,8 @@ const Map<String, String> _en = {
   'themeCyberpunkLight': 'Cyberpunk 2077 Light',
   'system': 'System',
   'themeSystemLight': 'Sys. Light.',
+  'themeLightSuffix': '(Light)',
+  'peachDarkLabel': 'Dark peach',
   'themeHint': 'Spin the drum',
   'peach': 'Peach',
   'grok': 'Grok',

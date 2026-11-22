@@ -180,6 +180,64 @@ class Installer {
     } catch (_) {}
   }
 
+  /// Состояние фоновой загрузки обновления системным менеджером.
+  ///
+  /// `status`: `none` | `started` | `running` | `done` | `failed`;
+  /// `progress` — доля 0..1 (для `running`), `path` — готовый APK,
+  /// `sha256` — хеш, с которым загрузка начиналась.
+  static Future<Map<String, dynamic>?> nativeDownloadStatus() async {
+    if (!_supported) return null;
+    try {
+      return await _channel.invokeMapMethod<String, dynamic>(
+        'downloadStatus',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Начинает скачивание обновления системным DownloadManager.
+  ///
+  /// В отличие от загрузки внутри Dart-изолята, она продолжается, когда
+  /// приложение свернули или система выгрузила процесс: менеджер загрузок
+  /// работает в своей службе Android.
+  static Future<Map<String, dynamic>?> startNativeDownload({
+    required String url,
+    required String fileName,
+    required String title,
+    String? sha256,
+  }) async {
+    if (!_supported) return null;
+    try {
+      return await _channel.invokeMapMethod<String, dynamic>('startDownload', {
+        'url': url,
+        'fileName': fileName,
+        'title': title,
+        'sha256': sha256,
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Останавливает фоновую загрузку обновления (если она была).
+  static Future<void> cancelNativeDownload() async {
+    if (!_supported) return;
+    try {
+      await _channel.invokeMethod<bool>('cancelDownload');
+    } catch (_) {}
+  }
+
+  /// Помечает фоновую загрузку обработанной: установка уже запущена, и
+  /// при следующем старте приложение не должно снова открывать установщик.
+  /// Сам скачанный файл остаётся на месте.
+  static Future<void> ackNativeDownload() async {
+    if (!_supported) return;
+    try {
+      await _channel.invokeMethod<bool>('ackDownload');
+    } catch (_) {}
+  }
+
   /// Запускает установку APK обычным системным установщиком.
   /// [expectedSha256] (hex) обязателен: нативная сторона сверяет хеш файла и
   /// отказывает при несовпадении. Итог установки (если система его пришлёт)

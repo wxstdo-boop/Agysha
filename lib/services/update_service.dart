@@ -432,12 +432,93 @@ class UpdateService {
     final active = _activeDownload;
     if (active != null) return active;
     downloadProgress.value = 0;
-    final f = download(info, onProgress: (v) => downloadProgress.value = v);
+    final f = _downloadPreferBackground(info);
     _activeDownload = f;
     f.whenComplete(() {
       if (identical(_activeDownload, f)) _activeDownload = null;
     });
     return f;
+  }
+
+  /// На Android качаем системным менеджером загрузок, иначе — внутри Dart.
+  ///
+  /// Менеджер загрузок живёт в своей службе Android, поэтому сворачивание
+  /// приложения, уход на другой экран и выгрузка процесса загрузку не рвут:
+  /// раньше качал Dart-изолят, в фоне его приостанавливали, поток получал
+  /// таймаут, и обновление «стопало» на середине.
+  Future<String?> _downloadPreferBackground(UpdateInfo info) async {
+    if (!Platform.isAndroid || info.downloadUrl.isEmpty) {
+      return download(info, onProgress: (v) => downloadProgress.value = v);
+    }
+    final fileName = 'agysha-${info.versionName}.apk';
+    final res = await Installer.startNativeDownload(
+      url: info.downloadUrl,
+      fileName: fileName,
+      title: 'Agysha ${info.versionName}',
+      sha256: info.sha256,
+    );
+    final status = res?['status'] as String?;
+    if (status == 'done') {
+      downloadProgress.value = 1;
+      return res?['path'] as String?;
+    }
+    if (status == null) {
+      // Натив не ответил (старая сборка канала) — обычный путь.
+      return download(info, onProgress: (v) => downloadProgress.value = v);
+    }
+    if (status == 'failed') return null;
+    // Менеджер качает; приложение может уйти в фон — опрос продолжится,
+    // когда система снова даст изоляту процессор.
+    return _waitForNativeDownload();
+  }
+
+  /// Ждёт готовности APK у системного менеджера загрузок.
+  Future<String?> _waitForNativeDownload() async {
+    final startedAt = DateTime.now();
+    // Запас с большим избытком: 27 МБ на медленной сети. Если и это
+    // истекло — загрузка всё равно осталась у менеджера и подхватится
+    // при следующем запуске (см. [adoptBackgroundDownload]).
+    const overall = Duration(minutes: 30);
+    while (DateTime.now().difference(startedAt) < overall) {
+      final st = await Installer.nativeDownloadStatus();
+      final status = st?['status'] as String?;
+      if (status == 'done') {
+        downloadProgress.value = 1;
+        return st?['path'] as String?;
+      }
+      if (status == 'failed' || status == 'none') return null;
+      final p = (st?['progress'] as num?)?.toDouble() ?? 0;
+      if (p > downloadProgress.value) {
+        downloadProgress.value = p.clamp(0.0, 1.0);
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    return null;
+  }
+
+  /// Подхватывает загрузку, пережившую перезапуск приложения.
+  ///
+  /// Если менеджер уже докачал APK — сразу предлагает установку; если ещё
+  /// качает — ведёт прогресс и доставит установку, когда будет готово.
+  /// Возвращает итог, только когда установку действительно запускали.
+  Future<UpdateOutcome?> adoptBackgroundDownload() async {
+    if (!Platform.isAndroid) return null;
+    if (_activeDownload != null) return null;
+    final st = await Installer.nativeDownloadStatus();
+    final status = st?['status'] as String?;
+    if (status != 'running' && status != 'done') return null;
+    final String? path = status == 'done'
+        ? (st?['path'] as String?)
+        : await _waitForNativeDownload();
+    if (path == null || path.isEmpty) return null;
+    final sha = st?['sha256'] as String?;
+    if (!await Installer.canInstall()) {
+      await Installer.openInstallSettings();
+      return UpdateOutcome.permissionNeeded;
+    }
+    final ok = await Installer.installApk(path, expectedSha256: sha);
+    if (ok) await Installer.ackNativeDownload();
+    return ok ? UpdateOutcome.installed : UpdateOutcome.installFailed;
   }
 
   /// Скачивает и СРАЗУ ставит APK — без участия экрана. Уход на другой
@@ -456,6 +537,7 @@ class UpdateService {
       return UpdateOutcome.permissionNeeded;
     }
     final ok = await Installer.installApk(path, expectedSha256: info.sha256);
+    if (ok) await Installer.ackNativeDownload();
     return ok ? UpdateOutcome.installed : UpdateOutcome.installFailed;
   }
 

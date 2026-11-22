@@ -24,7 +24,8 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
       _ThemeEntry(
         'oled',
         appState.themeKey == 'cyberpunkLight'
-            ? '${Translations.t('themeOled', context, 'Cyberpunk 2077')} (Light)'
+            ? '${Translations.t('themeOled', context, 'Cyberpunk 2077')} '
+                  '${Translations.t('themeLightSuffix', context, '(Light)')}'
             : Translations.t('themeOled', context, 'Cyberpunk 2077'),
         appState.themeKey == 'cyberpunkLight'
             ? Icons.wb_sunny_outlined
@@ -37,10 +38,16 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
         Icons.palette_outlined,
       ),
       _ThemeEntry('rose', Translations.roseOf(context), Icons.favorite_outline),
+      // Персик — тоже пара вариантов: подпись и значок меняются вместе
+      // с тёмной/светлой стороной, иначе рычаг выглядел «мёртвым».
       _ThemeEntry(
         'peach',
-        Translations.peachOf(context),
-        Icons.local_florist_outlined,
+        appState.themeKey == 'peach' && appState.themeMode == ThemeMode.dark
+            ? Translations.t('peachDarkLabel', context, 'Dark peach')
+            : Translations.peachOf(context),
+        appState.themeKey == 'peach' && appState.themeMode == ThemeMode.dark
+            ? Icons.nightlight_round
+            : Icons.local_florist_outlined,
       ),
       const _ThemeEntry('grok', 'Grok', Icons.auto_awesome),
       const _ThemeEntry('darkGrok', 'Grok Dark', Icons.dark_mode),
@@ -98,9 +105,10 @@ class _ThemeRevolver extends StatefulWidget {
 class _ThemeRevolverState extends State<_ThemeRevolver>
     with SingleTickerProviderStateMixin {
   /// Сколько пикселей тянуть, чтобы барабан провернулся на одну камору.
-  /// 78 px читались вяло: палец уже прошёл треть экрана, а барабан ещё
-  /// висел между каморами. 46 px — поворот идёт за пальцем.
-  static const double _dragStep = 46;
+  /// 46 px было слишком резво: одно движение через пол-экрана пролистывало
+  /// полколеса. 58 px — поворот всё ещё идёт за пальцем, но каждую камору
+  /// видно, и она успевает проявиться.
+  static const double _dragStep = 58;
 
   late final AnimationController _spin = AnimationController(
     vsync: this,
@@ -114,6 +122,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   int _applied = 0;
   bool _dragging = false;
   int _spinToken = 0;
+
+  /// Последнее смещение пальца за кадр: нужно, чтобы инерция на отпускании
+  /// не разворачивала барабан против движения.
+  double _recentDrag = 0;
 
   int get _n => widget.entries.length;
 
@@ -198,7 +210,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
       CurvedAnimation(parent: _spin, curve: Curves.easeOutCubic),
     );
     _spin.duration = Duration(
-      milliseconds: (260 + 130 * dist).round().clamp(260, 620),
+      milliseconds: (340 + 150 * dist).round().clamp(340, 780),
     );
     _spin.forward(from: 0).whenComplete(() {
       if (!mounted || token != _spinToken) return;
@@ -210,19 +222,28 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
 
   void _onDragStart(DragStartDetails details) {
     _dragging = true;
+    _recentDrag = 0;
     _spin.stop();
     _spinToken++;
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
-    setState(() => _pos -= (details.primaryDelta ?? 0) / _dragStep);
+    final delta = details.primaryDelta ?? 0;
+    _recentDrag = delta;
+    setState(() => _pos -= delta / _dragStep);
     _previewNearest();
   }
 
   void _onDragEnd(DragEndDetails details) {
     _dragging = false;
-    // Инерция: быстрый флик докручивает барабан ещё на камору-две.
-    final fling = (-(details.primaryVelocity ?? 0) / 1100).clamp(-2.4, 2.4);
+    // Инерция короткая и только ПО ходу пальца: телефон на отпускании
+    // иногда отдаёт скорость обратного знака (палец «отпружинивает»), и
+    // барабан резко уезжал назад. Такой «флик» просто не учитываем.
+    var fling = -(details.primaryVelocity ?? 0) / 1500;
+    if (_recentDrag.abs() < 4 || fling.sign != -_recentDrag.sign) {
+      fling = 0;
+    }
+    fling = fling.clamp(-1.4, 1.4);
     _settleTo((_pos + fling).roundToDouble());
   }
 
@@ -308,14 +329,17 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
               child: AnimatedSwitcher(
                 // Только перекрёстное затухание: со сползанием текста
                 // подписи при быстрой прокрутке наезжали друг на друга.
-                duration: const Duration(milliseconds: 220),
+                duration: const Duration(milliseconds: 280),
                 switchInCurve: Curves.easeOut,
                 switchOutCurve: Curves.easeIn,
                 transitionBuilder: (child, anim) =>
                     FadeTransition(opacity: anim, child: child),
                 child: Text(
                   entry.label,
-                  key: ValueKey('theme_label_${entry.key}'),
+                  // В ключе — сама подпись: у Cyberpunk и персика она
+                  // меняется вместе с вариантом, и без этого переключение
+                  // подменялось кадром вместо плавного затухания.
+                  key: ValueKey('theme_label_${entry.key}_${entry.label}'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleSmall?.copyWith(
@@ -412,7 +436,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
           ),
           child: Center(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 240),
+              duration: const Duration(milliseconds: 300),
               switchInCurve: Curves.easeOut,
               switchOutCurve: Curves.easeIn,
               transitionBuilder: (child, anim) => FadeTransition(
@@ -424,7 +448,9 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
               ),
               child: Icon(
                 entry.icon,
-                key: ValueKey<String>('hub_${entry.key}'),
+                key: ValueKey<String>(
+                  'hub_${entry.key}_${entry.icon.codePoint}',
+                ),
                 size: hub * 0.34,
                 color: cs.primary,
               ),
@@ -469,53 +495,61 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     // Ближняя к указателю камора — крупнее и ярче, дальняя уходит в глубину:
     // так плоский круг читается как барабан.
     final near = (math.cos(delta) + 1) / 2;
-    final active = index == _index;
-    final dot = active ? 40.0 : 34.0;
+    // Насколько камора «выбрана»: 1 ровно под указателем, 0 — уже на
+    // соседней позиции. Считается НЕПРЕРЫВНО от положения барабана, поэтому
+    // размер, заливка и обводка перетекают вместе с поворотом, а не
+    // щёлкают в кадр, когда округлился индекс: раньше значок под указателем
+    // «прыгал» и мигал посреди плавной прокрутки.
+    var sel = (1 - delta.abs() / (step * 0.6)).clamp(0.0, 1.0);
+    sel = sel * sel * (3 - 2 * sel); // smoothstep
+    final dot = 31.0 + 9.0 * sel;
     // Камора — не мини-палитра, а метка темы: монотонный кружок в цветах
-    // приложения, где цветом выделена только выбранная. Десять разноцветных
-    // градиентов читались как случайные наклейки.
-    final ink = active ? cs.onPrimary : cs.onSurfaceVariant;
+    // приложения, где цветом выделена только выбранная.
+    final ink = Color.lerp(cs.onSurfaceVariant, cs.onPrimary, sel)!;
+    final fill = Color.lerp(cs.surfaceContainerHighest, cs.primary, sel)!;
+    final rim = Color.lerp(
+      cs.outlineVariant.withValues(alpha: 0.65),
+      cs.primary,
+      sel,
+    )!;
 
     return Positioned(
       left: x - dot / 2,
       top: y - dot / 2,
       child: Transform.scale(
-        scale: 0.84 + 0.16 * near + (active ? 0.06 : 0),
+        scale: 0.84 + 0.16 * near + 0.06 * sel,
         child: Opacity(
           opacity: 0.55 + 0.45 * near,
           child: Semantics(
             button: true,
-            selected: active,
+            selected: index == _index,
             label: entry.label,
-            child: GestureDetector(
-              onTap: () => _tapChamber(index),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                width: dot,
-                height: dot,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: active
-                      ? cs.primary
-                      : cs.surfaceContainerHighest,
-                  border: Border.all(
-                    color: active
-                        ? cs.primary
-                        : cs.outlineVariant.withValues(alpha: 0.65),
-                    width: active ? 2 : 1,
+            child: PressScale(
+              pressedScale: 0.88,
+              duration: const Duration(milliseconds: 120),
+              releaseDuration: const Duration(milliseconds: 240),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _tapChamber(index),
+                child: Container(
+                  width: dot,
+                  height: dot,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: fill,
+                    border: Border.all(color: rim, width: 1 + sel),
+                    boxShadow: sel > 0.02
+                        ? <BoxShadow>[
+                            BoxShadow(
+                              color: cs.primary.withValues(alpha: 0.35 * sel),
+                              blurRadius: 12,
+                              spreadRadius: -2,
+                            ),
+                          ]
+                        : null,
                   ),
-                  boxShadow: active
-                      ? <BoxShadow>[
-                          BoxShadow(
-                            color: cs.primary.withValues(alpha: 0.35),
-                            blurRadius: 12,
-                            spreadRadius: -2,
-                          ),
-                        ]
-                      : null,
+                  child: Icon(entry.icon, size: dot * 0.42, color: ink),
                 ),
-                child: Icon(entry.icon, size: dot * 0.42, color: ink),
               ),
             ),
           ),

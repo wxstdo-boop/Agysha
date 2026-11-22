@@ -125,6 +125,8 @@ const Map<String, String> _ru = {
   'themeCyberpunkLight': 'Cyberpunk 2077 Light',
   'system': 'Сист.',
   'themeSystemLight': 'Сист. свет.',
+  'themeLightSuffix': '(светл.)',
+  'peachDarkLabel': 'Тёмный персик',
   'themeHint': 'Крути барабан',
   'peach': 'Персик',
   'grok': 'Grok',
@@ -279,7 +281,8 @@ const Map<String, String> _ru = {
   // Карточка в Настройках -- выключатель всего раздела РП.
   'rcSettingsTitle': 'Проверки реальности',
   'rcSettingsBody':
-      'Убирает или добавляет раздел целиком: таб «РП» в Home, расписание и уведомления.',
+      'Убирает или добавляет раздел целиком: таб «РП» на главном экране, '
+      'расписание и уведомления.',
   'rcSettingsOn': 'Раздел «Проверки реальности» включён',
   'rcSettingsOff': 'Раздел «Проверки реальности» скрыт',
   'rcChecksPerDay': 'Проверок в день',
