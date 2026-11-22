@@ -1,7 +1,9 @@
 package com.wetcorp.agysha
 
+import android.app.DownloadManager
 import android.app.NotificationManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Intent
@@ -974,9 +976,163 @@ class MainActivity : FlutterActivity() {
                         result.error("INSTALL", e.message, null)
                     }
                 }
+                // Скачивание через системный DownloadManager: он живёт в
+                // службе загрузок Android, поэтому сворачивание приложения,
+                // уход на другой экран и даже выгрузка процесса не рвут
+                // загрузку. Раньше качал Dart-изолят: в фоне его
+                // приостанавливали, поток таймаутил и обновление «стопало».
+                "startDownload" -> {
+                    val url = call.argument<String>("url")
+                    val fileName = call.argument<String>("fileName")
+                    val title = call.argument<String>("title") ?: "Agysha"
+                    val sha = call.argument<String>("sha256")
+                    if (url.isNullOrEmpty() || fileName.isNullOrEmpty()) {
+                        result.error("BAD_ARGS", "url and fileName are required", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        result.success(startNativeDownload(url, fileName, title, sha))
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "startDownload failed: $e")
+                        result.error("DOWNLOAD", e.message, null)
+                    }
+                }
+                "downloadStatus" -> result.success(nativeDownloadStatus())
+                "cancelDownload" -> {
+                    cancelNativeDownload()
+                    result.success(true)
+                }
+                // Установка уже запущена: забываем id загрузки, чтобы при
+                // следующем старте не открывать установщик повторно. Сам
+                // файл не удаляем — система ещё читает его.
+                "ackDownload" -> {
+                    updatePrefs.edit().putLong("id", -1L).apply()
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
+    }
+
+    /** Настройки нативного загрузчика обновлений: id загрузки и её файл. */
+    private val updatePrefs by lazy {
+        getSharedPreferences("agysha_updater", Context.MODE_PRIVATE)
+    }
+
+    /** Куда DownloadManager кладёт APK: своя папка приложения, не общая. */
+    private fun updaterFile(fileName: String): File {
+        val dir = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "updates")
+        if (!dir.exists()) dir.mkdirs()
+        return File(dir, fileName)
+    }
+
+    /**
+     * Ставит загрузку в системный DownloadManager и запоминает её id.
+     *
+     * Файл, скачанный в прошлый раз и оставшийся на месте, повторно не
+     * качается: возвращаем готовый путь, чтобы установка началась сразу.
+     */
+    private fun startNativeDownload(
+        url: String,
+        fileName: String,
+        title: String,
+        sha: String?,
+    ): Map<String, Any?> {
+        val file = updaterFile(fileName)
+        val savedFile = updatePrefs.getString("file", null)
+        if (file.exists() && file.length() > 0 && savedFile == file.absolutePath) {
+            return mapOf("status" to "done", "path" to file.absolutePath, "sha256" to (sha ?: ""))
+        }
+        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        // Прошлую (устаревшую или битую) загрузку убираем из менеджера.
+        val previous = updatePrefs.getLong("id", -1L)
+        if (previous > 0) {
+            try {
+                dm.remove(previous)
+            } catch (_: Exception) {}
+        }
+        val request = DownloadManager.Request(Uri.parse(url))
+            .setTitle(title)
+            .setDescription("Скачивание обновления")
+            .setNotificationVisibility(
+                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
+            )
+            .setMimeType("application/vnd.android.package-archive")
+            .setDestinationInExternalFilesDir(
+                this,
+                Environment.DIRECTORY_DOWNLOADS,
+                "updates/$fileName",
+            )
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(false)
+        request.addRequestHeader("User-Agent", "Agysha")
+        val id = dm.enqueue(request)
+        updatePrefs.edit()
+            .putLong("id", id)
+            .putString("file", file.absolutePath)
+            .putString("sha256", sha ?: "")
+            .apply()
+        return mapOf("status" to "started", "path" to file.absolutePath)
+    }
+
+    /**
+     * Состояние текущей загрузки: `none`, `running` (с прогрессом), `done`
+     * (с путём и хешем) или `failed`. По нему Dart-сторона понимает, что
+     * загрузка пережила сворачивание и её пора ставить.
+     */
+    private fun nativeDownloadStatus(): Map<String, Any?> {
+        val id = updatePrefs.getLong("id", -1L)
+        if (id <= 0) return mapOf("status" to "none")
+        val path = updatePrefs.getString("file", null)
+        val sha = updatePrefs.getString("sha256", "") ?: ""
+        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val cursor = try {
+            dm.query(DownloadManager.Query().setFilterById(id))
+        } catch (e: Exception) {
+            null
+        } ?: return mapOf("status" to "none")
+        cursor.use { c ->
+            if (!c.moveToFirst()) return mapOf("status" to "none")
+            val state = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            val total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+            val soFar =
+                c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+            return when (state) {
+                DownloadManager.STATUS_SUCCESSFUL -> {
+                    val f = path?.let { File(it) }
+                    if (f != null && f.exists() && f.length() > 0) {
+                        mapOf(
+                            "status" to "done",
+                            "path" to f.absolutePath,
+                            "sha256" to sha,
+                        )
+                    } else {
+                        updatePrefs.edit().putLong("id", -1L).apply()
+                        mapOf("status" to "failed", "reason" to "file missing")
+                    }
+                }
+                DownloadManager.STATUS_FAILED -> {
+                    updatePrefs.edit().putLong("id", -1L).apply()
+                    mapOf("status" to "failed", "reason" to "dm failed")
+                }
+                else -> mapOf(
+                    "status" to "running",
+                    "progress" to if (total > 0) soFar.toDouble() / total else 0.0,
+                    "sha256" to sha,
+                )
+            }
+        }
+    }
+
+    private fun cancelNativeDownload() {
+        val id = updatePrefs.getLong("id", -1L)
+        if (id > 0) {
+            try {
+                val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                dm.remove(id)
+            } catch (_: Exception) {}
+        }
+        updatePrefs.edit().putLong("id", -1L).apply()
     }
 
     /**

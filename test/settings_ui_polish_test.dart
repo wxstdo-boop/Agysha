@@ -135,7 +135,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
-  testWidgets('барабан тем: сдвиг на один шаг (46 px) переключает камору', (
+  testWidgets('барабан тем: сдвиг на один шаг (58 px) переключает камору', (
     tester,
   ) async {
     await openSettings(tester);
@@ -144,9 +144,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     final before = AgyshaApp.of(tester.element(revolver)).themeKey;
 
-    // 46 px — ровно одна камора. Раньше шаг был 78 px, и такой сдвиг
-    // ничего не менял: барабан казался «неотзывчивым».
-    await tester.drag(revolver, const Offset(-46, 0));
+    // 58 px — ровно одна камора. Шаг 46 px пролистывал полколеса за одно
+    // движение; 78 px, наоборот, казались «мёртвыми».
+    await tester.drag(revolver, const Offset(-58, 0));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
 
