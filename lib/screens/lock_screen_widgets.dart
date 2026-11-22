@@ -1284,15 +1284,17 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               // Пока палец прижат, пятно продолжает медленно расползаться —
               // это и есть «плавное появление»; на спаде геометрия уже стоит.
               final spread = Curves.easeOutCubic.transform(_in.value);
-              // Клавиша вдавливается мгновенно и возвращается пружиной, а не
-              // ждёт 700мс высыхания.
-              final press = Curves.easeOutCubic.transform(
-                (_in.value / 0.16).clamp(0.0, 1.0),
+              // Клавиша вдавливается и возвращается мягко, симметрично:
+              // easeOutCubic давал рывок в первом кадре, и темп нажатия
+              // читался дёрганым. Рампы растянуты до ~200 мс и сглажены
+              // по краям, поэтому ход пальца не «щёлкает».
+              final press = Curves.easeInOutCubic.transform(
+                (_in.value / 0.22).clamp(0.0, 1.0),
               );
-              final lift = Curves.easeOutCubic.transform(
-                (_out.value / 0.26).clamp(0.0, 1.0),
+              final lift = Curves.easeInOutCubic.transform(
+                (_out.value / 0.34).clamp(0.0, 1.0),
               );
-              final tilt = Curves.easeOutCubic.transform(_tiltCtrl.value);
+              final tilt = Curves.easeInOutCubic.transform(_tiltCtrl.value);
               final matrix = Matrix4.identity();
               if (tilt > 0.001) {
                 matrix.setEntry(3, 2, 0.0017);

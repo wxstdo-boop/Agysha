@@ -141,7 +141,10 @@ class _AnimatedStrikeTextState extends State<AnimatedStrikeText>
                 ),
               );
         return CustomPaint(
-          painter: _StrikePainter(
+          // Линия рисуется ПОВЕРХ текста: под глифами она пряталась за
+          // буквами, и зачёркивание читалось рваным — «то тонкая, то толстая».
+          // С foregroundPainter линия идёт непрерывно по всей строке.
+          foregroundPainter: _StrikePainter(
             span: layoutSpan,
             layout: _layout,
             maxLines: widget.maxLines,
@@ -269,19 +272,9 @@ class _StrikePainter extends CustomPainter {
       // дважды и линия читалась «то тонкой, то жирной». Теперь волна —
       // одна полилиния с мелким шагом: толщина постоянная, а изгиб
       // остаётся плавной змейкой.
-      ..strokeWidth = math.max(3.4, fontSize * 0.22)
+      ..strokeWidth = math.max(4.2, fontSize * 0.26)
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-    // «Перо» на растущем конце рисует со blur-маской, а это каждый вызов —
-    // отдельный saveLayer. Краска создаётся один раз на кадр, а не на строку.
-    final Paint? dotPaint;
-    if (progress < 0.999) {
-      dotPaint = Paint()
-        ..color = strikeColor.withValues(alpha: 0.35)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    } else {
-      dotPaint = null;
-    }
 
     // Линии рисуются ПОСЛЕДОВАТЕЛЬНО (первая → вторая → третья), а не все
     // сразу: раньше «перо» телепортировалось между строками, и зачёркивание
@@ -299,8 +292,8 @@ class _StrikePainter extends CustomPainter {
       // ЗМЕЙКА, а не «пупырки»: одна длинная синусоида с постоянной
       // толщиной пера. Амплитуда низкая, период длинный — изгибы читаются
       // ровной волной, а не «то тонко, то жирно».
-      final amp = math.max(0.6, fontSize * 0.030);
-      final period = math.max(30.0, fontSize * 3.2);
+      final amp = math.max(0.5, fontSize * 0.020);
+      final period = math.max(36.0, fontSize * 3.6);
       final phase = 2 * math.pi / period;
       double waveAt(double x) => math.sin(x * phase) * amp;
 
@@ -312,14 +305,6 @@ class _StrikePainter extends CustomPainter {
       }
       path.lineTo(m.left + lineWidth, y + waveAt(lineWidth));
       canvas.drawPath(path, linePaint);
-      // Мягкое «перо» на растущем конце — линия выглядит живой.
-      if (dotPaint != null) {
-        canvas.drawCircle(
-          Offset(m.left + lineWidth, y + waveAt(lineWidth)),
-          m.ascent * 0.055,
-          dotPaint,
-        );
-      }
     }
   }
 

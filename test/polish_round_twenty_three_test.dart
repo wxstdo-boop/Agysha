@@ -47,11 +47,13 @@ void main() {
   test('зачёркивание — одна толстая змейка с ровным пером', () {
     final src = read('lib/widgets/animated_strike_text.dart');
     expect(
-      src.contains('strokeWidth = math.max(3.4, fontSize * 0.22)'),
+      src.contains('strokeWidth = math.max(4.2, fontSize * 0.26)'),
       isTrue,
     );
-    expect(src.contains('fontSize * 0.030'), isTrue);
-    expect(src.contains('fontSize * 3.2'), isTrue);
+    expect(src.contains('fontSize * 0.020'), isTrue);
+    expect(src.contains('fontSize * 3.6'), isTrue);
+    // Линия поверх текста: под глифами она выглядела рваной.
+    expect(src.contains('foregroundPainter: _StrikePainter('), isTrue);
     // Толщина одна на всю линию: непрерывная полилиния с постоянным
     // strokeWidth, без кубических стыков, где перо ложилось дважды.
     expect(src.contains('path.lineTo('), isTrue);

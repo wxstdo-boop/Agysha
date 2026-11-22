@@ -499,6 +499,22 @@ class _SmoothTypingPainter extends CustomPainter {
   final void Function(String text, List<Rect?> boxes) onBoxes;
   final void Function(ViewportOffset offset) onOffset;
 
+  /// Раскладка основного текста, переиспользуемая между кадрами.
+  ///
+  /// При стирании меняются только «призраки»: сами буквы уже стоят на
+  /// месте. Раньше каждый кадр заново раскладывал ВЕСЬ текст, и на длинном
+  /// поле это читалось как «заедает, когда исчезает». Теперь, пока ни одна
+  /// буква не проявляется, раскладка берётся из кэша, а кадр рисует только
+  /// гаснущие копии.
+  TextPainter? _cachedTp;
+  String _cachedTpKey = '';
+
+  void _disposeCachedTp() {
+    _cachedTp?.dispose();
+    _cachedTp = null;
+    _cachedTpKey = '';
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (glyphs.isEmpty && ghosts.isEmpty) return;
@@ -527,22 +543,55 @@ class _SmoothTypingPainter extends CustomPainter {
     final double maxWidth = multiline ? availMax : double.infinity;
     final double minWidth = math.min(c.minWidth, availMax);
 
-    final TextPainter tp = TextPainter(
-      text: _span(),
-      textAlign: editable.textAlign,
-      textDirection: editable.textDirection,
-      strutStyle: editable.strutStyle,
-      textScaler: editable.textScaler,
-      textWidthBasis: editable.textWidthBasis,
-      textHeightBehavior: editable.textHeightBehavior,
-      // Кап по строкам — ТОЛЬКО для однострочного поля (как это делает
-      // само поле, см. RenderEditable._layoutText: `maxLines == 1 ? 1 : null`).
-      // Многострочное поле прокручивается и раскладывает ВЕСЬ текст: кап по
-      // `maxLines` обрезал раскладку слоя на видимых строках, и при прокрутке
-      // строки уезжали ЗА поле, а набранное после `maxLines`-й строки вообще
-      // не рисовалось — в поле оставалась пустая строка.
-      maxLines: editable.maxLines == 1 ? 1 : null,
-    )..layout(minWidth: minWidth, maxWidth: maxWidth);
+    // Пока ни одна буква не проявляется, раскладка основного текста не
+    // меняется — берём её из кэша. Иначе каждый кадр гаснущих «призраков»
+    // заново раскладывал весь текст, и стирание подтормаживало.
+    final bool animating = glyphs.any((g) => g.t0 != null);
+    final String text = glyphs.map((g) => g.ch).join();
+    final String cacheKey = animating
+        ? ''
+        : [
+            text,
+            style.hashCode,
+            minWidth,
+            maxWidth,
+            multiline,
+            editable.textAlign,
+            editable.textDirection,
+            editable.textScaler,
+            editable.strutStyle?.hashCode,
+            editable.textWidthBasis,
+            editable.textHeightBehavior,
+            editable.maxLines,
+          ].join('|');
+    TextPainter tp;
+    if (cacheKey.isNotEmpty &&
+        cacheKey == _cachedTpKey &&
+        _cachedTp != null) {
+      tp = _cachedTp!;
+    } else {
+      _disposeCachedTp();
+      tp = TextPainter(
+        text: _span(),
+        textAlign: editable.textAlign,
+        textDirection: editable.textDirection,
+        strutStyle: editable.strutStyle,
+        textScaler: editable.textScaler,
+        textWidthBasis: editable.textWidthBasis,
+        textHeightBehavior: editable.textHeightBehavior,
+        // Кап по строкам — ТОЛЬКО для однострочного поля (как это делает
+        // само поле, см. RenderEditable._layoutText: `maxLines == 1 ? 1 : null`).
+        // Многострочное поле прокручивается и раскладывает ВЕСЬ текст: кап по
+        // `maxLines` обрезал раскладку слоя на видимых строках, и при прокрутке
+        // строки уезжали ЗА поле, а набранное после `maxLines`-й строки вообще
+        // не рисовалось — в поле оставалась пустая строка.
+        maxLines: editable.maxLines == 1 ? 1 : null,
+      )..layout(minWidth: minWidth, maxWidth: maxWidth);
+      if (cacheKey.isNotEmpty) {
+        _cachedTp = tp;
+        _cachedTpKey = cacheKey;
+      }
+    }
 
     // Внутренняя прокрутка поля: однострочные «уезжают» по горизонтали,
     // многострочные с лимитом строк — по вертикали. Без этого наш текст

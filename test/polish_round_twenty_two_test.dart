@@ -56,10 +56,12 @@ void main() {
 
   test('зачёркивание идёт змейкой с постоянной толщиной', () {
     final src = read('lib/widgets/animated_strike_text.dart');
-    expect(RegExp(r'fontSize \* 0\.22').hasMatch(src), isTrue);
-    expect(RegExp(r'math\.max\(3\.4,').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 0\.030').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 3\.2').hasMatch(src), isTrue);
+    // Толщина поднята по претензии «слишком тонкие»: линия жирная и одна
+    // на всю длину, а не «тонкая-толстая-тонкая».
+    expect(RegExp(r'fontSize \* 0\.26').hasMatch(src), isTrue);
+    expect(RegExp(r'math\.max\(4\.2,').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.020').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 3\.6').hasMatch(src), isTrue);
     // Непрерывная полилиния: одна толщина на всю длину, без стыков.
     expect(RegExp(r'path\.lineTo\(').hasMatch(src), isTrue);
     expect(RegExp(r'amp \* 0\.28').hasMatch(src), isFalse);
