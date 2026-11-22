@@ -99,6 +99,22 @@ void main() {
     expect(body, contains('_flatPollinationsPrompt('));
   });
 
+  test('Kilo Gateway в цепочке раньше LLM7, OVH и Horde', () {
+    // Kilo без ключа отвечает 200 за ~1.3 с, а LLM7 и OVHcloud с общего
+    // адреса отдают 429 — Kilo обязан быть первым из «ключевых» источников,
+    // иначе Ада тратит бюджет на заведомо мёртвые попытки.
+    final src = File('lib/services/ai_guide_service.dart').readAsStringSync();
+    final kilo = src.indexOf("'Kilo',\n        7,");
+    expect(kilo, greaterThan(0), reason: 'Kilo пропал из цепочки');
+    for (final later in ["'LLM7',", "'OVHcloud',", "'AI Horde',"]) {
+      expect(
+        src.indexOf(later),
+        greaterThan(kilo),
+        reason: '$later должен идти после Kilo',
+      );
+    }
+  });
+
   test('GET-промпт Pollinations схлопывается в одну строку', () {
     // Перевод строки в пути URL ломает маршрут: сервер отдаёт 404, и с
     // включённым веб-поиском (многострочный промпт) Ада не отвечала.

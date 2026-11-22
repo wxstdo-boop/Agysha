@@ -1079,16 +1079,17 @@ class AiGuideService {
       _recordProviderTrace('Agnes AI: пропущен, ключ не задан');
     }
 
-    // Бесплатные провайдеры без ключа: LLM7.io (самый быстрый),
-    // Pollinations AI, OVHcloud AI Endpoints, Kilo Gateway и AI Horde —
-    // запасные.
+    // Бесплатные провайдеры без ключа. Порядок — по живучести на сегодня:
+    // Kilo Gateway отвечает первым за ~1.3 с, дальше Pollinations (GET одной
+    // строкой), LLM7.io, OVHcloud AI Endpoints (с общего адреса отдаёт 429)
+    // и AI Horde (асинхронный, последний).
     final providers = <(String, int, Future<String?> Function(int))>[
       (
-        'LLM7',
-        10,
+        'Kilo',
+        7,
         (s) => _tryProvider(
-          'LLM7',
-          () => _sendLlm7(userText, history, languageCode),
+          'Kilo',
+          () => _sendKilo(userText, history, languageCode),
           s,
         ),
       ),
@@ -1102,20 +1103,20 @@ class AiGuideService {
         ),
       ),
       (
+        'LLM7',
+        10,
+        (s) => _tryProvider(
+          'LLM7',
+          () => _sendLlm7(userText, history, languageCode),
+          s,
+        ),
+      ),
+      (
         'OVHcloud',
         7,
         (s) => _tryProvider(
           'OVHcloud',
           () => _sendOvh(userText, history, languageCode),
-          s,
-        ),
-      ),
-      (
-        'Kilo',
-        7,
-        (s) => _tryProvider(
-          'Kilo',
-          () => _sendKilo(userText, history, languageCode),
           s,
         ),
       ),
