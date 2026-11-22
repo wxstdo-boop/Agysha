@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/press_scale.dart';
+import '../widgets/rolling_text.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import 'package:uuid/uuid.dart';
 import '../models/app_timer.dart';
@@ -317,8 +318,11 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    Text(
-                      AppTimer.formatDuration(_totalSeconds),
+                    // Время в шапке перекатывается по разрядам: раньше
+                    // строка подменялась целиком и значение «прыгало».
+                    RollingText(
+                      value: AppTimer.formatDuration(_totalSeconds),
+                      duration: const Duration(milliseconds: 300),
                       style: theme.textTheme.displaySmall?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),

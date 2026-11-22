@@ -153,8 +153,25 @@ class HabitService extends ChangeNotifier {
     if (!_loaded) return;
     final value = habitsToJson(_habits);
     if (_snapshot != null && value == _snapshot) return;
-    final resolved = await JsonFile.writeWithSnapshot(_key, value, _snapshot);
-    if (resolved == value) _snapshot = resolved;
+    // Ретрай по конфликту и обязательное принятие снимка — здесь была
+    // причина «метка сохранения есть, а правки нет». Если между load() и
+    // записью файл менялся (импорт/бэкап, второй движок с плавающим
+    // окошком), старая база давала конфликт слияния на том же поле,
+    // исключение улетало в необработанный future (экран правки не ждёт
+    // сохранения), и правка молча пропадала. Снимок при этом не двигался,
+    // поэтому каждая следующая запись конфликтовала так же — «автосохранение
+    // не работает вообще».
+    final resolved = await JsonFile.writeWithSnapshotRetrying(
+      _key,
+      value,
+      _snapshot,
+    );
+    _snapshot = resolved;
+    if (resolved != value) {
+      // Слияние добавило чужие изменения: принимаем их в память, иначе
+      // следующая запись снова пошла бы от устаревшего состояния.
+      _habits = habitsFromJson(resolved);
+    }
   }
 
   /// Keeps pinned habits at the top of the list while preserving the

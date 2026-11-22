@@ -317,14 +317,36 @@ class _HabitsScreenState extends State<HabitsScreen>
     final result = await Navigator.of(
       context,
     ).push<Habit>(slideUpRoute(const AddHabitScreen()));
-    if (result != null) _service.add(result);
+    if (result != null) await _persist(() => _service.add(result));
+  }
+
+  /// Запись с показом ошибки: раньше результат сохранения нигде не ждался,
+  /// и сбой записи (например, конфликт слияния файла) пропадал молча —
+  /// человек видел, что «сохранено», а правки не было.
+  Future<void> _persist(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (_) {
+      if (!mounted) return;
+      showBeautifulSnackBar(
+        context,
+        message: Translations.t(
+          'dataStorageError',
+          context,
+          'Local data could not be read or saved. Existing files were not changed.',
+        ),
+        icon: Icons.warning_amber_rounded,
+        iconColor: Colors.redAccent,
+        duration: const Duration(seconds: 6),
+      );
+    }
   }
 
   void _editHabit(Habit habit) async {
     final result = await Navigator.of(
       context,
     ).push<Habit>(slideUpRoute(AddHabitScreen(existing: habit)));
-    if (result != null) _service.update(result);
+    if (result != null) await _persist(() => _service.update(result));
   }
 
   void _loadPerfectionismMode() {

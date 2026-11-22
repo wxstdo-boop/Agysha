@@ -2,12 +2,14 @@ part of 'settings_screen.dart';
 
 /// Выбор темы «барабаном револьвера».
 ///
-/// Темы — каморы барабана. Тянешь барабан вбок — он вращается с инерцией и
-/// щёлкает по каморам, а тема, вставшая под указатель, сразу применяется:
-/// MaterialApp плавно перетекает между палитрами (300 мс), поэтому смена
-/// видна ещё во время прокрутки, а не после неё. Тап по каморе доводит
-/// барабан до неё, тап по центру применяет выбранное ещё раз (там живут
-/// «светлая Cyberpunk» и тёмный персик).
+/// Темы — каморы барабана. Тянешь барабан вбок — он идёт строго за пальцем
+/// и щёлкает по каморам, а тема применяется ОДИН раз — когда барабан встал
+/// на камору. Живой предпросмотр во время движения убран: каждая смена
+/// палитры перестраивала всё приложение, из-за чего колесо дёргалось, а
+/// палитра успевала мигнуть промежуточным вариантом (например, «своя
+/// тёмная», потом светлая Cyberpunk, и только потом выбранная тема).
+/// Тап по каморе доводит барабан до неё, тап по центру применяет выбранное
+/// ещё раз (там живут «светлая Cyberpunk» и тёмный персик).
 extension _SettingsThemeCarousel on _SettingsScreenState {
   Widget _buildThemeCarousel(BuildContext context) {
     final appState = AgyshaApp.of(context);
@@ -64,9 +66,6 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
       key: const ValueKey('theme_revolver'),
       entries: entries,
       selectedKey: appState.themeKey,
-      // Прокрутка: только переключение палитры, без «спецрежимов» — иначе
-      // барабан, проезжая мимо персика, каждый раз переключал бы его тьму.
-      onPreview: (e) => appState.setThemeMode(e.key),
       // Осознанный выбор (барабан встал или тап по центру): здесь уже
       // работают повторные тапы — светлая Cyberpunk и тёмный персик.
       onCommit: (e) {
@@ -93,13 +92,11 @@ class _ThemeRevolver extends StatefulWidget {
     super.key,
     required this.entries,
     required this.selectedKey,
-    required this.onPreview,
     required this.onCommit,
   });
 
   final List<_ThemeEntry> entries;
   final String selectedKey;
-  final void Function(_ThemeEntry entry) onPreview;
   final void Function(_ThemeEntry entry) onCommit;
 
   @override
@@ -123,7 +120,6 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// Позиция барабана в каморах; целое значение — камора ровно под
   /// указателем, дробное — барабан между каморами.
   double _pos = 0;
-  int _applied = 0;
   bool _dragging = false;
   int _spinToken = 0;
 
@@ -133,9 +129,9 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   double _dragStartPos = 0;
   int _dragDir = 0;
 
-  /// Внешний довод (тему сменили не барабаном): во время такого полёта
-  /// предпросмотр не применяем — тема уже стоит.
-  bool _gliding = false;
+  /// Последняя камора, по которой уже щёлкнула вибрация. Нужна только для
+  /// отклика во время кручения — тему она не трогает.
+  int _hapticIndex = 0;
 
   int get _n => widget.entries.length;
 
@@ -147,7 +143,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void initState() {
     super.initState();
     _pos = _indexOfKey(widget.selectedKey).toDouble();
-    _applied = _norm(_pos.round());
+    _hapticIndex = _norm(_pos.round());
     _spin.addListener(_onSpinTick);
   }
 
@@ -174,10 +170,8 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _spin.stop();
     if (dist < 0.02) {
       setState(() => _pos = goal);
-      _applied = _norm(target);
       return;
     }
-    _gliding = true;
     _spinAnim = Tween<double>(
       begin: _pos,
       end: goal,
@@ -188,8 +182,6 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _spin.forward(from: 0).whenComplete(() {
       if (!mounted || token != _spinToken) return;
       setState(() => _pos = goal);
-      _applied = _norm(target);
-      _gliding = false;
     });
   }
 
@@ -204,36 +196,15 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     final anim = _spinAnim;
     if (anim == null) return;
     setState(() => _pos = anim.value);
-    if (!_gliding) _previewNearest();
   }
 
-  /// У этих тем есть второй вариант (светлый/тёмный), и предпросмотр его
-  /// сбрасывал: барабан проезжал мимо и сам ставил светлую тему, хотя пальца
-  /// на каморе не было. Их применяем только осознанным выбором.
-  static const Set<String> _variantOnly = <String>{'peach', 'oled'};
-
-  /// Насколько камора должна подойти к указателю, чтобы тема сменилась.
-  ///
-  /// Раньше порог считался от НОМЕРА прошлой каморы (0.66 шага), и у самой
-  /// середины шага палец дрожит: барабан то переходил порог, то
-  /// возвращался, и тема за одно движение переключалась три раза туда-сюда —
-  /// это и читалось как «значки перебирает». Теперь смена происходит только
-  /// когда камора почти встала под указатель (|дробная часть| < 0.16),
-  /// то есть ровно один раз на каждую пройденную камору.
-  static const double _chamberLock = 0.16;
-
-  /// Тема под указателем поменялась — применяем её, чтобы прокрутка
-  /// выглядела как живое переключение палитры. [force] — довести тему
-  /// после доводки, когда барабан уже стоит на каморе.
-  void _previewNearest({bool force = false}) {
+  /// Щелчок вибрации на каждой пройденной каморе — так колесо «щёлкает».
+  /// Тему не меняем: палитра переключается один раз, на остановке.
+  void _tickHaptics() {
     final i = _index;
-    if (i == _applied) return;
-    if (!force && (_pos - _pos.roundToDouble()).abs() > _chamberLock) return;
-    _applied = i;
-    final entry = widget.entries[i];
-    if (_variantOnly.contains(entry.key)) return;
+    if (i == _hapticIndex) return;
+    _hapticIndex = i;
     Haptics.select();
-    widget.onPreview(entry);
   }
 
   int _shortestDelta(int from, int to) {
@@ -251,7 +222,6 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
       // Барабан уже стоит на каморе: не крутим пустую анимацию, которая
       // потом 200 мс «висит» у цели и читается как «не доводится».
       _pos = target;
-      _previewNearest(force: true);
       widget.onCommit(widget.entries[_index]);
       return;
     }
@@ -267,16 +237,15 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _spin.forward(from: 0).whenComplete(() {
       if (!mounted || token != _spinToken) return;
       _pos = target;
-      _previewNearest(force: true);
       widget.onCommit(widget.entries[_index]);
     });
   }
 
   void _onDragStart(DragStartDetails details) {
     _dragging = true;
-    _gliding = false;
     _dragStartPos = _pos;
     _dragDir = 0;
+    _hapticIndex = _index;
     _spin.stop();
     _spinToken++;
   }
@@ -289,15 +258,22 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     // барабан прыгал и крутился не туда, куда вели.
     _dragDir = delta < 0 ? 1 : -1;
     setState(() => _pos -= delta / _dragStep);
-    _previewNearest();
+    _tickHaptics();
   }
 
   void _onDragEnd(DragEndDetails details) {
     _dragging = false;
     // Инерцию не подкручиваем: на отпускании телефон иногда отдаёт скорость
     // обратного знака, и барабан резко уезжал назад. Доводим до ближайшей
-    // каморы тем же easeOutCubic.
-    _settleTo(_pos.roundToDouble());
+    // каморы тем же easeOutCubic. Но если за жест барабан увело на заметную
+    // часть шага вперёд, доводим В ТУ ЖЕ сторону: откат назад через полколеса
+    // читался как «крутится не туда».
+    final moved = _pos - _dragStartPos;
+    if (moved.abs() >= 0.18 && _dragDir != 0) {
+      _settleTo(_dragDir > 0 ? _pos.ceilToDouble() : _pos.floorToDouble());
+    } else {
+      _settleTo(_dragStartPos);
+    }
   }
 
   void _onDragCancel() {

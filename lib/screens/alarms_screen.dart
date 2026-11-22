@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import '../services/haptics.dart';
@@ -14,6 +16,7 @@ import '../services/settings_service.dart';
 import '../main.dart';
 import '../l10n/translations.dart';
 import '../widgets/swipe_to_delete.dart';
+import '../widgets/rolling_text.dart';
 import '../widgets/volumetric_switch.dart';
 import '../utils/android_settings.dart' show openFullScreenNotifSettings;
 import '../utils/page_transitions.dart';
@@ -974,25 +977,43 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             duration: const Duration(milliseconds: 320),
             curve: Curves.easeInOutCubic,
             alignment: Alignment.topCenter,
-            child: timers.isEmpty
-                ? Padding(
-                    key: const ValueKey('timers_empty'),
-                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
-                    child: Text(
-                      Translations.t('noTimers', context),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+            // Пустое состояние не «щёлкает» на месте: строка «таймеров пока
+            // нет» проявляется и уезжает с лёгким сдвигом, а высоту секции
+            // всё равно ведёт внешний AnimatedSize.
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.08),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: timers.isEmpty
+                  ? Padding(
+                      key: const ValueKey('timers_empty'),
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
+                      child: Text(
+                        Translations.t('noTimers', context),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
+                    )
+                  : Column(
+                      key: const ValueKey('timers_list'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final timer in timers)
+                          _buildTimerCard(context, theme, timer),
+                      ],
                     ),
-                  )
-                : Column(
-                    key: const ValueKey('timers_list'),
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final timer in timers)
-                        _buildTimerCard(context, theme, timer),
-                    ],
-                  ),
+            ),
           ),
         ],
       ),
@@ -1047,6 +1068,9 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       key: ValueKey('item_timer_${timer.id}'),
       dismissKey: ValueKey('dismiss_${timer.id}'),
       borderRadius: 16,
+      // Высоту схлопывает внешний AnimatedSize секции. Своя анимация размера
+      // у свайпа позже давала ВТОРОЙ рывок снизу — окошко дёргалось дважды.
+      resizeDuration: null,
       // Фон удаления = границы карточки (у неё горизонтальный margin 12).
       inset: const EdgeInsets.symmetric(horizontal: 12),
       confirmDismiss: (_) async => await showAgyshaConfirm(
@@ -1104,22 +1128,13 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                       ),
                     ),
                   ),
-                  // Счётчик стоит в раскладке ВСЕГДА и меняется без
-                  // подмены виджета: раньше каждую секунду старый и новый
-                  // Text жили одновременно в AnimatedSwitcher, и это
-                  // читалось как «счётчик мигает и пропадает».
-                  Text(
-                    _timerSvc.remainingDisplay(timer.id),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontFeatures: const <FontFeature>[
-                        FontFeature.tabularFigures(),
-                      ],
-                      color: running
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant.withValues(
-                              alpha: 0.7,
-                            ),
-                    ),
+                  // Счётчик идёт сам, по стенным часам: цифры перекатываются
+                  // в своих ячейках, а цвет и мягкий отсвет плавно
+                  // разгораются при запуске и так же плавно гаснут на паузе.
+                  _TimerLiveText(
+                    timerId: timer.id,
+                    running: running,
+                    style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(width: 4),
                   action(
@@ -1152,8 +1167,8 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                 ],
               ),
             ),
-            // Прогресс — тонкая полоска на нижнем краю; её появление тоже
-            // анимировано высотой, а не прыжком.
+            // Прогресс — тонкая полоска на нижнем краю; высота и прозрачность
+            // тоже плавные.
             AnimatedSize(
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutCubic,
@@ -1163,33 +1178,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                 duration: const Duration(milliseconds: 240),
                 curve: Curves.easeOutCubic,
                 child: showProgress
-                    ? TweenAnimationBuilder<double>(
-                        // Значение приходит раз в секунду, и полоска прыгала
-                        // шагами. Догоняем новое значение линейно за тот же
-                        // интервал — она едет непрерывно, без рывков.
-                        tween: Tween<double>(
-                          end: timer.totalSeconds > 0
-                              ? (timer.totalSeconds - rem) / timer.totalSeconds
-                              : 0,
-                        ),
-                        duration: const Duration(milliseconds: 950),
-                        curve: Curves.linear,
-                        builder: (context, value, _) => LinearProgressIndicator(
-                          value: value,
-                          minHeight: 4,
-                          borderRadius: BorderRadius.circular(4),
-                          // На светлых темах primary почти белый, и
-                          // полоска пропадала. Фирменный алый виден везде,
-                          // а фон — приглушённый цвет текста, а не
-                          // surfaceContainerHighest.
-                          backgroundColor: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.12),
-                          color: running
-                              ? const Color(0xFFE23B4E)
-                              : theme.colorScheme.onSurfaceVariant.withValues(
-                                  alpha: 0.55,
-                                ),
-                        ),
+                    ? _TimerProgressBar(
+                        timerId: timer.id,
+                        running: running,
+                        theme: theme,
                       )
                     : const SizedBox(
                         key: ValueKey('timer_progress_hidden'),
@@ -1233,6 +1225,197 @@ class _AlarmTimeHighlight extends StatelessWidget {
       style: theme.textTheme.headlineSmall?.copyWith(
         color: theme.colorScheme.onSurface,
       ),
+    );
+  }
+}
+
+/// Живое время таймера.
+///
+/// Раньше карточка перерисовывалась по уведомлению сервиса раз в секунду, и
+/// строка просто подменяла число. Теперь пока таймер идёт, остаток читается
+/// по стенным часам каждые 80 мс, поэтому секунда переключается ровно на
+/// своей границе, а [RollingText] перекатывает только изменившийся разряд.
+/// Цвет и мягкий отсвет разгораются при запуске и гаснут на паузе плавно,
+/// а не щелчком.
+class _TimerLiveText extends StatefulWidget {
+  final String timerId;
+  final bool running;
+  final TextStyle? style;
+
+  const _TimerLiveText({
+    required this.timerId,
+    required this.running,
+    this.style,
+  });
+
+  @override
+  State<_TimerLiveText> createState() => _TimerLiveTextState();
+}
+
+class _TimerLiveTextState extends State<_TimerLiveText> {
+  Timer? _ticker;
+  late String _text = _format();
+
+  String _format() {
+    final ms = TimerService().remainingMs(widget.timerId);
+    return AppTimer.formatDuration((ms / 1000).ceil());
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_TimerLiveText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.running != widget.running ||
+        oldWidget.timerId != widget.timerId) {
+      _text = _format();
+      _sync();
+    }
+  }
+
+  void _sync() {
+    _ticker?.cancel();
+    _ticker = null;
+    if (!widget.running) return;
+    _ticker = Timer.periodic(const Duration(milliseconds: 80), (_) {
+      final next = _format();
+      if (next != _text && mounted) setState(() => _text = next);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: widget.running ? 1 : 0),
+      duration: const Duration(milliseconds: 340),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, _) {
+        final cs = Theme.of(context).colorScheme;
+        final style = (widget.style ?? const TextStyle()).copyWith(
+          color: Color.lerp(
+            cs.onSurfaceVariant.withValues(alpha: 0.7),
+            cs.primary,
+            t,
+          ),
+          shadows: t > 0.02
+              ? <Shadow>[
+                  Shadow(
+                    color: cs.primary.withValues(alpha: 0.28 * t),
+                    blurRadius: 9 * t,
+                  ),
+                ]
+              : const <Shadow>[],
+        );
+        return RollingText(value: _text, style: style);
+      },
+    );
+  }
+}
+
+/// Полоска прогресса таймера, идущая от дробного остатка.
+///
+/// Значение бралось раз в секунду, и полоска проезжала шагами по секунде.
+/// Теперь, пока таймер идёт, она пересчитывается каждые 60 мс по стенным
+/// часам, а на паузе и сбросе плавно откатывается назад.
+class _TimerProgressBar extends StatefulWidget {
+  final String timerId;
+  final bool running;
+  final ThemeData theme;
+
+  const _TimerProgressBar({
+    required this.timerId,
+    required this.running,
+    required this.theme,
+  });
+
+  @override
+  State<_TimerProgressBar> createState() => _TimerProgressBarState();
+}
+
+class _TimerProgressBarState extends State<_TimerProgressBar> {
+  Timer? _ticker;
+  late double _value = _target();
+
+  double _target() {
+    final total = TimerService().totalMs(widget.timerId);
+    if (total <= 0) return 0;
+    final left = TimerService().remainingMs(widget.timerId);
+    return (1 - left / total).clamp(0.0, 1.0);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_TimerProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.running != widget.running ||
+        oldWidget.timerId != widget.timerId) {
+      _value = _target();
+      _sync();
+    }
+  }
+
+  void _sync() {
+    _ticker?.cancel();
+    _ticker = null;
+    if (!widget.running) return;
+    _ticker = Timer.periodic(const Duration(milliseconds: 60), (_) {
+      final next = _target();
+      if ((next - _value).abs() > 0.0004 && mounted) {
+        setState(() => _value = next);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = widget.theme.colorScheme;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: widget.running ? 1 : 0),
+      duration: const Duration(milliseconds: 340),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, _) {
+        // На светлых темах primary почти белый, и полоска пропадала.
+        final color = Color.lerp(
+          cs.onSurfaceVariant.withValues(alpha: 0.55),
+          const Color(0xFFE23B4E),
+          t,
+        )!;
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: _value),
+          duration: widget.running
+              ? const Duration(milliseconds: 90)
+              : const Duration(milliseconds: 420),
+          curve: widget.running ? Curves.linear : Curves.easeOutCubic,
+          builder: (context, value, _) => LinearProgressIndicator(
+            value: value,
+            minHeight: 4,
+            borderRadius: BorderRadius.circular(4),
+            backgroundColor: cs.onSurface.withValues(alpha: 0.12),
+            color: color,
+          ),
+        );
+      },
     );
   }
 }

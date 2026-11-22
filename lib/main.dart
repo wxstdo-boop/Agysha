@@ -162,6 +162,7 @@ Future<String?> _readAlarmBootPayload() async {
 /// в settings_screen.
 void startAutoSave() {
   _autoSaveOn = true;
+  SettingsService.autoSaveEnabled.value = true;
   _autoSaveTimer?.cancel();
   _autoSaveTimer = null;
   _autoSaveTick();
@@ -231,6 +232,7 @@ void _reportPersistenceFailure(Object error, StackTrace stackTrace) {
 
 void stopAutoSave() {
   _autoSaveOn = false;
+  SettingsService.autoSaveEnabled.value = false;
   _autoSaveTimer?.cancel();
   _autoSaveTimer = null;
 }
