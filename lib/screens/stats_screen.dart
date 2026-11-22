@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show listEquals;
@@ -50,6 +51,12 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
   /// пересчитывает подписи и пропускает пересборку, пока она не изменилась.
   int _lastSig = 0;
 
+  /// Будильник на 00:00 МСК: дневные счётчики сбрасываются по Москве, и если
+  /// экран статистики открыт через полночь, он должен пересчитаться сам —
+  /// раньше сброс происходил только при возврате в приложение, и цифры
+  /// менялись скачком на чужом кадре.
+  Timer? _dayRollover;
+
   int _chartSig() {
     var hDone = 0;
     for (final h in _habitSvc.habits) {
@@ -95,10 +102,26 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
     _habitSvc.addListener(_onData);
     _taskSvc.addListener(_onData);
     _logSvc.addListener(_onData);
+    _scheduleDayRollover();
     _rcSvc.load();
     _habitSvc.load();
     _taskSvc.load();
     _logSvc.load().then((_) => _logSvc.recordToday());
+  }
+
+  void _scheduleDayRollover() {
+    final now = HabitService.mskNow();
+    final nextMidnight = DateTime(now.year, now.month, now.day + 1);
+    // +1 с, чтобы привычки и проверки точно увидели уже новый день.
+    final wait = nextMidnight.difference(now) + const Duration(seconds: 1);
+    _dayRollover?.cancel();
+    _dayRollover = Timer(wait, () {
+      if (!mounted) return;
+      _habitSvc.normalizeIfDayChanged();
+      _recomputeMonth();
+      _onData();
+      _scheduleDayRollover();
+    });
   }
 
   void _onData() {
@@ -119,6 +142,7 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
     _habitSvc.removeListener(_onData);
     _taskSvc.removeListener(_onData);
     _logSvc.removeListener(_onData);
+    _dayRollover?.cancel();
     _scrollCtrl.dispose();
     super.dispose();
   }
@@ -370,8 +394,9 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
                 // слой на каждый кадр. Процент меняется по действиям, не
                 // каждый кадр, поэтому мгновенная подмена незаметна, зато
                 // никакого наложения и никакой лишней работы.
-                _StatNumber(
-                  '${(pct * 100).toInt()}%',
+                _AnimatedStatNumber(
+                  value: pct * 100,
+                  format: (v) => '${v.round()}%',
                   style: theme.textTheme.headlineLarge?.copyWith(
                     color: theme.colorScheme.onPrimaryContainer,
                     fontWeight: FontWeight.bold,
@@ -434,8 +459,9 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
                       const SizedBox(width: 8),
                       // Счётчик «сделано / всего» — тоже чистым текстом: тот же
                       // кроссфейд-«иероглиф» из двух наложенных чисел.
-                      _StatNumber(
-                        '$done / $total',
+                      _AnimatedStatNumber(
+                        value: done.toDouble(),
+                        format: (v) => '${v.round()} / $total',
                         style: theme.textTheme.titleMedium?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
@@ -456,16 +482,26 @@ class _RealityCheckStatsScreenState extends State<RealityCheckStatsScreen> {
                         alpha: theme.brightness == Brightness.dark ? 0.16 : 0.09,
                       ),
                       alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: pct.clamp(0.0, 1.0),
-                        heightFactor: 1,
-                        child: Container(color: accent),
+                      // Ширина полосы тоже едет к новому значению плавно:
+                      // дневной сброс в полночь (100% → 0%) не обрывается
+                      // кадром, а «сдувается» вместе с числами.
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween<double>(begin: pct, end: pct),
+                        duration: const Duration(milliseconds: 480),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, v, _) => FractionallySizedBox(
+                          widthFactor: v.clamp(0.0, 1.0),
+                          heightFactor: 1,
+                          child: Container(color: accent),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '${(pct * 100).toInt()}% ${Translations.t('completed', context)}',
+                  _AnimatedStatNumber(
+                    value: pct * 100,
+                    format: (v) =>
+                        '${v.round()}% ${Translations.t('completed', context)}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -541,6 +577,33 @@ class _StatNumber extends StatelessWidget {
       softWrap: false,
       overflow: TextOverflow.visible,
       style: style,
+    );
+  }
+}
+
+/// То же число, но «досчитывающееся» до нового значения: счётчики и
+/// проценты меняются по действиям и при дневном сбросе — плавный пересчёт
+/// читается спокойнее мгновенной подмены, а наложений двух текстов (как у
+/// `AnimatedSwitcher`) здесь нет.
+class _AnimatedStatNumber extends StatelessWidget {
+  final double value;
+  final String Function(double) format;
+  final TextStyle? style;
+
+  const _AnimatedStatNumber({
+    required this.value,
+    required this.format,
+    this.style,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (MotionPrefs.shouldReduceMotion) return _StatNumber(format(value), style: style);
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: value, end: value),
+      duration: const Duration(milliseconds: 480),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, _) => _StatNumber(format(v), style: style),
     );
   }
 }
