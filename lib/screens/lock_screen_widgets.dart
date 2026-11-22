@@ -405,7 +405,7 @@ class _ExitCapsuleButtonState extends State<_ExitCapsuleButton> {
           child: PressScale(
             pressedScale: 0.94,
             enableTilt: true,
-            maxTiltAngle: 0.12,
+            maxTiltAngle: 0.18,
             duration: const Duration(milliseconds: 150),
             releaseDuration: const Duration(milliseconds: 260),
             child: ClipRRect(
@@ -707,7 +707,7 @@ Future<void> _showExitDialog(
                             PressScale(
                               pressedScale: 0.94,
                               enableTilt: true,
-                              maxTiltAngle: 0.12,
+                              maxTiltAngle: 0.18,
                               duration: const Duration(milliseconds: 150),
                               releaseDuration: const Duration(
                                 milliseconds: 260,
@@ -735,7 +735,7 @@ Future<void> _showExitDialog(
                             PressScale(
                               pressedScale: 0.94,
                               enableTilt: true,
-                              maxTiltAngle: 0.12,
+                              maxTiltAngle: 0.18,
                               duration: const Duration(milliseconds: 150),
                               releaseDuration: const Duration(
                                 milliseconds: 260,
@@ -1176,9 +1176,10 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
       ty /= mag;
     }
     final target = Offset(tx, ty);
-    // Мягче прежнего 0.55: при быстром перетаскивании курсор не «дёргает»
-    // плоскость, а ведёт её за собой.
-    _tilt.value = Offset.lerp(_tilt.value, target, 0.16) ?? target;
+    // Быстрее догоняем палец: при обычном тапе палец успевает сдвинуться
+    // всего на один-два пикселя, и прежние 0.16 оставляли наклон почти
+    // нулевым — владелец видел «наклона нет вовсе».
+    _tilt.value = Offset.lerp(_tilt.value, target, 0.45) ?? target;
   }
 
   /// Уровень пигмента по прогрессу удержания: налилось до 1 за первые 30%
@@ -1294,12 +1295,12 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               final tilt = Curves.easeOutCubic.transform(_tiltCtrl.value);
               final matrix = Matrix4.identity();
               if (tilt > 0.001) {
-                matrix.setEntry(3, 2, 0.0012);
-                // Вертикальный наклон вдвое слабее горизонтального: при
-                // потяге строго вниз клавиша больше не «уезжает» вниз
-                // перспективой, а лишь мягко подаётся под палец.
-                matrix.rotateX(-_tilt.value.dy * 0.12 * tilt);
-                matrix.rotateY(_tilt.value.dx * 0.24 * tilt);
+                matrix.setEntry(3, 2, 0.0017);
+                // Вертикальный наклон слабее горизонтального, чтобы клавиша
+                // не «проваливалась» вниз, но общая амплитуда заметно
+                // сочнее: владелец просил «чуть больше» на ПИН-экране.
+                matrix.rotateX(-_tilt.value.dy * 0.21 * tilt);
+                matrix.rotateY(_tilt.value.dx * 0.44 * tilt);
               }
               final scale = 1 - 0.12 * press * (1 - lift);
               matrix.scaleByDouble(scale, scale, 1.0, 1.0);

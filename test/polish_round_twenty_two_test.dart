@@ -56,18 +56,18 @@ void main() {
 
   test('зачёркивание идёт змейкой с постоянной толщиной', () {
     final src = read('lib/widgets/animated_strike_text.dart');
-    expect(RegExp(r'fontSize \* 0\.16').hasMatch(src), isTrue);
-    expect(RegExp(r'math\.max\(2\.6,').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 0\.055').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 2\.8').hasMatch(src), isTrue);
-    // Кубические сегменты дают ровную волну без «пупырок».
-    expect(RegExp(r'path\.cubicTo\(').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.22').hasMatch(src), isTrue);
+    expect(RegExp(r'math\.max\(3\.4,').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.030').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 3\.2').hasMatch(src), isTrue);
+    // Непрерывная полилиния: одна толщина на всю длину, без стыков.
+    expect(RegExp(r'path\.lineTo\(').hasMatch(src), isTrue);
     expect(RegExp(r'amp \* 0\.28').hasMatch(src), isFalse);
   });
 
   test('у красных кнопок пробуждения есть красноватый отсвет внутри', () {
     final src = read('lib/screens/wake_task_screen.dart');
-    expect(src.contains('pressTint: const Color(0xFFE02436)'), isTrue);
+    expect(src.contains('pressTint: _red'), isTrue);
     // Отсвет — ровный, без «кровавого» радиального слоя поверх плашки:
     // усиленная краснота и градиент поверх заливки читались владельцем как
     // «окровавленный фон при нажатии». Красноватость даёт лёгкая подложка
@@ -75,7 +75,7 @@ void main() {
     expect(src.contains('pressTintStrength: 0.16'), isTrue);
     expect(src.contains('pressOverlay:'), isFalse);
     expect(
-      src.contains('releaseDuration: const Duration(milliseconds: 760)'),
+      src.contains('releaseDuration: const Duration(milliseconds: 340)'),
       isTrue,
     );
   });

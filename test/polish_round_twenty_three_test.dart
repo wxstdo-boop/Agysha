@@ -13,10 +13,10 @@ void main() {
     // «Выйти» и «Отмена» крепятся к PressScale, а цифры и крестик ведут
     // собственный наклон (вложенный PressScale терял угол за уменьшением).
     final src = read('lib/screens/lock_screen_widgets.dart');
-    expect(src.contains('maxTiltAngle: 0.12'), isTrue);
+    expect(src.contains('maxTiltAngle: 0.18'), isTrue);
     expect(src.contains('enableTilt: true'), isTrue);
-    expect(src.contains('rotateX(-_tilt.value.dy * 0.12 * tilt)'), isTrue);
-    expect(src.contains('rotateY(_tilt.value.dx * 0.24 * tilt)'), isTrue);
+    expect(src.contains('rotateX(-_tilt.value.dy * 0.21 * tilt)'), isTrue);
+    expect(src.contains('rotateY(_tilt.value.dx * 0.44 * tilt)'), isTrue);
   });
 
   test('обводка замка не красится в подарочный северный цвет', () {
@@ -44,18 +44,19 @@ void main() {
     expect(block.contains('Navigator.of(context).pop()'), isTrue);
   });
 
-  test('зачёркивание — ровная змейка из кубических сегментов', () {
+  test('зачёркивание — одна толстая змейка с ровным пером', () {
     final src = read('lib/widgets/animated_strike_text.dart');
     expect(
-      src.contains('strokeWidth = math.max(2.6, fontSize * 0.16)'),
+      src.contains('strokeWidth = math.max(3.4, fontSize * 0.22)'),
       isTrue,
     );
-    expect(src.contains('fontSize * 0.055'), isTrue);
-    expect(src.contains('fontSize * 2.8'), isTrue);
-    // Толщина одна на всю линию: рисуем непрерывный path с постоянным
-    // strokeWidth, а не отдельные круги/штрихи разной толщины.
-    expect(src.contains('path.cubicTo('), isTrue);
-    expect(src.contains('slopeAt('), isTrue);
+    expect(src.contains('fontSize * 0.030'), isTrue);
+    expect(src.contains('fontSize * 3.2'), isTrue);
+    // Толщина одна на всю линию: непрерывная полилиния с постоянным
+    // strokeWidth, без кубических стыков, где перо ложилось дважды.
+    expect(src.contains('path.lineTo('), isTrue);
+    expect(src.contains('path.cubicTo('), isFalse);
+    expect(src.contains('slopeAt('), isFalse);
     expect(src.contains('amp * 0.28'), isFalse);
   });
 }

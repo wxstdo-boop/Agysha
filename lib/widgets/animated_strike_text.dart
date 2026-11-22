@@ -264,10 +264,12 @@ class _StrikePainter extends CustomPainter {
 
     final linePaint = Paint()
       ..color = strikeColor
-      // Одна ровная толщина на всей линии: волна рисуется постоянным
-      // пером, поэтому не «толстеет» на подъёмах и не кажется тонкой на
-      // спусках. 0.16 кегля с порогом 2.6 — спокойная, но читаемая линия.
-      ..strokeWidth = math.max(2.6, fontSize * 0.16)
+      // Одна ровная толщина на всей линии. Прежние кубические сегменты
+      // давали на стыках микро-петли: полупрозрачное перо там ложилось
+      // дважды и линия читалась «то тонкой, то жирной». Теперь волна —
+      // одна полилиния с мелким шагом: толщина постоянная, а изгиб
+      // остаётся плавной змейкой.
+      ..strokeWidth = math.max(3.4, fontSize * 0.22)
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     // «Перо» на растущем конце рисует со blur-маской, а это каждый вызов —
@@ -295,37 +297,20 @@ class _StrikePainter extends CustomPainter {
       // (раньше 0.42/0.45 уходили к верху строки).
       final y = m.baseline - m.ascent * 0.38;
       // ЗМЕЙКА, а не «пупырки»: одна длинная синусоида с постоянной
-      // толщиной пера. Амплитуда низкая (0.055 кегля), период длинный —
-      // изгибы читаются ровной волной, а не «то тонко, то жирно».
-      final amp = math.max(0.8, fontSize * 0.055);
-      final period = math.max(26.0, fontSize * 2.8);
+      // толщиной пера. Амплитуда низкая, период длинный — изгибы читаются
+      // ровной волной, а не «то тонко, то жирно».
+      final amp = math.max(0.6, fontSize * 0.030);
+      final period = math.max(30.0, fontSize * 3.2);
       final phase = 2 * math.pi / period;
-      final slopeAmp = amp * phase;
       double waveAt(double x) => math.sin(x * phase) * amp;
-      double slopeAt(double x) => math.cos(x * phase) * slopeAmp;
 
-      // Кубические Безье по самой синусоиде: контрольные точки берут её
-      // касательные, поэтому линия не «гуляет» по толщине и не ломается
-      // на стыках сегментов.
+      // Мелкий шаг и lineTo: одна непрерывная полилиния без стыков-петель.
       final path = Path()..moveTo(m.left, y + waveAt(0));
-      const step = 6.0;
-      for (var x = 0.0; x < lineWidth;) {
-        final x1 = math.min(x + step, lineWidth);
-        final y0 = waveAt(x);
-        final y1 = waveAt(x1);
-        // На самом конце касательную не продолжаем за край строки.
-        final k1 = x1 >= lineWidth ? 0.0 : slopeAt(x1);
-        final dx = (x1 - x) / 3;
-        path.cubicTo(
-          m.left + x + dx,
-          y + y0 + slopeAt(x) * dx,
-          m.left + x1 - dx,
-          y + y1 - k1 * dx,
-          m.left + x1,
-          y + y1,
-        );
-        x = x1;
+      const step = 1.5;
+      for (var x = step; x < lineWidth; x += step) {
+        path.lineTo(m.left + x, y + waveAt(x));
       }
+      path.lineTo(m.left + lineWidth, y + waveAt(lineWidth));
       canvas.drawPath(path, linePaint);
       // Мягкое «перо» на растущем конце — линия выглядит живой.
       if (dotPaint != null) {
