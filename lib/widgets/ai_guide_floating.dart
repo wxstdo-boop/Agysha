@@ -11,15 +11,16 @@ class AiFloatingBubble extends StatefulWidget {
 }
 
 class _AiFloatingBubbleState extends State<AiFloatingBubble>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   static const _historyKey = 'ai_chat_history';
-  // Скупко ужали: 240 → 204 — ниже остаётся больше места под клавиатуру.
-  static const double _expandedHeight = 204;
-  static const double _collapsedSize = 64;
+  // Окошко ещё мельче: 204 → 186, кружок 64 → 56. Меньше перекрывает
+  // чужое приложение, а подсказку всё равно видно.
+  static const double _expandedHeight = 186;
+  static const double _collapsedSize = 56;
 
   /// Ширина развёрнутого окошка: компактная, ближе к квадрату.
   static double _windowWidth(double screenWidth) =>
-      (screenWidth * 0.58).clamp(200.0, 250.0);
+      (screenWidth * 0.52).clamp(178.0, 226.0);
 
   Offset _pos = Offset.zero;
   // Позиция окошка — ValueNotifier: драг двигает только Positioned
@@ -54,6 +55,16 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   late final AnimationController _dotsCtrlMini = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
+  );
+
+  /// Превращение «окно ↔ пузырь». Раньше размер скакал в AnimatedContainer
+  /// с левым верхним якорем: в конце пузырь «дёргался и стопорился», а
+  /// середина уезжала. Теперь размер ведёт контроллер, а позиция
+  /// пересчитывается от ЦЕНТРА — превращение идёт из того же места.
+  late final AnimationController _morph = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+    value: 0.0,
   );
 
   @override
@@ -94,17 +105,37 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   /// перетаскивании вверх оно забиралось на категории «Полезные/Вредные».
   double get _topKeepout => adaTopKeepout(MediaQuery.paddingOf(context).top);
 
-  void _clampPos(Size screen) {
+  /// Плавно (без setState на каждый кадр) переводит окно в кружок и обратно.
+  void _setCollapsed(bool value) {
+    if (_collapsed == value) return;
+    setState(() => _collapsed = value);
+    _morph.animateTo(value ? 1.0 : 0.0, curve: Curves.easeInOutCubic);
+  }
+
+  /// [_pos] всегда хранит левый верхний угол РАЗВЁРНУТОГО окна — так
+  /// сохранённая позиция не зависит от состояния и не «уезжает» при
+  /// развороте. Видимый прямоугольник при скрутке центрируется относительно
+  /// него, поэтому границы считаем по текущему размеру и переводим обратно.
+  ({double cw, double ch, double ox, double oy}) _visibleBox(Size screen) {
     final w = _windowWidth(screen.width);
-    final maxY = math.max(_topKeepout, screen.height - _expandedHeight - 8.0);
-    _pos = Offset(
-      _pos.dx.clamp(8.0, screen.width - w - 8.0),
-      _pos.dy.clamp(_topKeepout, maxY),
-    );
+    final cw = _collapsed ? _collapsedSize : w;
+    final ch = _collapsed ? _collapsedSize : _expandedHeight;
+    return (cw: cw, ch: ch, ox: (w - cw) / 2, oy: (_expandedHeight - ch) / 2);
+  }
+
+  void _clampPos(Size screen) {
+    final box = _visibleBox(screen);
+    final maxY = math.max(_topKeepout, screen.height - box.ch - 8.0);
+    final left = (_pos.dx + box.ox).clamp(8.0, screen.width - box.cw - 8.0);
+    final top = (_pos.dy + box.oy).clamp(_topKeepout, maxY);
+    _pos = Offset(left - box.ox, top - box.oy);
   }
 
   void _onFloatChanged() {
     _ctrl.animateTo(aiFloating.value ? 1.0 : 0.0, curve: Curves.easeOutCubic);
+    // Ответ мог долететь в фон, пока окошко было скрыто: подхватываем
+    // историю заново, иначе новый ответ появится только после рестарта.
+    if (aiFloating.value) _loadHistory();
   }
 
   /// Загружаем ПОЛНУЮ историю диалога — единый контекст с полным чатом.
@@ -200,6 +231,10 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
     // ответ не «проскочит» в очищенную историю.
     final gen = adaChatGeneration;
     _inputCtrl.clear();
+    // Горячий стрик: строку вставляем сразу в ленту, без перечитывания
+    // истории из файла (иначе сообщение могло мигнуть или потеряться).
+    final hotLine = await AiGuideService.bumpAdaStreak();
+    if (!mounted) return;
     setState(() {
       _messages.add(
         AiMessage(
@@ -208,13 +243,20 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
           ts: DateTime.now().millisecondsSinceEpoch,
         ),
       );
+      if (hotLine != null) {
+        _messages.add(
+          AiMessage(
+            isUser: false,
+            text: hotLine,
+            ts: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+      }
       _busy = true;
       _typingFade = false;
     });
-    // Горячий стрик: общение из компактного пузыря тоже считается.
-    unawaited(AiGuideService.bumpAdaStreak());
     _dotsCtrlMini.repeat();
-    _saveHistory();
+    await _saveHistory();
     _scrollToBottom();
     try {
       final lang = await SettingsService.resolveLanguageCode();
@@ -226,7 +268,11 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
         // (мессенджер и т.п.) и может подсказать ответ собеседнику.
         screenContext: await ScreenReaderService.snapshot(),
       );
-      if (!mounted || gen != adaChatGeneration) return;
+      if (!mounted) {
+        await AiGuideService.appendBackgroundAnswer(answer);
+        return;
+      }
+      if (gen != adaChatGeneration) return;
       // Эстафета «печатает…» → ответ: точки плавно гаснут, потом ответ
       // всплывает — как в полном чате, без резкого щелчка.
       _dotsCtrlMini.stop();
@@ -264,6 +310,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   void dispose() {
     aiFloating.removeListener(_onFloatChanged);
     _ctrl.dispose();
+    _morph.dispose();
     _dotsCtrlMini.dispose();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
@@ -273,13 +320,14 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   }
 
   void _drag(Offset delta, Size screen) {
-    final next = _pos + delta;
-    final w = _windowWidth(screen.width);
-    final maxY = math.max(_topKeepout, screen.height - _expandedHeight - 8.0);
-    _pos = Offset(
-      next.dx.clamp(8.0, screen.width - w - 8.0),
-      next.dy.clamp(_topKeepout, maxY),
+    final box = _visibleBox(screen);
+    final maxY = math.max(_topKeepout, screen.height - box.ch - 8.0);
+    final left = (_pos.dx + box.ox + delta.dx).clamp(
+      8.0,
+      screen.width - box.cw - 8.0,
     );
+    final top = (_pos.dy + box.oy + delta.dy).clamp(_topKeepout, maxY);
+    _pos = Offset(left - box.ox, top - box.oy);
     _posNotifier.value = _pos;
   }
 
@@ -353,7 +401,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
       builder: (context, locked, _) {
         if (locked) return const SizedBox.shrink();
         return AnimatedBuilder(
-          animation: _ctrl,
+          animation: Listenable.merge([_ctrl, _morph]),
           // Тяжёлый контент (лента сообщений, поле ввода) строится ОДИН раз
           // и живёт как готовый child — при анимации появления/закрытия
           // пересоздаётся только Opacity/Scale (готовый слой двигается),
@@ -363,57 +411,73 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
           // RepaintBoundary: пузырь живёт отдельным слоем перерисовки —
           // его драг/анимации не перекрашивают окна приложений под ним
           // и наоборот; на слабых телефонах дёрганье устраняется.
-          child: RepaintBoundary(
-            child: AnimatedContainer(
-              // easeOutBack давал overshoot — окошко «перелетало» размер
-              // и дёргалось при разворачивании. Плавная easeOutCubic.
-              duration: const Duration(milliseconds: 420),
-              curve: Curves.easeInOutCubic,
-              width: _collapsed ? _collapsedSize : w,
-              height: _collapsed ? _collapsedSize : _expandedHeight,
-              decoration: _bubbleDecoration(cs, _collapsed),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 380),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    // Свой layout: уходящий слой остаётся позиционированным
-                    // УЖЕ, а не всплывает центром стека. Закрытие/скрутка
-                    // читаются как жалюзи одного окна, а не «новый белый
-                    // фон» из-под прозрачного пузыря.
-                    layoutBuilder: (currentChild, previousChildren) => Stack(
-                      fit: StackFit.expand,
-                      alignment: Alignment.center,
-                      children: <Widget>[...previousChildren, ?currentChild],
-                    ),
-                    transitionBuilder: (child, anim) => FadeTransition(
-                      opacity: anim,
-                      // Меньше «сжатости» при разворачивании: чат больше не
-                      // вылезает из «сжатой» 0.9-копии, а мягко проявляется.
-                      child: ScaleTransition(
-                        scale: Tween(begin: 0.965, end: 1.0).animate(anim),
-                        child: child,
-                      ),
-                    ),
-                    child: _collapsed
-                        ? _buildCollapsedCircle(
-                            cs,
-                            key: const ValueKey('circle'),
-                          )
-                        : _buildExpanded(
-                            cs,
-                            screen,
-                            key: const ValueKey('expanded'),
+          child: AnimatedBuilder(
+            animation: _morph,
+            builder: (context, _) {
+              // Размер ведём из того же контроллера, что и позицию:
+              // AnimatedContainer с левым верхним якорем в конце скрутки
+              // дёргался, потому что окно сжималось в угол.
+              final mt = Curves.easeInOutCubic.transform(_morph.value);
+              final cw = w + (_collapsedSize - w) * mt;
+              final ch =
+                  _expandedHeight + (_collapsedSize - _expandedHeight) * mt;
+              // Контент меняем на середине морфа, а не мгновенно: иначе
+              // при скрутке чат исчезал, пока коробка ещё большая, и
+              // пузырь «дёргался» в последний момент.
+              final shownCollapsed = mt >= 0.5;
+              return RepaintBoundary(
+                child: Container(
+                  width: cw,
+                  height: ch,
+                  decoration: _bubbleDecoration(cs, shownCollapsed),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 380),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        // Свой layout: уходящий слой остаётся позиционированным
+                        // УЖЕ, а не всплывает центром стека. Закрытие/скрутка
+                        // читаются как жалюзи одного окна, а не «новый белый
+                        // фон» из-под прозрачного пузыря.
+                        layoutBuilder: (currentChild, previousChildren) =>
+                            Stack(
+                              fit: StackFit.expand,
+                              alignment: Alignment.center,
+                              children: <Widget>[
+                                ...previousChildren,
+                                ?currentChild,
+                              ],
+                            ),
+                        transitionBuilder: (child, anim) => FadeTransition(
+                          opacity: anim,
+                          // Меньше «сжатости» при разворачивании: чат больше не
+                          // вылезает из «сжатой» 0.9-копии, а мягко проявляется.
+                          child: ScaleTransition(
+                            scale: Tween(begin: 0.965, end: 1.0).animate(anim),
+                            child: child,
                           ),
+                        ),
+                        child: shownCollapsed
+                            ? _buildCollapsedCircle(
+                                cs,
+                                key: const ValueKey('circle'),
+                              )
+                            : _buildExpanded(
+                                cs,
+                                screen,
+                                key: const ValueKey('expanded'),
+                              ),
+                      ),
+                      // Блик поверх любого состояния.
+                      _glassHighlight(cs, shownCollapsed),
+                    ],
                   ),
-                  // Блик поверх любого состояния.
-                  _glassHighlight(cs, _collapsed),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
           builder: (context, child) {
             // Смена анимаций появления/исчезания: была голая пульсация
@@ -436,18 +500,27 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                 // подписывал его на ЛЮБОЕ изменение метрик и пересобирал
                 // каждый кадр анимации клавиатуры целиком.
                 final mqSize = MediaQuery.sizeOf(context);
-                final kb = _collapsed
+                final kb = _morph.value >= 0.5
                     ? 0.0
                     : MediaQuery.viewInsetsOf(context).bottom;
-                var top = pos.dy;
-                if (!_collapsed) {
+                // Позиция считается от ЦЕНТРА: при скрутке окно уменьшается
+                // в обе стороны, а не убегает в левый верхний угол и не
+                // «стопорится» на последнем кадре.
+                final mt = Curves.easeInOutCubic.transform(_morph.value);
+                final cw = w + (_collapsedSize - w) * mt;
+                final ch =
+                    _expandedHeight + (_collapsedSize - _expandedHeight) * mt;
+                var left = pos.dx + (w - cw) / 2;
+                left = left.clamp(8.0, mqSize.width - cw - 8.0);
+                var top = pos.dy + (_expandedHeight - ch) / 2;
+                if (_morph.value < 0.5) {
                   if (kb > 0) {
-                    final maxTop = mqSize.height - _expandedHeight - 8;
+                    final maxTop = mqSize.height - ch - 8;
                     if (top > maxTop) top = maxTop < 0 ? 0 : maxTop;
                   }
                 }
                 return Positioned(
-                  left: pos.dx,
+                  left: left,
                   top: top,
                   child: IgnorePointer(
                     ignoring: !aiFloating.value || t < 1.0,
@@ -476,7 +549,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
     return GestureDetector(
       key: key,
       behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _collapsed = false),
+      onTap: () => _setCollapsed(false),
       onPanUpdate: (d) => _drag(d.delta, MediaQuery.sizeOf(context)),
       onPanEnd: (_) => _savePos(MediaQuery.sizeOf(context)),
       child: Center(
@@ -530,7 +603,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                 _swipeDy.abs() > _swipeDx.abs() * 1.4) {
               _swipedClosed = true;
               Haptics.light();
-              setState(() => _collapsed = true);
+              _setCollapsed(true);
             }
           },
           onPanEnd: (_) => _savePos(screen),
@@ -546,14 +619,14 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
               children: [
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => setState(() => _collapsed = true),
+                  onTap: () => _setCollapsed(true),
                   child: AdaAvatar(size: 26),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: () => setState(() => _collapsed = true),
+                    onTap: () => _setCollapsed(true),
                     child: Text(
                       Translations.t('aiGuide', context, 'AI guide'),
                       maxLines: 1,

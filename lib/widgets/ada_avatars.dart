@@ -13,6 +13,11 @@ class AdaVariant {
   final List<Color> colors;
   final IconData icon;
 
+  /// «Горячий» эмодзи-глиф вместо материальной иконки: персики, огонь, вишня,
+  /// поцелуй. Эмодзи цветные сами по себе и читаются «живее» плоского значка,
+  /// поэтому в медальоне Ады он рисуется как есть, с мягкой тенью.
+  final String? emoji;
+
   /// Приблизительный оттенок (0-360): при смене аватарки избегаем вариантов
   /// с близким оттенком, чтобы аватарка не «дублировалась» похожими
   /// градиентами подряд.
@@ -23,7 +28,13 @@ class AdaVariant {
   /// аватарки не читаются «одной и той же заливкой».
   final double angle;
 
-  const AdaVariant(this.colors, this.icon, {this.hue = 0, this.angle = 3.927});
+  const AdaVariant(
+    this.colors,
+    this.icon, {
+    this.emoji,
+    this.hue = 0,
+    this.angle = 3.927,
+  });
 }
 
 /// Все варианты Ады: 6 авторских + 114 сгенерированных = 120 уникальных
@@ -37,31 +48,37 @@ List<AdaVariant> _buildAdaVariants() {
     AdaVariant(
       [Color(0xFFFF9EC6), Color(0xFFB06AB3), Color(0xFF7C4DFF)],
       Icons.favorite,
+      emoji: '🍑',
       hue: 335,
     ),
     AdaVariant(
       [Color(0xFFFFB199), Color(0xFFFF6B9D), Color(0xFFE63946)],
       Icons.local_florist,
+      emoji: '💋',
       hue: 350,
     ),
     AdaVariant(
       [Color(0xFF9BE8FF), Color(0xFF7C4DFF), Color(0xFF2E3192)],
       Icons.auto_awesome,
+      emoji: '🔥',
       hue: 268,
     ),
     AdaVariant(
       [Color(0xFF8BF0C8), Color(0xFF2BB3A0), Color(0xFF0F6E6E)],
       Icons.wb_sunny,
+      emoji: '🍒',
       hue: 168,
     ),
     AdaVariant(
       [Color(0xFFFFD166), Color(0xFFFF8C42), Color(0xFFD62828)],
       Icons.star,
+      emoji: '✨',
       hue: 36,
     ),
     AdaVariant(
       [Color(0xFFC9B8FF), Color(0xFF8E7CFF), Color(0xFF4A3F9E)],
       Icons.psychology,
+      emoji: '💜',
       hue: 255,
     ),
   ];
@@ -109,6 +126,31 @@ List<AdaVariant> _buildAdaVariants() {
     Icons.heart_broken,
     Icons.emoji_objects,
   ];
+  // Пул «горячих» эмодзи для сгенерированных вариантов: он короче списка
+  // иконок, поэтому глифы повторяются, но вместе с уникальным градиентом и
+  // углом каждая аватарка остаётся узнаваемой.
+  const emojis = <String>[
+    '🍑',
+    '🔥',
+    '💋',
+    '🍒',
+    '✨',
+    '💜',
+    '🌶️',
+    '🍓',
+    '🥵',
+    '💫',
+    '🫦',
+    '🌹',
+    '🍯',
+    '⚡',
+    '💅',
+    '🧿',
+    '🪩',
+    '🍷',
+    '🦋',
+    '🖤',
+  ];
   final generated = <AdaVariant>[];
   for (var i = 0; i < 114; i++) {
     final hue = (i * 47) % 360;
@@ -132,6 +174,7 @@ List<AdaVariant> _buildAdaVariants() {
       AdaVariant(
         [c1, c2, c3],
         icons[i % icons.length],
+        emoji: emojis[i % emojis.length],
         hue: hue.toDouble(),
         angle: (3.927 + i * 0.57) % (math.pi * 2),
       ),
@@ -451,6 +494,16 @@ class AdaAvatar extends StatelessWidget {
       color: cs.primary.withValues(alpha: dark ? 0.34 : 0.20),
       blurRadius: size * 0.18,
     );
+    if (v.emoji != null) {
+      return Text(
+        v.emoji!,
+        style: TextStyle(
+          fontSize: size * (monochrome ? 0.50 : 0.46),
+          height: 1.0,
+          shadows: [glow],
+        ),
+      );
+    }
     final icon = ShaderMask(
       blendMode: BlendMode.srcIn,
       shaderCallback: (rect) => LinearGradient(

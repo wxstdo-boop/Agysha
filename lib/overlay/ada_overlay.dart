@@ -800,6 +800,10 @@ class _OverlayChatState extends State<_OverlayChat>
     final message = _inputCtrl.text.trim();
     if (message.isEmpty || _busy) return;
     _inputCtrl.clear();
+    // Горячий стрик: строку вставляем сразу в ленту, без перечитывания
+    // истории из файла.
+    final hotLine = await AiGuideService.bumpAdaStreak();
+    if (!mounted) return;
     setState(() {
       _messages.add(
         AiMessage(
@@ -808,12 +812,19 @@ class _OverlayChatState extends State<_OverlayChat>
           ts: DateTime.now().millisecondsSinceEpoch,
         ),
       );
+      if (hotLine != null) {
+        _messages.add(
+          AiMessage(
+            isUser: false,
+            text: hotLine,
+            ts: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+      }
       _busy = true;
       _typingFade = false;
     });
-    // Горячий стрик: общение из мини-окошка тоже считается.
-    unawaited(AiGuideService.bumpAdaStreak());
-    _saveHistory();
+    await _saveHistory();
     _scrollToBottom();
 
     try {
@@ -826,7 +837,10 @@ class _OverlayChatState extends State<_OverlayChat>
         // живёт в prefs ('ai_web_search') и переживает перезапуск.
         useWebSearch: globalPrefs.getBool('ai_web_search') ?? false,
       );
-      if (!mounted) return;
+      if (!mounted) {
+        await AiGuideService.appendBackgroundAnswer(reply);
+        return;
+      }
       // Эстафета «печатает…» → ответ: точки плавно гаснут, потом ответ
       // всплывает — как в полном чате, без резкого щелчка.
       setState(() => _typingFade = true);

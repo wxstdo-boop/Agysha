@@ -145,48 +145,38 @@ class _UpdatePillState extends State<UpdatePill>
         return;
       }
 
-      // Качаем после согласия.
-      final path = await UpdateService.instance.download(update);
+      // Качаем и ставим ОДНИМ вызовом сервиса: работа живёт вне экрана.
+      // Ушёл из настроек/свернул приложение — загрузка не обрывается, а
+      // установка запускается сама, как только APK готов.
+      final outcome = await UpdateService.instance.downloadAndInstall(update);
       if (!mounted) return;
-      if (path == null) {
-        _toast(
-          Translations.t(
-            'updateDownloadFailed',
-            context,
-            'Не удалось скачать обновление',
-          ),
-        );
-        return;
-      }
-
-      // Android не даст тихой установки: сперва проверяем право источника.
-      final can = await Installer.canInstall();
-      if (!can) {
-        await Installer.openInstallSettings();
-        if (!mounted) return;
-        _toast(
-          Translations.t(
-            'updateAllowSource',
-            context,
-            'Разрешите установку из этого источника и нажмите снова',
-          ),
-        );
-        return;
-      }
-
-      final ok = await Installer.installApk(
-        path,
-        expectedSha256: update.sha256,
-      );
-      if (!mounted) return;
-      if (!ok) {
-        _toast(
-          Translations.t(
-            'updateInstallFailed',
-            context,
-            'Не удалось запустить установку',
-          ),
-        );
+      switch (outcome) {
+        case UpdateOutcome.downloadFailed:
+          _toast(
+            Translations.t(
+              'updateDownloadFailed',
+              context,
+              'Не удалось скачать обновление',
+            ),
+          );
+        case UpdateOutcome.permissionNeeded:
+          _toast(
+            Translations.t(
+              'updateAllowSource',
+              context,
+              'Разрешите установку из этого источника и нажмите снова',
+            ),
+          );
+        case UpdateOutcome.installFailed:
+          _toast(
+            Translations.t(
+              'updateInstallFailed',
+              context,
+              'Не удалось запустить установку',
+            ),
+          );
+        case UpdateOutcome.installed:
+          break;
       }
     } catch (_) {
       if (!mounted) return;

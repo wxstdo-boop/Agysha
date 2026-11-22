@@ -24,9 +24,9 @@ part of 'ai_guide_service.dart';
 
   /// Вызывается при каждом сообщении пользователя. Растит стрик один раз
   /// в день (первое сообщение нового дня). Когда стрик вырос (≥2 дней),
-  /// Ада подкидывает в чат горячую фразу — «связь раскаляется».
-  /// Возвращает новый стрик, если он сегодня вырос, иначе 0.
-  Future<int> _bumpAdaStreakImpl() async {
+  /// возвращает горячую фразу для чата — вызывающий код вставляет её сам,
+  /// чтобы сообщение не перечитывалось из файла и не терялось.
+  Future<String?> _bumpAdaStreakImpl() async {
     try {
       final today = localDayKey();
       final last = globalPrefs.getString(AiGuideService._adaStreakLastKey);
@@ -52,13 +52,11 @@ part of 'ai_guide_service.dart';
       await ScoreService().markActiveDay();
       if (grew && newCount >= 2) {
         final lang = await SettingsService.resolveLanguageCode();
-        final text = _hotStreakLine(newCount, lang == 'ru');
-        await _appendToChatHistory([AiMessage(isUser: false, text: text)]);
-        AiGuideService.adaReportTick.value++;
+        return _hotStreakLine(newCount, lang == 'ru');
       }
-      return grew ? newCount : 0;
+      return null;
     } catch (_) {
-      return 0;
+      return null;
     }
   }
 

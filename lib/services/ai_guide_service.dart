@@ -635,14 +635,17 @@ class AiGuideService {
         webCtx = await webSearch(userText, languageCode);
         if (webCtx.isNotEmpty) {
           effectiveText =
-              'ВЕБ-ПОИСК по запросу пользователя включён.\n'
-              'Отвечай ТОЛЬКО по этим данным (они свежие и точные), коротко '
-              'и по делу. НЕ выдумывай факты, НЕ упоминай инструменты/поиск '
-              'и НЕ пиши ничего про «lookup», «поисковик», «API» — просто '
-              'отвечай. НЕ перечисляй источники в конце — приложение добавит '
-              'их само. Если всё же захочешь сослаться — напиши просто '
-              'домен в скобках, например (bing.com).\n'
-              '$webCtx\n\n'
+              'ВЕБ-ПОИСК по запросу пользователя включён. Ниже — свежие '
+              'выдержки из выдачи.\n'
+              'Сначала ответь ПО СУТИ: 2–4 живых предложения своими словами, '
+              'без воды и без пересказа всего списка. Используй факты из '
+              'выдержек, не выдумывай цифры и детали, которых там нет. '
+              'Если данные противоречат друг другу — выбери самое '
+              'убедительное и скажи об этом одной фразой. НЕ упоминай '
+              'инструменты, «поиск», «lookup», «API» и не пиши служебных '
+              'фраз вроде «согласно результатам». НЕ перечисляй источники '
+              'в конце — приложение добавит красивый список само.\n\n'
+              'ВЫДЕРЖКИ:\n$webCtx\n\n'
               'Вопрос пользователя: $userText';
         }
       } catch (_) {
@@ -756,18 +759,36 @@ class AiGuideService {
   static String _appendSources(String answer, String webCtx) {
     final s = answer.trim();
     if (s.isEmpty) return s;
-    final domains = <String>{};
-    for (final m in RegExp(r'\[([a-z0-9.-]+)\]').allMatches(webCtx)) {
-      final d = m.group(1);
-      if (d != null && d.isNotEmpty) domains.add(d);
+    // Домен → самый информативный заголовок из выдачи. Раньше источники
+    // были голыми доменами; теперь это аккуратный нумерованный список
+    // «**домен** — заголовок», который приятно читать.
+    final titles = <String, String>{};
+    for (final line in webCtx.split('\n')) {
+      final m = RegExp(r'\[([a-z0-9.-]+)\]').firstMatch(line);
+      if (m == null) continue;
+      final domain = m.group(1)!;
+      if (titles.containsKey(domain)) continue;
+      var title = line.substring(0, m.start).trim();
+      title = title.replaceFirst(RegExp(r'^\d+[.)]\s*'), '').trim();
+      final dash = title.indexOf(RegExp(r' [—:] '));
+      if (dash > 0) title = title.substring(0, dash).trim();
+      if (title.length > 64) title = '${title.substring(0, 64).trim()}…';
+      titles[domain] = title;
     }
-    if (domains.isEmpty) return s;
+    if (titles.isEmpty) return s;
     final body = _stripTrailingSourceSection(s);
     final buf = StringBuffer();
     if (body.isNotEmpty) buf.write('$body\n\n');
     buf.write('**Источники:**\n');
-    for (final d in domains) {
-      buf.write('**($d)**\n');
+    var i = 1;
+    for (final entry in titles.entries) {
+      final title = entry.value;
+      buf.write(
+        title.isEmpty
+            ? '**$i.** ${entry.key}\n'
+            : '**$i.** ${entry.key} — $title\n',
+      );
+      i++;
     }
     return buf.toString().trim();
   }
@@ -1284,12 +1305,53 @@ class AiGuideService {
   /// чата подхватывает изменения мгновенно.
   static final ValueNotifier<int> adaStreak = ValueNotifier<int>(0);
 
-  /// Локальная дата (yyyy-MM-dd) — стрик живёт по дням пользователя,
-  /// а не по UTC.
+  /// Дописывает ответ Ады, пришедший уже после закрытия чата. Раньше
+  /// `_send` выбрасывал его при `!mounted`, и человек, закрыв окно, терял
+  /// ответ навсегда. Пишем в общий файл истории (со слиянием снимков, чтобы
+  /// не затереть сообщения из второго движка) и толкаем тик — открытый
+  /// мини-чат/полный чат перечитает ленту.
+  static Future<void> appendBackgroundAnswer(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    try {
+      final raw = await JsonFile.read(_chatHistoryKey);
+      final list = <AiMessage>[];
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map<String, dynamic>) {
+              list.add(AiMessage.fromJson(item));
+            }
+          }
+        }
+      }
+      list.add(
+        AiMessage(
+          isUser: false,
+          text: trimmed,
+          ts: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      if (list.length > 1000) list.removeRange(0, list.length - 1000);
+      await JsonFile.writeWithSnapshot(
+        _chatHistoryKey,
+        jsonEncode(list.map((m) => m.toJson()).toList()),
+        raw,
+      );
+      adaReportTick.value++;
+    } catch (_) {
+      // Фоновая досылка не должна ронять приложение: ответ просто не
+      // долетит до истории, ноUI останется живым.
+    }
+  }
+
   // ---- Ада: стрик, отчёты и похвалы: тела в ai_guide_service_reports.dart ----
 
   static Future<void> loadAdaStreak() => _loadAdaStreakImpl();
-  static Future<int> bumpAdaStreak() => _bumpAdaStreakImpl();
+
+  /// Возвращает «горячую» строку, если стрик сегодня вырос (иначе null).
+  static Future<String?> bumpAdaStreak() => _bumpAdaStreakImpl();
   static Future<String> morningReportText(String languageCode) =>
       _morningReportTextImpl(languageCode);
   static Future<String> eveningReportText(String languageCode) =>

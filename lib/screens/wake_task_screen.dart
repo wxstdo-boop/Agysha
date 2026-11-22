@@ -1653,7 +1653,7 @@ class _PopNumber extends StatelessWidget {
 /// читались чужими. Теперь это та же стеклянная кровавая таблетка, что у
 /// разделов: постоянная форма, винный градиент, верхний блик, мягкая тень,
 /// 3D-наклон по пальцу и плавная отдача уменьшения (PressScale).
-class _RedPillButton extends StatelessWidget {
+class _RedPillButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
@@ -1665,132 +1665,171 @@ class _RedPillButton extends StatelessWidget {
   });
 
   @override
+  State<_RedPillButton> createState() => _RedPillButtonState();
+}
+
+class _RedPillButtonState extends State<_RedPillButton>
+    with SingleTickerProviderStateMixin {
+  /// Отсвет доступности живёт на своём контроллере: раньше его анимировал
+  /// `AnimatedContainer`, и при пересоздании кнопки (например, при вводе
+  /// цифры в задаче) состояние сбрасывалось — фон вспыхивал кадром.
+  late final AnimationController _glow = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    value: widget.onPressed != null ? 1 : 0,
+  );
+
+  @override
+  void didUpdateWidget(_RedPillButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final on = widget.onPressed != null;
+    final target = on ? 1.0 : 0.0;
+    if ((_glow.value - target).abs() > 0.001) {
+      _glow.animateTo(target, curve: Curves.easeOutCubic);
+    }
+  }
+
+  @override
+  void dispose() {
+    _glow.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final on = onPressed != null;
+    final label = widget.label;
+    final onPressed = widget.onPressed;
+    final icon = widget.icon;
+    final enabled = onPressed != null;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final radius = BorderRadius.circular(999);
-    final child = AnimatedContainer(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-      // Компактная кнопка задачи больше не «обрубок» по центру: у неё та же
-      // кровная таблетка, что у разделов, но с собственной минимальной
-      // шириной — на узком экране она читается как полноценная кнопка.
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        // ПРОЗРАЧНЫЙ фон внутри: та самая «пиздатая» кнопка, которую
-        // пользователь просил вернуть. Раньше здесь лежал плотный винный
-        // градиент, и на светлой теме кнопка читалась тяжёлой серой
-        // плашкой, а серые полосы градиента «вылезали» по краям.
-        // Теперь — только красная кромка и красный текст; зажатие
-        // подкрашивает внутренность мягким красным через PressScale.
-        // Прозрачный фон при отключённой кнопке и ЛЁГКИЙ красный отсвет
-        // внутри, когда она доступна. Переход в обе стороны анимирует
-        // AnimatedContainer 260 мс: заполнение цифр включает отсвет плавно,
-        // а стирание так же мягко его убирает — без «вспышки» кадром.
-        color: on
-            ? const Color(0xFFE02436).withValues(alpha: dark ? 0.12 : 0.09)
-            : Colors.transparent,
-        border: Border.all(
-          color: on
-              ? const Color(0xFFE02436).withValues(alpha: dark ? 0.92 : 0.88)
-              : const Color(0xFFE02436).withValues(alpha: dark ? 0.30 : 0.26),
-          width: 1.5,
-        ),
-        boxShadow: [
-          if (on)
-            BoxShadow(
-              color: BrandColors.blood.withValues(alpha: dark ? 0.24 : 0.16),
-              blurRadius: 16,
-              spreadRadius: -6,
-              offset: const Offset(0, 5),
+    return AnimatedBuilder(
+      animation: _glow,
+      builder: (context, _) {
+        final t = Curves.easeOutCubic.transform(_glow.value);
+        final child = Container(
+          // Компактная кнопка задачи больше не «обрубок» по центру: у неё та же
+          // кровная таблетка, что у разделов, но с собственной минимальной
+          // шириной — на узком экране она читается как полноценная кнопка.
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            // ПРОЗРАЧНЫЙ фон внутри: та самая «пиздатая» кнопка, которую
+            // пользователь просил вернуть. Раньше здесь лежал плотный винный
+            // градиент, и на светлой теме кнопка читалась тяжёлой серой
+            // плашкой, а серые полосы градиента «вылезали» по краям.
+            // Теперь — только красная кромка и красный текст; зажатие
+            // подкрашивает внутренность мягким красным через PressScale.
+            // Отсвет внутри появляется/исчезает вместе с доступностью
+            // (320 мс в обе стороны) — без «вспышки» кадром.
+            color: const Color(
+              0xFFE02436,
+            ).withValues(alpha: (dark ? 0.12 : 0.09) * t),
+            border: Border.all(
+              color: const Color(0xFFE02436).withValues(
+                alpha:
+                    (dark ? 0.30 : 0.26) +
+                    ((dark ? 0.92 : 0.88) - (dark ? 0.30 : 0.26)) * t,
+              ),
+              width: 1.5,
             ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (icon != null) ...[
-            // Значок в лёгком светлом кружке — тот же ритм, что у кружка
-            // привычки: кнопка не выглядит «текстом с иконкой сбоку».
-            Container(
-              width: 21,
-              height: 21,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.transparent,
-                border: Border.all(
-                  color: const Color(
-                    0xFFE02436,
-                  ).withValues(alpha: on ? 0.75 : 0.35),
-                  width: 1.1,
+            boxShadow: [
+              BoxShadow(
+                color: BrandColors.blood.withValues(
+                  alpha: (dark ? 0.24 : 0.16) * t,
+                ),
+                blurRadius: 16,
+                spreadRadius: -6,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                // Значок в лёгком светлом кружке — тот же ритм, что у кружка
+                // привычки: кнопка не выглядит «текстом с иконкой сбоку».
+                Container(
+                  width: 21,
+                  height: 21,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.transparent,
+                    border: Border.all(
+                      color: const Color(
+                        0xFFE02436,
+                      ).withValues(alpha: 0.35 + 0.40 * t),
+                      width: 1.1,
+                    ),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 14,
+                    color: const Color(
+                      0xFFE02436,
+                    ).withValues(alpha: 0.45 + 0.55 * t),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  style: TextStyle(
+                    // Кнопка мельче: прежние 15/14 выглядели крупной плашкой
+                    // рядом с компактной карточкой.
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                    color: const Color(
+                      0xFFE02436,
+                    ).withValues(alpha: 0.45 + 0.55 * t),
+                    shadows: null,
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
-              child: Icon(
-                icon,
-                size: 14,
-                color: const Color(
-                  0xFFE02436,
-                ).withValues(alpha: on ? 1.0 : 0.45),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              style: TextStyle(
-                // Кнопка мельче: прежние 15/14 выглядели крупной плашкой
-                // рядом с компактной карточкой.
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-                color: const Color(
-                  0xFFE02436,
-                ).withValues(alpha: on ? 1.0 : 0.45),
-                shadows: null,
-              ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-              ),
+            ],
+          ),
+        );
+
+        return Semantics(
+          button: true,
+          enabled: enabled,
+          label: label,
+          child: PressScale(
+            enabled: enabled,
+            pressedScale: 0.965,
+            enableTilt: true,
+            // Красноватый отсвет ВНУТРИ фона под пальцем: винная подложка
+            // заливает таблетку и плавно растворяется после отпускания
+            // (760 мс), а не гаснет рывком.
+            // Отсвет ВНУТРИ — только мягкий красноватый тон под пальцем.
+            // Радиальный «кровавый» слой убран: он «окровавливал» фон всей
+            // таблетки, и владелец просил вернуть прежний вид.
+            pressTint: const Color(0xFFE02436),
+            pressTintStrength: 0.16,
+            pressTintRadius: radius,
+            duration: const Duration(milliseconds: 160),
+            releaseDuration: const Duration(milliseconds: 760),
+            releaseCurve: Curves.easeOutCubic,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              // Нажатие по недоступной кнопке не должно давать отклика.
+              onTap: onPressed,
+              child: child,
             ),
           ),
-        ],
-      ),
-    );
-
-    return Semantics(
-      button: true,
-      enabled: on,
-      label: label,
-      child: PressScale(
-        enabled: on,
-        pressedScale: 0.965,
-        enableTilt: true,
-        // Красноватый отсвет ВНУТРИ фона под пальцем: винная подложка
-        // заливает таблетку и плавно растворяется после отпускания
-        // (760 мс), а не гаснет рывком.
-        // Отсвет ВНУТРИ — только мягкий красноватый тон под пальцем.
-        // Радиальный «кровавый» слой убран: он «окровавливал» фон всей
-        // таблетки, и владелец просил вернуть прежний вид.
-        pressTint: const Color(0xFFE02436),
-        pressTintStrength: 0.16,
-        pressTintRadius: radius,
-        duration: const Duration(milliseconds: 160),
-        releaseDuration: const Duration(milliseconds: 760),
-        releaseCurve: Curves.easeOutCubic,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          // Нажатие по недоступной кнопке не должно давать отклика.
-          onTap: onPressed,
-          child: child,
-        ),
-      ),
+        );
+      },
     );
   }
 }
