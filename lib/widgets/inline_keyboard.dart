@@ -153,7 +153,9 @@ class _InlineKeyboardState extends State<InlineKeyboard>
       // Бока — 6 px: крайние клавиши больше не наезжают на скругление листа
       // и «не заезжают» в стенки окна. Сами клавиши чуть уже, зато ряд
       // читается целым — владелец просил именно уменьшить панель по бокам.
-      padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
+      // Боковые поля панели поджаты: клавиши должны быть шире, чтобы по ним
+      // попадать пальцем (владелец: «кнопки на клавиатуре расширь»).
+      padding: const EdgeInsets.fromLTRB(3, 8, 3, 10),
       decoration: BoxDecoration(
         // Полупрозрачная панель с ЯВНЫМ КРАСНЫМ отливом: сквозь клавиатуру
         // просвечивает лист, а алый тон привязывает её к остальным
@@ -364,7 +366,9 @@ class _KeyState extends State<_Key> {
             cs.surfaceContainerHighest.withValues(alpha: 0.24),
           );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
+      // Полпикселя по бокам вместо пикселя: зазор между клавишами остаётся
+      // читаемым, но каждая шляпка получает ещё ~1 px ширины.
+      padding: const EdgeInsets.symmetric(horizontal: 0.5, vertical: 1),
       child: PressScale(
         // Отдача клавиши — заметно медленнее и мягче прежних 90/180 мс:
         // на быстром наборе клавиша «щёлкала» кадром и не читалась как

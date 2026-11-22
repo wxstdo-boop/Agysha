@@ -34,17 +34,18 @@ void main() {
         reason: '$path: история должна отбрасывать сообщения до очистки',
       );
       expect(
-        src.contains('(m.ts ?? 0) > clearedAt'),
+        src.contains('AiGuideService.visibleInChat(m, clearedAt)'),
         isTrue,
         reason: '$path: без фильтра стёртые тексты возвращаются',
       );
     }
-    expect(
-      File(
-        'lib/services/ai_guide_service.dart',
-      ).readAsStringSync().contains('(message.ts ?? 0) > clearedAt'),
-      isTrue,
-    );
+    final service = File(
+      'lib/services/ai_guide_service.dart',
+    ).readAsStringSync();
+    expect(service.contains('(message.ts ?? 0) > clearedAt'), isTrue);
+    // Без очистки (clearedAt == 0) старые сообщения без метки времени
+    // остаются в ленте — иначе чат пустел после перезахода.
+    expect(service.contains('clearedAt == 0 ||'), isTrue);
   });
 
   test('веб-поиск режет по границе слова и ищет свежие материалы', () {

@@ -1164,6 +1164,15 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
     reverseDuration: const Duration(milliseconds: 700),
   );
 
+  /// Момент прошлого отпускания. Быстрый набор ПИН-кода — это десяток
+  /// тапов подряд, и каждый заново зажигал пятно с нуля: на экране мигала
+  /// гирлянда вспышек. Повторный тап в пределах [_repeatGuard] по-прежнему
+  /// вводит цифру, но новую волну не запускает — пятно успевает спокойно
+  /// погаснуть от прошлого нажатия.
+  DateTime? _lastReleaseAt;
+  static const _repeatGuard = Duration(milliseconds: 180);
+  bool _waveActive = false;
+
   /// Текущий наклон и цель, к которой он едет.
   ///
   /// Раньше наклон ставился прямо в `_aim` как `lerp(old, target, 0.45)`:
@@ -1220,6 +1229,18 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
   void _down(PointerDownEvent e) {
     _aim(e.localPosition);
     _tiltCtrl.forward();
+    final last = _lastReleaseAt;
+    if (last != null &&
+        DateTime.now().difference(last) < _repeatGuard &&
+        _in.value > 0.02) {
+      // Быстрый набор: пятно от прошлого тапа ещё живёт. Новую волну НЕ
+      // зажигаем (владелец: «при быстрых тапах эта грязь от нажатия много
+      // раз не должна появляться»), но и не гасим его кадром — отпускание
+      // ниже просто продолжит уже начатую волну.
+      _waveActive = false;
+      return;
+    }
+    _waveActive = true;
     _out.reset();
     // Ход ОБЯЗАТЕЛЬНО с нуля: `_up()` оставляет контроллер остановленным на
     // пике (0.30), и `forward()` без `from: 0` продолжал бы с этой точки —
@@ -1231,7 +1252,14 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
   }
 
   void _up(PointerUpEvent _) {
+    _lastReleaseAt = DateTime.now();
     _tiltCtrl.reverse();
+    if (!_waveActive) {
+      // Тап был подавлен (быстрый повтор) — волну не перезапускаем, только
+      // даём уже идущему высыханию спокойно доехать до конца.
+      if (_out.value < 1) _out.forward();
+      return;
+    }
     // Если палец ушёл раньше пика, короткий тап всё равно дорастает до максимума
     // (остальное время — уже спад). Долгое зажатие замораживается на своём
     // остывшем уровне и оттуда плавно дотухает.

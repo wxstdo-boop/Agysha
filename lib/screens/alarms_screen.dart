@@ -101,6 +101,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
     sectionCurrentIndex.removeListener(_onCurrentSectionChanged);
     _pillCtrl.removeListener(_syncPillOffset);
     _pillCtrl.dispose();
+    _timerHideTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -109,13 +110,21 @@ class _AlarmsScreenState extends State<AlarmsScreen>
   /// выключения флага остаётся, если таймеры уже созданы: иначе они
   /// «отваливались» от будильников и выглядели пропавшими.
   bool get _timersVisible =>
-      SettingsService.experimentalEnabled.value || _timerSvc.timers.isNotEmpty;
+      SettingsService.experimentalEnabled.value ||
+      _timerSvc.timers.isNotEmpty ||
+      _timersHiding;
 
   /// Таймер сейчас удаляют свайпом: его строку схлопывает сам `SwipeToDelete`
   /// (320 мс). Пока это идёт, внешняя `AnimatedSize` секции работает без
   /// задержки — иначе она догоняла уже ужавшуюся строку вторым, более
   /// долгим движением, и удаление выглядело как двойной рывок.
   bool _timerCollapsing = false;
+
+  /// Последний таймер только что удалили. Секция (если эксперимент выключен)
+  /// не должна исчезать кадром: даём ей доиграть схлопывание и прощание
+  /// плейсхолдера «таймеров пока нет», и лишь потом убираем из дерева.
+  bool _timersHiding = false;
+  Timer? _timerHideTimer;
 
   /// Раздел стал активным — форсируем ресинк офсета таблетки (keep-alive
   /// вкладка не присылает событий скролла, а общий notifier мог остаться с
@@ -989,6 +998,19 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           duration: const Duration(milliseconds: 300),
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
+          // Высоту задаёт ТОЛЬКО новый ребёнок: старый список доигрывает
+          // фейд внутри его рамки. С дефолтным layoutBuilder стек держал
+          // высоту прежнего списка до конца перехода, а потом ронял её
+          // кадром — на удалении последнего таймера экран «скукоживался».
+          layoutBuilder: (currentChild, previousChildren) => Stack(
+            alignment: Alignment.topCenter,
+            children: [
+              ...previousChildren.map(
+                (p) => Positioned.fill(child: IgnorePointer(child: p)),
+              ),
+              ?currentChild,
+            ],
+          ),
           transitionBuilder: (child, animation) => FadeTransition(
             opacity: animation,
             child: SlideTransition(
@@ -1090,8 +1112,20 @@ class _AlarmsScreenState extends State<AlarmsScreen>
         return ok;
       },
       onDismissed: (_) {
-        setState(() => _timerCollapsing = false);
+        final wasLast = _timerSvc.timers.length <= 1;
+        setState(() {
+          _timerCollapsing = false;
+          if (wasLast && !SettingsService.experimentalEnabled.value) {
+            _timersHiding = true;
+          }
+        });
         _timerSvc.remove(timer.id);
+        if (wasLast) {
+          _timerHideTimer?.cancel();
+          _timerHideTimer = Timer(const Duration(milliseconds: 520), () {
+            if (mounted) setState(() => _timersHiding = false);
+          });
+        }
       },
       child: Card(
         key: ValueKey('card_${timer.id}'),
