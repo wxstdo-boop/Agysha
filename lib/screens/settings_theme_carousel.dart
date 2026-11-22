@@ -127,16 +127,6 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   bool _dragging = false;
   int _spinToken = 0;
 
-  /// Последнее смещение пальца за кадр: нужно, чтобы инерция на отпускании
-  /// не разворачивала барабан против движения.
-  double _recentDrag = 0;
-
-  /// Направление текущего жеста (+1 / -1, 0 — ещё не определено) и сколько
-  /// пикселей палец уже тянет против него. Пока человек крутит в одну
-  /// сторону, мелкая дрожь пальца назад гасится, и барабан не отпружинивает.
-  double _dragDir = 0;
-  double _against = 0;
-
   int get _n => widget.entries.length;
 
   int _norm(int i) => i % _n < 0 ? i % _n + _n : i % _n;
@@ -241,58 +231,30 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
 
   void _onDragStart(DragStartDetails details) {
     _dragging = true;
-    _recentDrag = 0;
-    _dragDir = 0;
-    _against = 0;
     _spin.stop();
     _spinToken++;
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
-    var delta = details.primaryDelta ?? 0;
+    final delta = details.primaryDelta ?? 0;
     if (delta == 0) return;
-    if (_dragDir == 0) {
-      _dragDir = delta.sign;
-      _against = 0;
-    } else if (delta.sign != _dragDir) {
-      // Палец идёт против жеста: короткую дрожь (до 18 px) не показываем
-      // вовсе — барабан крутится только туда, куда ведут. Осознанный
-      // разворот начинается после этих 18 px.
-      _against += delta.abs();
-      if (_against < 18) return;
-      // Засчитываем только то, что палец прошёл СВЕРХ порога, поэтому
-      // разворот начинается с нуля, а не рывком на весь кадр.
-      final excess = _against - 18.0;
-      _dragDir = delta.sign;
-      _against = 0;
-      delta = _dragDir * excess;
-    } else {
-      _against = 0;
-    }
-    _recentDrag = delta;
+    // Строго 1:1 за пальцем, без порогов «против хода». Раньше короткая
+    // дрожь отбрасывалась, а накопленный хват потом применялся одним кадром —
+    // барабан прыгал и крутился не туда, куда вели.
     setState(() => _pos -= delta / _dragStep);
     _previewNearest();
   }
 
   void _onDragEnd(DragEndDetails details) {
     _dragging = false;
-    _dragDir = 0;
-    _against = 0;
-    // Инерция короткая и только ПО ходу пальца: телефон на отпускании
-    // иногда отдаёт скорость обратного знака (палец «отпружинивает»), и
-    // барабан резко уезжал назад. Такой «флик» просто не учитываем.
-    var fling = -(details.primaryVelocity ?? 0) / 1500;
-    if (_recentDrag.abs() < 4 || fling.sign != -_recentDrag.sign) {
-      fling = 0;
-    }
-    fling = fling.clamp(-1.4, 1.4);
-    _settleTo((_pos + fling).roundToDouble());
+    // Инерцию не подкручиваем: на отпускании телефон иногда отдаёт скорость
+    // обратного знака, и барабан резко уезжал назад. Доводим до ближайшей
+    // каморы тем же easeOutCubic.
+    _settleTo(_pos.roundToDouble());
   }
 
   void _onDragCancel() {
     _dragging = false;
-    _dragDir = 0;
-    _against = 0;
     _settleTo(_pos.roundToDouble());
   }
 
@@ -492,13 +454,22 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                   child: child,
                 ),
               ),
-              child: Icon(
-                entry.icon,
-                key: ValueKey<String>(
-                  'hub_${entry.key}_${entry.icon.codePoint}',
+              // Цвет значка едет за палитрой плавно. Раньше он брался
+              // напрямую из cs.primary: при смене темы значок успевал
+              // щёлкнуть новым цветом до окончания AnimatedTheme — это и
+              // читалось как «мигает».
+              child: TweenAnimationBuilder<Color?>(
+                tween: ColorTween(end: cs.primary),
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                builder: (context, color, _) => Icon(
+                  entry.icon,
+                  key: ValueKey<String>(
+                    'hub_${entry.key}_${entry.icon.codePoint}',
+                  ),
+                  size: hub * 0.34,
+                  color: color ?? cs.primary,
                 ),
-                size: hub * 0.34,
-                color: cs.primary,
               ),
             ),
           ),

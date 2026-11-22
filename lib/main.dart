@@ -70,6 +70,11 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final JankRouteObserver _jankObserver = JankRouteObserver();
 Timer? _autoSaveTimer;
 bool _autoSaveFailureActive = false;
+
+/// Включено ли автосохранение прямо сейчас. Нужен, чтобы тик, который уже
+/// шёл в момент выключения, не завёл таймер заново, и чтобы уход в фон
+/// мог сохранить данные.
+bool _autoSaveOn = false;
 // Флаг — WakeTaskScreen уже показан, не пушить второй при тапе
 // по уведомлению (onNewIntent → onNewAlarmPayload).
 bool _wakeScreenShowing = false;
@@ -118,6 +123,11 @@ Future<void> _loadStartupData() async {
     // задачи и будильники сам. Чистим остатки старых демо-данных,
     // которые могли сохраниться на диск из прошлых билдов.
     await _removeLegacyDemoData();
+    // Секция таймеров появляется только при включённой экспериментальной
+    // настройке. Флаг нужно прочитать ДО первого кадра, иначе на холодном
+    // старте таймеры «есть», а секции нет (появлялась лишь после захода
+    // в настройки и возврата).
+    await SettingsService.loadExperimental();
     final autoSaveOn = await SettingsService.loadAutoSave();
     if (autoSaveOn) startAutoSave();
     final autoExportOn = await SettingsService.loadAutoExport();
@@ -151,12 +161,14 @@ Future<String?> _readAlarmBootPayload() async {
 /// в payload ключи совпадали с именами, которыми пользуется импорт
 /// в settings_screen.
 void startAutoSave() {
+  _autoSaveOn = true;
   _autoSaveTimer?.cancel();
   _autoSaveTimer = null;
   _autoSaveTick();
 }
 
-Future<void> _autoSaveTick() async {
+/// Пишет все локальные данные на диск один раз, без запуска таймера.
+Future<void> _saveAllData() async {
   try {
     // Параллельно — не блокируем UI последовательной записью 5 файлов
     await Future.wait([
@@ -173,6 +185,13 @@ Future<void> _autoSaveTick() async {
       _reportPersistenceFailure(error, stackTrace);
     }
   }
+}
+
+Future<void> _autoSaveTick() async {
+  await _saveAllData();
+  // Тик мог доработать уже после выключения автосохранения — тогда новый
+  // таймер не заводим, иначе оно продолжало бы работать «выключенным».
+  if (!_autoSaveOn) return;
   // Увеличиваем интервал с 3 до 10 секунд, чтобы снизить нагрузку на диск.
   _autoSaveTimer = Timer(const Duration(seconds: 10), _autoSaveTick);
 }
@@ -206,6 +225,7 @@ void _reportPersistenceFailure(Object error, StackTrace stackTrace) {
 }
 
 void stopAutoSave() {
+  _autoSaveOn = false;
   _autoSaveTimer?.cancel();
   _autoSaveTimer = null;
 }
@@ -1223,6 +1243,10 @@ class AgyshaAppState extends State<AgyshaApp>
   bool get locked => _locked;
 
   void setThemeMode(String key) {
+    // Барабан на каждой доводке зовёт onCommit, даже если тема та же.
+    // Без этого guard'а лишний setState перезапускал AnimatedTheme, и при
+    // смене cyberpunk → системная значок успевал мигнуть старой палитрой.
+    if (key == _themeKey) return;
     setState(() => _themeKey = key);
     SettingsService.saveThemeMode(key);
     // Тема перетекает сама — MaterialApp анимирует ThemeData (AnimatedTheme),
@@ -1464,6 +1488,10 @@ class AgyshaAppState extends State<AgyshaApp>
     // открывается без PIN). Если PIN-экран уже на экране — не дублируем.
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
+      // Сворачивание/закрытие может заморозить процесс в любой момент,
+      // поэтому при включённом автосохранении пишем данные сразу, не
+      // дожидаясь следующего десятисекундного тика.
+      if (_autoSaveOn) _saveAllData();
       if (!systemUiActive &&
           !_wakeScreenShowing &&
           !_locked &&
@@ -1493,6 +1521,9 @@ class AgyshaAppState extends State<AgyshaApp>
         if (awayMs >= kRelockGrace.inMilliseconds) _goLock();
       }
       HabitService().normalizeIfDayChanged();
+      // В фоне тики таймеров замораживаются — при возврате пересчитываем
+      // остаток по стенным часам, чтобы счётчик не отставал.
+      TimerService().refreshFromClock();
       // Тяжёлая перепланировка — НЕ на первый видимый кадр: сначала даём
       // кадру отрисоваться (addPostFrameCallback), и только если с прошлого
       // раза прошло больше [kResumeRescheduleGrace]. Иначе десятки

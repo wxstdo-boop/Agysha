@@ -230,43 +230,6 @@ extension _SettingsSectionAccess on _SettingsScreenState {
                     // вверх-вниз кадром: она разворачивается по высоте и
                     // проявляется, а при возврате права так же плавно
                     // сворачивается.
-                    subtitle: AnimatedSize(
-                      duration: const Duration(milliseconds: 260),
-                      curve: Curves.easeOutCubic,
-                      alignment: Alignment.topLeft,
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        transitionBuilder: (child, animation) => SizeTransition(
-                          sizeFactor: animation,
-                          alignment: Alignment.topCenter,
-                          child: FadeTransition(
-                            opacity: animation,
-                            child: child,
-                          ),
-                        ),
-                        child: fsBlocked
-                            ? Padding(
-                                key: const ValueKey('fs_blocked'),
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  Translations.t(
-                                    'fullScreenGrantMissing',
-                                    context,
-                                  ),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.error,
-                                  ),
-                                ),
-                              )
-                            : const SizedBox(
-                                key: ValueKey('fs_ok'),
-                                width: double.infinity,
-                                height: 0,
-                              ),
-                      ),
-                    ),
                     leading: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 240),
                       switchInCurve: Curves.easeOutCubic,
@@ -313,6 +276,41 @@ extension _SettingsSectionAccess on _SettingsScreenState {
                       onChanged: (v) => notificationService.setFullscreen(v),
                       activeColor: theme.colorScheme.primary,
                     ),
+                  ),
+                ),
+                // Предупреждение живёт ПОД строкой, а не вместо subtitle:
+                // раньше оно раздувало ListTile и рывком сдвигало соседние
+                // строки, а сам переключатель «дёргался». Теперь высота
+                // разворачивается плавно, а строка стоит на месте.
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topLeft,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, animation) => SizeTransition(
+                      sizeFactor: animation,
+                      alignment: Alignment.topCenter,
+                      child: FadeTransition(opacity: animation, child: child),
+                    ),
+                    child: fsBlocked
+                        ? Padding(
+                            key: const ValueKey('fs_blocked'),
+                            padding: const EdgeInsets.only(top: 6, bottom: 4),
+                            child: Text(
+                              Translations.t('fullScreenGrantMissing', context),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.error,
+                              ),
+                            ),
+                          )
+                        : const SizedBox(
+                            key: ValueKey('fs_ok'),
+                            width: double.infinity,
+                            height: 0,
+                          ),
                   ),
                 ),
               ],

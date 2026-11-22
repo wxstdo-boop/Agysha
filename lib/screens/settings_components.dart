@@ -227,15 +227,13 @@ class _RealityCheckToggleCard extends StatelessWidget {
 /// Кнопка-«таблетка» способа оплаты в окне поддержки: градиентная широкая
 /// строка с иконкой в кружке, названием и стрелкой. Используется внутри
 /// bottom sheet (Ozon / Boosty и др.). Все таблетки зажимаются одинаково
-/// плавно (340 мс); справа вместо стрелки у «скоро»-способов — плашка
-/// [badge].
+/// плавно (340 мс); справа — стрелка.
 class _SupportPill extends StatefulWidget {
   final String label;
   final IconData icon;
   final List<Color> gradient;
   final Color glow;
   final VoidCallback onTap;
-  final String? badge;
 
   /// Цвет иконки и текста. Нужен для полупрозрачного алого: там всегда
   /// белый, а не «тёмный на светлой теме».
@@ -251,7 +249,6 @@ class _SupportPill extends StatefulWidget {
     required this.gradient,
     required this.glow,
     required this.onTap,
-    this.badge,
     this.subtitle,
     this.foreground,
   });
@@ -369,50 +366,11 @@ class _SupportPillState extends State<_SupportPill> {
                   ],
                 ),
               ),
-              if (widget.badge != null)
-                // Плашка «скоро»: светлый стеклянный прямоугольник с
-                // градиентом и мягким свечением, заменяет стрелку у способа,
-                // который ещё не запущен.
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(9),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        fg.withValues(alpha: 0.30),
-                        fg.withValues(alpha: 0.14),
-                      ],
-                    ),
-                    border: Border.all(color: fg.withValues(alpha: 0.55)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: fg.withValues(alpha: 0.22),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    widget.badge!,
-                    style: TextStyle(
-                      color: fg,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                      letterSpacing: 2.2,
-                    ),
-                  ),
-                )
-              else
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: fg.withValues(alpha: 0.7),
-                  size: 26,
-                ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: fg.withValues(alpha: 0.7),
+                size: 26,
+              ),
             ],
           ),
         ),
@@ -526,7 +484,7 @@ class _CtaButtonState extends State<_CtaButton> {
                 style: const TextStyle(
                   // Подпись чуть просвечивает: плотный белый «кричал», а
                   // полупрозрачный читается как часть стеклянной кнопки.
-                  color: Color(0xD9FFFFFF),
+                  color: Color(0x99FFFFFF),
                   fontWeight: FontWeight.w900,
                   fontSize: 18.4,
                   height: 1.1,

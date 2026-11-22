@@ -304,16 +304,18 @@ extension _SettingsSectionLook on _SettingsScreenState {
                 // тот же графит, что и на светлой, только чуть поднятый:
                 // прежний белёсый верх выцветал на тёмной карточке, и кнопка
                 // выглядела «вымытой» по сравнению со светлой темой.
+                // Ещё прозрачнее: кнопка читается как матовое стекло,
+                // сквозь неё видно карточку, а подпись не «кричит».
                 gradient: theme.brightness == Brightness.dark
                     ? const [
-                        Color(0xFF5A5F69),
-                        Color(0xFF2E3036),
-                        Color(0xFF15161A),
+                        Color(0x8C5A5F69),
+                        Color(0x7A2E3036),
+                        Color(0x6615161A),
                       ]
                     : const [
-                        Color(0xFF525760),
-                        Color(0xFF2A2C31),
-                        Color(0xFF121316),
+                        Color(0x8C525760),
+                        Color(0x7A2A2C31),
+                        Color(0x66121316),
                       ],
                 glow: theme.brightness == Brightness.dark
                     ? const Color(0xFF7D8494)

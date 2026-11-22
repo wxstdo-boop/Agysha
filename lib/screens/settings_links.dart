@@ -119,12 +119,11 @@ extension _SettingsLinks on _SettingsScreenState {
                 ),
                 const SizedBox(height: 18),
                 // Способы оплаты — большие кнопки-«таблетки» В ЦВЕТАХ ТЕМЫ
-                // с уникальными значками: красная сумка у Ozon — плашка SOON
-                // сохранена, но зажимается ТАКЖЕ плавно, как Boosty (340 мс).
+                // с уникальными значками. Ozon переводит по СБП: открываем
+                // ссылку доната во внешнем браузере.
                 _SupportPill(
                   label: 'Ozon',
                   icon: Icons.shopping_bag_rounded,
-                  badge: 'SOON',
                   subtitle: Translations.t('supportOzonSubtitle', context),
                   // Стеклянный алый, как у кнопки «Угостить кофе»: два
                   // ярко-красных пятна подряд читаются спокойно, пока они
@@ -135,18 +134,10 @@ extension _SettingsLinks on _SettingsScreenState {
                     Color(0xCC8A0F26),
                   ],
                   glow: const Color(0xFFD42A45),
-                  foreground: Color(0xE6FFFFFF),
-                  onTap: () {
-                    showBeautifulSnackBar(
-                      context,
-                      message: Translations.t(
-                        'supportSoonToast',
-                        context,
-                        'Ozon is coming soon. Stay tuned!',
-                      ),
-                      icon: Icons.hourglass_top_rounded,
-                    );
-                  },
+                  foreground: const Color(0x99FFFFFF),
+                  onTap: () => _openLink(
+                    'https://finance.ozon.ru/apps/sbp/ozonbankpay/ccccb061-0a35-4e1b-8607-79c369b40b37',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 _SupportPill(
@@ -161,7 +152,7 @@ extension _SettingsLinks on _SettingsScreenState {
                     Color(0xCC7C0D22),
                   ],
                   glow: const Color(0xFFD42A45),
-                  foreground: Color(0xE6FFFFFF),
+                  foreground: const Color(0x99FFFFFF),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _openLink(_boostyUrl);
