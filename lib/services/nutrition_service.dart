@@ -192,6 +192,11 @@ class NutritionService extends ChangeNotifier {
 
   List<Meal> _meals = [];
   String? _snapshot;
+
+  /// Файл уже прочитан. Без этого флага автосохранение, тикающее до открытия
+  /// раздела питания, писало ПУСТОЙ список поверх сохранённых приёмов пищи —
+  /// еда пропадала, хотя «последнее сохранение» обновлялось.
+  bool _loaded = false;
   static const _key = 'nutrition_meals';
   static const _normKey = 'nutrition_calorie_norm';
 
@@ -277,6 +282,7 @@ class NutritionService extends ChangeNotifier {
   Future<void> load() async {
     final raw = await JsonFile.read(_key);
     _snapshot = raw;
+    _loaded = true;
     if (raw != null) {
       final data = jsonDecode(raw) as List;
       _meals = data.map((e) => Meal.fromJson(e)).toList();
@@ -306,6 +312,7 @@ class NutritionService extends ChangeNotifier {
   }
 
   Future<void> _save() async {
+    if (!_loaded) return;
     final value = jsonEncode(_meals.map((e) => e.toJson()).toList());
     final resolved = await JsonFile.writeWithSnapshotRetrying(
       _key,

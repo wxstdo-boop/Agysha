@@ -15,6 +15,7 @@ import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/rolling_number.dart';
 import '../widgets/smooth_keyboard_body.dart';
+import '../widgets/auto_save_on_exit.dart';
 
 class AddTimerScreen extends StatefulWidget {
   final AppTimer? existing;
@@ -62,6 +63,16 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
   }
 
   int get _totalSeconds => _hours * 3600 + _minutes * 60 + _seconds;
+
+  /// Выход с формы при включённом автосохранении: сохраняем введённое, но
+  /// нулевой таймер не создаём — просто закрываем экран.
+  void _exitWithAutoSave() {
+    if (_totalSeconds == 0) {
+      Navigator.of(context).pop();
+      return;
+    }
+    _save();
+  }
 
   void _save() {
     if (_totalSeconds == 0) return;
@@ -285,7 +296,9 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
     final theme = Theme.of(context);
     final editing = widget.existing != null;
 
-    return Scaffold(
+    return AutoSaveOnExit(
+      onExit: _exitWithAutoSave,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(
           editing
@@ -475,6 +488,7 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../widgets/icon_picker_sheet.dart';
 import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/smooth_keyboard_body.dart';
+import '../widgets/auto_save_on_exit.dart';
 
 class AddRealityCheckScreen extends StatefulWidget {
   final RealityCheck? existing;
@@ -52,6 +53,16 @@ class _AddRealityCheckScreenState extends State<AddRealityCheckScreen> {
     if (result != null) setState(() => _iconCodePoint = result);
   }
 
+  /// Выход с формы при включённом автосохранении: сохраняем введённое, но
+  /// пустой вопрос не создаём — просто закрываем экран.
+  void _exitWithAutoSave() {
+    if (_questionCtrl.text.trim().isEmpty) {
+      Navigator.of(context).pop();
+      return;
+    }
+    _save();
+  }
+
   void _save() {
     final question = _questionCtrl.text.trim();
     if (question.isEmpty) return;
@@ -69,7 +80,9 @@ class _AddRealityCheckScreenState extends State<AddRealityCheckScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
+    return AutoSaveOnExit(
+      onExit: _exitWithAutoSave,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(
           _editing
@@ -190,6 +203,7 @@ class _AddRealityCheckScreenState extends State<AddRealityCheckScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

@@ -652,12 +652,18 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                   : const Duration(milliseconds: 320),
               curve: Curves.easeInOutCubic,
               alignment: Alignment.topCenter,
+              // Место под таблетку и сама секция живут в ОДНОМ AnimatedSize:
+              // иначе при включении/выключении секции зарезервированная
+              // полоса исчезала мгновенно, пока секция ещё дорастала, и
+              // список дёргался на её высоту.
               child: _timersVisible
                   ? _buildTimersSection(context, theme, _timerSvc.timers)
-                  : const SizedBox.shrink(),
+                  : const SizedBox(
+                      height: kSectionPillSlotHeight,
+                      width: double.infinity,
+                    ),
             ),
           ),
-          if (!_timersVisible) const SizedBox(height: kSectionPillSlotHeight),
           _buildNextAlarmPill(context, theme, alarms),
           if (alarms.isEmpty) _buildAlarmEmpty(context, theme),
         ],

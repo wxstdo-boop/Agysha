@@ -218,22 +218,22 @@ extension _SettingsLinks on _SettingsScreenState {
       // Clear in-memory Flutter image cache.
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
-      final tempDir = await getTemporaryDirectory();
-      if (tempDir.existsSync()) {
-        for (final entity in tempDir.listSync()) {
-          try {
-            if (entity is File) {
-              entity.deleteSync();
-            } else if (entity is Directory) {
-              entity.deleteSync(recursive: true);
-            }
-          } catch (_) {}
-        }
+
+      // Идёт загрузка обновления — её файлы не трогаем, иначе докачка
+      // продолжит писать в удалённый файл и установка сорвётся.
+      final progress = UpdateService.downloadProgress.value;
+      final downloading = progress > 0 && progress < 1;
+
+      var freed = 0;
+      for (final dir in await _cacheDirs()) {
+        freed += _purgeDir(dir, skipDownloads: downloading);
       }
+
       if (mounted) {
+        final done = Translations.t('clearCacheDone', context);
         showBeautifulSnackBar(
           context,
-          message: Translations.t('clearCacheDone', context),
+          message: freed > 0 ? '$done ${_formatBytes(freed)}' : done,
         );
       }
     } catch (_) {
@@ -246,5 +246,77 @@ extension _SettingsLinks on _SettingsScreenState {
         );
       }
     }
+  }
+
+  /// Папки, которые считаются кэшем. Временная и кэш-папка приложения на
+  /// Android часто совпадают, поэтому пути дедуплицируются: иначе освобождённое
+  /// место посчиталось бы дважды.
+  Future<List<Directory>> _cacheDirs() async {
+    final dirs = <Directory>[];
+    final seen = <String>{};
+    Future<void> add(Future<Directory?> Function() get) async {
+      try {
+        final d = await get();
+        if (d != null && seen.add(d.path)) dirs.add(d);
+      } catch (_) {}
+    }
+
+    await add(() async => getTemporaryDirectory());
+    await add(() async => getApplicationCacheDirectory());
+    await add(() async {
+      final docs = await getApplicationDocumentsDirectory();
+      return Directory('${docs.path}/updates');
+    });
+    return dirs;
+  }
+
+  /// Удаляет содержимое папки и возвращает, сколько байт освободилось.
+  int _purgeDir(Directory dir, {required bool skipDownloads}) {
+    if (!dir.existsSync()) return 0;
+    var freed = 0;
+    for (final entity in dir.listSync()) {
+      try {
+        if (skipDownloads && entity is File && _isUpdateFile(entity.path)) {
+          continue;
+        }
+        if (entity is File) {
+          freed += entity.lengthSync();
+          entity.deleteSync();
+        } else if (entity is Directory) {
+          freed += _dirBytes(entity);
+          entity.deleteSync(recursive: true);
+        }
+      } catch (_) {
+        // Файл занят системой — просто оставляем его до следующего раза.
+      }
+    }
+    return freed;
+  }
+
+  bool _isUpdateFile(String path) =>
+      path.contains('/agysha-') &&
+      (path.endsWith('.apk') || path.endsWith('.part'));
+
+  int _dirBytes(Directory dir) {
+    var total = 0;
+    try {
+      for (final e in dir.listSync(recursive: true, followLinks: false)) {
+        if (e is File) {
+          try {
+            total += e.lengthSync();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    return total;
+  }
+
+  /// Размер по-человечески: «12,4 МБ», «860 КБ», «340 Б».
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes Б';
+    final kb = bytes / 1024;
+    if (kb < 1024) return '${kb.round()} КБ';
+    final mb = kb / 1024;
+    return '${mb.toStringAsFixed(1).replaceAll('.', ',')} МБ';
   }
 }

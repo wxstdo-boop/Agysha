@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 /// Уважение к системной и пользовательской настройке «убрать анимации».
 ///
@@ -36,6 +37,40 @@ abstract final class MotionPrefs {
 
   /// Итог для мест без контекста: системный флаг ИЛИ ручной тумблер.
   static bool get shouldReduceMotion => systemReduceMotion || enabled.value;
+
+  /// Во сколько раз ускорить оставшиеся анимации при «убрать анимации».
+  /// 20× — переход в 300 мс заканчивается за 15 мс, то есть на глаз сразу,
+  /// но все контроллеры и `AnimatedSwitcher`/`AnimatedSize` доходят до
+  /// конечного состояния и не залипают в середине.
+  static const double _fastForward = 0.05;
+
+  static bool _installed = false;
+
+  /// Подключает глобальное ускорение анимаций. Вызывается один раз из `main`
+  /// до `runApp`: без этого тумблер гасил только декоративные петли, а
+  /// переходы экранов, шторки и плашки продолжали двигаться.
+  static void install() {
+    if (_installed) return;
+    _installed = true;
+    enabled.addListener(sync);
+    try {
+      WidgetsBinding.instance.addObserver(_MotionObserver());
+    } catch (_) {}
+    sync();
+  }
+
+  /// Приводит глобальное состояние анимаций к текущему флагу.
+  static void sync() {
+    final fast = shouldReduceMotion;
+    timeDilation = fast ? _fastForward : 1.0;
+  }
+}
+
+/// Системный «убрать анимации» может включиться и выключиться на ходу —
+/// тогда ускорение нужно пересчитать без перезапуска приложения.
+class _MotionObserver extends WidgetsBindingObserver {
+  @override
+  void didChangeAccessibilityFeatures() => MotionPrefs.sync();
 }
 
 /// Миксин для виджетов с бесконечными декоративными циклами: следит за

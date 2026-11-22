@@ -73,15 +73,21 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
       axis: Axis.vertical,
       child: FadeTransition(
         opacity: _perfFade,
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          // Канарейка вместо «телефонной» иконки developer-mode: стоит
-          // статично, при тапе плавно машет крылом; повторные тапы,
-          // пока анимация жива, игнорируются внутри самой канарейки.
-          leading: const CanaryIcon(size: 40),
-          title: Text(_developerCornerTitle(context)),
-          trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-          onTap: _devOpening ? null : _showDevToolsScreen,
+        // Свой прозрачный Material: иначе ListTile внутри цветной подложки
+        // красит всплеск тапа на дальнем Material и Flutter ругается
+        // ассертом о невидимом фоне.
+        child: Material(
+          type: MaterialType.transparency,
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            // Канарейка вместо «телефонной» иконки developer-mode: стоит
+            // статично, при тапе плавно машет крылом; повторные тапы,
+            // пока анимация жива, игнорируются внутри самой канарейки.
+            leading: const CanaryIcon(size: 40),
+            title: Text(_developerCornerTitle(context)),
+            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+            onTap: _devOpening ? null : _showDevToolsScreen,
+          ),
         ),
       ),
     ),
@@ -176,18 +182,26 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
             Row(
               children: [
                 Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: _exportData,
-                    icon: const Icon(Icons.upload_outlined, size: 18),
-                    label: Text(Translations.t('export', context)),
+                  child: PressScale(
+                    pressedScale: 0.95,
+                    maxTiltAngle: 0.1,
+                    child: FilledButton.tonalIcon(
+                      onPressed: _exportData,
+                      icon: const Icon(Icons.upload_outlined, size: 18),
+                      label: Text(Translations.t('export', context)),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: _importData,
-                    icon: const Icon(Icons.download_outlined, size: 18),
-                    label: Text(Translations.t('import', context)),
+                  child: PressScale(
+                    pressedScale: 0.95,
+                    maxTiltAngle: 0.1,
+                    child: FilledButton.tonalIcon(
+                      onPressed: _importData,
+                      icon: const Icon(Icons.download_outlined, size: 18),
+                      label: Text(Translations.t('import', context)),
+                    ),
                   ),
                 ),
               ],
@@ -200,16 +214,27 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
               ),
             ),
             const SizedBox(height: 8),
-            InkWell(
-              onTap: _showDevModeDialog,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  'Agysha',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant.withValues(
-                      alpha: 0.5,
+            // Имя в самом низу — тоже кнопка (скрытый вход в dev-режим),
+            // поэтому у неё та же отдача, что у остальных: вдавливание,
+            // мягкий наклон под палец и едва заметное пятно под текстом.
+            PressScale(
+              pressedScale: 0.9,
+              maxTiltAngle: 0.12,
+              pressTint: theme.colorScheme.onSurfaceVariant,
+              child: InkWell(
+                onTap: _showDevModeDialog,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 4,
+                    horizontal: 6,
+                  ),
+                  child: Text(
+                    'Agysha',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.5,
+                      ),
                     ),
                   ),
                 ),

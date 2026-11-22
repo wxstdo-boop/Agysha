@@ -22,6 +22,7 @@ import '../widgets/priority_selector.dart';
 import '../widgets/smooth_keyboard_body.dart';
 import '../services/haptics.dart';
 import '../widgets/agysha_confirm_dialog.dart';
+import '../widgets/auto_save_on_exit.dart';
 
 class AddTaskScreen extends StatefulWidget {
   final Task? existing;
@@ -373,6 +374,16 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     );
   }
 
+  /// Выход с формы при включённом автосохранении: сохраняем введённое, но
+  /// пустую задачу не создаём — просто закрываем экран.
+  void _exitWithAutoSave() {
+    if (_titleCtrl.text.trim().isEmpty) {
+      Navigator.of(context).pop();
+      return;
+    }
+    _save();
+  }
+
   void _save() {
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) return;
@@ -561,7 +572,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return AutoSaveOnExit(
+      onExit: _exitWithAutoSave,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(
           _editing
@@ -956,6 +969,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
             StaggerIn(index: 5, child: _deadlineCard(context, theme)),
           ],
         ),
+      ),
       ),
     );
   }

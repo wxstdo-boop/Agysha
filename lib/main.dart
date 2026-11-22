@@ -124,6 +124,9 @@ Future<void> _loadStartupData() async {
       AlarmService().load(),
       RealityCheckService().load(),
       TimerService().load(),
+      // Питание — до автосохранения: его forceSave пишет файл из памяти, и
+      // без загрузки пустой список затирал сохранённые приёмы пищи.
+      NutritionService().load(),
       // Профиль (имя, аватарка, друзья, музыка) читается вместе с
       // остальными: к первому кадру шапки кружок онлайна уже знает статус.
       ProfileService().load(),
@@ -774,6 +777,10 @@ Future<_StartupState> _loadStartupState() async {
 
   // Данные старых версий переезжают в JSON-файлы до того, как их начнут
   // читать сервисы (те стартуют после runApp).
+  // Глобальный тумблер «убрать анимации» действует на ВСЕ переходы, а не
+  // только на декоративные петли: ускорение ставится до первого кадра.
+  MotionPrefs.install();
+
   final migration = migrateFromPrefs();
   final notifications = notificationService.init().then((_) {
     notificationService.onNotificationTap = _handleNotificationTap;
