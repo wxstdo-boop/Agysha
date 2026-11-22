@@ -232,7 +232,7 @@ class _GiftCard3DState extends State<GiftCard3D>
               const Spacer(),
               // Название артефакта
               Text(
-                widget.gift.title,
+                Translations.t('giftTitle_${widget.gift.id}', context, widget.gift.title),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -243,7 +243,7 @@ class _GiftCard3DState extends State<GiftCard3D>
               const SizedBox(height: 2),
               // Бафф/эффект
               Text(
-                widget.gift.buffText,
+                Translations.t('giftBuff_${widget.gift.id}', context, widget.gift.buffText),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -1011,7 +1011,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
             ),
             const SizedBox(height: 12),
             Text(
-              widget.gift.title,
+              Translations.t('giftTitle_${widget.gift.id}', context, widget.gift.title),
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -1081,7 +1081,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.gift.description,
+                    Translations.t('giftDesc_${widget.gift.id}', context, widget.gift.description),
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.4,
@@ -1109,7 +1109,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                           fontWeight: FontWeight.w600,
                           color: _fav ? BrandColors.red : theme.colorScheme.primary,
                         ),
-                        child: Text(widget.gift.buffText),
+                        child: Text(Translations.t('giftBuff_${widget.gift.id}', context, widget.gift.buffText)),
                       ),
                     ],
                   ),
