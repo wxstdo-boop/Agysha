@@ -259,7 +259,22 @@ jobs:
           # Пуш в main не перезапустит воркфлоу: коммит "release: v…" отсекается
           # условием job (сообщение начинается с "release:"), даже если он
           # задевает lib/ — paths-фильтр тут не единственная защита.
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          #
+          # Пока прогон собирался, в main мог приехать чужой коммит (правка
+          # документации, хотфикс) — тогда прямой push отклоняется как
+          # non-fast-forward, и релиз молча не выходит. Поэтому подтягиваем
+          # свежий main ребейзом и пробуем ещё раз.
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            echo "::warning::push отклонён (попытка $attempt) — подтягиваю свежий ${GITHUB_REF_NAME}"
+            git fetch -q origin "${GITHUB_REF_NAME}"
+            git rebase "origin/${GITHUB_REF_NAME}" || { git rebase --abort; sleep 10; continue; }
+            sleep 5
+          done
+          echo "::error::Не удалось запушить бамп версии: main уезжает быстрее, чем идёт релиз"
+          exit 1
 
   publish:
     # Сборка и публикация — общий процесс, тот же, что и по тегу.
