@@ -111,7 +111,7 @@ class _ManualTimeDialogState extends State<_ManualTimeDialog> {
             Text('⏰', style: theme.textTheme.headlineMedium),
             const SizedBox(height: 4),
             Text(
-              'Время',
+              Translations.t('timeTitle', context, 'Время'),
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),

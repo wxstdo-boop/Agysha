@@ -509,14 +509,27 @@ class _AlarmsScreenState extends State<AlarmsScreen>
 
       final String durationStr;
       if (hours == 0) {
-        durationStr = '$minutes мин';
+        durationStr = Translations.t(
+          'durMin',
+          context,
+          '{n} мин',
+        ).replaceAll('{n}', '$minutes');
       } else if (minutes == 0) {
-        durationStr = '$hours ч';
+        durationStr = Translations.t(
+          'durHour',
+          context,
+          '{n} ч',
+        ).replaceAll('{n}', '$hours');
       } else {
-        durationStr = '$hours ч $minutes мин';
+        durationStr = Translations.t('durHourMin', context, '{h} ч {m} мин')
+            .replaceAll('{h}', '$hours')
+            .replaceAll('{m}', '$minutes');
       }
 
-      text = '$when $timeStr · через $durationStr';
+      text = Translations.t('alarmIn', context, '{when} {time} · через {dur}')
+          .replaceAll('{when}', when)
+          .replaceAll('{time}', timeStr)
+          .replaceAll('{dur}', durationStr);
     }
 
     final pillBg = hasActive

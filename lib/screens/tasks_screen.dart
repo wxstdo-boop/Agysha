@@ -1108,8 +1108,16 @@ class _TasksScreenState extends State<TasksScreen>
     final estLabel = est == null
         ? null
         : est < 60
-        ? '$est мин'
-        : '${est ~/ 60} ч';
+        ? Translations.t(
+            'durMin',
+            context,
+            '{n} мин',
+          ).replaceAll('{n}', '$est')
+        : Translations.t(
+            'durHour',
+            context,
+            '{n} ч',
+          ).replaceAll('{n}', '${est ~/ 60}');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(

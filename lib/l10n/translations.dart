@@ -43,6 +43,13 @@ class Translations {
     return _emdash(byLocale[key] ?? fallback ?? _data['en']![key] ?? key);
   }
 
+  /// Тот же поиск, что и [t], но для мест без BuildContext: уведомления,
+  /// фоновые задачи и прочий код, которому локаль приходит кодом из настроек.
+  static String tFor(String code, String key, [String? fallback]) {
+    final byLocale = _data[code] ?? _data['en']!;
+    return _emdash(byLocale[key] ?? fallback ?? _data['en']![key] ?? key);
+  }
+
   /// В приложении всё, что выглядит как «-», должно быть длинным тире «—».
   /// Проходим по строке и заменяем дефисы между словами.
   static String _emdash(String s) {

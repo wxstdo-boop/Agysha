@@ -167,27 +167,4 @@ class NewYearEventService extends ChangeNotifier {
   String _todayKey() => localDayKey();
 
   String _pad(int n) => n.toString().padLeft(2, '0');
-
-  /// Форматирует дату ключа в читаемый вид «21 дек».
-  static String formatDateKey(String key) {
-    final parts = key.split('-');
-    if (parts.length != 3) return key;
-    final m = int.parse(parts[1]);
-    final d = int.parse(parts[2]);
-    const months = [
-      'янв',
-      'фев',
-      'мар',
-      'апр',
-      'май',
-      'июн',
-      'июл',
-      'авг',
-      'сен',
-      'окт',
-      'ноя',
-      'дек',
-    ];
-    return '$d ${months[m - 1]}';
-  }
 }

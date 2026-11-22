@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/translations.dart';
 import '../models/profile_gift.dart';
 import '../services/haptics.dart';
 import '../services/profile_service.dart';
@@ -1050,7 +1051,14 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                     color: _fav ? BrandColors.red : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                   child: Text(
-                    'Артефакт #${widget.gift.serialNumber.toString().padLeft(4, '0')}',
+                    Translations.t(
+                      'giftArtifact',
+                      context,
+                      'Артефакт #{n}',
+                    ).replaceAll(
+                      '{n}',
+                      widget.gift.serialNumber.toString().padLeft(4, '0'),
+                    ),
                   ),
                 ),
               ],
@@ -1172,7 +1180,17 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                                       ),
                                     ),
                                     child: Text(
-                                      _fav ? 'В избранном (до 5)' : 'В избранное (до 5)',
+                                      _fav
+                                          ? Translations.t(
+                                              'giftFavOn',
+                                              context,
+                                              'В избранном (до 5)',
+                                            )
+                                          : Translations.t(
+                                              'giftFavOff',
+                                              context,
+                                              'В избранное (до 5)',
+                                            ),
                                       key: ValueKey(_fav),
                                       style: const TextStyle(
                                         color: Colors.white,

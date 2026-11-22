@@ -892,9 +892,12 @@ Future<void> _startApp() async {
     debugPrint('Application startup failed: $error\n$stackTrace');
     if (JsonFile.canRecoverFromBackup(error)) {
       runApp(
-        MaterialApp(
-          debugShowCheckedModeBanner: false,
-          home: StartupRecoveryScreen(onRestore: _restoreStartupBackup),
+        LocaleProvider(
+          locale: _startupDiagnosticLocale(),
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: StartupRecoveryScreen(onRestore: _restoreStartupBackup),
+          ),
         ),
       );
       return;

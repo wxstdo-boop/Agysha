@@ -178,7 +178,9 @@ extension _SettingsLanguageFont on _SettingsScreenState {
           ('ordinary', Icons.font_download_outlined),
           ('caveat', Icons.draw_outlined),
         ];
-        String fontLabel(String f) => f == 'caveat' ? 'Caveat' : 'Обычный';
+        String fontLabel(String f) => f == 'caveat'
+            ? 'Caveat'
+            : Translations.t('fontOrdinary', ctx, 'Обычный');
         return StatefulBuilder(
           builder: (ctx, setState) => Center(
             child: Material(

@@ -853,7 +853,7 @@ class _NutritionScreenState extends State<NutritionScreen>
               ),
             ),
             Text(
-              ' г',
+              Translations.t('unitGram', context, ' г'),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
               ),

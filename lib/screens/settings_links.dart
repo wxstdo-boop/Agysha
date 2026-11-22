@@ -174,7 +174,11 @@ extension _SettingsLinks on _SettingsScreenState {
     showConfettiBurst(context);
     showBeautifulSnackBar(
       context,
-      message: 'Ты нашёл пасхалку. Agysha — свободное приложение.',
+      message: Translations.t(
+        'easterEgg',
+        context,
+        'Ты нашёл пасхалку. Agysha — свободное приложение.',
+      ),
       icon: Icons.celebration_outlined,
       duration: const Duration(milliseconds: 2600),
     );

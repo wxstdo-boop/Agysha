@@ -679,12 +679,29 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (!mounted) return;
       _toast(
         downloadedBytes != null
-            ? '«$title» найден в сети и добавлен в профиль! 🏎️💨'
-            : '«$title» добавлен в профиль! 🏎️💨',
+            ? Translations.t(
+                'trackFoundOnline',
+                context,
+                '«{title}» найден в сети и добавлен в профиль! 🏎️💨',
+              ).replaceAll('{title}', title)
+            : Translations.t(
+                'trackAdded',
+                context,
+                '«{title}» добавлен в профиль! 🏎️💨',
+              ).replaceAll('{title}', title),
         icon: Icons.music_note_rounded,
       );
     } catch (_) {
-      if (mounted) _toast('Не удалось сохранить трек', icon: Icons.error_outline);
+      if (mounted) {
+        _toast(
+          Translations.t(
+            'trackSaveFailed',
+            context,
+            'Не удалось сохранить трек',
+          ),
+          icon: Icons.error_outline,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSearchingHardtekk = false);
     }
@@ -1760,7 +1777,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       icon: Icons.auto_awesome,
       trailing: Text(
-        '${gifts.length} шт.',
+        Translations.t(
+          'countShort',
+          context,
+          '{n} шт.',
+        ).replaceAll('{n}', '${gifts.length}'),
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.bold,
@@ -2060,16 +2081,28 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     ),
                                   ),
                                   SizedBox(width: 8),
-                                  Text('Ищем...'),
+                                  Text(
+                                    Translations.t(
+                                      'searching',
+                                      context,
+                                      'Ищем…',
+                                    ),
+                                  ),
                                 ],
                               )
-                            : const Row(
-                                key: ValueKey('search_idle'),
+                            : Row(
+                                key: const ValueKey('search_idle'),
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.search_rounded, size: 16),
-                                  SizedBox(width: 6),
-                                  Text('Поиск'),
+                                  const Icon(Icons.search_rounded, size: 16),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    Translations.t(
+                                      'searchIdle',
+                                      context,
+                                      'Поиск',
+                                    ),
+                                  ),
                                 ],
                               ),
                       ),

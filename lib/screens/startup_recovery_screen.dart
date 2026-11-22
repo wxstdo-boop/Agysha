@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../l10n/translations.dart';
 import '../widgets/agysha_confirm_dialog.dart';
 
 class StartupRecoveryScreen extends StatefulWidget {
@@ -25,7 +26,11 @@ class _StartupRecoveryScreenState extends State<StartupRecoveryScreen> {
     });
     try {
       final file = await FilePicker.pickFile(
-        dialogTitle: 'Выберите резервную копию Agysha',
+        dialogTitle: Translations.t(
+          'restorePick',
+          context,
+          'Выберите резервную копию Agysha',
+        ),
         type: FileType.custom,
         allowedExtensions: const ['json'],
         initialDirectory: '/storage/emulated/0/Download/Agysha',
@@ -52,18 +57,35 @@ class _StartupRecoveryScreenState extends State<StartupRecoveryScreen> {
       if (!mounted) return;
       final confirmed = await showAgyshaConfirm(
         context,
-        title: 'Восстановить резервную копию?',
-        body:
-            'Будет восстановлен файл «${file.name}». Старые зашифрованные '
-            'файлы останутся нетронутыми. Выберите самую свежую копию.',
+        title: Translations.t(
+          'restoreConfirmTitle',
+          context,
+          'Восстановить резервную копию?',
+        ),
+        body: Translations.t(
+          'restoreConfirmBody',
+          context,
+          'Будет восстановлен файл «{name}». Старые зашифрованные файлы '
+              'останутся нетронутыми. Выберите самую свежую копию.',
+        ).replaceAll('{name}', file.name),
         icon: Icons.restore_rounded,
-        confirmLabel: 'Восстановить',
+        confirmLabel: Translations.t(
+          'restoreAction',
+          context,
+          'Восстановить',
+        ),
       );
       if (confirmed != true || !mounted) return;
       await widget.onRestore(backup);
     } catch (error) {
       if (mounted) {
-        setState(() => _error = 'Не удалось восстановить копию: $error');
+        setState(
+          () => _error = Translations.t(
+            'restoreFailed',
+            context,
+            'Не удалось восстановить копию: {e}',
+          ).replaceAll('{e}', '$error'),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -90,21 +112,33 @@ class _StartupRecoveryScreenState extends State<StartupRecoveryScreen> {
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Нужно восстановить данные',
+                    Translations.t(
+                      'restoreNeededTitle',
+                      context,
+                      'Нужно восстановить данные',
+                    ),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'После обновления Android не смог открыть старый ключ '
-                    'шифрования. Данные в приложении не удалены, но для '
-                    'запуска нужна JSON-копия из Download/Agysha. PIN и '
-                    'настройки восстановятся из выбранной копии.',
+                  Text(
+                    Translations.t(
+                      'restoreNeededBody',
+                      context,
+                      'После обновления Android не смог открыть старый ключ '
+                          'шифрования. Данные в приложении не удалены, но для '
+                          'запуска нужна JSON-копия из Download/Agysha. PIN и '
+                          'настройки восстановятся из выбранной копии.',
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Старые зашифрованные файлы останутся на месте.',
+                    Translations.t(
+                      'restoreOldFilesStay',
+                      context,
+                      'Старые зашифрованные файлы останутся на месте.',
+                    ),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: colors.primary,
@@ -130,7 +164,17 @@ class _StartupRecoveryScreenState extends State<StartupRecoveryScreen> {
                           )
                         : const Icon(Icons.restore),
                     label: Text(
-                      _busy ? 'Восстановление…' : 'Выбрать резервную копию',
+                      _busy
+                          ? Translations.t(
+                              'restoreBusy',
+                              context,
+                              'Восстановление…',
+                            )
+                          : Translations.t(
+                              'restorePickButton',
+                              context,
+                              'Выбрать резервную копию',
+                            ),
                     ),
                   ),
                 ],

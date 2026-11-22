@@ -94,7 +94,11 @@ extension _SettingsPermissions on _SettingsScreenState {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Разрешения не выданы',
+                    Translations.t(
+                      'permNotGranted',
+                      context,
+                      'Разрешения не выданы',
+                    ),
                     style: TextStyle(
                       color: textColor,
                       fontWeight: FontWeight.w800,
@@ -103,7 +107,11 @@ extension _SettingsPermissions on _SettingsScreenState {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Будильники и уведомления не будут работать',
+                    Translations.t(
+                      'permAlarmsOff',
+                      context,
+                      'Будильники и уведомления не будут работать',
+                    ),
                     style: TextStyle(
                       color: subColor,
                       fontSize: 12.5,
@@ -178,7 +186,11 @@ extension _SettingsPermissions on _SettingsScreenState {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'Выдать',
+                              Translations.t(
+                                'permGrant',
+                                context,
+                                'Выдать',
+                              ),
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w800,

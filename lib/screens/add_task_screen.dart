@@ -515,7 +515,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               children: [
                 for (final m in const [15, 30, 60, 120, 240])
                   _DeadlineChip(
-                    label: _estimateLabel(m),
+                    label: _estimateLabel(context, m),
                     selected: _estimateMinutes == m,
                     onTap: () => setState(
                       () => _estimateMinutes = _estimateMinutes == m ? null : m,
@@ -529,8 +529,13 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     );
   }
 
-  String _estimateLabel(int minutes) =>
-      minutes < 60 ? '$minutes мин' : '${minutes ~/ 60} ч';
+  String _estimateLabel(BuildContext context, int minutes) => minutes < 60
+      ? Translations.t('durMin', context, '{n} мин').replaceAll('{n}', '$minutes')
+      : Translations.t(
+          'durHour',
+          context,
+          '{n} ч',
+        ).replaceAll('{n}', '${minutes ~/ 60}');
 
   String _dueLabel(BuildContext context, DateTime d) {
     final now = DateTime.now();

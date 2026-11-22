@@ -51,7 +51,7 @@ extension _SettingsSectionTop on _SettingsScreenState {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Шрифт',
+                  Translations.t('fontSection', context, 'Шрифт'),
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.w800,
@@ -99,7 +99,11 @@ extension _SettingsSectionTop on _SettingsScreenState {
                           child: Text(
                             appState.fontFamily == 'caveat'
                                 ? 'Caveat'
-                                : 'Обычный',
+                                : Translations.t(
+                                    'fontOrdinary',
+                                    context,
+                                    'Обычный',
+                                  ),
                             style: theme.textTheme.bodyLarge?.copyWith(
                               color: theme.colorScheme.onSurface,
                             ),

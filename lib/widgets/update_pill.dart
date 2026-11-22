@@ -285,7 +285,11 @@ class _UpdatePillState extends State<UpdatePill>
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Обновление',
+                        Translations.t(
+                          'updateBadge',
+                          context,
+                          'Обновление',
+                        ),
                         maxLines: 1,
                         softWrap: false,
                         style: badgeTextStyle.copyWith(

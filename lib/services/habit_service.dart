@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../l10n/translations.dart';
 import '../models/habit.dart';
 import 'json_file.dart';
 import 'notification_service_instance.dart';
@@ -365,14 +366,18 @@ class HabitService extends ChangeNotifier {
     // Текст напоминания в списке привычек НЕ показываем — он живёт
     // в самом уведомлении: если задан «текст напоминания», показываем
     // его, иначе стандартное «Пора вспомнить: <имя>».
-    final custom = h.reminderText?.trim();
-    final body = (custom != null && custom.isNotEmpty)
-        ? custom
-        : 'Пора вспомнить: ${h.name}';
     String lang = 'ru';
     try {
       lang = await SettingsService.loadLanguageCode();
     } catch (_) {}
+    final custom = h.reminderText?.trim();
+    final body = (custom != null && custom.isNotEmpty)
+        ? custom
+        : Translations.tFor(
+            lang,
+            'habitReminderBody',
+            'Пора вспомнить: {name}',
+          ).replaceAll('{name}', h.name);
     final localTitle = _reminderTitle(h.name, lang);
     if (h.activeDays.isEmpty) {
       await notificationService.scheduleHabitReminder(
