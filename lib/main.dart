@@ -183,6 +183,7 @@ Future<void> _saveAllData() async {
       TimerService().forceSave(),
     ]);
     _autoSaveFailureActive = false;
+    await SettingsService.markAutoSaveOk();
   } catch (error, stackTrace) {
     if (!_autoSaveFailureActive) {
       _autoSaveFailureActive = true;

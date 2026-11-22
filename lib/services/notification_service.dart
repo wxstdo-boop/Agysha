@@ -99,7 +99,15 @@ class NotificationService extends ChangeNotifier {
       _fullScreenGranted = true;
       return true;
     }
-    final ok = await android_settings.canUseFullScreenIntent();
+    final probe = await android_settings.probeFullScreenIntent();
+    if (probe == null) {
+      // ОС не ответила: состояние не трогаем. Раньше ошибка канала
+      // превращалась в «право отозвано», и переключатель/плашка врали,
+      // будто разрешение слетело само.
+      debugPrint('[fullscreen] проверка права не удалась — состояние не меняю');
+      return _fullScreenGranted;
+    }
+    final ok = probe;
     final lastSeen = globalPrefs.getBool(_lastFullScreenGrantKey);
     if (lastSeen == true && !ok) {
       debugPrint(
@@ -724,16 +732,18 @@ class NotificationService extends ChangeNotifier {
     final title = alarm.label.isNotEmpty ? alarm.label : 'Alarm';
     String body;
     final lang = globalPrefs.getString('setting_locale') ?? 'ru';
+    // Названия задач короткие («Решить пример»), для тела уведомления их
+    // мало: человек должен сразу понять, что от него хотят, поэтому
+    // добавляем «Задача: …» на языке интерфейса.
+    final taskPrefix = Translations.tFor(lang, 'wakeTaskBodyPrefix', 'Задача: ');
     if (alarm.taskType == WakeUpTask.math) {
-      body = Translations.tFor(lang, 'taskMath', 'Задача: решить пример');
+      body = '$taskPrefix${Translations.tFor(lang, 'taskMath', 'Решить пример')}';
     } else if (alarm.taskType == WakeUpTask.pattern) {
-      body = Translations.tFor(
-        lang,
-        'taskPattern',
-        'Задача: повторить паттерн',
-      );
+      body =
+          '$taskPrefix${Translations.tFor(lang, 'taskPattern', 'Запомнить паттерн')}';
     } else if (alarm.taskType == WakeUpTask.memory) {
-      body = Translations.tFor(lang, 'taskMemory', 'Задача: вспомни слово');
+      body =
+          '$taskPrefix${Translations.tFor(lang, 'taskMemory', 'Игра на память')}';
     } else {
       body = formatHmValues(alarm.time.hour, alarm.time.minute);
     }

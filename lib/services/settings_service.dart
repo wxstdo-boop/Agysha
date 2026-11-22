@@ -189,6 +189,26 @@ class SettingsService {
   /// автосохранение «включалось» и молча выключалось после перезапуска.
   static const String _keyAutoSaveMirror = 'setting_auto_save_mirror';
 
+  static const String _keyAutoSaveLastOk = 'setting_auto_save_last_ok';
+
+  /// Время последнего УСПЕШНОГО автосохранения. Живой notifier, чтобы
+  /// строка в настройках обновлялась сама и человек видел, что оно
+  /// действительно пишет, а не «включено и молчит».
+  static final ValueNotifier<DateTime?> autoSaveLastOk =
+      ValueNotifier<DateTime?>(null);
+
+  static Future<void> markAutoSaveOk() async {
+    final now = DateTime.now();
+    autoSaveLastOk.value = now;
+    await globalPrefs.setInt(_keyAutoSaveLastOk, now.millisecondsSinceEpoch);
+  }
+
+  static Future<DateTime?> loadAutoSaveLastOk() async {
+    final ms = globalPrefs.getInt(_keyAutoSaveLastOk);
+    if (ms == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
   static Future<bool> loadAutoSave() async {
     final map = await _loadSettings();
     final stored = map[_keyAutoSave];

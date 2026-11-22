@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:agysha/l10n/locale_provider.dart';
 import 'package:agysha/l10n/translations.dart';
 import 'package:agysha/widgets/update_pill.dart';
 
@@ -35,7 +36,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData(useMaterial3: true),
-        home: const Scaffold(body: Center(child: UpdatePill())),
+        // В приложении локаль всегда приходит сверху; без провайдера
+        // таблетка падала бы на переводе строк.
+        home: const LocaleProvider(
+          locale: Locale('ru'),
+          child: Scaffold(body: Center(child: UpdatePill())),
+        ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));

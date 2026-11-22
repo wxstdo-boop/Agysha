@@ -229,6 +229,28 @@ void main() {
     expect(globalPrefs.getBool('notifications_enabled'), isTrue);
   });
 
+  test('сбой проверки права не выдаёт его за отозванное', () async {
+    final service = NotificationService();
+    // Система уже отвечала «право выдано» — это записано при прошлом старте.
+    await globalPrefs.setBool('fullscreen_grant_last_seen', true);
+    service.clearFullScreenRevoked();
+    final wasGranted = service.fullScreenGranted;
+
+    // Теперь канал недоступен, как при холодном старте. Раньше сбой
+    // трактовался как «право отрублено», и приложение само снимало
+    // полноэкранный показ.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(fullscreenChannel, (call) async {
+          throw PlatformException(code: 'UNAVAILABLE');
+        });
+
+    final ok = await service.refreshFullScreenGrant();
+
+    expect(service.fullScreenRevoked, isFalse, reason: 'сбой ≠ отзыв права');
+    expect(ok, wasGranted);
+    expect(globalPrefs.getBool('fullscreen_grant_last_seen'), isTrue);
+  });
+
   test('повторяющийся будильник передаёт дни недели', () async {
     final service = NotificationService();
     final alarm = makeAlarm(repeatDays: const [1, 2, 3, 4, 5]);
