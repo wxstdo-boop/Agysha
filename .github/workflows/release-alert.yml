@@ -5,10 +5,15 @@ name: release-alert
 # а автообновление в приложении при этом молчит до следующего пуша.
 #
 # Здесь на каждый завершившийся прогон сборки:
-#   * провал (failure / timed_out / startup_failure / cancelled)
+#   * ДВА провала подряд (failure / timed_out / startup_failure)
 #     → открываем issue «Релиз не вышел — автоалерт» (или дополняем
 #       существующее ссылкой на новый прогон);
 #   * успех → закрываем открытое issue, если оно есть.
+#
+# Один упавший прогон — ещё не повод для письма: сеть и сторонние площадки
+# моргают, а сборка перезапускается сама (release-watchdog, retry в сборке).
+# Поэтому алерт поднимается только со второго провала подряд по одному и тому
+# же workflow. Ручная отмена (cancelled) не считается провалом вообще.
 #
 # Секретов не требует: работает на штатном GITHUB_TOKEN (issues: write).
 # Дубли комментариев отсекаются по URL прогона.
@@ -50,6 +55,7 @@ jobs:
           SHA: ${{ github.event.workflow_run.head_sha }}
           BRANCH: ${{ github.event.workflow_run.head_branch }}
           TITLE_TEXT: ${{ github.event.workflow_run.display_title }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -uo pipefail
 
@@ -68,6 +74,7 @@ jobs:
               echo "- ветка: \`$BRANCH\`"
               echo "- коммит: \`${SHA:0:7}\`"
               echo "- прогон: $TITLE_TEXT"
+              echo "- провалов подряд: $STREAK"
               echo
               echo "Лог: $RUN_URL"
               echo
@@ -93,13 +100,35 @@ jobs:
               echo "::notice::Алерт #$NUM закрыт — релиз снова зелёный."
               exit 0
               ;;
-            failure|timed_out|startup_failure|cancelled)
+            cancelled)
+              echo "Ручная отмена — это не провал, алерт не поднимаю."
+              exit 0
+              ;;
+            failure|timed_out|startup_failure)
               ;;
             *)
               echo "Прогон «$WF_NAME» завершился с conclusion=$CONCLUSION — не алерт-кейс."
               exit 0
               ;;
           esac
+
+          # Сколько провалов подряд, включая текущий. Идём от свежих прогонов
+          # к старым и останавливаемся на первом не-провале; отмены не считаем.
+          PREV_STREAK=$(gh run list --repo "$REPO" --workflow "$WF_NAME" --limit 15 \
+            --json databaseId,status,conclusion \
+            --jq "[.[] | select(.status == \"completed\") | select(.databaseId != $RUN_ID) | select(.conclusion != \"cancelled\") | .conclusion]
+                 | reduce .[] as \$c ({n: 0, stop: false};
+                     if .stop then .
+                     elif (\$c == \"failure\" or \$c == \"timed_out\" or \$c == \"startup_failure\") then .n += 1
+                     else .stop = true end)
+                 | .n" 2>/dev/null || echo 0)
+          case "$PREV_STREAK" in ''|*[!0-9]*) PREV_STREAK=0 ;; esac
+          STREAK=$((PREV_STREAK + 1))
+
+          if [ "$STREAK" -lt 2 ]; then
+            echo "::notice::Провал «$WF_NAME» #$RUN_NUM — первый подряд, ждём перезапуска и не шумим."
+            exit 0
+          fi
 
           write_body
           NUM=$(find_issue)
