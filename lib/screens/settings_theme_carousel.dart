@@ -98,11 +98,13 @@ class _ThemeRevolver extends StatefulWidget {
 class _ThemeRevolverState extends State<_ThemeRevolver>
     with SingleTickerProviderStateMixin {
   /// Сколько пикселей тянуть, чтобы барабан провернулся на одну камору.
-  static const double _dragStep = 78;
+  /// 78 px читались вяло: палец уже прошёл треть экрана, а барабан ещё
+  /// висел между каморами. 46 px — поворот идёт за пальцем.
+  static const double _dragStep = 46;
 
   late final AnimationController _spin = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 420),
+    duration: const Duration(milliseconds: 520),
   );
   Animation<double>? _spinAnim;
 
@@ -174,7 +176,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _settleTo(double goal) {
     final token = ++_spinToken;
     _spinAnim = Tween<double>(begin: _pos, end: goal).animate(
-      CurvedAnimation(parent: _spin, curve: Curves.easeOutCubic),
+      CurvedAnimation(parent: _spin, curve: Curves.easeOutQuint),
     );
     _spin.forward(from: 0).whenComplete(() {
       if (!mounted || token != _spinToken) return;
@@ -199,6 +201,11 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     // Инерция: быстрый флик докручивает барабан ещё на камору-две.
     final fling = (-(details.primaryVelocity ?? 0) / 1400).clamp(-1.6, 1.6);
     _settleTo((_pos + fling).roundToDouble());
+  }
+
+  void _onDragCancel() {
+    _dragging = false;
+    _settleTo(_pos.roundToDouble());
   }
 
   void _tapChamber(int index) {
@@ -232,8 +239,14 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
       builder: (context, constraints) {
         final side = constraints.maxWidth.clamp(180.0, 252.0).toDouble();
         final hub = side * 0.44;
-        return Column(
-          children: <Widget>[
+        // Центрируем барабан явно: при широкой карточке (планшет,
+        // горизонтальная раскладка) колонка растягивалась, и круг уезжал
+        // от центра карточки.
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
             SizedBox(
               width: side,
               height: side,
@@ -242,6 +255,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                 onHorizontalDragStart: _onDragStart,
                 onHorizontalDragUpdate: _onDragUpdate,
                 onHorizontalDragEnd: _onDragEnd,
+                onHorizontalDragCancel: _onDragCancel,
                 child: Stack(
                   alignment: Alignment.center,
                   children: <Widget>[
@@ -267,7 +281,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
             SizedBox(
               height: 24,
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 240),
+                duration: const Duration(milliseconds: 300),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 transitionBuilder: (child, anim) => FadeTransition(
@@ -294,31 +308,29 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
             ),
             Text(
               Translations.t('themeHint', context, 'Крути барабан'),
+              textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant.withValues(alpha: 0.7),
               ),
             ),
           ],
+          ),
         );
       },
     );
   }
 
-  /// Корпус барабана: круг с мягким градиентом и тонким колесом внутри.
+  /// Корпус барабана: ровный круг в тон темы и тонкое колесо внутри.
+  /// Диагональный градиент читался как случайное пятно света и на каждой
+  /// теме выглядел по-своему — теперь заливка однотонная, а объём дают
+  /// кольца и тень.
   Widget _drumShell(ColorScheme cs, double side) {
     return Container(
       width: side,
       height: side,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            cs.surfaceContainerHighest.withValues(alpha: 0.55),
-            cs.surface.withValues(alpha: 0.15),
-          ],
-        ),
+        color: cs.surfaceContainerLow,
         border: Border.all(
           color: cs.outlineVariant.withValues(alpha: 0.5),
           width: 1.2,
@@ -339,9 +351,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.35),
+              color: cs.outlineVariant.withValues(alpha: 0.30),
               width: 1,
             ),
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.30),
           ),
         ),
       ),
@@ -385,7 +398,24 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
             ],
           ),
           child: Center(
-            child: Icon(entry.icon, size: hub * 0.34, color: preview.onColor),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 320),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, anim) => FadeTransition(
+                opacity: anim,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.75, end: 1).animate(anim),
+                  child: child,
+                ),
+              ),
+              child: Icon(
+                entry.icon,
+                key: ValueKey<String>('hub_${entry.key}'),
+                size: hub * 0.34,
+                color: preview.onColor,
+              ),
+            ),
           ),
         ),
       ),
