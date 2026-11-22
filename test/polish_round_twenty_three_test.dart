@@ -15,8 +15,11 @@ void main() {
     final src = read('lib/screens/lock_screen_widgets.dart');
     expect(src.contains('maxTiltAngle: 0.18'), isTrue);
     expect(src.contains('enableTilt: true'), isTrue);
-    expect(src.contains('rotateX(-_tilt.value.dy * 0.21 * tilt)'), isTrue);
-    expect(src.contains('rotateY(_tilt.value.dx * 0.44 * tilt)'), isTrue);
+    expect(src.contains('rotateX(-aim.dy * 0.21 * tilt)'), isTrue);
+    expect(src.contains('rotateY(aim.dx * 0.44 * tilt)'), isTrue);
+    // Показываемый наклон подтягивается к цели по кадрам: при редких
+    // pointer-событиях клавиша не дёргается, а плавно догоняет палец.
+    expect(src.contains('Offset.lerp(_tilt.value, _tiltTarget, 0.22)'), isTrue);
   });
 
   test('обводка замка не красится в подарочный северный цвет', () {
@@ -47,9 +50,14 @@ void main() {
   test('зачёркивание — одна толстая змейка с ровным пером', () {
     final src = read('lib/widgets/animated_strike_text.dart');
     expect(
-      src.contains('strokeWidth = math.max(4.2, fontSize * 0.26)'),
+      src.contains('strokeWidth = math.max(6.0, fontSize * 0.34)'),
       isTrue,
     );
+    // Сплошная линия: цвет пера на полной непрозрачности, иначе над
+    // глифами она плотнее, чем в промежутках, и читается «то тонкой,
+    // то толстой».
+    expect(src.contains('.withValues('), isTrue);
+    expect(src.contains('alpha: 1.0'), isTrue);
     expect(src.contains('fontSize * 0.020'), isTrue);
     expect(src.contains('fontSize * 3.6'), isTrue);
     // Линия поверх текста: под глифами она выглядела рваной.

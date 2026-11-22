@@ -392,22 +392,49 @@ String _pollinationsPrompt(
   return buf.toString();
 }
 
+/// Промпт для GET-маршрута Pollinations в ОДНУ строку.
+///
+/// Критично: перенос строки в пути URL ломает маршрут — сервер отвечает
+/// 404 «Not Found» (проверено curl'ом: промпт с `\n` → 404, тот же текст
+/// через пробелы → 200). А наш промпт всегда многострочный (системная
+/// часть + выдержки веб-поиска + вопрос), поэтому GET стабильно падал и
+/// с включённым веб-поиском Ада не отвечала вовсе. Схлопываем переводы
+/// строк в разделитель « · » и лишние пробелы.
+String _flatPollinationsPrompt(
+  String userText,
+  List<AiMessage> history,
+  String languageCode,
+) {
+  String flat(String s) => AiGuideService.flattenForUrl(s);
+
+  var prompt = flat(_pollinationsPrompt(userText, history, languageCode));
+  if (prompt.length > 2000) {
+    // Длинный промпт режем по истории, а не по хвосту: вопрос стоит в
+    // конце и должен дойти до модели целиком.
+    final short = userText.length > 300
+        ? userText.substring(0, 300)
+        : userText;
+    prompt = flat(_freePrompt(short, languageCode));
+  }
+  return prompt;
+}
+
 Future<String> _sendPollinations(
   String userText,
   List<AiMessage> history,
   String languageCode,
 ) async {
-  // GET-маршрут идёт ПЕРВЫМ: он не упирается в лимит «1 ответ в 45 секунд
-  // на IP», который отдаёт POST /openai (402 FREE_LIMIT), и отвечает за
-  // доли секунды. Раньше GET стоял последним — до него бюджет цепочки
-  // уже заканчивался, и при включённом веб-поиске Ада показывала ошибку.
+  // GET-маршрут идёт ПЕРВЫМ: он не требует тела запроса и ключа, отвечает
+  // за 2–3 секунды даже с выдержками веб-поиска (проверено: промпт 1659
+  // символов → 200 за 2.4 с). POST /openai на анонимном IP сразу отдаёт
+  // 402 FREE_LIMIT («1 ответ в 45 секунд»), поэтому он только запасной.
   try {
     final getResp = await http
         .get(
           Uri.parse(
             '$_pollinationsUrl'
-            '${Uri.encodeComponent(_pollinationsPrompt(userText, history, languageCode))}'
-            '?model=openai-fast',
+            '${Uri.encodeComponent(_flatPollinationsPrompt(userText, history, languageCode))}'
+            '?model=openai-fast&referrer=agysha',
           ),
           headers: {
             'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',

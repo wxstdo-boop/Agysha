@@ -15,6 +15,7 @@ import '../utils/snackbar.dart';
 import '../services/ai_guide_service.dart';
 import '../services/json_file.dart';
 import '../services/prefs.dart';
+import '../services/screen_reader_service.dart';
 import '../services/settings_service.dart';
 import '../utils/wide_dash_formatter.dart';
 import '../utils/wide_dash_controller.dart';
@@ -203,11 +204,12 @@ class _OverlayChatState extends State<_OverlayChat>
   double get _screenH =>
       (globalPrefs.getDouble('ada_overlay_sh') ?? 850).clamp(480.0, 2400.0);
 
-  /// Ширина панели — почти во весь экран; высота — 44% экрана, но не выше
-  /// 460 и не ниже 300. Такой «нижний лист» оставляет место клавиатуре и
-  /// не выглядит отдельным плавающим окном.
-  double get _chatW => (_screenW - 32).clamp(272.0, 520.0);
-  double get _chatH => (_screenH * 0.36).clamp(260.0, 380.0);
+  /// Ширина панели — по ширине экрана с полями, но уже прежней «почти во
+  /// весь экран»: владелец просил окошко заметно мельче. Высота — ~30%
+  /// экрана (210…300 dp): при открытой клавиатуре остаётся место и панели,
+  /// и полю ввода, а само окно не превращается в отдельный экран.
+  double get _chatW => (_screenW - 40).clamp(248.0, 380.0);
+  double get _chatH => (_screenH * 0.30).clamp(210.0, 300.0);
 
   /// Текущий подъём над клавиатурой (dp): 0 — клавиатуры нет.
   double _kbInset = 0;
@@ -869,6 +871,11 @@ class _OverlayChatState extends State<_OverlayChat>
         // Мини-окошеко уважает веб-поиск из основного чата: настройка
         // живёт в prefs ('ai_web_search') и переживает перезапуск.
         useWebSearch: globalPrefs.getBool('ai_web_search') ?? false,
+        // «Ада видит экран»: раньше мини-окно НЕ передавало снимок вовсе —
+        // переключатель в настройках включался, а в промпт контекст не
+        // попадал, поэтому Ада «не видела экран». Здесь тот же снимок,
+        // что и в остальных окнах чата ('' — если выключено/нет прав).
+        screenContext: await ScreenReaderService.snapshot(),
       );
       if (!mounted) {
         await AiGuideService.appendBackgroundAnswer(reply);
@@ -1051,13 +1058,22 @@ class _OverlayChatState extends State<_OverlayChat>
         animation: Listenable.merge([_appearCtrl, _contentCtrl]),
         builder: (context, _) {
           final appearT = Curves.easeOutCubic.transform(_appearCtrl.value);
-          final contentT = _contentCtrl.value;
+          final contentT = Curves.easeOutCubic.transform(_contentCtrl.value);
+          // Морф пузырь↔чат: системное окно меняет размер скачком (натив
+          // не умеет анимировать его само), поэтому содержимое въезжает
+          // слегка уменьшенным и дорастает до 100% — переход читается
+          // превращением, а не подменой одного прямоугольника другим.
+          final morph = 0.90 + 0.10 * contentT;
           return Opacity(
             // Появление гарантировано (авто-таймер в initState + команда
             // сброса от main + lifecycle), поэтому минимум НЕ нужен —
             // иначе висел «полупрозрачный след чата» вместо плавного фейда.
             opacity: (appearT * contentT).clamp(0.0, 1.0),
-            child: _collapsed ? _buildBubble() : _buildChatShell(),
+            child: Transform.scale(
+              scale: morph,
+              alignment: _collapsed ? Alignment.center : Alignment.bottomCenter,
+              child: _collapsed ? _buildBubble() : _buildChatShell(),
+            ),
           );
         },
       ),
@@ -1148,10 +1164,12 @@ class _OverlayChatState extends State<_OverlayChat>
             color: const Color(0xFF0A0A0C),
             borderRadius: BorderRadius.circular(26),
             border: Border.all(
-              // Обводка как у маркера перемещения (пузыря Ады), но тоньше:
-              // окно читается «своим» элементом оверлея, а не белой рамкой.
-              color: cs.outlineVariant.withValues(alpha: 0.45),
-              width: 1,
+              // Та же обводка, что у маркера перемещения (пузыря Ады):
+              // тот же outlineVariant, но тоньше — 0.9 против 1.2 и чуть
+              // мягче по плотности, чтобы окно читалось «своим» элементом
+              // оверлея, а не белой рамкой.
+              color: cs.outlineVariant.withValues(alpha: 0.50),
+              width: 0.9,
             ),
             // Тени НЕ кладём: оверлей рисуется на поверхности, обрезанной
             // ПРЯМОУГОЛЬНОЙ границей окна — размытая тень обрезалась

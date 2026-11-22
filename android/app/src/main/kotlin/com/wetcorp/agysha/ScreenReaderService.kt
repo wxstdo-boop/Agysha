@@ -5,8 +5,9 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 /**
- * Читает текст активного окна ДРУГОГО приложения, чтобы Ада (мини-окно)
- * могла подсказать ответ собеседнику и вообще видеть контекст экрана.
+ * Читает текст активного окна, чтобы Ада (мини-окно) могла подсказать ответ
+ * собеседнику и вообще видеть контекст экрана: и чужого приложения, и самого
+ * Agysha (кроме окна Ады — его пропускаем, см. [isOverlayWindow]).
  *
  * Приватность: текст держится ТОЛЬКО в оперативной памяти этого процесса
  * (companion object), на диск не пишется и никуда не отправляется сам по
@@ -29,20 +30,28 @@ class ScreenReaderService : AccessibilityService() {
         event ?: return
         val pkg = event.packageName?.toString() ?: return
 
-        // Своё окно и клавиатуры не читаем: иначе в снимок попадал бы
-        // собственный чат Ады и подсказки клавиатуры — шум вместо пользы.
-        if (pkg == packageName) return
+        // Клавиатуры не читаем: подсказки IME — шум вместо пользы.
         if (pkg.startsWith("com.android.inputmethod") || pkg.contains("inputmethod", ignoreCase = true)) return
 
         val now = System.currentTimeMillis()
         // Троттлинг: контент-события приходят на каждый чат-кадр мессенджера,
         // обход дерева на каждый из них зря грузит слабый телефон.
         if (now - lastCaptureAt < 600) return
-        lastCaptureAt = now
 
         val root: AccessibilityNodeInfo? =
             if (event.source != null) event.source else rootInActiveWindow
         if (root == null) return
+
+        // Свой пакет ЧИТАЕМ: владелец спрашивает Аду именно про экран
+        // Agysha (привычки, задачи, питание), а прежний `pkg == packageName`
+        // отбрасывал его целиком — «Ада видит экран» не работала нигде
+        // внутри приложения. Пропускаем только окно самой Ады (оверлей
+        // занимает малую часть экрана), иначе в снимок попадал её
+        // собственный чат и она «отвечала сама себе».
+        if (pkg == packageName && isOverlayWindow(root)) return
+
+        lastCaptureAt = now
+
         try {
             val sb = StringBuilder()
             collect(root, sb, 0)
@@ -55,6 +64,27 @@ class ScreenReaderService : AccessibilityService() {
         } catch (_: Exception) {
         } finally {
             try { root.recycle() } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Окно мини-Ады (оверлей) или пузырь: его корень заметно меньше экрана.
+     * Главный экран Agysha занимает весь экран, поэтому порог 60% площади
+     * разделяет их без дополнительных разрешений
+     * (`getWindows()` требует flagRetrieveInteractiveWindows, а он
+     * намеренно не объявлен — см. screen_reader_config.xml).
+     */
+    private fun isOverlayWindow(root: AccessibilityNodeInfo): Boolean {
+        return try {
+            val r = android.graphics.Rect()
+            root.getBoundsInScreen(r)
+            val dm = resources.displayMetrics
+            val screen = dm.widthPixels.toLong() * dm.heightPixels.toLong()
+            if (screen <= 0L) return false
+            val area = r.width().toLong() * r.height().toLong()
+            area < screen * 6 / 10
+        } catch (_: Exception) {
+            false
         }
     }
 

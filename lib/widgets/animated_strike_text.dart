@@ -107,7 +107,14 @@ class _AnimatedStrikeTextState extends State<AnimatedStrikeText>
   Widget build(BuildContext context) {
     final baseColor = widget.style.color ?? const Color(0xFF000000);
     final struckColor = widget.struckColor ?? baseColor.withValues(alpha: 0.55);
-    final strikeColor = widget.strikeColor ?? struckColor;
+    // Линия — СПЛОШНАЯ и непрозрачная. Полупрозрачная линия ложилась на
+    // буквы: над глифом суммарная плотность выше, в промежутках ниже — и
+    // ровная по толщине линия читалась «то тонкая, то толстая». Держим тот
+    // же приглушённый тон, но на полной непрозрачности: толщина одинакова
+    // на всём протяжении.
+    final strikeColor = (widget.strikeColor ?? struckColor).withValues(
+      alpha: 1.0,
+    );
     // Масштаб, которым рендерится видимый RichText: если явно не передан,
     // берём из MediaQuery, чтобы линии зачёркивания всегда совпадали
     // со строками текста (при системном масштабе шрифта ≠ 1.0).
@@ -272,7 +279,10 @@ class _StrikePainter extends CustomPainter {
       // дважды и линия читалась «то тонкой, то жирной». Теперь волна —
       // одна полилиния с мелким шагом: толщина постоянная, а изгиб
       // остаётся плавной змейкой.
-      ..strokeWidth = math.max(4.2, fontSize * 0.26)
+      //
+      // Толщина: заметно толще прежних 0.26·fontSize (на 19.5px это было
+      // 5.07). Тонкая линия тонула в буквах и на светлой, и на тёмной теме.
+      ..strokeWidth = math.max(6.0, fontSize * 0.34)
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 

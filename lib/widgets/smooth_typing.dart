@@ -114,10 +114,16 @@ class _Repaint extends ChangeNotifier {
 class _Ghost {
   final String ch;
   final Offset pos;
+
+  /// Куда буква «уезжает», пока гаснет: к началу образовавшейся дыры, куда
+  /// уже сдвинулся остаток строки. Без этого гаснущая буква СТОЯЛА на старом
+  /// месте, пока весь текст уже прыгнул влево — именно это читалось как
+  /// «дёрнуло, а потом она плавно исчезает».
+  final Offset? to;
   final double from;
   final double t0;
 
-  _Ghost(this.ch, this.pos, this.from, this.t0);
+  _Ghost(this.ch, this.pos, this.from, this.t0, {this.to});
 
   double alphaAt(double now, double dur) {
     final t = ((now - t0) / dur).clamp(0.0, 1.0);
@@ -127,6 +133,14 @@ class _Ghost {
     // «стереть» читалось как «буквы заедают». Теперь буква начинает
     // растворяться сразу и гаснет мягко.
     return from * (1 - Curves.easeOutQuad.transform(t));
+  }
+
+  /// Положение буквы в текущий момент: от старой точки к началу дыры.
+  Offset posAt(double now, double dur) {
+    final target = to;
+    if (target == null) return pos;
+    final t = ((now - t0) / dur).clamp(0.0, 1.0);
+    return Offset.lerp(pos, target, Curves.easeOutCubic.transform(t)) ?? pos;
   }
 }
 
@@ -269,11 +283,29 @@ class _SmoothTypingState extends State<SmoothTyping>
       }
       final boxesMatch = _boxedText == oldText.toString();
       if (boxesMatch) {
+        // Куда «схлопывается» дыра: позиция первого уцелевшего символа
+        // остатка строки в старых рамках (после него текст уже сдвинут
+        // влево). Если удаляли с конца — дыра на месте самой буквы.
+        Offset? gap;
+        final firstKept = n - s;
+        if (firstKept < _boxes.length && _boxes[firstKept] != null) {
+          gap = _boxes[firstKept]!.topLeft;
+        } else if (p < _boxes.length && _boxes[p] != null) {
+          gap = _boxes[p]!.topLeft;
+        } else if (p > 0 && p - 1 < _boxes.length && _boxes[p - 1] != null) {
+          gap = _boxes[p - 1]!.topRight;
+        }
         for (var i = p; i < n - s; i++) {
           final box = i < _boxes.length ? _boxes[i] : null;
           if (box == null) continue;
           _ghosts.add(
-            _Ghost(old[i].ch, box.topLeft, old[i].alphaAt(now, _dur), now),
+            _Ghost(
+              old[i].ch,
+              box.topLeft,
+              old[i].alphaAt(now, _dur),
+              now,
+              to: gap,
+            ),
           );
         }
         if (_ghosts.length > 28) {
@@ -645,9 +677,15 @@ class _SmoothTypingPainter extends CustomPainter {
       ghostPainters.clear();
     }
     for (final gh in ghosts) {
-      final a = gh.alphaAt(nowGetter(), duration);
+      final now = nowGetter();
+      final a = gh.alphaAt(now, duration);
       if (a <= 0.01) continue;
-      _ghostPainter(editable, gh.ch, a, base).paint(canvas, gh.pos);
+      _ghostPainter(
+        editable,
+        gh.ch,
+        a,
+        base,
+      ).paint(canvas, gh.posAt(now, duration));
     }
     canvas.restore();
   }

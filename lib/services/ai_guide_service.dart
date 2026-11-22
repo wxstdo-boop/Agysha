@@ -475,6 +475,14 @@ class AiGuideService {
   /// служебные строки вырезаются, а живая фраза Ады остаётся.
   static String cleanAnswerText(String t) => _cleanText(t);
 
+  /// Схлопывает промпт в одну строку для GET-маршрутов вида
+  /// `text.pollinations.ai/<промпт>`: перевод строки в пути URL ломает
+  /// маршрут (сервер отдаёт 404), а промпт Ады всегда многострочный.
+  static String flattenForUrl(String s) => s
+      .replaceAll(RegExp(r'\s*\n+\s*'), ' · ')
+      .replaceAll(RegExp(r'[ \t]{2,}'), ' ')
+      .trim();
+
   static String _cleanText(String t) {
     var s = t;
     while (s.isNotEmpty) {

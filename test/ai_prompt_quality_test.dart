@@ -96,6 +96,18 @@ void main() {
     expect(post, greaterThan(0));
     // GET-маршрут стоит ПЕРВЫМ, POST — только запасной.
     expect(get, lessThan(post));
-    expect(body, contains('_pollinationsPrompt('));
+    expect(body, contains('_flatPollinationsPrompt('));
+  });
+
+  test('GET-промпт Pollinations схлопывается в одну строку', () {
+    // Перевод строки в пути URL ломает маршрут: сервер отдаёт 404, и с
+    // включённым веб-поиском (многострочный промпт) Ада не отвечала.
+    const raw = 'Ты Ада.\n\nВЫДЕРЖКИ:\n1. Кофе бодрит [healthline.com]\n\n'
+        'Вопрос: расскажи про кофе';
+    final flat = AiGuideService.flattenForUrl(raw);
+    expect(flat.contains('\n'), isFalse);
+    expect(flat.contains('  '), isFalse);
+    expect(flat, contains('Ты Ада.'));
+    expect(flat, contains('Вопрос: расскажи про кофе'));
   });
 }

@@ -1123,8 +1123,13 @@ class _KeyButton extends StatefulWidget {
 
 class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
   /// Полный ход «появления»: подъём + остывание под удержанием.
-  static const _kIn = Duration(milliseconds: 900);
-  static const _kOut = Duration(milliseconds: 700);
+  ///
+  /// Темп сжат: прежние 900 мс растягивали реакцию на тап почти на треть
+  /// секунды — клавиша «догоняла» палец уже после отпускания, и набор
+  /// читался дёрганым. Пик теперь на ~150 мс, остывание под пальцем и
+  /// высыхание — тоже короче, но с той же кривой без щелчков на стыке.
+  static const _kIn = Duration(milliseconds: 520);
+  static const _kOut = Duration(milliseconds: 420);
 
   /// Доля хода, за которую пятно наливается до максимума.
   static const _kPeak = 0.30;
@@ -1155,10 +1160,20 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
     vsync: this,
     value: 0,
     // Медленнее и мягче: наклон догоняет палец, а не щёлкает за ним.
-    duration: const Duration(milliseconds: 520),
-    reverseDuration: const Duration(milliseconds: 1150),
+    duration: const Duration(milliseconds: 380),
+    reverseDuration: const Duration(milliseconds: 700),
   );
+
+  /// Текущий наклон и цель, к которой он едет.
+  ///
+  /// Раньше наклон ставился прямо в `_aim` как `lerp(old, target, 0.45)`:
+  /// при редких pointer-событиях он прыгал на 45% за раз (рывок), при
+  /// частых — фактически мгновенно (щелчок). Теперь шаг события меньше
+  /// (0.28), а между событиями билдер ещё и подтягивает показываемое
+  /// значение к цели по кадрам — ход получается ровным при любом потоке
+  /// касаний.
   final ValueNotifier<Offset> _tilt = ValueNotifier(Offset.zero);
+  Offset _tiltTarget = Offset.zero;
 
   /// Куда палец стоит внутри клавиши: −1..1 по каждой оси.
   void _aim(Offset local) {
@@ -1175,11 +1190,8 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
       tx /= mag;
       ty /= mag;
     }
-    final target = Offset(tx, ty);
-    // Быстрее догоняем палец: при обычном тапе палец успевает сдвинуться
-    // всего на один-два пикселя, и прежние 0.16 оставляли наклон почти
-    // нулевым — владелец видел «наклона нет вовсе».
-    _tilt.value = Offset.lerp(_tilt.value, target, 0.45) ?? target;
+    _tiltTarget = Offset(tx, ty);
+    _tilt.value = Offset.lerp(_tilt.value, _tiltTarget, 0.28) ?? _tiltTarget;
   }
 
   /// Уровень пигмента по прогрессу удержания: налилось до 1 за первые 30%
@@ -1295,14 +1307,19 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
                 (_out.value / 0.34).clamp(0.0, 1.0),
               );
               final tilt = Curves.easeInOutCubic.transform(_tiltCtrl.value);
+              // Показываемый наклон подтягивается к цели по кадрам: между
+              // pointer-событиями он едет сам, поэтому клавиша не прыгает
+              // на редких событиях и не щёлкает на частых.
+              final aim =
+                  Offset.lerp(_tilt.value, _tiltTarget, 0.22) ?? _tiltTarget;
               final matrix = Matrix4.identity();
               if (tilt > 0.001) {
                 matrix.setEntry(3, 2, 0.0017);
                 // Вертикальный наклон слабее горизонтального, чтобы клавиша
                 // не «проваливалась» вниз, но общая амплитуда заметно
                 // сочнее: владелец просил «чуть больше» на ПИН-экране.
-                matrix.rotateX(-_tilt.value.dy * 0.21 * tilt);
-                matrix.rotateY(_tilt.value.dx * 0.44 * tilt);
+                matrix.rotateX(-aim.dy * 0.21 * tilt);
+                matrix.rotateY(aim.dx * 0.44 * tilt);
               }
               final scale = 1 - 0.12 * press * (1 - lift);
               matrix.scaleByDouble(scale, scale, 1.0, 1.0);
