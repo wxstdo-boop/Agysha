@@ -174,7 +174,16 @@ class _SwipeToDeleteState extends State<SwipeToDelete> with TickerProviderStateM
   Future<void> _onDragEnd(DragEndDetails details) async {
     if (_dismissed || _confirming) return;
     final p = _move.value;
-    if (p < 0.24) {
+    // Скорость учитываем ВМЕСТЕ с позицией: резкий короткий мах влево —
+    // это тоже удаление, а быстрый возврат вправо — отмена. Без этого
+    // быстрый «туда-сюда» обрывался на пороге 0.24 и карточка дёргалась.
+    final v = details.primaryVelocity ?? 0;
+    final flickOut = v < -700 && p > 0.05;
+    if (p < 0.24 && !flickOut) {
+      _animateBack(p);
+      return;
+    }
+    if (p >= 0.24 && v > 700) {
       _animateBack(p);
       return;
     }
@@ -212,13 +221,23 @@ class _SwipeToDeleteState extends State<SwipeToDelete> with TickerProviderStateM
       _move.value = 0;
       return;
     }
-    _move.animateTo(0, duration: _scaled(180 + 260 * p), curve: Curves.easeOutCubic);
+    // Возврат мягче и длиннее: прежние 180–440 мс на быстром реверсе
+    // читались как рывок. easeOutQuint гасит хвост почти в ноль.
+    _move.animateTo(
+      0,
+      duration: _scaled(260 + 340 * p),
+      curve: Curves.easeOutQuint,
+    );
   }
 
   /// Доезд за край: та же мягкая кривая, длительность — по остатку пути.
   void _animateOut(double p) {
     _dismissPending = true;
-    _move.animateTo(1, duration: _scaled(180 + 260 * (1 - p)), curve: Curves.easeOutCubic);
+    _move.animateTo(
+      1,
+      duration: _scaled(240 + 300 * (1 - p)),
+      curve: Curves.easeOutQuint,
+    );
   }
 
   @override

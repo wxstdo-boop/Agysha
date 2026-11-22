@@ -77,8 +77,9 @@ void main() {
       reason: 'вечного «дыхания» значка больше нет',
     );
     expect(
-      RegExp(r'if \(!MotionPrefs\.shouldReduceMotion\) _enter\.forward\(\)')
-          .hasMatch(src),
+      RegExp(
+        r'if \(!MotionPrefs\.shouldReduceMotion\) _enter\.forward\(\)',
+      ).hasMatch(src),
       isTrue,
       reason: 'вход идёт один раз и уважает «убрать анимации»',
     );
@@ -139,11 +140,13 @@ void main() {
     expect(card, greaterThan(0));
     final cardSrc = src.substring(card, (card + 16000).clamp(0, src.length));
     expect(
-      cardSrc.contains('Curves.easeInOutCubic'),
-      isFalse,
-      reason: 'своя кривая на растворении давала вспышку текста при удалении',
+      cardSrc.contains('curve: _mealCollapseCurve'),
+      isTrue,
+      reason: 'растворение и схлопывание идут одной кривой',
     );
-    expect(cardSrc.contains('curve: _mealCollapseCurve'), isTrue);
+    // Кривая AnimatedSlide для плавного переезда закреплённого блюда —
+    // отдельная анимация, она не подменяет кривую удаления.
+    expect(cardSrc.contains('AnimatedSlide'), isTrue);
   });
 
   testWidgets('кольцо музыки собирается и не роняет кадр', (tester) async {

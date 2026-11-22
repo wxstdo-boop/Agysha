@@ -62,26 +62,16 @@ class WideDashController extends TextEditingController implements GlyphStyling {
     required bool withComposing,
   }) {
     final String text = value.text;
-    // Именно «есть широкое тире», а не «есть что заменять»: значение уже
-    // нормализовано, и узких знаков в нём быть не может.
-    if (!text.contains('\u2014')) {
-      return super.buildTextSpan(
-        context: context,
-        style: style,
-        withComposing: withComposing,
-      );
-    }
-
-    final TextRange composing = withComposing && value.isComposingRangeValid
-        ? value.composing
-        : TextRange.empty;
-    final bool composingActive = composing.isValid && !composing.isCollapsed;
+    // Собираем span ВСЕГДА, даже без широкого тире: иначе `super`
+    // подчёркивает composing и жёлтая линия возвращается в обычном тексте.
+    // Зону «составления» (composing) НЕ подчёркиваем: раньше здесь
+    // рисовался underline системным цветом, и на тёмной теме он выглядел
+    // как жёлтый спеллчек прямо в пузыре мини-окна Ады.
     final TextStyle base = style ?? const TextStyle();
 
     final List<InlineSpan> runs = <InlineSpan>[];
     final StringBuffer buffer = StringBuffer();
     var bufferDash = false;
-    var bufferUnderline = false;
 
     void flush() {
       if (buffer.isEmpty) return;
@@ -92,9 +82,6 @@ class WideDashController extends TextEditingController implements GlyphStyling {
           fontFamilyFallback: const <String>[],
         );
       }
-      if (bufferUnderline) {
-        runStyle = runStyle.copyWith(decoration: TextDecoration.underline);
-      }
       runs.add(TextSpan(text: buffer.toString(), style: runStyle));
       buffer.clear();
     }
@@ -102,12 +89,9 @@ class WideDashController extends TextEditingController implements GlyphStyling {
     for (var i = 0; i < text.length; i++) {
       final String ch = text[i];
       final bool dash = isDash(ch);
-      final bool underline =
-          composingActive && i >= composing.start && i < composing.end;
-      if (dash != bufferDash || underline != bufferUnderline) {
+      if (dash != bufferDash) {
         flush();
         bufferDash = dash;
-        bufferUnderline = underline;
       }
       buffer.write(ch);
     }

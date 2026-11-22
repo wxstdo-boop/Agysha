@@ -15,12 +15,14 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   static const _historyKey = 'ai_chat_history';
   // Окошко ещё мельче: 204 → 186, кружок 64 → 56. Меньше перекрывает
   // чужое приложение, а подсказку всё равно видно.
-  static const double _expandedHeight = 186;
-  static const double _collapsedSize = 56;
+  // Ещё меньше: 168 px в высоту и не шире 202 px — окошко перестаёт
+  // закрывать половину экрана, но строка ввода и две строки ответа влезают.
+  static const double _expandedHeight = 168;
+  static const double _collapsedSize = 52;
 
   /// Ширина развёрнутого окошка: компактная, ближе к квадрату.
   static double _windowWidth(double screenWidth) =>
-      (screenWidth * 0.52).clamp(178.0, 226.0);
+      (screenWidth * 0.46).clamp(166.0, 202.0);
 
   Offset _pos = Offset.zero;
   // Позиция окошка — ValueNotifier: драг двигает только Positioned
@@ -346,8 +348,8 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          cs.surfaceContainerHighest.withValues(alpha: 0.99),
-          cs.surfaceContainerLowest.withValues(alpha: 0.99),
+          cs.surfaceContainerHighest.withValues(alpha: 0.93),
+          cs.surfaceContainerLowest.withValues(alpha: 0.91),
         ],
       ),
       border: Border.all(
@@ -571,7 +573,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
               ),
             ],
           ),
-          child: const Center(child: AdaAvatar(size: 36)),
+          child: const Center(child: AdaAvatar(size: 34, monochrome: true)),
         ),
       ),
     );
@@ -620,7 +622,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => _setCollapsed(true),
-                  child: AdaAvatar(size: 26),
+                  child: AdaAvatar(size: 24, monochrome: true),
                 ),
                 const SizedBox(width: 8),
                 Expanded(

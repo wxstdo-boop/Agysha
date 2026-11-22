@@ -351,18 +351,20 @@ class _AiChatSheetState extends State<_AiChatSheet> {
               curve: Curves.easeOutCubic,
               height: sheetHeight,
               decoration: BoxDecoration(
+                // Заметно прозрачнее: сквозь окно видно разметку экрана.
+                // Без BackdropFilter — кадр стоит как обычный контейнер.
                 color: theme.scaffoldBackgroundColor.withValues(
-                  alpha: isDark ? 0.965 : 0.975,
+                  alpha: isDark ? 0.80 : 0.88,
                 ),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
                     theme.scaffoldBackgroundColor.withValues(
-                      alpha: isDark ? 0.97 : 0.98,
+                      alpha: isDark ? 0.82 : 0.90,
                     ),
                     theme.colorScheme.surfaceContainerLow.withValues(
-                      alpha: isDark ? 0.94 : 0.97,
+                      alpha: isDark ? 0.76 : 0.88,
                     ),
                   ],
                 ),
@@ -401,6 +403,11 @@ class _AiChatBodyState extends State<_AiChatBody>
   final _inputCtrl = WideDashController();
   final _inputFocus = FocusNode();
   final _scrollCtrl = ScrollController();
+  /// Записи истории идут СТРОГО по очереди. Без очереди две параллельные
+  /// записи (отправка и очистка) завершались в произвольном порядке, и
+  /// последней на диск могла лечь старая: после «Очистить чат» и
+  /// перезапуска тексты возвращались.
+  Future<void> _historyWriteChain = Future<void>.value();
   final List<AiMessage> _messages = [];
   String? _historySnapshot;
   // Закреплённые сообщения Ады: живут отдельно от чата и НЕ стираются
@@ -747,19 +754,25 @@ class _AiChatBodyState extends State<_AiChatBody>
     if (mounted) setState(() => _historyLoaded = true);
   }
 
-  Future<void> _saveHistory() async {
-    try {
-      final value = jsonEncode(_messages.map((m) => m.toJson()).toList());
-      final resolved = await JsonFile.writeWithSnapshotRetrying(
-        _historyKey,
-        value,
-        _historySnapshot,
-      );
-      if (resolved == value) _historySnapshot = resolved;
-      _storageErrorShown = false;
-    } catch (error, stackTrace) {
-      _reportStorageFailure(error, stackTrace);
-    }
+  Future<void> _saveHistory() {
+    // Снимок делаем СРАЗУ: к моменту записи список уже может быть очищен.
+    final value = jsonEncode(_messages.map((m) => m.toJson()).toList());
+    final snapshot = _historySnapshot;
+    final next = _historyWriteChain.then((_) async {
+      try {
+        final resolved = await JsonFile.writeWithSnapshotRetrying(
+          _historyKey,
+          value,
+          snapshot,
+        );
+        _historySnapshot = resolved;
+        _storageErrorShown = false;
+      } catch (error, stackTrace) {
+        _reportStorageFailure(error, stackTrace);
+      }
+    });
+    _historyWriteChain = next;
+    return next;
   }
 
   Future<void> _loadPins() async {
@@ -898,11 +911,13 @@ class _AiChatBodyState extends State<_AiChatBody>
       if (!_scrollCtrl.hasClients) return;
       final pos = _scrollCtrl.position;
       if (animate) {
-        if (pos.pixels > 4) {
+        if (pos.pixels > 1) {
+          // Отправка сверху: лента едет к ответу одним мягким проездом.
+          // 360 мс с резким стартом читались как рывок вниз.
           _scrollCtrl.animateTo(
             0,
-            duration: const Duration(milliseconds: 360),
-            curve: Curves.easeOutCubic,
+            duration: const Duration(milliseconds: 560),
+            curve: Curves.easeInOutCubic,
           );
         }
       } else if (pos.pixels > 0) {
@@ -1261,6 +1276,9 @@ class _AiChatBodyState extends State<_AiChatBody>
       // он ждал при следующем открытии. Чат очистили вручную — ответ
       // выбрасываем (gen изменился).
       if (!mounted) {
+        // Чат очистили, пока окно было закрыто: ответ в пустую историю
+        // не дописываем (иначе тексты «возвращались» после перезапуска).
+        if (gen != adaChatGeneration) return;
         await AiGuideService.appendBackgroundAnswer(answer);
         return;
       }

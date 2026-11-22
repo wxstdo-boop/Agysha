@@ -10,11 +10,13 @@ void main() {
   String read(String path) => File(path).readAsStringSync();
 
   test('кнопки ПИН-экрана наклоняются по пальцу', () {
-    // «Выйти», «Отмена», цифры и крестик крепятся к PressScale.
+    // «Выйти» и «Отмена» крепятся к PressScale, а цифры и крестик ведут
+    // собственный наклон (вложенный PressScale терял угол за уменьшением).
     final src = read('lib/screens/lock_screen_widgets.dart');
     expect(src.contains('maxTiltAngle: 0.12'), isTrue);
-    expect(src.contains('maxTiltAngle: 0.10'), isTrue);
     expect(src.contains('enableTilt: true'), isTrue);
+    expect(src.contains('rotateX(-_tilt.value.dy * 0.34 * tilt)'), isTrue);
+    expect(src.contains('rotateY(_tilt.value.dx * 0.34 * tilt)'), isTrue);
   });
 
   test('обводка замка не красится в подарочный северный цвет', () {

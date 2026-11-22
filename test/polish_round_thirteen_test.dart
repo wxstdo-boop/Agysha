@@ -379,20 +379,15 @@ void main() {
       reason:
           'монохром — две соседние ступени поверхности, без фирменных цветов',
     );
-    // Значок теперь эмодзи (персик и т.п.) — он рисуется Текстом, а не
-    // Icon, и остаётся узнаваемым даже в монохромном медальоне.
-    expect(
-      find.descendant(of: mono, matching: find.text('🍑')),
-      findsOneWidget,
-      reason: 'у первого варианта — горячий эмодзи-значок',
-    );
+    // Монохром рисует ВЕКТОРНЫЙ значок в цвете темы: эмодзи в один цвет
+    // не перекрашивается и выбивался бы из таблетки разделов.
+    expect(find.descendant(of: mono, matching: find.text('🍑')), findsNothing);
     expect(
       find.descendant(of: mono, matching: find.byType(Icon)),
-      findsNothing,
+      findsWidgets,
     );
 
-    // В цветном режиме градиент фирменный, значок тот же эмодзи — кнопка
-    // отличается медальоном, а не подменой символа.
+    // В цветном режиме градиент фирменный, а значок — горячий эмодзи.
     final colorGrad = decoOf(color).gradient! as LinearGradient;
     expect(colorGrad.colors.toSet().length, greaterThan(1));
     expect(

@@ -131,7 +131,17 @@ Future<String> _sendZen(
 const _poolsideUrl = 'https://inference.poolside.ai/v1/chat/completions';
 const _poolsideModel = 'poolside/laguna-s-2.1';
 const _openrouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
-const _openrouterModel = 'poolside/laguna-s-2.1:free';
+
+/// Бесплатные модели OpenRouter по убыванию силы. У каждой свой суточный
+/// лимит, поэтому при 429/404 просто идём к следующей — так «бесплатный
+/// ключ» не превращается в один шанс в сутки.
+const _openrouterFreeModels = <String>[
+  'deepseek/deepseek-r1:free',
+  'qwen/qwen3-235b-a22b:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemma-3-27b-it:free',
+  'poolside/laguna-s-2.1:free',
+];
 
 Future<String> _sendPoolside(
   String userText,
@@ -141,7 +151,6 @@ Future<String> _sendPoolside(
 ) async {
   final isOpenRouter = apiKey.startsWith('sk-or-');
   final url = isOpenRouter ? _openrouterUrl : _poolsideUrl;
-  final model = isOpenRouter ? _openrouterModel : _poolsideModel;
 
   final ctx = AiGuideService._trimContext(history);
   final messages = <Map<String, dynamic>>[
@@ -154,15 +163,31 @@ Future<String> _sendPoolside(
     {'role': 'user', 'content': userText},
   ];
 
-  final body = await _poolsideRound(messages, model, apiKey, url);
-  if (body is String) return body; // обычный текстовый ответ
-  return _poolsideRoundWithTools(
-    body as Map<String, dynamic>,
-    messages,
-    model,
-    apiKey,
-    url,
-  );
+  final models = isOpenRouter
+      ? _openrouterFreeModels
+      : const <String>[_poolsideModel];
+  Object? lastError;
+  for (final model in models) {
+    try {
+      final body = await _poolsideRound(messages, model, apiKey, url);
+      if (body is String) {
+        AiGuideService._noteModel(
+          isOpenRouter ? 'OpenRouter · ${model.split('/').first}' : model,
+        );
+        return body; // обычный текстовый ответ
+      }
+      return await _poolsideRoundWithTools(
+        body as Map<String, dynamic>,
+        messages,
+        model,
+        apiKey,
+        url,
+      );
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw Exception('Poolside/OpenRouter: $lastError');
 }
 
 /// Один раунд запроса. Возвращает либо готовый текст, либо assistant-
@@ -329,7 +354,12 @@ Future<String> _sendLlm7(
   // Три живые модели шлюза: если одна отвечает пустым content или 429,
   // следующая обычно отвечает нормально. Без этого одно падение модели
   // выбивало весь бесплатный слой.
-  for (final model in const ['gpt-oss:20b', 'gpt-oss', 'codestral-latest']) {
+  for (final model in const [
+    'gpt-oss:20b',
+    'gpt-oss',
+    'codestral-latest',
+    'mistral-Nemo-Instruct-2407',
+  ]) {
     try {
       final resp = await http
           .post(
