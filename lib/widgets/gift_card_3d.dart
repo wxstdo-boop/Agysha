@@ -27,12 +27,18 @@ class GiftCard3D extends StatefulWidget {
   final double height;
   final VoidCallback? onFavoriteToggled;
 
+  /// Наклон можно погасить снаружи: пока полоса артефактов листается,
+  /// каждая карточка иначе ловит палец и качаетcя вместе с прокруткой —
+  /// отсюда и бралось дёрганье у краёв.
+  final bool tiltEnabled;
+
   const GiftCard3D({
     super.key,
     required this.gift,
     this.width = defaultWidth,
     this.height = 210,
     this.onFavoriteToggled,
+    this.tiltEnabled = true,
   });
 
   @override
@@ -45,7 +51,9 @@ class _GiftCard3DState extends State<GiftCard3D>
   late Animation<Offset> _tiltAnimation;
 
   Offset _tilt = Offset.zero;
-  final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(Offset.zero);
+  final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(
+    Offset.zero,
+  );
 
   @override
   void initState() {
@@ -54,13 +62,16 @@ class _GiftCard3DState extends State<GiftCard3D>
       vsync: this,
       duration: const Duration(milliseconds: 460),
     );
-    _tiltAnimation = Tween<Offset>(
-      begin: Offset.zero,
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _resetController,
-      curve: Curves.easeOutCubic,
-    ));
+    _tiltAnimation = Tween<Offset>(begin: Offset.zero, end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic),
+        );
+  }
+
+  @override
+  void didUpdateWidget(covariant GiftCard3D oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tiltEnabled && !widget.tiltEnabled) _resetTilt();
   }
 
   @override
@@ -82,7 +93,7 @@ class _GiftCard3DState extends State<GiftCard3D>
   }
 
   void _updateTiltFromPos(Offset localPosition) {
-    if (MotionPrefs.shouldReduceMotion) return;
+    if (!widget.tiltEnabled || MotionPrefs.shouldReduceMotion) return;
     _resetController.stop();
     final rawDx = (localPosition.dx / widget.width - 0.5) * 2.0;
     final rawDy = (localPosition.dy / widget.height - 0.5) * 2.0;
@@ -96,17 +107,37 @@ class _GiftCard3DState extends State<GiftCard3D>
 
   void _resetTilt() {
     if (MotionPrefs.shouldReduceMotion) return;
-    _tiltAnimation = Tween<Offset>(
-      begin: _tilt,
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _resetController,
-      curve: Curves.easeOutCubic,
-    ));
+    if (_tilt == Offset.zero && !_resetController.isAnimating) return;
+    _tiltAnimation = Tween<Offset>(begin: _tilt, end: Offset.zero).animate(
+      CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic),
+    );
     _resetController.forward(from: 0).then((_) {
       _tilt = Offset.zero;
       _tiltNotifier.value = Offset.zero;
     });
+  }
+
+  /// Перелив подложки: сам следит за наклоном, поэтому живёт внутри
+  /// карточки и не тянет за собой перестройку содержимого на каждый кадр.
+  Widget _foilLayer() {
+    return ListenableBuilder(
+      listenable: Listenable.merge([_resetController, _tiltNotifier]),
+      builder: (context, _) {
+        final tilt = _resetController.isAnimating
+            ? _tiltAnimation.value
+            : _tilt;
+        final hasTilt = tilt.dx.abs() > 0.0005 || tilt.dy.abs() > 0.0005;
+        return CustomPaint(
+          painter: _HoloFoilPainter(
+            tilt: tilt,
+            idle: !hasTilt,
+            rarityColor: widget.gift.isFavorite
+                ? BrandColors.red
+                : widget.gift.rarity.color,
+          ),
+        );
+      },
+    );
   }
 
   void _openDetails(BuildContext context) {
@@ -130,14 +161,8 @@ class _GiftCard3DState extends State<GiftCard3D>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: dark
-              ? [
-                  const Color(0xFF141420),
-                  const Color(0xFF0A0A12),
-                ]
-              : [
-                  Colors.white,
-                  const Color(0xFFF0F4F8),
-                ],
+              ? [const Color(0xFF141420), const Color(0xFF0A0A12)]
+              : [Colors.white, const Color(0xFFF0F4F8)],
         ),
         border: Border.all(
           color: widget.gift.isFavorite
@@ -157,109 +182,126 @@ class _GiftCard3DState extends State<GiftCard3D>
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(Radii.lg),
-        child: Padding(
-          padding: const EdgeInsets.all(Spacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Верхний ряд: Редкость и Серийник (плюс звездочка без наезда)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Stack(
+          children: [
+            // Перелив — часть подложки, а не эффект нажатия: он лежит над
+            // фоном карточки и виден всегда, но ПОД текстом, поэтому снизу
+            // ничего не «вылезает» поверх подписей.
+            Positioned.fill(child: _foilLayer()),
+            Padding(
+              padding: const EdgeInsets.all(Spacing.sm),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: rarity.color.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(Radii.xs),
-                        border: Border.all(
-                          color: rarity.color.withValues(alpha: 0.45),
-                          width: 0.8,
-                        ),
-                      ),
-                      child: Text(
-                        rarity.labelRu.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: rarity.color,
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  // Номер и кровавая звездочка рядом
+                  // Верхний ряд: Редкость и Серийник (плюс звездочка без наезда)
                   Row(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (widget.gift.isFavorite) ...[
-                        const Icon(
-                          Icons.star_rounded,
-                          size: 14,
-                          color: BrandColors.red,
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: rarity.color.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(Radii.xs),
+                            border: Border.all(
+                              color: rarity.color.withValues(alpha: 0.45),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            rarity.labelRu.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: rarity.color,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
                         ),
-                        const SizedBox(width: 2),
-                      ],
-                      Text(
-                        '#${widget.gift.serialNumber.toString().padLeft(4, '0')}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontFamily: 'monospace',
-                          fontWeight: FontWeight.w700,
-                          color: widget.gift.isFavorite
-                              ? BrandColors.red
-                              : theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.60),
-                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Номер и кровавая звездочка рядом
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.gift.isFavorite) ...[
+                            const Icon(
+                              Icons.star_rounded,
+                              size: 14,
+                              color: BrandColors.red,
+                            ),
+                            const SizedBox(width: 2),
+                          ],
+                          Text(
+                            '#${widget.gift.serialNumber.toString().padLeft(4, '0')}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w700,
+                              color: widget.gift.isFavorite
+                                  ? BrandColors.red
+                                  : theme.colorScheme.onSurface.withValues(
+                                      alpha: 0.60,
+                                    ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
+                  const Spacer(),
+                  // Центральная иконка артефакта с аурой
+                  Center(
+                    child: ArtifactEmblem(
+                      giftId: widget.gift.id,
+                      icon: widget.gift.icon,
+                      color: rarity.color,
+                      isFavorite: widget.gift.isFavorite,
+                      size: 68,
+                    ),
+                  ),
+                  const Spacer(),
+                  // Название артефакта
+                  Text(
+                    Translations.t(
+                      'giftTitle_${widget.gift.id}',
+                      context,
+                      widget.gift.title,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  // Бафф/эффект
+                  Text(
+                    Translations.t(
+                      'giftBuff_${widget.gift.id}',
+                      context,
+                      widget.gift.buffText,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: widget.gift.isFavorite
+                          ? BrandColors.red
+                          : theme.colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
-              const Spacer(),
-              // Центральная иконка артефакта с аурой
-              Center(
-                child: ArtifactEmblem(
-                  giftId: widget.gift.id,
-                  icon: widget.gift.icon,
-                  color: rarity.color,
-                  isFavorite: widget.gift.isFavorite,
-                  size: 68,
-                ),
-              ),
-              const Spacer(),
-              // Название артефакта
-              Text(
-                Translations.t('giftTitle_${widget.gift.id}', context, widget.gift.title),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 2),
-              // Бафф/эффект
-              Text(
-                Translations.t('giftBuff_${widget.gift.id}', context, widget.gift.buffText),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: widget.gift.isFavorite
-                      ? BrandColors.red
-                      : theme.colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -286,32 +328,10 @@ class _GiftCard3DState extends State<GiftCard3D>
                     ? _tiltAnimation.value
                     : _tilt;
                 final hasTilt =
-                    currentTilt.dx.abs() > 0.0005 || currentTilt.dy.abs() > 0.0005;
+                    currentTilt.dx.abs() > 0.0005 ||
+                    currentTilt.dy.abs() > 0.0005;
 
-                // Голографический перелив — часть фона карточки, а не эффект
-                // наведения: он лежит поверх контента и в покое, иначе
-                // артефакт «терял» фон, стоило убрать палец.
-                final layered = Stack(
-                  children: [
-                    child!,
-                    Positioned.fill(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(Radii.lg),
-                        child: CustomPaint(
-                          painter: _HoloFoilPainter(
-                            tilt: currentTilt,
-                            idle: !hasTilt,
-                            rarityColor: widget.gift.isFavorite
-                                ? BrandColors.red
-                                : rarity.color,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-
-                if (!hasTilt) return layered;
+                if (!hasTilt) return child!;
 
                 final tiltX = -currentTilt.dy * 0.26;
                 final tiltY = currentTilt.dx * 0.26;
@@ -324,7 +344,7 @@ class _GiftCard3DState extends State<GiftCard3D>
                 return Transform(
                   transform: transform,
                   alignment: FractionalOffset.center,
-                  child: layered,
+                  child: child!,
                 );
               },
               child: cardContent,
@@ -357,7 +377,8 @@ class ArtifactEmblem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final targetColor = activeColorOverride ?? (isFavorite ? BrandColors.red : color);
+    final targetColor =
+        activeColorOverride ?? (isFavorite ? BrandColors.red : color);
 
     return TweenAnimationBuilder<Color?>(
       duration: const Duration(milliseconds: 360),
@@ -486,7 +507,14 @@ class SharpArtifactPainter extends CustomPainter {
     }
   }
 
-  void _drawChronoCrystal(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+  void _drawChronoCrystal(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    Paint fill,
+    Paint stroke,
+  ) {
     // Внешняя кристаллическая аура
     final glow = Paint()
       ..color = color.withValues(alpha: 0.35)
@@ -503,42 +531,79 @@ class SharpArtifactPainter extends CustomPainter {
     final mRight = Offset(cx + r * 0.36, cy + r * 0.24);
 
     // Верхние фасеты (чистый неон + прозрачные кристаллы)
-    final tablePath = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(top.dx, top.dy)..close();
+    final tablePath = Path()
+      ..moveTo(tLeft.dx, tLeft.dy)
+      ..lineTo(tRight.dx, tRight.dy)
+      ..lineTo(top.dx, top.dy)
+      ..close();
     fill.color = color.withValues(alpha: 0.92);
     canvas.drawPath(tablePath, fill);
 
-    final fLt = Path()..moveTo(top.dx, top.dy)..lineTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..close();
+    final fLt = Path()
+      ..moveTo(top.dx, top.dy)
+      ..lineTo(tLeft.dx, tLeft.dy)
+      ..lineTo(left.dx, left.dy)
+      ..close();
     fill.color = color.withValues(alpha: 0.38);
     canvas.drawPath(fLt, fill);
 
-    final fRt = Path()..moveTo(top.dx, top.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..close();
+    final fRt = Path()
+      ..moveTo(top.dx, top.dy)
+      ..lineTo(tRight.dx, tRight.dy)
+      ..lineTo(right.dx, right.dy)
+      ..close();
     fill.color = color.withValues(alpha: 0.80);
     canvas.drawPath(fRt, fill);
 
     // Центральное плато с белым спекулярным отблеском
-    final fCenter = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(tRight.dx, tRight.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
+    final fCenter = Path()
+      ..moveTo(tLeft.dx, tLeft.dy)
+      ..lineTo(tRight.dx, tRight.dy)
+      ..lineTo(mRight.dx, mRight.dy)
+      ..lineTo(mLeft.dx, mLeft.dy)
+      ..close();
     fill.color = Colors.white.withValues(alpha: 0.65);
     canvas.drawPath(fCenter, fill);
 
     // Боковые фасеты
-    final fCl = Path()..moveTo(tLeft.dx, tLeft.dy)..lineTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..close();
+    final fCl = Path()
+      ..moveTo(tLeft.dx, tLeft.dy)
+      ..lineTo(left.dx, left.dy)
+      ..lineTo(mLeft.dx, mLeft.dy)
+      ..close();
     fill.color = color.withValues(alpha: 0.28);
     canvas.drawPath(fCl, fill);
 
-    final fCr = Path()..moveTo(tRight.dx, tRight.dy)..lineTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..close();
+    final fCr = Path()
+      ..moveTo(tRight.dx, tRight.dy)
+      ..lineTo(right.dx, right.dy)
+      ..lineTo(mRight.dx, mRight.dy)
+      ..close();
     fill.color = color.withValues(alpha: 0.70);
     canvas.drawPath(fCr, fill);
 
     // Нижние кинжальные грани
-    final fBc = Path()..moveTo(mLeft.dx, mLeft.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
+    final fBc = Path()
+      ..moveTo(mLeft.dx, mLeft.dy)
+      ..lineTo(mRight.dx, mRight.dy)
+      ..lineTo(bot.dx, bot.dy)
+      ..close();
     fill.color = color.withValues(alpha: 0.95);
     canvas.drawPath(fBc, fill);
 
-    final fBl = Path()..moveTo(left.dx, left.dy)..lineTo(mLeft.dx, mLeft.dy)..lineTo(bot.dx, bot.dy)..close();
+    final fBl = Path()
+      ..moveTo(left.dx, left.dy)
+      ..lineTo(mLeft.dx, mLeft.dy)
+      ..lineTo(bot.dx, bot.dy)
+      ..close();
     fill.color = color.withValues(alpha: 0.22);
     canvas.drawPath(fBl, fill);
 
-    final fBr = Path()..moveTo(right.dx, right.dy)..lineTo(mRight.dx, mRight.dy)..lineTo(bot.dx, bot.dy)..close();
+    final fBr = Path()
+      ..moveTo(right.dx, right.dy)
+      ..lineTo(mRight.dx, mRight.dy)
+      ..lineTo(bot.dx, bot.dy)
+      ..close();
     fill.color = color.withValues(alpha: 0.75);
     canvas.drawPath(fBr, fill);
 
@@ -576,17 +641,41 @@ class SharpArtifactPainter extends CustomPainter {
     canvas.drawLine(mRight, bot, stroke);
   }
 
-  void _drawCyberSakura(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+  void _drawCyberSakura(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    Paint fill,
+    Paint stroke,
+  ) {
     const n = 5;
     // Брутальные лезвия-сюрикены в форме сакуры
     for (int i = 0; i < n; i++) {
       final angle = -math.pi / 2 + i * (2 * math.pi / n);
-      final tip = Offset(cx + math.cos(angle) * r * 0.95, cy + math.sin(angle) * r * 0.95);
-      final wLeft = Offset(cx + math.cos(angle - 0.35) * r * 0.52, cy + math.sin(angle - 0.35) * r * 0.52);
-      final wRight = Offset(cx + math.cos(angle + 0.35) * r * 0.52, cy + math.sin(angle + 0.35) * r * 0.52);
-      final base = Offset(cx + math.cos(angle) * r * 0.18, cy + math.sin(angle) * r * 0.18);
+      final tip = Offset(
+        cx + math.cos(angle) * r * 0.95,
+        cy + math.sin(angle) * r * 0.95,
+      );
+      final wLeft = Offset(
+        cx + math.cos(angle - 0.35) * r * 0.52,
+        cy + math.sin(angle - 0.35) * r * 0.52,
+      );
+      final wRight = Offset(
+        cx + math.cos(angle + 0.35) * r * 0.52,
+        cy + math.sin(angle + 0.35) * r * 0.52,
+      );
+      final base = Offset(
+        cx + math.cos(angle) * r * 0.18,
+        cy + math.sin(angle) * r * 0.18,
+      );
 
-      final petal = Path()..moveTo(base.dx, base.dy)..lineTo(wLeft.dx, wLeft.dy)..lineTo(tip.dx, tip.dy)..lineTo(wRight.dx, wRight.dy)..close();
+      final petal = Path()
+        ..moveTo(base.dx, base.dy)
+        ..lineTo(wLeft.dx, wLeft.dy)
+        ..lineTo(tip.dx, tip.dy)
+        ..lineTo(wRight.dx, wRight.dy)
+        ..close();
       fill.color = color.withValues(alpha: 0.70 + 0.22 * math.sin(i * 1.5));
       canvas.drawPath(petal, fill);
 
@@ -606,7 +695,10 @@ class SharpArtifactPainter extends CustomPainter {
     final core = Path();
     for (int i = 0; i < n; i++) {
       final angle = -math.pi / 2 + i * (2 * math.pi / n);
-      final p = Offset(cx + math.cos(angle) * r * 0.26, cy + math.sin(angle) * r * 0.26);
+      final p = Offset(
+        cx + math.cos(angle) * r * 0.26,
+        cy + math.sin(angle) * r * 0.26,
+      );
       if (i == 0) {
         core.moveTo(p.dx, p.dy);
       } else {
@@ -621,7 +713,14 @@ class SharpArtifactPainter extends CustomPainter {
     canvas.drawPath(core, stroke);
   }
 
-  void _drawNeonLotus(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+  void _drawNeonLotus(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    Paint fill,
+    Paint stroke,
+  ) {
     // Центральный боевой клинок-пика
     final spire = Path()
       ..moveTo(cx, cy - r * 0.98)
@@ -672,10 +771,21 @@ class SharpArtifactPainter extends CustomPainter {
     // Центральный лазерный фокус
     stroke.color = Colors.white;
     stroke.strokeWidth = 1.8;
-    canvas.drawLine(Offset(cx, cy - r * 0.75), Offset(cx, cy + r * 0.35), stroke);
+    canvas.drawLine(
+      Offset(cx, cy - r * 0.75),
+      Offset(cx, cy + r * 0.35),
+      stroke,
+    );
   }
 
-  void _drawGoldenBell(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+  void _drawGoldenBell(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    Paint fill,
+    Paint stroke,
+  ) {
     // Массивный колокол-титан с рогатой они-короной
     final bell = Path()
       ..moveTo(cx - r * 0.32, cy - r * 0.68)
@@ -717,20 +827,36 @@ class SharpArtifactPainter extends CustomPainter {
     // Акустические звуковые лезвия по бокам
     stroke.color = color.withValues(alpha: 0.95);
     stroke.strokeWidth = 2.0;
-    final arcL = Path()..moveTo(cx - r * 0.92, cy - r * 0.18)..lineTo(cx - r * 1.04, cy + r * 0.15)..lineTo(cx - r * 0.92, cy + r * 0.48);
-    final arcR = Path()..moveTo(cx + r * 0.92, cy - r * 0.18)..lineTo(cx + r * 1.04, cy + r * 0.15)..lineTo(cx + r * 0.92, cy + r * 0.48);
+    final arcL = Path()
+      ..moveTo(cx - r * 0.92, cy - r * 0.18)
+      ..lineTo(cx - r * 1.04, cy + r * 0.15)
+      ..lineTo(cx - r * 0.92, cy + r * 0.48);
+    final arcR = Path()
+      ..moveTo(cx + r * 0.92, cy - r * 0.18)
+      ..lineTo(cx + r * 1.04, cy + r * 0.15)
+      ..lineTo(cx + r * 0.92, cy + r * 0.48);
     canvas.drawPath(arcL, stroke);
     canvas.drawPath(arcR, stroke);
   }
 
-  void _drawAdaNeuralShard(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+  void _drawAdaNeuralShard(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    Paint fill,
+    Paint stroke,
+  ) {
     // Внешняя гексагональная микросхема процессора
     final hex = Path();
     const n = 6;
     final pts = <Offset>[];
     for (int i = 0; i < n; i++) {
       final angle = i * math.pi / 3;
-      final p = Offset(cx + math.cos(angle) * r * 0.90, cy + math.sin(angle) * r * 0.90);
+      final p = Offset(
+        cx + math.cos(angle) * r * 0.90,
+        cy + math.sin(angle) * r * 0.90,
+      );
       pts.add(p);
       if (i == 0) {
         hex.moveTo(p.dx, p.dy);
@@ -770,18 +896,41 @@ class SharpArtifactPainter extends CustomPainter {
     canvas.drawCircle(Offset(cx, cy), r * 0.14, Paint()..color = Colors.white);
   }
 
-  void _drawSamuraiVisor(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+  void _drawSamuraiVisor(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    Paint fill,
+    Paint stroke,
+  ) {
     // Скрещенные кибер-катаны за шлемом
     stroke.color = color.withValues(alpha: 0.85);
     stroke.strokeWidth = 2.4;
-    canvas.drawLine(Offset(cx - r * 0.90, cy - r * 0.90), Offset(cx + r * 0.90, cy + r * 0.90), stroke);
-    canvas.drawLine(Offset(cx + r * 0.90, cy - r * 0.90), Offset(cx - r * 0.90, cy + r * 0.90), stroke);
+    canvas.drawLine(
+      Offset(cx - r * 0.90, cy - r * 0.90),
+      Offset(cx + r * 0.90, cy + r * 0.90),
+      stroke,
+    );
+    canvas.drawLine(
+      Offset(cx + r * 0.90, cy - r * 0.90),
+      Offset(cx - r * 0.90, cy + r * 0.90),
+      stroke,
+    );
 
     // Белые острые лезвия катан по центру
     stroke.color = Colors.white;
     stroke.strokeWidth = 1.2;
-    canvas.drawLine(Offset(cx - r * 0.86, cy - r * 0.86), Offset(cx + r * 0.86, cy + r * 0.86), stroke);
-    canvas.drawLine(Offset(cx + r * 0.86, cy - r * 0.86), Offset(cx - r * 0.86, cy + r * 0.86), stroke);
+    canvas.drawLine(
+      Offset(cx - r * 0.86, cy - r * 0.86),
+      Offset(cx + r * 0.86, cy + r * 0.86),
+      stroke,
+    );
+    canvas.drawLine(
+      Offset(cx + r * 0.86, cy - r * 0.86),
+      Offset(cx - r * 0.86, cy + r * 0.86),
+      stroke,
+    );
 
     // Рога Кабуто (демонический полумесяц Они в неоновой оправе)
     final horns = Path()
@@ -815,22 +964,55 @@ class SharpArtifactPainter extends CustomPainter {
     // Неоновые боевые полосы на броне щек
     stroke.color = color;
     stroke.strokeWidth = 2.0;
-    canvas.drawLine(Offset(cx - r * 0.50, cy + r * 0.10), Offset(cx - r * 0.25, cy + r * 0.48), stroke);
-    canvas.drawLine(Offset(cx + r * 0.50, cy + r * 0.10), Offset(cx + r * 0.25, cy + r * 0.48), stroke);
+    canvas.drawLine(
+      Offset(cx - r * 0.50, cy + r * 0.10),
+      Offset(cx - r * 0.25, cy + r * 0.48),
+      stroke,
+    );
+    canvas.drawLine(
+      Offset(cx + r * 0.50, cy + r * 0.10),
+      Offset(cx + r * 0.25, cy + r * 0.48),
+      stroke,
+    );
 
     // Лазерный оптический разрез глаз / визор
     fill.color = color;
-    final eyeL = Path()..moveTo(cx - r * 0.56, cy - r * 0.04)..lineTo(cx - r * 0.12, cy + r * 0.08)..lineTo(cx - r * 0.12, cy + r * 0.18)..lineTo(cx - r * 0.56, cy + r * 0.08)..close();
-    final eyeR = Path()..moveTo(cx + r * 0.56, cy - r * 0.04)..lineTo(cx + r * 0.12, cy + r * 0.08)..lineTo(cx + r * 0.12, cy + r * 0.18)..lineTo(cx + r * 0.56, cy + r * 0.08)..close();
+    final eyeL = Path()
+      ..moveTo(cx - r * 0.56, cy - r * 0.04)
+      ..lineTo(cx - r * 0.12, cy + r * 0.08)
+      ..lineTo(cx - r * 0.12, cy + r * 0.18)
+      ..lineTo(cx - r * 0.56, cy + r * 0.08)
+      ..close();
+    final eyeR = Path()
+      ..moveTo(cx + r * 0.56, cy - r * 0.04)
+      ..lineTo(cx + r * 0.12, cy + r * 0.08)
+      ..lineTo(cx + r * 0.12, cy + r * 0.18)
+      ..lineTo(cx + r * 0.56, cy + r * 0.08)
+      ..close();
     canvas.drawPath(eyeL, fill);
     canvas.drawPath(eyeR, fill);
 
     final eyeCenter = Paint()..color = Colors.white;
-    canvas.drawCircle(Offset(cx - r * 0.34, cy + r * 0.06), r * 0.04, eyeCenter);
-    canvas.drawCircle(Offset(cx + r * 0.34, cy + r * 0.06), r * 0.04, eyeCenter);
+    canvas.drawCircle(
+      Offset(cx - r * 0.34, cy + r * 0.06),
+      r * 0.04,
+      eyeCenter,
+    );
+    canvas.drawCircle(
+      Offset(cx + r * 0.34, cy + r * 0.06),
+      r * 0.04,
+      eyeCenter,
+    );
   }
 
-  void _drawDefaultSharpCrystal(Canvas canvas, double cx, double cy, double r, Paint fill, Paint stroke) {
+  void _drawDefaultSharpCrystal(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    Paint fill,
+    Paint stroke,
+  ) {
     final p = Path()
       ..moveTo(cx, cy - r * 0.95)
       ..lineTo(cx + r * 0.85, cy)
@@ -940,10 +1122,8 @@ void showGiftDetailsSheet(
       reverseCurve: Curves.easeInCubic,
       reverseDuration: const Duration(milliseconds: 240),
     ),
-    builder: (ctx) => _GiftDetailsSheet(
-      gift: gift,
-      onFavoriteToggled: onFavoriteToggled,
-    ),
+    builder: (ctx) =>
+        _GiftDetailsSheet(gift: gift, onFavoriteToggled: onFavoriteToggled),
   ).then((_) => onFavoriteToggled?.call());
 }
 
@@ -952,10 +1132,7 @@ class _GiftDetailsSheet extends StatefulWidget {
   final ProfileGift gift;
   final VoidCallback? onFavoriteToggled;
 
-  const _GiftDetailsSheet({
-    required this.gift,
-    this.onFavoriteToggled,
-  });
+  const _GiftDetailsSheet({required this.gift, this.onFavoriteToggled});
 
   @override
   State<_GiftDetailsSheet> createState() => _GiftDetailsSheetState();
@@ -1011,9 +1188,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
             TweenAnimationBuilder<Color?>(
               duration: const Duration(milliseconds: 360),
               curve: Curves.easeInOutCubic,
-              tween: ColorTween(
-                end: _fav ? BrandColors.red : rarity.color,
-              ),
+              tween: ColorTween(end: _fav ? BrandColors.red : rarity.color),
               builder: (context, animColor, _) {
                 return ArtifactEmblem(
                   giftId: widget.gift.id,
@@ -1027,11 +1202,12 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
             ),
             const SizedBox(height: 12),
             Text(
-              Translations.t('giftTitle_${widget.gift.id}', context, widget.gift.title),
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+              Translations.t(
+                'giftTitle_${widget.gift.id}',
+                context,
+                widget.gift.title,
               ),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             Row(
@@ -1039,12 +1215,19 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
               children: [
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
-                    color: (_fav ? BrandColors.red : rarity.color).withValues(alpha: 0.18),
+                    color: (_fav ? BrandColors.red : rarity.color).withValues(
+                      alpha: 0.18,
+                    ),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: (_fav ? BrandColors.red : rarity.color).withValues(alpha: 0.5),
+                      color: (_fav ? BrandColors.red : rarity.color).withValues(
+                        alpha: 0.5,
+                      ),
                     ),
                   ),
                   child: Text(
@@ -1064,7 +1247,9 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                     fontSize: 12,
                     fontFamily: 'monospace',
                     fontWeight: FontWeight.w700,
-                    color: _fav ? BrandColors.red : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    color: _fav
+                        ? BrandColors.red
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                   child: Text(
                     Translations.t(
@@ -1087,21 +1272,31 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.35,
+                ),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: (_fav ? BrandColors.red : rarity.color).withValues(alpha: 0.18),
+                  color: (_fav ? BrandColors.red : rarity.color).withValues(
+                    alpha: 0.18,
+                  ),
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    Translations.t('giftDesc_${widget.gift.id}', context, widget.gift.description),
+                    Translations.t(
+                      'giftDesc_${widget.gift.id}',
+                      context,
+                      widget.gift.description,
+                    ),
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.4,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.88),
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.88,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1113,7 +1308,9 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                           Icons.bolt_rounded,
                           key: ValueKey(_fav),
                           size: 16,
-                          color: _fav ? BrandColors.red : theme.colorScheme.primary,
+                          color: _fav
+                              ? BrandColors.red
+                              : theme.colorScheme.primary,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -1123,9 +1320,17 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: _fav ? BrandColors.red : theme.colorScheme.primary,
+                          color: _fav
+                              ? BrandColors.red
+                              : theme.colorScheme.primary,
                         ),
-                        child: Text(Translations.t('giftBuff_${widget.gift.id}', context, widget.gift.buffText)),
+                        child: Text(
+                          Translations.t(
+                            'giftBuff_${widget.gift.id}',
+                            context,
+                            widget.gift.buffText,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1143,9 +1348,13 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                       behavior: HitTestBehavior.opaque,
                       onTap: () async {
                         await Haptics.select();
-                        await ProfileService().toggleGiftFavorite(widget.gift.id);
+                        await ProfileService().toggleGiftFavorite(
+                          widget.gift.id,
+                        );
                         if (mounted) {
-                          final cur = ProfileService().gifts.where((g) => g.id == widget.gift.id).firstOrNull;
+                          final cur = ProfileService().gifts
+                              .where((g) => g.id == widget.gift.id)
+                              .firstOrNull;
                           setState(() => _fav = cur?.isFavorite ?? !_fav);
                         }
                         widget.onFavoriteToggled?.call();
@@ -1153,14 +1362,22 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 320),
                         curve: Curves.easeInOutCubic,
-                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                          horizontal: 16,
+                        ),
                         decoration: BoxDecoration(
-                          color: _fav ? BrandColors.red : theme.colorScheme.primary,
+                          color: _fav
+                              ? BrandColors.red
+                              : theme.colorScheme.primary,
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: (_fav ? BrandColors.red : theme.colorScheme.primary)
-                                  .withValues(alpha: 0.40),
+                              color:
+                                  (_fav
+                                          ? BrandColors.red
+                                          : theme.colorScheme.primary)
+                                      .withValues(alpha: 0.40),
                               blurRadius: _fav ? 14 : 8,
                               offset: const Offset(0, 4),
                             ),
@@ -1174,7 +1391,9 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                               AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 260),
                                 child: Icon(
-                                  _fav ? Icons.star_rounded : Icons.star_outline_rounded,
+                                  _fav
+                                      ? Icons.star_rounded
+                                      : Icons.star_outline_rounded,
                                   key: ValueKey(_fav),
                                   color: Colors.white,
                                   size: 18,
@@ -1188,13 +1407,17 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                                     duration: const Duration(milliseconds: 260),
                                     switchInCurve: Curves.easeOutCubic,
                                     switchOutCurve: Curves.easeInCubic,
-                                    transitionBuilder: (child, anim) => FadeTransition(
-                                      opacity: anim,
-                                      child: ScaleTransition(
-                                        scale: Tween<double>(begin: 0.90, end: 1.0).animate(anim),
-                                        child: child,
-                                      ),
-                                    ),
+                                    transitionBuilder: (child, anim) =>
+                                        FadeTransition(
+                                          opacity: anim,
+                                          child: ScaleTransition(
+                                            scale: Tween<double>(
+                                              begin: 0.90,
+                                              end: 1.0,
+                                            ).animate(anim),
+                                            child: child,
+                                          ),
+                                        ),
                                     child: Text(
                                       _fav
                                           ? Translations.t(

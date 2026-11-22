@@ -6,6 +6,7 @@ import '../l10n/translations.dart';
 import '../main.dart';
 import '../services/new_year_event_service.dart';
 import '../services/haptics.dart';
+import 'press_scale.dart';
 import '../utils/design_tokens.dart';
 import '../utils/date_keys.dart';
 import '../utils/snackbar.dart';
@@ -898,20 +899,39 @@ class _NewYearEventBannerState extends State<NewYearEventBanner>
                       const SizedBox(height: 14),
                       Row(
                         children: [
+                          // Наклон — как у карточек профиля: кнопки ивента
+                          // раньше только сжимались, и на фоне остальных
+                          // объёмных элементов читались плоскими.
                           Expanded(
-                            child: _NyMarkButton(
-                              marked: marked,
-                              onTap: () async {
-                                await _onMark();
-                              },
-                              onTripleTap: _onPreview,
+                            child: PressScale(
+                              pressedScale: 1.0,
+                              enableTilt: true,
+                              maxTiltAngle: 0.30,
+                              duration: const Duration(milliseconds: 200),
+                              releaseDuration: const Duration(
+                                milliseconds: 300,
+                              ),
+                              child: _NyMarkButton(
+                                marked: marked,
+                                onTap: () async {
+                                  await _onMark();
+                                },
+                                onTripleTap: _onPreview,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _ClosePill(
-                            isDark: isDark,
-                            onTap: _close,
-                            onLongPress: _onReset,
+                          PressScale(
+                            pressedScale: 1.0,
+                            enableTilt: true,
+                            maxTiltAngle: 0.26,
+                            duration: const Duration(milliseconds: 160),
+                            releaseDuration: const Duration(milliseconds: 260),
+                            child: _ClosePill(
+                              isDark: isDark,
+                              onTap: _close,
+                              onLongPress: _onReset,
+                            ),
                           ),
                         ],
                       ),

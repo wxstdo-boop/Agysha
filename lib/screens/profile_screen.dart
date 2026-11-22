@@ -14,7 +14,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/locale_provider.dart';
 import '../l10n/translations.dart';
-import '../services/app_version.dart';
 import '../services/haptics.dart';
 import '../services/music_service.dart';
 import '../services/new_year_event_service.dart';
@@ -31,7 +30,6 @@ import '../widgets/music_pulse_ring.dart';
 import '../widgets/online_dot.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/profile_avatar.dart';
-import 'changelog_screen.dart';
 import '../widgets/smooth_digits.dart';
 import '../widgets/new_year_event_banner.dart';
 import '../widgets/smooth_tooltip.dart';
@@ -152,6 +150,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _isSearchingHardtekk = false;
   bool _isPrestigePickerOpen = false;
 
+  /// Едет ли полоса артефактов: пока да, карточки не наклоняются.
+  bool _giftsScrolling = false;
+
   /// Прозрачность подсказки «Как вас звать?»: видна, пока поле НЕ в фокусе.
   /// Подсказка гаснет плавно, как только пользователь открыл поле, и так же
   /// плавно возвращается, когда он его закрыл, — отдельный контроллер, потому
@@ -246,8 +247,20 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.dispose();
   }
 
-  void _onMusicChanged() {
-    if (mounted) setState(() {});
+  void _onMusicChanged() => _scheduleRebuild();
+
+  /// Перестройка не чаще одного раза за микротаск: сервисы уведомляют
+  /// пачками (очки, подарки, треки), и раньше каждый сигнал запускал полный
+  /// setState профиля — отсюда подтормаживание при быстрых тапах.
+  bool _rebuildScheduled = false;
+
+  void _scheduleRebuild() {
+    if (_rebuildScheduled || !mounted) return;
+    _rebuildScheduled = true;
+    scheduleMicrotask(() {
+      _rebuildScheduled = false;
+      if (mounted) setState(() {});
+    });
   }
 
   /// Отдаём плееру подборку целиком: без этого в медиауведомлении нет ни
@@ -261,10 +274,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _onServiceChanged() {
-    if (mounted) setState(() {});
     // Список треков мог измениться (добавили/удалили) — держим очередь
     // плеера и медиауведомление в том же составе.
     _syncMusicQueue();
+    _scheduleRebuild();
   }
 
   void _toast(String message, {IconData icon = Icons.check_circle_outline}) {
@@ -1697,34 +1710,39 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       body: AnimatedBuilder(
         animation: _service,
-        builder: (context, _) => ListView(
-          controller: _scrollCtrl,
-          padding: const EdgeInsets.fromLTRB(
-            Spacing.md,
-            Spacing.sm,
-            Spacing.md,
-            Spacing.xxl,
-          ),
-          children: [
-            RepaintBoundary(child: _headerCard(theme)),
-            const SizedBox(height: Spacing.md),
-            RepaintBoundary(child: _nameCard(theme)),
-            const SizedBox(height: Spacing.md),
-            RepaintBoundary(child: _onlineCard(theme)),
-            const SizedBox(height: Spacing.md),
-            RepaintBoundary(child: _musicCard(theme)),
-            const SizedBox(height: Spacing.md),
-            RepaintBoundary(child: _leaderboardCard(theme)),
-            const SizedBox(height: Spacing.md),
+        // Ленивый список, а НЕ список готовых детей: раньше все девять
+        // карточек (вместе с сотнями строк треков и полусотней строк
+        // рейтинга) собирались ещё до первого кадра. Теперь строятся только
+        // видимые, и открытие профиля не зависит от размера коллекции.
+        builder: (context, _) {
+          final cards = <Widget Function(ThemeData)>[
+            _headerCard,
+            _nameCard,
+            _onlineCard,
+            _musicCard,
+            _leaderboardCard,
             // Очки — сразу после рейтинга: «за что» читается рядом с «кто
             // сколько», а карточки музыки и рейтинга остаются на своих местах.
-            RepaintBoundary(child: _scoreCard(theme)),
-            const SizedBox(height: Spacing.md),
-            RepaintBoundary(child: _giftsCard(theme)),
-            const SizedBox(height: Spacing.md),
-            RepaintBoundary(child: _eventsCard(theme)),
-          ],
-        ),
+            _scoreCard,
+            _giftsCard,
+            _eventsCard,
+          ];
+          return ListView.builder(
+            controller: _scrollCtrl,
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.md,
+              Spacing.sm,
+              Spacing.md,
+              Spacing.xxl,
+            ),
+            itemCount: cards.length * 2 - 1,
+            itemBuilder: (context, i) {
+              if (i.isOdd) return const SizedBox(height: Spacing.md);
+              final card = cards[i ~/ 2];
+              return RepaintBoundary(child: card(theme));
+            },
+          );
+        },
       ),
     );
   }
@@ -2119,64 +2137,8 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          _versionPill(theme),
         ],
       ),
-    );
-  }
-
-  /// Плашка версии под титулом: та же цифра, что в патч-ноутах, и тап
-  /// открывает сам список изменений. Слушаем [AppVersion], а не читаем
-  /// строку один раз — после обновления цифра меняется без перезахода.
-  Widget _versionPill(ThemeData theme) {
-    return ValueListenableBuilder<String>(
-      valueListenable: AppVersion.listenable,
-      builder: (context, version, _) {
-        final label = Translations.t(
-          'profileVersionWhatsNew',
-          context,
-          'Что нового',
-        );
-        return PressScale(
-          pressedScale: 0.94,
-          child: GestureDetector(
-            onTap: () {
-              Haptics.light();
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const ChangelogScreen(),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: ShapeDecoration(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
-                shape: const StadiumBorder(),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.new_releases_outlined,
-                    size: 13,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    '$label · v$version',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -2340,21 +2302,36 @@ class _ProfileScreenState extends State<ProfileScreen>
         height: 220,
         // Ленивый список с фиксированной шириной карточки: коллекция на
         // сотни артефактов раньше строилась вся целиком при каждом кадре
-        // прокрутки — отсюда рывки у краёв. Clamping вместо Bouncing: у
-        // вложенной полосы отскок читался как «застревание».
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          clipBehavior: Clip.none,
-          physics: const ClampingScrollPhysics(),
-          itemExtent: GiftCard3D.defaultWidth + Spacing.sm,
-          itemCount: gifts.length,
-          itemBuilder: (context, i) => Padding(
-            padding: const EdgeInsets.only(right: Spacing.sm),
-            child: RepaintBoundary(
-              key: ValueKey('gift_card_${gifts[i].id}'),
-              child: GiftCard3D(
-                gift: gifts[i],
-                onFavoriteToggled: () => setState(() {}),
+        // прокрутки — отсюда рывки у краёв. Растяжение по краям вернули
+        // (Bouncing), а дёрганье убрали иначе: пока полоса едет, карточки
+        // не ловят наклон, поэтому каждая не качается под пальцем.
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (n) {
+            if (n.depth != 0) return false;
+            if (n is ScrollStartNotification || n is OverscrollNotification) {
+              if (!_giftsScrolling) setState(() => _giftsScrolling = true);
+            } else if (n is ScrollEndNotification) {
+              if (_giftsScrolling) setState(() => _giftsScrolling = false);
+            }
+            return false;
+          },
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            itemExtent: GiftCard3D.defaultWidth + Spacing.sm,
+            itemCount: gifts.length,
+            itemBuilder: (context, i) => Padding(
+              padding: const EdgeInsets.only(right: Spacing.sm),
+              child: RepaintBoundary(
+                key: ValueKey('gift_card_${gifts[i].id}'),
+                child: GiftCard3D(
+                  gift: gifts[i],
+                  tiltEnabled: !_giftsScrolling,
+                  onFavoriteToggled: () => setState(() {}),
+                ),
               ),
             ),
           ),

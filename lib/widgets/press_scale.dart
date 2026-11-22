@@ -126,6 +126,15 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// Страховка от залипшей отдачи (см. [PressScale.maxPressDuration]).
   Timer? _stuckGuard;
 
+  /// Где палец коснулся элемента и ушёл ли он в перетаскивание/прокрутку.
+  /// Наклон живёт только у настоящего нажатия: если палец поехал, карточка
+  /// не должна кривиться вслед за прокруткой — иначе наклон «залипает».
+  Offset? _downPos;
+  bool _dragged = false;
+
+  /// Палец считается ушедшим в жест после этого сдвига (логические пиксели).
+  static const double _dragSlop = 12.0;
+
   /// Мягкое асимптотическое сглаживание к границе наклона:
   /// в пределах карточки (abs <= 0.90) угол передаётся 1:1 без срезания,
   /// а у границы и за её пределами плавно и упруго амортизирует (soft rubber-band cushion).
@@ -172,6 +181,10 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   void didUpdateWidget(covariant PressScale oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!widget.enabled && _ctrl.value > 0) _ctrl.reverse();
+    if (!widget.enabled) {
+      _dragged = false;
+      _tiltFade.reverse();
+    }
   }
 
   @override
@@ -209,6 +222,8 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     if (!mounted || !widget.enabled) return;
     if (SwipeToDeleteScope.of(context)) return;
     if (_swipeCtrl.value < 1.0) _swipeCtrl.forward();
+    _downPos = e.localPosition;
+    _dragged = false;
     // Наклон включается своим каналом — и гаснет он тоже плавно.
     _tiltFade.forward();
     _updateTilt(e.localPosition, smooth: false);
@@ -235,7 +250,18 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   }
 
   void _move(PointerMoveEvent e) {
-    if (!mounted || !widget.enabled || _ctrl.value <= 0) return;
+    if (!mounted || !widget.enabled) return;
+    // Палец поехал — это прокрутка или перетаскивание, а не нажатие:
+    // гасим наклон и больше не ведём его, иначе карточка «заедает»
+    // в кривом положении до конца движения и дёргает ленту.
+    final start = _downPos;
+    if (!_dragged && start != null) {
+      if ((e.localPosition - start).distance > _dragSlop) {
+        _dragged = true;
+        _tiltFade.reverse();
+      }
+    }
+    if (_dragged || _ctrl.value <= 0) return;
     if (SwipeToDeleteScope.of(context)) {
       // Смахивание забирает палец у кнопки: отдачу больше не ведём.
       // Гасим ТОЛЬКО прежнее нажатие до нуля мгновенно, а плавность
@@ -255,23 +281,29 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
 
   void _up(PointerUpEvent _) {
     _stuckGuard?.cancel();
-    if (!mounted || _ctrl.value <= 0) return;
+    _downPos = null;
+    _dragged = false;
+    if (!mounted) return;
     _releaseTilt = _tilt;
+    // Наклон гаснет СВОИМ каналом и ВСЕГДА, независимо от прогресса
+    // вдавливания: раньше при отпускании до первого кадра анимации
+    // (`_ctrl.value` ещё 0) наклон оставался висеть на карточке навсегда.
+    _tiltFade.reverse();
+    if (_ctrl.value <= 0) return;
     _ctrl.duration = widget.releaseDuration ?? widget.duration;
     _ctrl.reverse();
-    // Наклон гаснет СВОИМ каналом: раньше он был привязан к прогрессу
-    // нажатия и вместе с ним обнулялся кадром — карточка «прыгала» в
-    // плоскость.
-    _tiltFade.reverse();
   }
 
   void _cancel(PointerCancelEvent _) {
     _stuckGuard?.cancel();
-    if (!mounted || _ctrl.value <= 0) return;
+    _downPos = null;
+    _dragged = false;
+    if (!mounted) return;
     _releaseTilt = _tilt;
+    _tiltFade.reverse();
+    if (_ctrl.value <= 0) return;
     _ctrl.duration = widget.releaseDuration ?? widget.duration;
     _ctrl.reverse();
-    _tiltFade.reverse();
   }
 
   @override

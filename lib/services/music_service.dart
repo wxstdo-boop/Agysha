@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
 import '../utils/motion_prefs.dart';
+import 'notification_service.dart';
 
 /// Режим очереди «своей музыки» профиля.
 ///
@@ -143,6 +144,14 @@ class MusicService extends ChangeNotifier {
   Future<bool> play(String path) async {
     final file = File(path);
     if (!file.existsSync() || file.lengthSync() == 0) return false;
+    // Без разрешения на уведомления (Android 13+) система молча не
+    // показывает уведомление foreground-сервиса — то есть трек играет, а
+    // шторка пустая. Спрашиваем ровно перед стартом, пока экран активен.
+    if (Platform.isAndroid) {
+      try {
+        await NotificationService().ensureNotificationPermission();
+      } catch (_) {}
+    }
     // Состояние и иконка меняются СРАЗУ, фейд идёт следом — тап по «плей»
     // отзывается мгновенно, а не через полсекунды.
     _playing = true;

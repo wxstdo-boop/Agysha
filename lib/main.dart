@@ -852,6 +852,9 @@ Future<void> _initBackgroundAudio() async {
     await JustAudioBackground.init(
       androidNotificationChannelId: 'com.wetcorp.agysha.music',
       androidNotificationChannelName: 'Музыка',
+      // Своя белая иконка: штатный `mipmap/ic_launcher` — цветная
+      // адаптивная иконка, и Android 13+ её не рисует в шторке.
+      androidNotificationIcon: 'drawable/ic_stat_music',
       // Пауза из шторки не убирает уведомление: трек можно вернуть тем же
       // тапом, а кнопка «дальше» остаётся под рукой.
       androidStopForegroundOnPause: false,
