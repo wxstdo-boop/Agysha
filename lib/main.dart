@@ -167,6 +167,10 @@ void startAutoSave() {
   _autoSaveTick();
 }
 
+/// Немедленная запись всех данных: включение автосохранения, уход в фон,
+/// ручной вызов после «Сохранить сейчас».
+Future<void> flushAutoSaveNow() => _saveAllData();
+
 /// Пишет все локальные данные на диск один раз, без запуска таймера.
 Future<void> _saveAllData() async {
   try {
@@ -1526,6 +1530,17 @@ class AgyshaAppState extends State<AgyshaApp>
       // В фоне тики таймеров замораживаются — при возврате пересчитываем
       // остаток по стенным часам, чтобы счётчик не отставал.
       TimerService().refreshFromClock();
+      // Право полноэкранного показа система снимает сама (обновление,
+      // перезагрузка, Realme). При каждом возврате сверяемся с ОС: если
+      // человек только что выдал право, плашка «система отключила показ»
+      // должна исчезнуть сразу, а не после перезапуска приложения.
+      unawaited(
+        notificationService.refreshFullScreenGrant().then((granted) {
+          if (granted) {
+            dismissBeautifulSnackBar(groupKey: 'fullscreen_grant');
+          }
+        }),
+      );
       // Тяжёлая перепланировка — НЕ на первый видимый кадр: сначала даём
       // кадру отрисоваться (addPostFrameCallback), и только если с прошлого
       // раза прошло больше [kResumeRescheduleGrace]. Иначе десятки

@@ -85,7 +85,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       SettingsService.loadExperimental();
       // Возврат из системного экрана выдачи права: либо оно вернулось и
       // плашка больше не нужна, либо отзыв всё ещё висит.
-      notificationService.refreshFullScreenGrant().then((_) {
+      notificationService.refreshFullScreenGrant().then((granted) {
+        // Право вернули — плашка «система отключила показ» больше не нужна.
+        // Без этого она висела до перезахода и врала о состоянии.
+        if (granted) dismissBeautifulSnackBar(groupKey: 'fullscreen_grant');
         _maybeWarnFullScreenRevoked();
       });
     }
@@ -153,10 +156,12 @@ class _AlarmsScreenState extends State<AlarmsScreen>
         // которого право и оставалось снятым до следующего проспанного утра.
         // Висит, пока её не закроют или пока не выдадут право.
         duration: const Duration(minutes: 10),
+        groupKey: 'fullscreen_grant',
         actionLabel: Translations.t('openSettings', context),
         onAction: () async {
           await openFullScreenNotifSettings();
           notificationService.clearFullScreenRevoked();
+          dismissBeautifulSnackBar(groupKey: 'fullscreen_grant');
         },
       );
     });
@@ -1188,16 +1193,34 @@ class _AlarmsScreenState extends State<AlarmsScreen>
               curve: Curves.easeOutCubic,
               alignment: Alignment.topCenter,
               child: showProgress
-                  ? LinearProgressIndicator(
-                      value: timer.totalSeconds > 0
-                          ? (timer.totalSeconds - rem) / timer.totalSeconds
-                          : 0,
-                      minHeight: 3,
-                      backgroundColor:
-                          theme.colorScheme.surfaceContainerHighest,
-                      color: running
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.outline,
+                  ? TweenAnimationBuilder<double>(
+                      // Значение приходит раз в секунду, и полоска прыгала
+                      // шагами. Догоняем новое значение линейно за тот же
+                      // интервал — она едет непрерывно, без рывков.
+                      tween: Tween<double>(
+                        end: timer.totalSeconds > 0
+                            ? (timer.totalSeconds - rem) / timer.totalSeconds
+                            : 0,
+                      ),
+                      duration: const Duration(milliseconds: 950),
+                      curve: Curves.linear,
+                      builder: (context, value, _) => LinearProgressIndicator(
+                        value: value,
+                        minHeight: 4,
+                        borderRadius: BorderRadius.circular(4),
+                        // На светлых темах primary почти белый, и
+                        // полоска пропадала. Фирменный алый виден везде,
+                        // а фон — приглушённый цвет текста, а не
+                        // surfaceContainerHighest.
+                        backgroundColor: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.12,
+                        ),
+                        color: running
+                            ? const Color(0xFFE23B4E)
+                            : theme.colorScheme.onSurfaceVariant.withValues(
+                                alpha: 0.55,
+                              ),
+                      ),
                     )
                   : const SizedBox(
                       key: ValueKey('timer_progress_hidden'),

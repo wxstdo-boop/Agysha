@@ -144,6 +144,20 @@ class AlarmForegroundService : Service() {
      * (`onStartCommand` пришёл повторно): иначе старый плеер остаётся
      * играть без ссылки на него, и два звонка накладываются.
      */
+    /**
+     * Есть ли у приложения право открыть активность по full-screen intent.
+     * До Android 14 такого права нет — считаем, что есть.
+     */
+    private fun canUseFullScreenIntent(ctx: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        return try {
+            val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.canUseFullScreenIntent()
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun resetAudio() {
         handler.removeCallbacksAndMessages(null)
         vibrating = false
@@ -242,6 +256,8 @@ class AlarmForegroundService : Service() {
         // удаление/выключение и кнопка «Отключить», так что карточка ровно
         // одна и живёт ровно столько, сколько звенит.
         val notifId = if (ringId == 0) NOTIFICATION_ID else ringId
+        // defensive: сервис может быть поднят и без свежей проверки права
+        val useFullScreen = fullscreen && canUseFullScreenIntent(this)
         val notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -250,7 +266,7 @@ class AlarmForegroundService : Service() {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(tap)
-            .setFullScreenIntent(tap, true)
+            .apply { if (useFullScreen) setFullScreenIntent(tap, true) }
             .setOngoing(true)
             .setAutoCancel(false)
             .setShowWhen(true)

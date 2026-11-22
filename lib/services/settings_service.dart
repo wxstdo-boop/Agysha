@@ -184,15 +184,23 @@ class SettingsService {
     experimentalEnabled.value = value;
   }
 
+  /// Зеркало флага в prefs. JSON-файл настроек пишется целиком, и
+  /// параллельная запись с другого экрана могла затереть ключ — тогда
+  /// автосохранение «включалось» и молча выключалось после перезапуска.
+  static const String _keyAutoSaveMirror = 'setting_auto_save_mirror';
+
   static Future<bool> loadAutoSave() async {
     final map = await _loadSettings();
-    return _bool(map[_keyAutoSave], false);
+    final stored = map[_keyAutoSave];
+    if (stored is bool) return stored;
+    return globalPrefs.getBool(_keyAutoSaveMirror) ?? false;
   }
 
   static Future<void> saveAutoSave(bool value) async {
     final map = await _loadSettings();
     map[_keyAutoSave] = value;
     await _saveSettings(map);
+    await globalPrefs.setBool(_keyAutoSaveMirror, value);
   }
 
   static Future<bool> loadDevMode() async {

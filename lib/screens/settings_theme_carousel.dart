@@ -127,6 +127,16 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   bool _dragging = false;
   int _spinToken = 0;
 
+  /// Положение, с которого началось текущее перетаскивание, и направление
+  /// последнего движения. Нужны, чтобы отмена жеста не отбрасывала барабан
+  /// назад через полколеса: он довершает шаг в ту сторону, куда его вели.
+  double _dragStartPos = 0;
+  int _dragDir = 0;
+
+  /// Внешний довод (тему сменили не барабаном): во время такого полёта
+  /// предпросмотр не применяем — тема уже стоит.
+  bool _gliding = false;
+
   int get _n => widget.entries.length;
 
   int _norm(int i) => i % _n < 0 ? i % _n + _n : i % _n;
@@ -150,8 +160,37 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     if (_dragging || _spin.isAnimating) return;
     final target = _indexOfKey(widget.selectedKey);
     if (target == _index) return;
-    _pos = target.toDouble();
-    _applied = target;
+    // Плавно доводим до установленной темы, а не телепортируем барабан:
+    // мгновенный перенос заставлял значки «перебрать» всю дорогу одним
+    // кадром, и это читалось как поломка, а не как переключение.
+    _glideTo(target);
+  }
+
+  /// Довод без осознанного выбора: анимируем позицию, тему не трогаем.
+  void _glideTo(int target) {
+    final token = ++_spinToken;
+    final goal = target.toDouble();
+    final dist = (goal - _pos).abs();
+    _spin.stop();
+    if (dist < 0.02) {
+      setState(() => _pos = goal);
+      _applied = _norm(target);
+      return;
+    }
+    _gliding = true;
+    _spinAnim = Tween<double>(
+      begin: _pos,
+      end: goal,
+    ).animate(CurvedAnimation(parent: _spin, curve: Curves.easeOutCubic));
+    _spin.duration = Duration(
+      milliseconds: (300 + 130 * dist).round().clamp(300, 640),
+    );
+    _spin.forward(from: 0).whenComplete(() {
+      if (!mounted || token != _spinToken) return;
+      setState(() => _pos = goal);
+      _applied = _norm(target);
+      _gliding = false;
+    });
   }
 
   int _indexOfKey(String key) {
@@ -165,7 +204,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     final anim = _spinAnim;
     if (anim == null) return;
     setState(() => _pos = anim.value);
-    _previewNearest();
+    if (!_gliding) _previewNearest();
   }
 
   /// У этих тем есть второй вариант (светлый/тёмный), и предпросмотр его
@@ -231,6 +270,9 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
 
   void _onDragStart(DragStartDetails details) {
     _dragging = true;
+    _gliding = false;
+    _dragStartPos = _pos;
+    _dragDir = 0;
     _spin.stop();
     _spinToken++;
   }
@@ -241,6 +283,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     // Строго 1:1 за пальцем, без порогов «против хода». Раньше короткая
     // дрожь отбрасывалась, а накопленный хват потом применялся одним кадром —
     // барабан прыгал и крутился не туда, куда вели.
+    _dragDir = delta < 0 ? 1 : -1;
     setState(() => _pos -= delta / _dragStep);
     _previewNearest();
   }
@@ -255,7 +298,16 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
 
   void _onDragCancel() {
     _dragging = false;
-    _settleTo(_pos.roundToDouble());
+    // Жест перехватил вертикальный скролл. Раньше барабан в этом случае
+    // возвращался к ближайшей каморе — то есть назад, против движения, и
+    // выглядело как «крутишь в одну сторону, а он крутится в другую».
+    // Теперь довершаем шаг в ту сторону, куда уже увели барабан.
+    final moved = _pos - _dragStartPos;
+    if (_dragDir != 0 && moved.abs() >= 0.25) {
+      _settleTo(_dragDir > 0 ? _pos.ceilToDouble() : _pos.floorToDouble());
+    } else {
+      _settleTo(_dragStartPos);
+    }
   }
 
   void _tapChamber(int index) {
@@ -459,14 +511,17 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
               // щёлкнуть новым цветом до окончания AnimatedTheme — это и
               // читалось как «мигает».
               child: TweenAnimationBuilder<Color?>(
+                // Ключ — на самом ребёнке AnimatedSwitcher: раньше он висел
+                // на Icon внутри билдера, и переключатель считал виджет тем
+                // же самым, подменяя значок одним кадром («перебор»).
+                key: ValueKey<String>(
+                  'hub_${entry.key}_${entry.icon.codePoint}',
+                ),
                 tween: ColorTween(end: cs.primary),
                 duration: const Duration(milliseconds: 320),
                 curve: Curves.easeOutCubic,
                 builder: (context, color, _) => Icon(
                   entry.icon,
-                  key: ValueKey<String>(
-                    'hub_${entry.key}_${entry.icon.codePoint}',
-                  ),
                   size: hub * 0.34,
                   color: color ?? cs.primary,
                 ),

@@ -653,6 +653,7 @@ const Map<String, String> _fr = {
   'timerFinished': 'Terminé',
   'autoSave': 'Sauvegarde auto',
   'autoSaveDesc': 'Enregistrer les données chaque seconde',
+  'autoSaveDone': 'Données enregistrées · sauvegarde auto activée',
   'autoExport': 'Export auto',
   'autoExportHourly':
       'Enregistrer une sauvegarde dans Téléchargements/Agysha chaque heure',
@@ -808,7 +809,7 @@ const Map<String, String> _fr = {
   'supportAuthorHint': 'Ouvre la page de remerciement dans le navigateur',
   'supportSoonToast':
       'Le paiement via Ozon arrive très bientôt — restez à l’affût !',
-  'supportOzonSubtitle': 'Bientôt — soutien par un achat',
+  'supportOzonSubtitle': 'Méthode de soutien principale',
   'supportBoostySubtitle': 'Don unique ou abonnement',
   'support': 'Offrir un café',
   'rcNotificationTitle': 'Test de réalité',
