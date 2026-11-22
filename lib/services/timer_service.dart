@@ -42,6 +42,28 @@ class TimerService extends ChangeNotifier {
   String remainingDisplay(String id) =>
       AppTimer.formatDuration(_remainingSeconds[id] ?? 0);
 
+  /// Остаток в МИЛЛИСЕКУНДАХ. Целых секунд мало для плавного счётчика в
+  /// карточке: по ним полоска и цифры дёргались раз в секунду. У идущего
+  /// таймера остаток считается по стенным часам, у стоящего — из сохранённого.
+  int remainingMs(String id) {
+    if (_running[id] == true) {
+      final end = _endsAt[id];
+      if (end != null) {
+        final left = end.difference(DateTime.now()).inMilliseconds;
+        return left <= 0 ? 0 : left;
+      }
+    }
+    return (_remainingSeconds[id] ?? 0) * 1000;
+  }
+
+  /// Общая длительность таймера в миллисекундах (для полоски прогресса).
+  int totalMs(String id) {
+    for (final t in _timers) {
+      if (t.id == id) return t.totalSeconds * 1000;
+    }
+    return 0;
+  }
+
   Future<void> load() async {
     final raw = await JsonFile.read(_key);
     _snapshot = raw;

@@ -2,8 +2,6 @@ part of 'settings_screen.dart';
 
 /// Поведение: автосохранение, экспериментальное, вибрация, звуки, «убрать анимации».
 extension _SettingsSectionBehavior on _SettingsScreenState {
-  String _two(int v) => v.toString().padLeft(2, '0');
-
   /// Включение/выключение автосохранения. При включении сразу пишем все
   /// данные и подтверждаем это плашкой: раньше флаг включался, а первый тик
   /// мог молча упасть, и выглядело так, будто автосохранение не работает.
@@ -125,24 +123,47 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                   color: theme.colorScheme.primary,
                 ),
                 title: Text(Translations.t('autoSave', context)),
-                subtitle: ValueListenableBuilder<DateTime?>(
-                  valueListenable: SettingsService.autoSaveLastOk,
-                  builder: (context, lastOk, _) {
-                    final desc = Translations.t('autoSaveDesc', context);
-                    // Показываем ДОКАЗАТЕЛЬСТВО работы: время последней
-                    // успешной записи. Так видно, что автосохранение пишет,
-                    // а не просто «включено».
-                    final stamp = lastOk == null
-                        ? ''
-                        : '\n${Translations.t('autoSaveLastAt', context, 'Последнее сохранение')}: '
-                              '${_two(lastOk.hour)}:${_two(lastOk.minute)}:${_two(lastOk.second)}';
-                    return Text(
-                      '$desc$stamp',
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      Translations.t('autoSaveDesc', context),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
-                    );
-                  },
+                    ),
+                    // Показываем ДОКАЗАТЕЛЬСТВО работы: время последней
+                    // успешной записи. Строка живёт ТОЛЬКО при включённом
+                    // автосохранении и появляется/исчезает вместе с ним
+                    // плавно (AnimatedCrossFade анимирует и прозрачность,
+                    // и высоту), а само время меняется перетеканием цифр.
+                    ValueListenableBuilder<bool>(
+                      valueListenable: SettingsService.autoSaveEnabled,
+                      builder: (context, on, _) => AnimatedCrossFade(
+                        duration: const Duration(milliseconds: 300),
+                        sizeCurve: Curves.easeOutCubic,
+                        firstCurve: Curves.easeOutCubic,
+                        secondCurve: Curves.easeInCubic,
+                        crossFadeState: on && _autoSave
+                            ? CrossFadeState.showFirst
+                            : CrossFadeState.showSecond,
+                        firstChild: _AutoSaveStamp(
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.85,
+                            ),
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        secondChild: const SizedBox(
+                          key: ValueKey('auto_save_stamp_hidden'),
+                          width: double.infinity,
+                          height: 0,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 onTap: () => _applyAutoSave(!_autoSave),
                 trailing: VolumetricSwitch(
@@ -278,4 +299,64 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
       ),
     ),
   ];
+}
+
+/// Строка «Последнее сохранение: ЧЧ:ММ:СС».
+///
+/// Время меняется каждые 10 секунд, и раньше строка подменялась одним кадром.
+/// Теперь новые цифры въезжают снизу с затуханием — так же, как меняется
+/// время в остальном приложении.
+class _AutoSaveStamp extends StatelessWidget {
+  const _AutoSaveStamp({required this.style});
+
+  final TextStyle? style;
+
+  String _two(int v) => v.toString().padLeft(2, '0');
+
+  @override
+  Widget build(BuildContext context) {
+    final label = Translations.t(
+      'autoSaveLastAt',
+      context,
+      'Последнее сохранение',
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: ValueListenableBuilder<DateTime?>(
+        valueListenable: SettingsService.autoSaveLastOk,
+        builder: (context, lastOk, _) {
+          final time = lastOk == null
+              ? '—'
+              : '${_two(lastOk.hour)}:${_two(lastOk.minute)}:${_two(lastOk.second)}';
+          return Row(
+            children: [
+              Flexible(child: Text('$label: ', style: style)),
+              ClipRect(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 260),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: Alignment.centerLeft,
+                    children: <Widget>[...previous, ?current],
+                  ),
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.5),
+                        end: Offset.zero,
+                      ).animate(anim),
+                      child: child,
+                    ),
+                  ),
+                  child: Text(time, key: ValueKey<String>(time), style: style),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }

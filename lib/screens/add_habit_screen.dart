@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../models/habit.dart';
 import '../l10n/translations.dart';
 import '../services/habit_service.dart';
+import '../services/settings_service.dart';
 import '../services/notification_service_instance.dart';
 import '../utils/context_menu.dart';
 import '../utils/snackbar.dart';
@@ -260,418 +261,434 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return PopScope(
-      canPop: true,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        final name = _nameCtrl.text.trim();
-        if (name.isNotEmpty) {
+    // При включённом автосохранении выход из формы СОХРАНЯЕТ введённое:
+    // раньше `canPop: true` пропускал системный «назад» мимо `_save`, и
+    // правка привычки терялась — приходилось помнить про кнопку.
+    return ValueListenableBuilder<bool>(
+      valueListenable: SettingsService.autoSaveEnabled,
+      builder: (context, autoSaveOn, _) => PopScope(
+        canPop: !autoSaveOn,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop || !mounted) return;
+          if (_nameCtrl.text.trim().isEmpty) {
+            Navigator.of(context).pop();
+            return;
+          }
           _save();
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            _editing
-                ? Translations.t('editHabit', context)
-                : Translations.t('newHabit', context),
-          ),
-          leading: const BackButtonTooltip(),
-          centerTitle: true,
-          actions: [
-            PressScale(
-              pressedScale: 0.96,
-              duration: const Duration(milliseconds: 200),
-              releaseDuration: const Duration(milliseconds: 340),
-              child: TextButton(
-                onPressed: _save,
-                child: Text(Translations.saveOf(context)),
-              ),
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(
+              _editing
+                  ? Translations.t('editHabit', context)
+                  : Translations.t('newHabit', context),
             ),
-          ],
-        ),
-        resizeToAvoidBottomInset: false,
-        body: SmoothKeyboardBody(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Center(
-                child: PressScale(
-                  pressedScale: 0.92,
-                  duration: const Duration(milliseconds: 160),
-                  releaseDuration: const Duration(milliseconds: 300),
-                  child: GestureDetector(
-                    onTap: _pickIcon,
-                    child: Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(
-                          alpha: 0.12,
-                        ),
-                        shape: BoxShape.circle,
-                        border: Border.all(
+            leading: const BackButtonTooltip(),
+            centerTitle: true,
+            actions: [
+              PressScale(
+                pressedScale: 0.96,
+                duration: const Duration(milliseconds: 200),
+                releaseDuration: const Duration(milliseconds: 340),
+                child: TextButton(
+                  onPressed: _save,
+                  child: Text(Translations.saveOf(context)),
+                ),
+              ),
+            ],
+          ),
+          resizeToAvoidBottomInset: false,
+          body: SmoothKeyboardBody(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Center(
+                  child: PressScale(
+                    pressedScale: 0.92,
+                    duration: const Duration(milliseconds: 160),
+                    releaseDuration: const Duration(milliseconds: 300),
+                    child: GestureDetector(
+                      onTap: _pickIcon,
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
                           color: theme.colorScheme.primary.withValues(
-                            alpha: 0.50,
+                            alpha: 0.12,
                           ),
-                          width: 2,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.50,
+                            ),
+                            width: 2,
+                          ),
+                        ),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 260),
+                          switchInCurve: Curves.easeOutBack,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (child, animation) =>
+                              ScaleTransition(
+                                scale: animation,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              ),
+                          child: Icon(
+                            iconDataForCodePoint(_iconCodePoint),
+                            key: ValueKey(_iconCodePoint),
+                            size: 32,
+                            color: theme.colorScheme.primary,
+                          ),
                         ),
                       ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    PressScale(
+                      pressedScale: 0.93,
+                      duration: const Duration(milliseconds: 190),
+                      releaseDuration: const Duration(milliseconds: 320),
+                      child: TextButton.icon(
+                        onPressed: _pickIcon,
+                        icon: const Icon(Icons.touch_app, size: 16),
+                        label: Text(Translations.t('changeIcon', context)),
+                      ),
+                    ),
+                    // Лампочка-статус плавно появляется/исчезает при смене
+                    // «полезная ↔ вредная» (fade + size), как и блок заметок
+                    // ниже — значок не «выпрыгивает» мгновенно, а занимает ту же
+                    // ширину что и при good-типе, благодаря Padding'у.
+                    //
+                    // Слот под переключатель ФИКСИРОВАН по ширине (= good-вариант:
+                    // 16 отступа + IconButton 48). Без него AnimatedSwitcher
+                    // считает ширину Stack'а как max(уходящей, приходящей), а
+                    // SizeTransition по пути роняет обе почти до нуля — и ряд с
+                    // `center` посередине анимации сжимался, из-за чего кнопка
+                    // «сменить иконку» дёргалась вправо/влево на смене типа.
+                    SizedBox(
+                      width: 64,
+                      height: 48,
                       child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeOutBack,
+                        duration: const Duration(milliseconds: 280),
+                        switchInCurve: Curves.easeOut,
                         switchOutCurve: Curves.easeIn,
-                        transitionBuilder: (child, animation) =>
-                            ScaleTransition(
-                              scale: animation,
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: child,
-                              ),
-                            ),
-                        child: Icon(
-                          iconDataForCodePoint(_iconCodePoint),
-                          key: ValueKey(_iconCodePoint),
-                          size: 32,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  PressScale(
-                    pressedScale: 0.93,
-                    duration: const Duration(milliseconds: 190),
-                    releaseDuration: const Duration(milliseconds: 320),
-                    child: TextButton.icon(
-                      onPressed: _pickIcon,
-                      icon: const Icon(Icons.touch_app, size: 16),
-                      label: Text(Translations.t('changeIcon', context)),
-                    ),
-                  ),
-                  // Лампочка-статус плавно появляется/исчезает при смене
-                  // «полезная ↔ вредная» (fade + size), как и блок заметок
-                  // ниже — значок не «выпрыгивает» мгновенно, а занимает ту же
-                  // ширину что и при good-типе, благодаря Padding'у.
-                  //
-                  // Слот под переключатель ФИКСИРОВАН по ширине (= good-вариант:
-                  // 16 отступа + IconButton 48). Без него AnimatedSwitcher
-                  // считает ширину Stack'а как max(уходящей, приходящей), а
-                  // SizeTransition по пути роняет обе почти до нуля — и ряд с
-                  // `center` посередине анимации сжимался, из-за чего кнопка
-                  // «сменить иконку» дёргалась вправо/влево на смене типа.
-                  SizedBox(
-                    width: 64,
-                    height: 48,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 280),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: SizeTransition(
-                          sizeFactor: animation,
-                          alignment: Alignment.centerLeft,
-                          child: child,
-                        ),
-                      ),
-                      child: _habitType == 'good'
-                          ? Padding(
-                              key: const ValueKey('good_status_btn'),
-                              padding: const EdgeInsets.only(left: 16),
-                              child: SmoothTooltip(
-                                message: Translations.t(
-                                  'habitNotesBtn',
-                                  context,
-                                ),
-                                preferredAbove: true,
-                                child: PressScale(
-                                  pressedScale: 0.90,
-                                  duration: const Duration(milliseconds: 180),
-                                  releaseDuration: const Duration(
-                                    milliseconds: 300,
-                                  ),
-                                  child: IconButton(
-                                    onPressed: _showNotesDialog,
-                                    icon: Icon(
-                                      _statusCtrl.text.isNotEmpty
-                                          ? Icons.lightbulb
-                                          : Icons.lightbulb_outline,
-                                      size: 20,
-                                      color: _statusCtrl.text.isNotEmpty
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            )
-                          : SizedBox(
-                              key: const ValueKey('bad_no_status_btn'),
-                              // Ровно тот же габарит, что у good-варианта
-                              // (16 отступа + IconButton 48×48 = 64×48), чтобы
-                              // иконка не «прыгала» при смене типа. САМОЙ
-                              // лампочки здесь нет: у вредной привычки статуса
-                              // не бывает — раньше тут рисовалась та же кнопка с
-                              // тем же значком, и «скрытый» статус было видно.
-                              width: 64,
-                              height: 48,
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Text(
-                        Translations.t('habitType', context),
-                        style: theme.textTheme.titleSmall,
-                      ),
-                      const SizedBox(width: 12),
-                      _TypeCapsule(
-                        label: Translations.t('habitTypeGood', context),
-                        selected: _habitType == 'good',
-                        color: theme.colorScheme.primary,
-                        containerColor: theme.colorScheme.primaryContainer,
-                        onSelectedColor: theme.colorScheme.onPrimaryContainer,
-                        onTap: () => _setType('good'),
-                      ),
-                      const SizedBox(width: 8),
-                      _TypeCapsule(
-                        label: Translations.t('habitTypeBad', context),
-                        selected: _habitType == 'bad',
-                        color: theme.colorScheme.error,
-                        containerColor: theme.colorScheme.errorContainer,
-                        onSelectedColor: theme.colorScheme.onErrorContainer,
-                        onTap: () => _setType('bad'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: SmoothTyping(
-                    controller: _nameCtrl,
-                    builder: (style) => TextField(
-                      style: style,
-                      cursorOpacityAnimates: true,
-                      magnifierConfiguration:
-                          TextMagnifierConfiguration.disabled,
-                      controller: _nameCtrl,
-                      contextMenuBuilder: minimalContextMenuBuilder,
-                      maxLength: 150,
-                      inputFormatters: [WideDashFormatter()],
-                      enableSuggestions: false,
-                      autocorrect: false,
-                      maxLines: 5,
-                      buildCounter: smoothCharCounterBuilder,
-                      textInputAction: TextInputAction.next,
-                      decoration: InputDecoration(
-                        labelText: Translations.t('habitName', context),
-                        prefixIcon: const Icon(Icons.edit_outlined),
-                        border: const OutlineInputBorder(),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Заметки скрыты для вредного типа, но смена типа плавная:
-              // блок мягко сжимается/раскрывается, давая чёткий отклик.
-              //
-              // Раньше смена типа шла через AnimatedSwitcher: он на 280 мс
-              // держал ОБА поддерева (уходящее и приходящее) — а это два
-              // Card + два TextField (minLines: 5) + два SmoothTyping с
-              // тикером. Каждый кадр пересчитывались оба тяжёлых поддерева
-              // (SizeTransition делает layout по обеим ветвям) — это и
-              // читалось как «заметка убирается/появляется с лагом».
-              //
-              // Теперь заметка существует в единственном экземпляре, а
-              // раскрытие/сжатие едет по одной кривой (ClipRect +
-              // Align.heightFactor + Opacity + лёгкий подъём). Никаких
-              // дублей — анимация гладкая даже на слабом устройстве.
-              TweenAnimationBuilder<double>(
-                tween: Tween<double>(
-                  begin: _habitType == 'good' ? 1.0 : 0.0,
-                  end: _habitType == 'good' ? 1.0 : 0.0,
-                ),
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                builder: (context, t, child) => ClipRect(
-                  key: const ValueKey('notes_reveal'),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    heightFactor: t,
-                    child: Opacity(
-                      opacity: t,
-                      // Тяжёлый блок (Card + TextField на 5 строк +
-                      // SmoothTyping) кэшируется растром: пока едет высота,
-                      // он не перерисовывается каждый кадр — пропадает
-                      // «лаг» при появлении/скрытии заметки.
-                      child: RepaintBoundary(
-                        child: IgnorePointer(
-                          ignoring: t == 0,
-                          child: Transform.translate(
-                            offset: Offset(0, (1.0 - t) * -10),
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SizeTransition(
+                            sizeFactor: animation,
+                            alignment: Alignment.centerLeft,
                             child: child,
                           ),
                         ),
+                        child: _habitType == 'good'
+                            ? Padding(
+                                key: const ValueKey('good_status_btn'),
+                                padding: const EdgeInsets.only(left: 16),
+                                child: SmoothTooltip(
+                                  message: Translations.t(
+                                    'habitNotesBtn',
+                                    context,
+                                  ),
+                                  preferredAbove: true,
+                                  child: PressScale(
+                                    pressedScale: 0.90,
+                                    duration: const Duration(milliseconds: 180),
+                                    releaseDuration: const Duration(
+                                      milliseconds: 300,
+                                    ),
+                                    child: IconButton(
+                                      onPressed: _showNotesDialog,
+                                      icon: Icon(
+                                        _statusCtrl.text.isNotEmpty
+                                            ? Icons.lightbulb
+                                            : Icons.lightbulb_outline,
+                                        size: 20,
+                                        color: _statusCtrl.text.isNotEmpty
+                                            ? theme.colorScheme.primary
+                                            : theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : SizedBox(
+                                key: const ValueKey('bad_no_status_btn'),
+                                // Ровно тот же габарит, что у good-варианта
+                                // (16 отступа + IconButton 48×48 = 64×48), чтобы
+                                // иконка не «прыгала» при смене типа. САМОЙ
+                                // лампочки здесь нет: у вредной привычки статуса
+                                // не бывает — раньше тут рисовалась та же кнопка с
+                                // тем же значком, и «скрытый» статус было видно.
+                                width: 64,
+                                height: 48,
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Text(
+                          Translations.t('habitType', context),
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(width: 12),
+                        _TypeCapsule(
+                          label: Translations.t('habitTypeGood', context),
+                          selected: _habitType == 'good',
+                          color: theme.colorScheme.primary,
+                          containerColor: theme.colorScheme.primaryContainer,
+                          onSelectedColor: theme.colorScheme.onPrimaryContainer,
+                          onTap: () => _setType('good'),
+                        ),
+                        const SizedBox(width: 8),
+                        _TypeCapsule(
+                          label: Translations.t('habitTypeBad', context),
+                          selected: _habitType == 'bad',
+                          color: theme.colorScheme.error,
+                          containerColor: theme.colorScheme.errorContainer,
+                          onSelectedColor: theme.colorScheme.onErrorContainer,
+                          onTap: () => _setType('bad'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: SmoothTyping(
+                      controller: _nameCtrl,
+                      builder: (style) => TextField(
+                        style: style,
+                        cursorOpacityAnimates: true,
+                        magnifierConfiguration:
+                            TextMagnifierConfiguration.disabled,
+                        controller: _nameCtrl,
+                        contextMenuBuilder: minimalContextMenuBuilder,
+                        maxLength: 150,
+                        inputFormatters: [WideDashFormatter()],
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        maxLines: 5,
+                        buildCounter: smoothCharCounterBuilder,
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: Translations.t('habitName', context),
+                          prefixIcon: const Icon(Icons.edit_outlined),
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: SmoothTyping(
-                          controller: _notesCtrl,
-                          builder: (style) => TextField(
-                            style: style,
-                            cursorOpacityAnimates: true,
-                            magnifierConfiguration:
-                                TextMagnifierConfiguration.disabled,
-                            controller: _notesCtrl,
-                            contextMenuBuilder: minimalContextMenuBuilder,
-                            maxLength: 500,
-                            inputFormatters: [WideDashFormatter()],
-                            enableSuggestions: false,
-                            autocorrect: false,
-                            minLines: 5,
-                            maxLines: 12,
-                            buildCounter: smoothCharCounterBuilder,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            decoration: InputDecoration(
-                              labelText: Translations.t('notes', context),
-                              prefixIcon: const Icon(Icons.notes_outlined),
-                              border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
+                const SizedBox(height: 12),
+                // Заметки скрыты для вредного типа, но смена типа плавная:
+                // блок мягко сжимается/раскрывается, давая чёткий отклик.
+                //
+                // Раньше смена типа шла через AnimatedSwitcher: он на 280 мс
+                // держал ОБА поддерева (уходящее и приходящее) — а это два
+                // Card + два TextField (minLines: 5) + два SmoothTyping с
+                // тикером. Каждый кадр пересчитывались оба тяжёлых поддерева
+                // (SizeTransition делает layout по обеим ветвям) — это и
+                // читалось как «заметка убирается/появляется с лагом».
+                //
+                // Теперь заметка существует в единственном экземпляре, а
+                // раскрытие/сжатие едет по одной кривой (ClipRect +
+                // Align.heightFactor + Opacity + лёгкий подъём). Никаких
+                // дублей — анимация гладкая даже на слабом устройстве.
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(
+                    begin: _habitType == 'good' ? 1.0 : 0.0,
+                    end: _habitType == 'good' ? 1.0 : 0.0,
+                  ),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, t, child) => ClipRect(
+                    key: const ValueKey('notes_reveal'),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      heightFactor: t,
+                      child: Opacity(
+                        opacity: t,
+                        // Тяжёлый блок (Card + TextField на 5 строк +
+                        // SmoothTyping) кэшируется растром: пока едет высота,
+                        // он не перерисовывается каждый кадр — пропадает
+                        // «лаг» при появлении/скрытии заметки.
+                        child: RepaintBoundary(
+                          child: IgnorePointer(
+                            ignoring: t == 0,
+                            child: Transform.translate(
+                              offset: Offset(0, (1.0 - t) * -10),
+                              child: child,
                             ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-              Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        Translations.t('habitDays', context),
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: theme.colorScheme.primary,
+                      Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        Translations.t('habitDaysHint', context),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: SmoothTyping(
+                            controller: _notesCtrl,
+                            builder: (style) => TextField(
+                              style: style,
+                              cursorOpacityAnimates: true,
+                              magnifierConfiguration:
+                                  TextMagnifierConfiguration.disabled,
+                              controller: _notesCtrl,
+                              contextMenuBuilder: minimalContextMenuBuilder,
+                              maxLength: 500,
+                              inputFormatters: [WideDashFormatter()],
+                              enableSuggestions: false,
+                              autocorrect: false,
+                              minLines: 5,
+                              maxLines: 12,
+                              buildCounter: smoothCharCounterBuilder,
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.newline,
+                              decoration: InputDecoration(
+                                labelText: Translations.t('notes', context),
+                                prefixIcon: const Icon(Icons.notes_outlined),
+                                border: const OutlineInputBorder(),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          PressScale(
-                            pressedScale: 0.93,
-                            duration: const Duration(milliseconds: 190),
-                            releaseDuration: const Duration(milliseconds: 320),
-                            child: TextButton.icon(
-                              onPressed: () => setState(
-                                () => _activeDays = [1, 2, 3, 4, 5, 6, 7],
-                              ),
-                              icon: const Icon(
-                                Icons.calendar_month_outlined,
-                                size: 18,
-                              ),
-                              label: Text(Translations.t('everyDay', context)),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          PressScale(
-                            pressedScale: 0.93,
-                            duration: const Duration(milliseconds: 190),
-                            releaseDuration: const Duration(milliseconds: 320),
-                            child: TextButton.icon(
-                              onPressed: () => setState(() => _activeDays = []),
-                              icon: const Icon(Icons.block, size: 18),
-                              label: Text(Translations.t('clear', context)),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      // Плавные чипы дней: каждый анимируется (цвет,
-                      // граница, галочка) при выборе. Кнопки «Каждый день»/
-                      // «Очистить» меняют список за один setState, но чипы
-                      // «перетекают» плавно, а не прыгают разом.
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: List.generate(7, (i) {
-                          final day = i + 1;
-                          final selected = _activeDays.contains(day);
-                          return _DayChip(
-                            day: day,
-                            label: Translations.dayNames(context)[i],
-                            selected: selected,
-                            onTap: () => _toggleDay(day),
-                          );
-                        }),
-                      ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              // === Вспомнить всё: напоминание о привычке ===
-              // Напоминание может стоять ТОЛЬКО на ОДНОЙ привычке: если оно
-              // уже установлено на другой — у этой привычки секция
-              // «Вспомнить всё» не показывается вообще.
-              if (_reminderSectionHidden)
-                const SizedBox.shrink()
-              else
-                _buildReminderFullCard(context, theme),
-            ],
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          Translations.t('habitDays', context),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          Translations.t('habitDaysHint', context),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            PressScale(
+                              pressedScale: 0.93,
+                              duration: const Duration(milliseconds: 190),
+                              releaseDuration: const Duration(
+                                milliseconds: 320,
+                              ),
+                              child: TextButton.icon(
+                                onPressed: () => setState(
+                                  () => _activeDays = [1, 2, 3, 4, 5, 6, 7],
+                                ),
+                                icon: const Icon(
+                                  Icons.calendar_month_outlined,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  Translations.t('everyDay', context),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            PressScale(
+                              pressedScale: 0.93,
+                              duration: const Duration(milliseconds: 190),
+                              releaseDuration: const Duration(
+                                milliseconds: 320,
+                              ),
+                              child: TextButton.icon(
+                                onPressed: () =>
+                                    setState(() => _activeDays = []),
+                                icon: const Icon(Icons.block, size: 18),
+                                label: Text(Translations.t('clear', context)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Плавные чипы дней: каждый анимируется (цвет,
+                        // граница, галочка) при выборе. Кнопки «Каждый день»/
+                        // «Очистить» меняют список за один setState, но чипы
+                        // «перетекают» плавно, а не прыгают разом.
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List.generate(7, (i) {
+                            final day = i + 1;
+                            final selected = _activeDays.contains(day);
+                            return _DayChip(
+                              day: day,
+                              label: Translations.dayNames(context)[i],
+                              selected: selected,
+                              onTap: () => _toggleDay(day),
+                            );
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // === Вспомнить всё: напоминание о привычке ===
+                // Напоминание может стоять ТОЛЬКО на ОДНОЙ привычке: если оно
+                // уже установлено на другой — у этой привычки секция
+                // «Вспомнить всё» не показывается вообще.
+                if (_reminderSectionHidden)
+                  const SizedBox.shrink()
+                else
+                  _buildReminderFullCard(context, theme),
+              ],
+            ),
           ),
         ),
       ),

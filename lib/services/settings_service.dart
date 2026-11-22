@@ -197,6 +197,12 @@ class SettingsService {
   static final ValueNotifier<DateTime?> autoSaveLastOk =
       ValueNotifier<DateTime?>(null);
 
+  /// Включено ли автосохранение прямо сейчас. Живой флаг для экранов,
+  /// которым нужно знать это без чтения файла настроек (например, форма
+  /// привычки сохраняет себя при выходе, только когда автосохранение
+  /// включено).
+  static final ValueNotifier<bool> autoSaveEnabled = ValueNotifier<bool>(false);
+
   static Future<void> markAutoSaveOk() async {
     final now = DateTime.now();
     autoSaveLastOk.value = now;
@@ -212,8 +218,11 @@ class SettingsService {
   static Future<bool> loadAutoSave() async {
     final map = await _loadSettings();
     final stored = map[_keyAutoSave];
-    if (stored is bool) return stored;
-    return globalPrefs.getBool(_keyAutoSaveMirror) ?? false;
+    final on = stored is bool
+        ? stored
+        : (globalPrefs.getBool(_keyAutoSaveMirror) ?? false);
+    autoSaveEnabled.value = on;
+    return on;
   }
 
   static Future<void> saveAutoSave(bool value) async {
@@ -221,6 +230,7 @@ class SettingsService {
     map[_keyAutoSave] = value;
     await _saveSettings(map);
     await globalPrefs.setBool(_keyAutoSaveMirror, value);
+    autoSaveEnabled.value = value;
   }
 
   static Future<bool> loadDevMode() async {
