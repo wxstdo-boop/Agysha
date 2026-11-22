@@ -1,0 +1,3 @@
+- ✨ Retry the version bump push when main moves
+- ✨ Count failed runs on the same branch only
+- ✨ Theme drum 1:1, Ozon SBP link, wall-clock timers, auto-save (#43)
