@@ -8,6 +8,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import '../models/alarm.dart';
 import '../models/wake_task.dart';
 import '../utils/android_settings.dart' as android_settings;
+import '../l10n/translations.dart';
 import '../utils/time_format.dart';
 import 'alarm_black_box.dart';
 import 'alarm_scheduler.dart';
@@ -160,7 +161,7 @@ class NotificationService extends ChangeNotifier {
       onDidReceiveNotificationResponse: (response) =>
           onNotificationTap?.call(response.payload),
     );
-    _createChannels();
+    await _createChannels();
     // After reinstall, SharedPreferences may survive via Android auto-backup
     // while OS notification permission is revoked. Sync stored state and
     // clear the alarm-asked timestamp so the alarm settings screen is
@@ -358,8 +359,9 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
-  void _createChannels() {
-    const channels = [
+  Future<void> _createChannels() async {
+    final lang = globalPrefs.getString('setting_locale') ?? 'ru';
+    final channels = [
       AndroidNotificationChannel(
         'agysha_alarm',
         'Alarms',
@@ -386,15 +388,23 @@ class NotificationService extends ChangeNotifier {
       // heads-up. Создаём явно, по id из NotificationDetails ниже.
       AndroidNotificationChannel(
         'habit_reminders',
-        'Напоминания привычек',
-        description: 'Напоминание «Вспомнить всё» о привычках',
+        Translations.tFor(lang, 'notifHabitChannel', 'Напоминания привычек'),
+        description: Translations.tFor(
+          lang,
+          'notifHabitChannelDesc',
+          'Напоминание «Вспомнить всё» о привычках',
+        ),
         importance: Importance.high,
         enableVibration: true,
       ),
       AndroidNotificationChannel(
         'ada_reminders',
-        'Напоминания Ады',
-        description: 'Утренний отчёт и вечерний разбор',
+        Translations.tFor(lang, 'notifAdaChannel', 'Напоминания Ады'),
+        description: Translations.tFor(
+          lang,
+          'notifAdaChannelDesc',
+          'Утренний отчёт и вечерний разбор',
+        ),
         importance: Importance.high,
         enableVibration: true,
       ),
@@ -713,12 +723,17 @@ class NotificationService extends ChangeNotifier {
     }
     final title = alarm.label.isNotEmpty ? alarm.label : 'Alarm';
     String body;
+    final lang = globalPrefs.getString('setting_locale') ?? 'ru';
     if (alarm.taskType == WakeUpTask.math) {
-      body = 'Задача: решить пример';
+      body = Translations.tFor(lang, 'taskMath', 'Задача: решить пример');
     } else if (alarm.taskType == WakeUpTask.pattern) {
-      body = 'Задача: повторить паттерн';
+      body = Translations.tFor(
+        lang,
+        'taskPattern',
+        'Задача: повторить паттерн',
+      );
     } else if (alarm.taskType == WakeUpTask.memory) {
-      body = 'Задача: вспомни слово';
+      body = Translations.tFor(lang, 'taskMemory', 'Задача: вспомни слово');
     } else {
       body = formatHmValues(alarm.time.hour, alarm.time.minute);
     }

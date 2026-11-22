@@ -953,16 +953,32 @@ class _AiChatBodyState extends State<_AiChatBody>
   String _friendlyAiError(Object error) {
     final raw = error.toString().toLowerCase();
     if (raw.contains('timeout') || raw.contains('timed out')) {
-      return 'Ада не успела получить ответ. Попробуй ещё раз через мгновение.';
+      return Translations.t(
+        'aiErrorTimeout',
+        context,
+        'Ада не успела получить ответ. Попробуй ещё раз через мгновение.',
+      );
     }
     if (raw.contains('429') || raw.contains('rate')) {
-      return 'Ада сейчас занята — я уже попробую другой бесплатный канал.';
+      return Translations.t(
+        'aiErrorBusy',
+        context,
+        'Ада сейчас занята — я уже попробую другой бесплатный канал.',
+      );
     }
     if (raw.contains('все провайдеры') || raw.contains('unavailable')) {
-      return 'Все бесплатные каналы сейчас недоступны. Проверь интернет — '
-          'или вставь свой ключ Poolside в настройках, и нажми «обновить».';
+      return Translations.t(
+        'aiErrorAllDown',
+        context,
+        'Все бесплатные каналы сейчас недоступны. Проверь интернет — '
+            'или вставь свой ключ Poolside в настройках, и нажми «обновить».',
+      );
     }
-    return 'Связь с Адой прервалась. Нажми обновить — я попробую снова.';
+    return Translations.t(
+      'aiErrorDisconnected',
+      context,
+      'Связь с Адой прервалась. Нажми обновить — я попробую снова.',
+    );
   }
 
   /// Отправляет сообщение. [text] — если null, берём из поля ввода.
@@ -1084,15 +1100,18 @@ class _AiChatBodyState extends State<_AiChatBody>
     // (didChangeAppLifecycleState → _refreshScreenPerm).
     final go = await showAgyshaConfirm(
       context,
-      title: 'Ада видит экран',
-      body:
-          'Чтобы Ада могла подсказать ответ собеседнику (например, в '
-          'мессенджере), разреши Agysha «Специальные возможности».\n\n'
-          'Текст экрана не сохраняется и никуда не отправляется — он '
-          'попадает в Аду только вместе с твоим сообщением.',
+      title: Translations.t('screenAwareTitle', context, 'Ада видит экран'),
+      body: Translations.t(
+        'screenAwareBody',
+        context,
+        'Чтобы Ада могла подсказать ответ собеседнику (например, в '
+            'мессенджере), разреши Agysha «Специальные возможности».\n\n'
+            'Текст экрана не сохраняется и никуда не отправляется — он '
+            'попадает в Аду только вместе с твоим сообщением.',
+      ),
       icon: Icons.visibility_outlined,
-      confirmLabel: 'Открыть настройки',
-      cancelLabel: 'Не сейчас',
+      confirmLabel: Translations.t('openSettings', context, 'Открыть настройки'),
+      cancelLabel: Translations.t('notNow', context, 'Не сейчас'),
     );
     if (go == true && mounted) {
       await ScreenReaderService.openSystemSettings();
@@ -1109,8 +1128,16 @@ class _AiChatBodyState extends State<_AiChatBody>
     final isDark = theme.brightness == Brightness.dark;
     return SmoothTooltip(
       message: _screenAware
-          ? 'Контекст экрана: включён — Ада видит текст на экране'
-          : 'Контекст экрана: выключен — Ада не читает экран',
+          ? Translations.t(
+              'screenContextOn',
+              context,
+              'Контекст экрана: включён — Ада видит текст на экране',
+            )
+          : Translations.t(
+              'screenContextOff',
+              context,
+              'Контекст экрана: выключен — Ада не читает экран',
+            ),
       waitDuration: const Duration(milliseconds: 400),
       child: PressScale(
         // Ровно та же отдача, что у кнопки веб-поиска: соседние кнопки
@@ -1681,7 +1708,7 @@ class _AiChatBodyState extends State<_AiChatBody>
                   children: [
                     // Заголовок: «Ада Край (Cry)»
                     Text(
-                      'Ада Край (Cry)',
+                      Translations.t('adaCryTitle', context, 'Ада Край (Cry)'),
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -2223,7 +2250,9 @@ class _AdaStatusLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final text = busy ? 'Ада отвечает…' : model;
+    final text = busy
+        ? Translations.t('adaReplying', context, 'Ада отвечает…')
+        : model;
     return SizedBox(
       height: 16,
       child: ClipRect(
