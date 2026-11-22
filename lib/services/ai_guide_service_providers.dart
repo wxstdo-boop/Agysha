@@ -553,3 +553,122 @@ Future<String> _sendHorde(String userText, String languageCode) async {
   }
   throw TimeoutException('AI Horde queue timeout');
 }
+
+/// OVHcloud AI Endpoints — бесплатный шлюз без ключа (Kepler).
+/// Живые модели: gpt-oss-20b, Qwen3.5-9B, Qwen3.8-27B, Llama-3.3-70B.
+/// У части моделей ответ уходит в `reasoning`, а `content` приходит пустым,
+/// поэтому лимит токенов щедрый и модели перебираются по очереди.
+const _ovhUrl =
+    'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions';
+
+Future<String> _sendOvh(
+  String userText,
+  List<AiMessage> history,
+  String languageCode,
+) async {
+  final ctx = AiGuideService._trimContext(history);
+  final messages = <Map<String, dynamic>>[
+    {
+      'role': 'system',
+      'content': AiGuideService.systemPrompt(languageCode, withContext: true),
+    },
+    for (final m in ctx)
+      {'role': m.isUser ? 'user' : 'assistant', 'content': m.text},
+    {'role': 'user', 'content': userText},
+  ];
+
+  for (final model in const [
+    'gpt-oss-20b',
+    'Qwen3.5-9B',
+    'Qwen3.8-27B',
+    'Meta-Llama-3_3-70B-Instruct',
+  ]) {
+    try {
+      final resp = await http
+          .post(
+            Uri.parse(_ovhUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'AgyshaApp/1.6.0',
+            },
+            body: jsonEncode({
+              'model': model,
+              'messages': messages,
+              'temperature': 0.6,
+              'max_tokens': 1200,
+            }),
+          )
+          .timeout(const Duration(seconds: 4));
+      if (resp.statusCode != 200) continue;
+      final decoded = jsonDecode(resp.body);
+      if (decoded is! Map) continue;
+      final choices = decoded['choices'];
+      if (choices is! List || choices.isEmpty) continue;
+      final msg = (choices.first as Map)['message'];
+      if (msg is! Map) continue;
+      final raw = msg['content'];
+      if (raw is! String) continue;
+      final cleaned = AiGuideService._cleanText(raw);
+      if (cleaned.length < 2) continue;
+      if (AiGuideService._isRefusal(cleaned)) continue;
+      AiGuideService._noteModel('OVHcloud · $model');
+      return cleaned;
+    } catch (_) {}
+  }
+
+  throw Exception('OVHcloud unavailable');
+}
+
+/// Kilo Gateway — бесплатный OpenAI-совместимый шлюз без ключа.
+/// `kilo-auto/free` крутит бесплатные модели и иногда упирается в лимит
+/// вышестоящего провайдера, поэтому короткий таймаут и одна попытка.
+const _kiloUrl = 'https://api.kilo.ai/api/gateway/chat/completions';
+
+Future<String> _sendKilo(
+  String userText,
+  List<AiMessage> history,
+  String languageCode,
+) async {
+  final ctx = AiGuideService._trimContext(history);
+  final messages = <Map<String, dynamic>>[
+    {
+      'role': 'system',
+      'content': AiGuideService.systemPrompt(languageCode, withContext: true),
+    },
+    for (final m in ctx)
+      {'role': m.isUser ? 'user' : 'assistant', 'content': m.text},
+    {'role': 'user', 'content': userText},
+  ];
+
+  final resp = await http
+      .post(
+        Uri.parse(_kiloUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'AgyshaApp/1.6.0',
+        },
+        body: jsonEncode({
+          'model': 'kilo-auto/free',
+          'messages': messages,
+          'temperature': 0.6,
+          'max_tokens': 1200,
+        }),
+      )
+      .timeout(const Duration(seconds: 12));
+  if (resp.statusCode != 200) {
+    throw Exception('Kilo ${resp.statusCode}');
+  }
+  final decoded = jsonDecode(resp.body);
+  if (decoded is! Map) throw Exception('Kilo invalid response');
+  final choices = decoded['choices'];
+  if (choices is! List || choices.isEmpty) {
+    throw Exception('Kilo empty response');
+  }
+  final msg = (choices.first as Map)['message'];
+  final raw = msg is Map ? msg['content'] : null;
+  if (raw is! String) throw Exception('Kilo empty text');
+  final cleaned = AiGuideService._cleanText(raw);
+  if (cleaned.isEmpty) throw Exception('Kilo empty text');
+  AiGuideService._noteModel('Kilo · auto-free');
+  return cleaned;
+}

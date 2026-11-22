@@ -1071,8 +1071,9 @@ class AiGuideService {
       _recordProviderTrace('Agnes AI: пропущен, ключ не задан');
     }
 
-    // Бесплатные провайдеры без ключа: LLM7.io (самый быстрый из троих),
-    // Pollinations AI и AI Horde — запасные.
+    // Бесплатные провайдеры без ключа: LLM7.io (самый быстрый),
+    // Pollinations AI, OVHcloud AI Endpoints, Kilo Gateway и AI Horde —
+    // запасные.
     final providers = <(String, int, Future<String?> Function(int))>[
       (
         'LLM7',
@@ -1089,6 +1090,24 @@ class AiGuideService {
         (s) => _tryProvider(
           'Pollinations',
           () => _sendPollinations(userText, history, languageCode),
+          s,
+        ),
+      ),
+      (
+        'OVHcloud',
+        7,
+        (s) => _tryProvider(
+          'OVHcloud',
+          () => _sendOvh(userText, history, languageCode),
+          s,
+        ),
+      ),
+      (
+        'Kilo',
+        7,
+        (s) => _tryProvider(
+          'Kilo',
+          () => _sendKilo(userText, history, languageCode),
           s,
         ),
       ),

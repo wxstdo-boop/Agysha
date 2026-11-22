@@ -119,13 +119,15 @@ const List<String> _kSongTitles = [
   'Готов втопить в пол до самого упора?',
 ];
 
-String _funSongTitle(String seed) {
+String _funSongTitle(String seed, BuildContext context) {
   var h = 17;
   for (final c in seed.codeUnits) {
     h = (h * 31 + c) & 0x7fffffff;
   }
-  final base = _kSongTitles[h % _kSongTitles.length];
-  return base.endsWith('?') ? base : '$base?';
+  final i = h % _kSongTitles.length;
+  final base = _kSongTitles[i];
+  final title = Translations.t('songTitle$i', context, base);
+  return title.endsWith('?') ? title : '$title?';
 }
 
 /// Добавление друга: имя, аватарка, стартовые очки.

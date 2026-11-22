@@ -399,7 +399,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       // Название берём из отпечатка: разные звуки получают РАЗНЫЕ имена (а
       // не имя файла вроде «record_2024_05_11»), а служба сама добавит
       // номер, если имя всё же совпало с уже занятым.
-      final title = _funSongTitle(fingerprint);
+      final title = _funSongTitle(fingerprint, context);
       final added = await _service.addTrack(
         path: newPath,
         title: title,
