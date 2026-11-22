@@ -279,7 +279,12 @@ void main() {
         .toList();
     expect(schedule, isNotEmpty, reason: 'Будильник не поставлен нативно');
     final args = Map<Object?, Object?>.from(schedule.last.arguments as Map);
-    expect(args['body'], contains('Задача'));
+    // Текст задачи переводится на выбранный язык: 'Задача: Решить пример'
+    // или 'Wake-up task: Solve math'. Проверяем подпись, не префикс.
+    expect(
+      args['body'],
+      anyOf(contains('Решить пример'), contains('Solve math')),
+    );
   });
 
   test('одноразовый будильник в запасном пути не повторяется ежедневно', () async {
