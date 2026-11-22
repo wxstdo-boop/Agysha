@@ -652,6 +652,7 @@ const Map<String, String> _fr = {
   'timerPaused': 'En pause',
   'timerFinished': 'Terminé',
   'autoSave': 'Sauvegarde auto',
+  'autoSaveLastAt': 'Dernier enregistrement',
   'autoSaveDesc': 'Enregistrer les données chaque seconde',
   'autoSaveDone': 'Données enregistrées · sauvegarde auto activée',
   'autoExport': 'Export auto',

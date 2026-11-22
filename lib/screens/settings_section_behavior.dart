@@ -2,11 +2,23 @@ part of 'settings_screen.dart';
 
 /// Поведение: автосохранение, экспериментальное, вибрация, звуки, «убрать анимации».
 extension _SettingsSectionBehavior on _SettingsScreenState {
+  String _two(int v) => v.toString().padLeft(2, '0');
+
   /// Включение/выключение автосохранения. При включении сразу пишем все
   /// данные и подтверждаем это плашкой: раньше флаг включался, а первый тик
   /// мог молча упасть, и выглядело так, будто автосохранение не работает.
   Future<void> _applyAutoSave(bool value) async {
-    await SettingsService.saveAutoSave(value);
+    // Запись флага могла упасть (конфликт файла настроек) — раньше это
+    // молча оставляло переключатель выключенным, и выглядело как «нажимаю,
+    // а автосохранение не включается».
+    var storeError = false;
+    try {
+      await SettingsService.saveAutoSave(value);
+    } catch (error, stackTrace) {
+      storeError = true;
+      debugPrint('auto-save setting failed: $error\n$stackTrace');
+    }
+    if (!mounted) return;
     _refresh(() => _autoSave = value);
     if (!value) {
       stopAutoSave();
@@ -15,6 +27,19 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
     startAutoSave();
     await flushAutoSaveNow();
     if (!mounted) return;
+    if (storeError) {
+      showBeautifulSnackBar(
+        context,
+        message: Translations.t(
+          'autoSaveStoreError',
+          context,
+          'Автосохранение включено, но флаг не сохранился в файл настроек',
+        ),
+        icon: Icons.warning_amber_rounded,
+        iconColor: Colors.orangeAccent,
+      );
+      return;
+    }
     showBeautifulSnackBar(
       context,
       message: Translations.t(
@@ -100,11 +125,24 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                   color: theme.colorScheme.primary,
                 ),
                 title: Text(Translations.t('autoSave', context)),
-                subtitle: Text(
-                  Translations.t('autoSaveDesc', context),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                subtitle: ValueListenableBuilder<DateTime?>(
+                  valueListenable: SettingsService.autoSaveLastOk,
+                  builder: (context, lastOk, _) {
+                    final desc = Translations.t('autoSaveDesc', context);
+                    // Показываем ДОКАЗАТЕЛЬСТВО работы: время последней
+                    // успешной записи. Так видно, что автосохранение пишет,
+                    // а не просто «включено».
+                    final stamp = lastOk == null
+                        ? ''
+                        : '\n${Translations.t('autoSaveLastAt', context, 'Последнее сохранение')}: '
+                              '${_two(lastOk.hour)}:${_two(lastOk.minute)}:${_two(lastOk.second)}';
+                    return Text(
+                      '$desc$stamp',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    );
+                  },
                 ),
                 onTap: () => _applyAutoSave(!_autoSave),
                 trailing: VolumetricSwitch(

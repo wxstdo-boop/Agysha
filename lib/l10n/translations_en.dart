@@ -640,6 +640,7 @@ const Map<String, String> _en = {
   'timerPaused': 'Paused',
   'timerFinished': 'Finished',
   'autoSave': 'Auto-save',
+  'autoSaveLastAt': 'Last saved',
   'autoSaveDesc': 'Save data every second',
   'autoSaveDone': 'Data saved · auto-save is on',
   'autoExport': 'Auto-export',

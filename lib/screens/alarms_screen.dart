@@ -15,8 +15,6 @@ import '../main.dart';
 import '../l10n/translations.dart';
 import '../widgets/swipe_to_delete.dart';
 import '../widgets/volumetric_switch.dart';
-import '../utils/ambient_loop.dart';
-import '../utils/motion_prefs.dart';
 import '../utils/android_settings.dart' show openFullScreenNotifSettings;
 import '../utils/page_transitions.dart';
 import '../utils/markdown_text.dart' show sanitizeTextForWrap;
@@ -354,7 +352,13 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                       curve: Curves.easeInOutCubic,
                       // Тик таймера перерисовывает только эту секцию, а не весь
                       // список будильников под ней.
-                      child: SettingsService.experimentalEnabled.value
+                      // Секция остаётся на месте и после выключения
+                      // тумблера, если таймеры уже созданы: иначе они
+                      // «отваливались» от будильников и выглядели
+                      // пропавшими.
+                      child:
+                          SettingsService.experimentalEnabled.value ||
+                              _timerSvc.timers.isNotEmpty
                           ? ListenableBuilder(
                               listenable: _timerSvc,
                               builder: (context, _) => _buildTimersSection(
@@ -521,9 +525,11 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           '{n} ч',
         ).replaceAll('{n}', '$hours');
       } else {
-        durationStr = Translations.t('durHourMin', context, '{h} ч {m} мин')
-            .replaceAll('{h}', '$hours')
-            .replaceAll('{m}', '$minutes');
+        durationStr = Translations.t(
+          'durHourMin',
+          context,
+          '{h} ч {m} мин',
+        ).replaceAll('{h}', '$hours').replaceAll('{m}', '$minutes');
       }
 
       text = Translations.t('alarmIn', context, '{when} {time} · через {dur}')
@@ -1098,103 +1104,50 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                       ),
                     ),
                   ),
-                  // Счётчик и кнопки появляются/исчезают плавно, а не
-                  // щёлкают мгновенно при старте и сбросе.
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 260),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, anim) => FadeTransition(
-                      opacity: anim,
-                      child: SizeTransition(
-                        sizeFactor: anim,
-                        axis: Axis.horizontal,
-                        alignment: Alignment.centerRight,
-                        child: child,
+                  // Счётчик стоит в раскладке ВСЕГДА и меняется без
+                  // подмены виджета: раньше каждую секунду старый и новый
+                  // Text жили одновременно в AnimatedSwitcher, и это
+                  // читалось как «счётчик мигает и пропадает».
+                  Text(
+                    _timerSvc.remainingDisplay(timer.id),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontFeatures: const <FontFeature>[
+                        FontFeature.tabularFigures(),
+                      ],
+                      color: running
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.7,
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  action(
+                    icon: running
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_fill,
+                    color: running
+                        ? theme.colorScheme.primary
+                        : const Color(0xFFFFAB91),
+                    onTap: () => running
+                        ? _timerSvc.pauseTimer(timer.id)
+                        : _timerSvc.startTimer(timer.id),
+                  ),
+                  // Рефреш не вынимаем из раскладки: он просто гаснет на
+                  // месте, поэтому соседние кнопки не прыгают.
+                  IgnorePointer(
+                    ignoring: running,
+                    child: AnimatedOpacity(
+                      opacity: running ? 0 : 1,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      child: action(
+                        icon: Icons.replay,
+                        color: theme.colorScheme.onSurfaceVariant,
+                        size: 22,
+                        onTap: () => _timerSvc.resetTimer(timer.id),
                       ),
                     ),
-                    child: showProgress
-                        ? Row(
-                            key: const ValueKey('timer_running_part'),
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _TimerPulse(
-                                active: running,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(right: 2),
-                                  child: ClipRect(
-                                    // Каждая секунда счётчика сменяется
-                                    // плавно: цифры «вкатываются» снизу.
-                                    child: AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 320,
-                                      ),
-                                      switchInCurve: Curves.easeOutCubic,
-                                      switchOutCurve: Curves.easeInCubic,
-                                      transitionBuilder: (child, animation) {
-                                        final t = Curves.easeOutCubic.transform(
-                                          animation.value,
-                                        );
-                                        return FadeTransition(
-                                          opacity: animation,
-                                          child: Transform.translate(
-                                            offset: Offset(0, 14 * (1 - t)),
-                                            child: child,
-                                          ),
-                                        );
-                                      },
-                                      child: Text(
-                                        _timerSvc.remainingDisplay(timer.id),
-                                        key: ValueKey(
-                                          _timerSvc.remainingDisplay(timer.id),
-                                        ),
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                              fontFeatures: const [
-                                                FontFeature.tabularFigures(),
-                                              ],
-                                              color: running
-                                                  ? theme.colorScheme.primary
-                                                  : theme
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                            ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              action(
-                                icon: running
-                                    ? Icons.pause_circle_filled
-                                    : Icons.play_circle_fill,
-                                color: running
-                                    ? theme.colorScheme.primary
-                                    : const Color(0xFFFFAB91),
-                                onTap: () => running
-                                    ? _timerSvc.pauseTimer(timer.id)
-                                    : _timerSvc.startTimer(timer.id),
-                              ),
-                              if (!running)
-                                action(
-                                  icon: Icons.replay,
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  size: 22,
-                                  onTap: () => _timerSvc.resetTimer(timer.id),
-                                ),
-                            ],
-                          )
-                        : Row(
-                            key: const ValueKey('timer_idle_part'),
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              action(
-                                icon: Icons.play_circle_fill,
-                                color: const Color(0xFFFFAB91),
-                                onTap: () => _timerSvc.startTimer(timer.id),
-                              ),
-                            ],
-                          ),
                   ),
                 ],
               ),
@@ -1205,124 +1158,50 @@ class _AlarmsScreenState extends State<AlarmsScreen>
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutCubic,
               alignment: Alignment.topCenter,
-              child: showProgress
-                  ? TweenAnimationBuilder<double>(
-                      // Значение приходит раз в секунду, и полоска прыгала
-                      // шагами. Догоняем новое значение линейно за тот же
-                      // интервал — она едет непрерывно, без рывков.
-                      tween: Tween<double>(
-                        end: timer.totalSeconds > 0
-                            ? (timer.totalSeconds - rem) / timer.totalSeconds
-                            : 0,
-                      ),
-                      duration: const Duration(milliseconds: 950),
-                      curve: Curves.linear,
-                      builder: (context, value, _) => LinearProgressIndicator(
-                        value: value,
-                        minHeight: 4,
-                        borderRadius: BorderRadius.circular(4),
-                        // На светлых темах primary почти белый, и
-                        // полоска пропадала. Фирменный алый виден везде,
-                        // а фон — приглушённый цвет текста, а не
-                        // surfaceContainerHighest.
-                        backgroundColor: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.12,
+              child: AnimatedOpacity(
+                opacity: showProgress ? 1 : 0,
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                child: showProgress
+                    ? TweenAnimationBuilder<double>(
+                        // Значение приходит раз в секунду, и полоска прыгала
+                        // шагами. Догоняем новое значение линейно за тот же
+                        // интервал — она едет непрерывно, без рывков.
+                        tween: Tween<double>(
+                          end: timer.totalSeconds > 0
+                              ? (timer.totalSeconds - rem) / timer.totalSeconds
+                              : 0,
                         ),
-                        color: running
-                            ? const Color(0xFFE23B4E)
-                            : theme.colorScheme.onSurfaceVariant.withValues(
-                                alpha: 0.55,
-                              ),
+                        duration: const Duration(milliseconds: 950),
+                        curve: Curves.linear,
+                        builder: (context, value, _) => LinearProgressIndicator(
+                          value: value,
+                          minHeight: 4,
+                          borderRadius: BorderRadius.circular(4),
+                          // На светлых темах primary почти белый, и
+                          // полоска пропадала. Фирменный алый виден везде,
+                          // а фон — приглушённый цвет текста, а не
+                          // surfaceContainerHighest.
+                          backgroundColor: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.12),
+                          color: running
+                              ? const Color(0xFFE23B4E)
+                              : theme.colorScheme.onSurfaceVariant.withValues(
+                                  alpha: 0.55,
+                                ),
+                        ),
+                      )
+                    : const SizedBox(
+                        key: ValueKey('timer_progress_hidden'),
+                        width: double.infinity,
+                        height: 0,
                       ),
-                    )
-                  : const SizedBox(
-                      key: ValueKey('timer_progress_hidden'),
-                      width: double.infinity,
-                      height: 0,
-                    ),
+              ),
             ),
           ],
         ),
       ),
     );
-  }
-}
-
-/// Лёгкая пульсация работающего таймера: цифры мягко «дышат»
-/// (медленный цикл 1.4с, амплитуда ~4%) — живо, но ненавязчиво.
-class _TimerPulse extends StatefulWidget {
-  final bool active;
-  final Widget child;
-
-  const _TimerPulse({required this.active, required this.child});
-
-  @override
-  State<_TimerPulse> createState() => _TimerPulseState();
-}
-
-class _TimerPulseState extends State<_TimerPulse>
-    with SingleTickerProviderStateMixin, MotionAwareRepeat {
-  // Пульс 1.00 → 1.04 за 700 мс: [AmbientVsync] оставляет ему ~20 fps. При
-  // таком малом масштабе разница глазом не видна, зато активный таймер не
-  // перерисовывает список будильников 60 раз в секунду (замер с телефона:
-  // home:alarms rAvg 32.8 мс).
-  late final AnimationController _ctrl = AnimationController(
-    vsync: AmbientVsync(this),
-    duration: const Duration(milliseconds: 700),
-  );
-  late final Animation<double> _scale = TweenSequence<double>([
-    TweenSequenceItem(
-      tween: Tween(
-        begin: 1.0,
-        end: 1.04,
-      ).chain(CurveTween(curve: Curves.easeOut)),
-      weight: 50,
-    ),
-    TweenSequenceItem(
-      tween: Tween(
-        begin: 1.04,
-        end: 1.0,
-      ).chain(CurveTween(curve: Curves.easeIn)),
-      weight: 50,
-    ),
-  ]).animate(_ctrl);
-
-  @override
-  void initState() {
-    super.initState();
-    watchMotion();
-    if (widget.active) _ctrl.repeat();
-  }
-
-  @override
-  void onMotionChanged() {
-    if (widget.active && !MotionPrefs.shouldReduceMotion) {
-      if (!_ctrl.isAnimating) _ctrl.repeat();
-    } else if (_ctrl.isAnimating) {
-      _ctrl.stop();
-    }
-  }
-
-  @override
-  void didUpdateWidget(_TimerPulse oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.active && !_ctrl.isAnimating) {
-      if (!MotionPrefs.shouldReduceMotion) _ctrl.repeat();
-    } else if (!widget.active && _ctrl.isAnimating) {
-      _ctrl.stop();
-      _ctrl.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(scale: _scale, child: widget.child);
   }
 }
 

@@ -649,6 +649,7 @@ const Map<String, String> _ru = {
   'timerPaused': 'На паузе',
   'timerFinished': 'Завершён',
   'autoSave': 'Автосохранение',
+  'autoSaveLastAt': 'Последнее сохранение',
   'autoSaveDesc': 'Сохранять данные каждую секунду',
   'autoSaveDone': 'Данные сохранены · автосохранение включено',
   'autoExport': 'Автоэкспорт',

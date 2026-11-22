@@ -212,11 +212,15 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// на каморе не было. Их применяем только осознанным выбором.
   static const Set<String> _variantOnly = <String>{'peach', 'oled'};
 
-  /// Насколько барабан должен уйти за середину шага, чтобы тема сменилась.
-  /// Порог больше 0.5 даёт гистерезис: у самой середины палец дрожит, и
-  /// раньше тема перескакивала туда-обратно, читаясь как «крутишь в одну
-  /// сторону, а переводит в другую».
-  static const double _previewHysteresis = 0.66;
+  /// Насколько камора должна подойти к указателю, чтобы тема сменилась.
+  ///
+  /// Раньше порог считался от НОМЕРА прошлой каморы (0.66 шага), и у самой
+  /// середины шага палец дрожит: барабан то переходил порог, то
+  /// возвращался, и тема за одно движение переключалась три раза туда-сюда —
+  /// это и читалось как «значки перебирает». Теперь смена происходит только
+  /// когда камора почти встала под указатель (|дробная часть| < 0.16),
+  /// то есть ровно один раз на каждую пройденную камору.
+  static const double _chamberLock = 0.16;
 
   /// Тема под указателем поменялась — применяем её, чтобы прокрутка
   /// выглядела как живое переключение палитры. [force] — довести тему
@@ -224,7 +228,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _previewNearest({bool force = false}) {
     final i = _index;
     if (i == _applied) return;
-    if (!force && (_pos - _applied).abs() < _previewHysteresis) return;
+    if (!force && (_pos - _pos.roundToDouble()).abs() > _chamberLock) return;
     _applied = i;
     final entry = widget.entries[i];
     if (_variantOnly.contains(entry.key)) return;
@@ -496,16 +500,14 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
           ),
           child: Center(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
+              // Короткое чистое затухание: масштаб и 300 мс держали старый
+              // и новый значок видимыми одновременно, и они «перекрывали»
+              // друг друга при каждой смене каморы.
+              duration: const Duration(milliseconds: 150),
               switchInCurve: Curves.easeOut,
               switchOutCurve: Curves.easeIn,
-              transitionBuilder: (child, anim) => FadeTransition(
-                opacity: anim,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.92, end: 1).animate(anim),
-                  child: child,
-                ),
-              ),
+              transitionBuilder: (child, anim) =>
+                  FadeTransition(opacity: anim, child: child),
               // Цвет значка едет за палитрой плавно. Раньше он брался
               // напрямую из cs.primary: при смене темы значок успевал
               // щёлкнуть новым цветом до окончания AnimatedTheme — это и

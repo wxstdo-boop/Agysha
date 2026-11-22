@@ -99,7 +99,15 @@ class NotificationService extends ChangeNotifier {
       _fullScreenGranted = true;
       return true;
     }
-    final ok = await android_settings.canUseFullScreenIntent();
+    final probe = await android_settings.probeFullScreenIntent();
+    if (probe == null) {
+      // ОС не ответила: состояние не трогаем. Раньше ошибка канала
+      // превращалась в «право отозвано», и переключатель/плашка врали,
+      // будто разрешение слетело само.
+      debugPrint('[fullscreen] проверка права не удалась — состояние не меняю');
+      return _fullScreenGranted;
+    }
+    final ok = probe;
     final lastSeen = globalPrefs.getBool(_lastFullScreenGrantKey);
     if (lastSeen == true && !ok) {
       debugPrint(

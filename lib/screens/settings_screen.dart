@@ -300,6 +300,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _loadAutoSave() async {
     final v = await SettingsService.loadAutoSave();
     _autoSave = v;
+    final lastOk = await SettingsService.loadAutoSaveLastOk();
+    if (lastOk != null) SettingsService.autoSaveLastOk.value = lastOk;
   }
 
   Future<void> _loadAutoExport() async {
