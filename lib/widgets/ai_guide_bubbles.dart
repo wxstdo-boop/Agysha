@@ -754,24 +754,40 @@ class _AnimatedErrorPlaque extends StatelessWidget {
                                   ),
                                 ),
                               )
-                            : IconButton(
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 34,
-                                  minHeight: 34,
+                            : PressScale(
+                                // Отдача как у прочих кнопок Ады: мягкое
+                                // вдавливание с 3D-наклоном за пальцем и
+                                // плавный возврат. Раньше кнопка повтора
+                                // «щёлкала» без отдачи и наклона.
+                                pressedScale: 0.86,
+                                enableTilt: true,
+                                maxTiltAngle: 0.16,
+                                duration: const Duration(milliseconds: 170),
+                                releaseDuration: const Duration(
+                                  milliseconds: 380,
                                 ),
-                                icon: Icon(
-                                  Icons.refresh_rounded,
-                                  color: cs.primary,
-                                  size: 18,
+                                pressTint: cs.primary,
+                                pressTintStrength: 0.10,
+                                pressTintRadius: BorderRadius.circular(17),
+                                child: IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 34,
+                                    minHeight: 34,
+                                  ),
+                                  icon: Icon(
+                                    Icons.refresh_rounded,
+                                    color: cs.primary,
+                                    size: 18,
+                                  ),
+                                  tooltip: Translations.t(
+                                    'retry',
+                                    context,
+                                    'Retry',
+                                  ),
+                                  onPressed: onRetry,
                                 ),
-                                tooltip: Translations.t(
-                                  'retry',
-                                  context,
-                                  'Retry',
-                                ),
-                                onPressed: onRetry,
                               ),
                       ),
                     ],

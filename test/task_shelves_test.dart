@@ -208,6 +208,34 @@ void main() {
     expect(find.text('Архивные'), findsNothing);
   });
 
+  testWidgets('снятие галки не оставляет вторую копию карточки', (
+    tester,
+  ) async {
+    // Возврат из архива шёл через схлопывание на месте ВМЕСТЕ с волной
+    // списка: на экране на миг оказывались две карточки, и она «скакала
+    // туда-сюда». Теперь возврат ведёт только волна.
+    await seedAndPump(tester, [
+      Task(id: 'a1', title: 'Купить молоко', done: true),
+    ]);
+
+    await tester.tap(find.byKey(const ValueKey('task_toggle_a1')));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(
+        card('a1'),
+        findsOneWidget,
+        reason: 'карточка не должна дублироваться на кадре $i',
+      );
+    }
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 40)),
+    );
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(card('a1'), findsOneWidget);
+  });
+
   /// «Всё читается»: заголовки полок должны быть контрастны фону в обеих
   /// темах — приглушённый цвет «Выполненных» на тёмном фоне сливался бы.
   for (final dark in [false, true]) {

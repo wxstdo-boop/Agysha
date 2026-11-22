@@ -834,7 +834,15 @@ class AiGuideService {
       // Гарантируем список источников: если Ада не перечислила их сама,
       // добавляем домены из найденного контекста в конец ответа.
       if (useWebSearch && webCtx.isNotEmpty) {
-        answer = _appendSources(answer, webCtx);
+        // Мелкая модель иногда вместо ответа просто здоровается, хотя
+        // выдержки уже найдены. Тогда показываем сводку найденного —
+        // пустое приветствие при включённом веб-поиске выглядит как поломка.
+        if (_isJustGreeting(answer)) {
+          final digest = _webDigest(webCtx);
+          if (digest.isNotEmpty) answer = digest;
+        } else {
+          answer = _appendSources(answer, webCtx);
+        }
       }
       // Лингвогард: мелкие бесплатные модели иногда «уплывают» в английский
       // (особенно в «рассуждениях»). Если ответ почти целиком на латинице —
@@ -885,6 +893,31 @@ class AiGuideService {
     for (final key in _cooldownUntil.keys.toList()) {
       _cooldownUntil.remove(key);
     }
+  }
+
+  /// Видимая обёртка для тестов: правило «пустое приветствие вместо
+  /// ответа при включённом веб-поиске».
+  @visibleForTesting
+  static bool isJustGreetingForTest(String answer) => _isJustGreeting(answer);
+
+  /// Ответ — только приветствие/«чем помочь?», без сути по запросу.
+  static bool _isJustGreeting(String answer) {
+    final t = answer.trim();
+    if (t.isEmpty || t.length > 220) return false;
+    final lower = t.toLowerCase();
+    // \b в Dart/JS не считает кириллицу словом, поэтому якорим начало
+    // строки и пропускаем только пунктуацию/эмодзи перед приветствием.
+    final hasGreeting = RegExp(
+      r'^[^a-zа-я0-9]*(привет|здравствуй|хай|hello|hi|hey)',
+    ).hasMatch(lower);
+    if (!hasGreeting) return false;
+    // Если в ответе есть конкретика (цифры, факты, ссылки) — это не пустое
+    // приветствие, оставляем как есть.
+    if (RegExp(r'\d').hasMatch(t)) return false;
+    final askOnly = RegExp(
+      r'(чем|как) (я )?(могу|тебе) (помочь|помощь)|how can i help|что хочешь',
+    ).hasMatch(lower);
+    return askOnly || t.length < 90;
   }
 
   /// Запасной ответ, когда ИИ-каналы недоступны, а веб-выдача есть:
@@ -1039,7 +1072,7 @@ class AiGuideService {
     // `.timeout(25s)` обрубал цепочку, и пользователь видел «ИИ на курорте»
     // вместо ответа (а с веб-поиском — тем более). Теперь каждый провайдер
     // получает не больше остатка бюджета, и цепочка честно завершается.
-    final deadline = DateTime.now().add(const Duration(seconds: 16));
+    final deadline = DateTime.now().add(const Duration(seconds: 22));
     int budget(int want) {
       final left = deadline.difference(DateTime.now()).inMilliseconds;
       if (left <= 1200) return 0;
@@ -1093,7 +1126,7 @@ class AiGuideService {
     final providers = <(String, int, Future<String?> Function(int))>[
       (
         'Kilo',
-        7,
+        6,
         (s) => _tryProvider(
           'Kilo',
           () => _sendKilo(userText, history, languageCode),
@@ -1102,7 +1135,7 @@ class AiGuideService {
       ),
       (
         'Pollinations',
-        9,
+        8,
         (s) => _tryProvider(
           'Pollinations',
           () => _sendPollinations(userText, history, languageCode),
@@ -1111,7 +1144,7 @@ class AiGuideService {
       ),
       (
         'LLM7',
-        10,
+        8,
         (s) => _tryProvider(
           'LLM7',
           () => _sendLlm7(userText, history, languageCode),
@@ -1120,7 +1153,7 @@ class AiGuideService {
       ),
       (
         'OVHcloud',
-        7,
+        5,
         (s) => _tryProvider(
           'OVHcloud',
           () => _sendOvh(userText, history, languageCode),

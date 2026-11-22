@@ -700,7 +700,7 @@ class _SectionPillState extends State<SectionPill>
                         enabled: !_dragging,
                         pressedScale: 0.94,
                         pressTint: const Color(0xFFFF453A),
-                        pressTintStrength: 0.13,
+                        pressTintStrength: 0.10,
                         pressTintRadius: BorderRadius.circular(18),
                         enableTilt: true,
                         // Если pointer-up потеряется при быстрых тапах и
@@ -844,7 +844,16 @@ class _PillLabelState extends State<_PillLabel>
     // Порог 0.02: при драге glow приходит каждый кадр, и раньше каждая
     // такая мелочь перезапускала анимацию — цвет «дрожал» и догонял
     // рывками. Теперь стартуем только на заметном шаге.
-    if ((old.glow - widget.glow).abs() < 0.02) return;
+    // Цель обновляем ВСЕГДА: раньше мелкие шаги (<0.02) игнорировались
+    // вместе с целью, и при серии быстрых переключений _to «застревал» на
+    // старом значении — выбранная подпись оставалась красной навсегда.
+    if ((old.glow - widget.glow).abs() < 0.02) {
+      if (!_ctrl.isAnimating) {
+        _from = widget.glow;
+        _to = widget.glow;
+      }
+      return;
+    }
     _from = _value;
     _to = widget.glow;
     _ctrl.forward(from: 0);

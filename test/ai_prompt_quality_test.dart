@@ -104,7 +104,7 @@ void main() {
     // адреса отдают 429 — Kilo обязан быть первым из «ключевых» источников,
     // иначе Ада тратит бюджет на заведомо мёртвые попытки.
     final src = File('lib/services/ai_guide_service.dart').readAsStringSync();
-    final kilo = src.indexOf("'Kilo',\n        7,");
+    final kilo = src.indexOf("'Kilo',\n        6,");
     expect(kilo, greaterThan(0), reason: 'Kilo пропал из цепочки');
     for (final later in ["'LLM7',", "'OVHcloud',", "'AI Horde',"]) {
       expect(
@@ -115,15 +115,70 @@ void main() {
     }
   });
 
+  test('Agnes перебирает актуальные модели, а не удалённую 2.0', () {
+    // С рабочим ключом Agnes отвечал ошибкой: модели agnes-2.0-flash больше
+    // нет в каталоге, и запрос падал, после чего цепочка уходила на
+    // бесплатные модели. Теперь модель перебирается из списка.
+    final src = File(
+      'lib/services/ai_guide_service_providers.dart',
+    ).readAsStringSync();
+    expect(src, contains("'agnes-3.0-flash'"));
+    expect(src, contains('for (final model in _agnesModels)'));
+    expect(
+      RegExp(r"'agnes-2\.0-flash'").hasMatch(src),
+      isFalse,
+      reason: 'удалённой модели не должно быть в списке',
+    );
+  });
+
+  test('Пустое приветствие при веб-поиске заменяется сводкой', () {
+    // «Поищи про акул» → «Привет! Чем помочь?» — веб-выдача была, а ответ
+    // терялся. Такой ответ считаем не-ответом.
+    expect(
+      AiGuideService.isJustGreetingForTest('Привет! Чем я могу помочь?'),
+      isTrue,
+    );
+    expect(
+      AiGuideService.isJustGreetingForTest('Hello! How can I help?'),
+      isTrue,
+    );
+    // Ответ с конкретикой не трогаем.
+    expect(
+      AiGuideService.isJustGreetingForTest(
+        'Привет! Акулы — хрящевые рыбы, известно около 530 видов.',
+      ),
+      isFalse,
+    );
+    expect(
+      AiGuideService.isJustGreetingForTest('Акулы бывают 5-6 метров длиной.'),
+      isFalse,
+    );
+  });
+
   test('GET-промпт Pollinations схлопывается в одну строку', () {
     // Перевод строки в пути URL ломает маршрут: сервер отдаёт 404, и с
     // включённым веб-поиском (многострочный промпт) Ада не отвечала.
-    const raw = 'Ты Ада.\n\nВЫДЕРЖКИ:\n1. Кофе бодрит [healthline.com]\n\n'
+    const raw =
+        'Ты Ада.\n\nВЫДЕРЖКИ:\n1. Кофе бодрит [healthline.com]\n\n'
         'Вопрос: расскажи про кофе';
     final flat = AiGuideService.flattenForUrl(raw);
     expect(flat.contains('\n'), isFalse);
     expect(flat.contains('  '), isFalse);
     expect(flat, contains('Ты Ада.'));
     expect(flat, contains('Вопрос: расскажи про кофе'));
+  });
+
+  test('длинный промпт с веб-выдачей сохраняет вопрос в хвосте', () {
+    // С веб-поиском вопрос стоит в конце: голова на 260 символов + хвост.
+    // Раньше резали первые 500 — модель видела только выдержки и здоровалась.
+    final excerpts = List.filled(
+      20,
+      'Выдержка из статьи про акул и океан.',
+    ).join(' ');
+    final question = 'Чем питаются акулы и сколько видов живёт в тёплых морях?';
+    final prompt = freePromptForTest('$excerpts\n\n$question', 'ru');
+    expect(prompt, contains(question));
+    // Голова вопроса (260) + хвост с самим вопросом (300), плюс инструкции.
+    expect(prompt.length, lessThan(2000));
   });
 }

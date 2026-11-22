@@ -100,7 +100,7 @@ class _Card extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       releaseDuration: const Duration(milliseconds: 320),
       pressedOpacity: 0.96,
-      maxTiltAngle: 0.22,
+      maxTiltAngle: 0.12,
       pressTint: theme.colorScheme.primary,
       pressTintStrength: 0.07,
       pressTintRadius: BorderRadius.circular(Radii.md),

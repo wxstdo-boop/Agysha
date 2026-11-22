@@ -127,6 +127,14 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// Страховка от залипшей отдачи (см. [PressScale.maxPressDuration]).
   Timer? _stuckGuard;
 
+  /// Момент последнего отпускания. Быстрые повторные тапы (чаще 150 мс)
+  /// не запускают новую волну отдачи: иначе подложка вспыхивала несколько
+  /// раз подряд и читалась как «грязь» под пальцем.
+  DateTime? _lastReleaseAt;
+
+  /// Пауза, в течение которой повторный тап не анимируется.
+  static const _repeatGuard = Duration(milliseconds: 150);
+
   /// Лежит ли палец на элементе прямо сейчас. По нему отдача «самолечится»:
   /// если по какой-то причине нажатие осталось висеть без пальца, первый
   /// же кадр перестройки мягко его снимет.
@@ -245,6 +253,11 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   void _down(PointerDownEvent e) {
     if (!mounted || !widget.enabled) return;
     if (SwipeToDeleteScope.of(context)) return;
+    final released = _lastReleaseAt;
+    if (released != null &&
+        DateTime.now().difference(released) < _repeatGuard) {
+      return;
+    }
     if (_swipeCtrl.value < 1.0) _swipeCtrl.forward();
     _downPos = e.localPosition;
     _dragged = false;
@@ -306,6 +319,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
 
   void _up(PointerUpEvent _) {
     _stuckGuard?.cancel();
+    _lastReleaseAt = DateTime.now();
     _downPos = null;
     _dragged = false;
     _pointerDown = false;
@@ -322,6 +336,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
 
   void _cancel(PointerCancelEvent _) {
     _stuckGuard?.cancel();
+    _lastReleaseAt = DateTime.now();
     _downPos = null;
     _dragged = false;
     _pointerDown = false;
