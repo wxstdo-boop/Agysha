@@ -771,8 +771,8 @@ class AiGuideService {
               'Если данные противоречат друг другу — выбери самое '
               'убедительное и скажи об этом одной фразой. НЕ упоминай '
               'инструменты, «поиск», «lookup», «API» и не пиши служебных '
-              'фраз вроде «согласно результатам». НЕ перечисляй источники '
-              'в конце — приложение добавит красивый список само.\n\n'
+              'фраз вроде «согласно результатам». НЕ перечисляй источники, '
+              'ссылки и домены — ни в конце, ни по тексту ответа.\n\n'
               'ВЫДЕРЖКИ:\n$webCtx\n\n'
               'Вопрос пользователя: $userText';
         }
@@ -831,8 +831,8 @@ class AiGuideService {
           languageCode,
         ).timeout(const Duration(seconds: 18));
       }
-      // Гарантируем список источников: если Ада не перечислила их сама,
-      // добавляем домены из найденного контекста в конец ответа.
+      // Источники не показываем: только вычищаем хвост, если модель
+      // всё-таки дописала домены/ссылки сама.
       if (useWebSearch && webCtx.isNotEmpty) {
         // Мелкая модель иногда вместо ответа просто здоровается, хотя
         // выдержки уже найдены. Тогда показываем сводку найденного —
@@ -841,7 +841,7 @@ class AiGuideService {
           final digest = _webDigest(webCtx);
           if (digest.isNotEmpty) answer = digest;
         } else {
-          answer = _appendSources(answer, webCtx);
+          answer = _stripSources(answer);
         }
       }
       // Лингвогард: мелкие бесплатные модели иногда «уплывают» в английский
@@ -861,7 +861,7 @@ class AiGuideService {
           if (retried.trim().isNotEmpty && !_isMostlyEnglish(retried)) {
             answer = retried;
             if (useWebSearch && webCtx.isNotEmpty) {
-              answer = _appendSources(answer, webCtx);
+              answer = _stripSources(answer);
             }
           }
         } catch (_) {
@@ -921,7 +921,7 @@ class AiGuideService {
   }
 
   /// Запасной ответ, когда ИИ-каналы недоступны, а веб-выдача есть:
-  /// короткая сводка найденного + источники. Без «служебного» тона.
+  /// короткая сводка найденного, без списка источников. Без «служебного» тона.
   static String _webDigest(String webCtx) {
     final lines = webCtx
         .split('\n')
@@ -934,48 +934,17 @@ class AiGuideService {
     for (final line in lines) {
       buf.write('— $line\n');
     }
-    return _appendSources(buf.toString().trim(), webCtx);
+    return buf.toString().trim();
   }
 
-  /// Источники в веб-поиске ВСЕГДА переписываем в едином формате:
-  /// заголовок жирным (**Источники:**), каждый источник жирным и
-  /// в скобках — **(домен)**. Список, который Ада дописала сама,
-  /// отрезаем, чтобы не «двоило» и не было разнобоя в форматировании.
-  static String _appendSources(String answer, String webCtx) {
+  /// Источники в ответе больше не показываем: при включённом веб-поиске
+  /// Ада ищет и пользуется выдержками, но список доменов/ссылок только
+  /// засорял сообщение. Поэтому любую приписку про источники, которую
+  /// модель успела добавить сама, отрезаем.
+  static String _stripSources(String answer) {
     final s = answer.trim();
     if (s.isEmpty) return s;
-    // Домен → самый информативный заголовок из выдачи. Раньше источники
-    // были голыми доменами; теперь это аккуратный нумерованный список
-    // «**домен** — заголовок», который приятно читать.
-    final titles = <String, String>{};
-    for (final line in webCtx.split('\n')) {
-      final m = RegExp(r'\[([a-z0-9.-]+)\]').firstMatch(line);
-      if (m == null) continue;
-      final domain = m.group(1)!;
-      if (titles.containsKey(domain)) continue;
-      var title = line.substring(0, m.start).trim();
-      title = title.replaceFirst(RegExp(r'^\d+[.)]\s*'), '').trim();
-      final dash = title.indexOf(RegExp(r' [—:] '));
-      if (dash > 0) title = title.substring(0, dash).trim();
-      if (title.length > 64) title = '${title.substring(0, 64).trim()}…';
-      titles[domain] = title;
-    }
-    if (titles.isEmpty) return s;
-    final body = _stripTrailingSourceSection(s);
-    final buf = StringBuffer();
-    if (body.isNotEmpty) buf.write('$body\n\n');
-    buf.write('**Источники:**\n');
-    var i = 1;
-    for (final entry in titles.entries) {
-      final title = entry.value;
-      buf.write(
-        title.isEmpty
-            ? '**$i.** ${entry.key}\n'
-            : '**$i.** ${entry.key} — $title\n',
-      );
-      i++;
-    }
-    return buf.toString().trim();
+    return _stripTrailingSourceSection(s);
   }
 
   /// Отрезает «хвост» ответа, если Ада уже начала список источников
@@ -1321,8 +1290,9 @@ class AiGuideService {
     try {
       final saved = globalPrefs.getString(_modelPrefKey);
       if (saved != null && saved.trim().isNotEmpty) {
-        // В старых сборках в prefs лежало «Agnes AI · agnes-3.0-flash».
-        // Плашке нужно только имя провайдера — подрезаем при чтении.
+        // В старых сборках в prefs лежала метка через « · » и полное имя
+        // «Agnes AI». Плашка показывает «Провайдер • модель», поэтому
+        // приводим разделитель и короткое имя провайдера при чтении.
         final clean = _shortLabel(saved);
         _lastModel = clean;
         _lastGoodModel = clean;
@@ -1346,19 +1316,42 @@ class AiGuideService {
     _stagedModel = label;
   }
 
+  /// Метка «Провайдер • модель» — единый вид у всех провайдеров.
+  static void _noteModelWith(String provider, String? model) {
+    final name = _cleanModelName(model);
+    _noteModel(name.isEmpty ? provider : '$provider • $name');
+  }
+
+  /// Имя модели из ответа провайдера: без вендорного префикса
+  /// («baidu/ernie-…» → «ernie-…»), без суффикса «:free» и не длиннее
+  /// 24 символов, иначе плашка в шапке обрезается целиком.
+  static String _cleanModelName(String? model) {
+    if (model == null) return '';
+    var name = model.trim();
+    if (name.isEmpty) return '';
+    final slash = name.lastIndexOf('/');
+    if (slash >= 0 && slash < name.length - 1) {
+      name = name.substring(slash + 1);
+    }
+    name = name.replaceAll(RegExp(r':(free|beta)$'), '').trim();
+    if (name.length > 24) name = '${name.substring(0, 23)}…';
+    return name;
+  }
+
   static void commitStaged(String fallback) {
     final label = _stagedModel.isNotEmpty ? _stagedModel : fallback;
     _stagedModel = '';
     if (label.isNotEmpty) _setModel(label);
   }
 
-  /// Плашка статуса — только имя провайдера. Раньше сюда попадала связка
-  /// «Agnes AI · agnes-3.0-flash», и в шапке чата читалось «Agnes • agnes
-  /// модель». Модель по-прежнему видна в настройках, а в статусе — имя.
+  /// Плашка статуса — «провайдер • модель» единым видом у всех: Agnes,
+  /// LLM7, Pollinations, OVHcloud, AI Horde, Kilo. Старые сохранённые
+  /// метки писались через « · » — переводим их к тому же виду.
   static String _shortLabel(String label) {
-    final cut = label.indexOf(' · ');
-    final short = cut < 0 ? label : label.substring(0, cut);
-    return short.trim();
+    return label
+        .replaceAll(' · ', ' • ')
+        .replaceFirst('Agnes AI', 'Agnes')
+        .trim();
   }
 
   static void _setModel(String label) {

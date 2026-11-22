@@ -9,11 +9,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Статус Ады', () {
-    test('в плашке только имя провайдера, без модели', () async {
+    test('в плашке провайдер и модель: «Agnes • agnes-…»', () async {
       AiGuideService.recordModelUsed('Agnes AI · agnes-3.0-flash');
       // Метка публикуется с задержкой-дебюнсом (900 мс).
       await Future<void>.delayed(const Duration(milliseconds: 1100));
-      expect(await AiGuideService.currentModelLabel(), 'Agnes AI');
+      expect(
+        await AiGuideService.currentModelLabel(),
+        'Agnes • agnes-3.0-flash',
+      );
     });
 
     test('имя без модели остаётся как есть', () async {

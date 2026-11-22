@@ -14,6 +14,7 @@ import 'section_pill.dart';
 import 'stagger_in.dart';
 import '../l10n/translations.dart';
 import '../services/ai_guide_service.dart';
+import '../services/ai_chat_store.dart';
 import '../services/json_file.dart';
 import '../utils/wide_dash_formatter.dart';
 import '../utils/wide_dash_controller.dart';
@@ -774,23 +775,43 @@ class _AiChatBodyState extends State<_AiChatBody>
 
   Future<void> _saveHistory() {
     // Снимок делаем СРАЗУ: к моменту записи список уже может быть очищен.
-    final value = jsonEncode(_messages.map((m) => m.toJson()).toList());
     final snapshot = _historySnapshot;
+    final gen = adaChatGeneration;
     final next = _historyWriteChain.then((_) async {
       try {
-        final resolved = await JsonFile.writeWithSnapshotRetrying(
-          _historyKey,
-          value,
-          snapshot,
-        );
-        _historySnapshot = resolved;
+        final saved = await AiChatStore.persist(_messages, snapshot);
+        _historySnapshot = saved.snapshot;
         _storageErrorShown = false;
+        _adoptSavedHistory(saved.messages, gen);
       } catch (error, stackTrace) {
         _reportStorageFailure(error, stackTrace);
       }
     });
     _historyWriteChain = next;
     return next;
+  }
+
+  /// Принять слияние, которое вернул диск.
+  ///
+  /// Второй движок (мини-окно или оверлей) пишет ту же историю, и слияние
+  /// возвращает сообщения, которых ещё нет в памяти. Если их не принять,
+  /// следующая запись считает их удалёнными и стирает — чат после
+  /// перезахода оказывался пустым.
+  void _adoptSavedHistory(List<AiMessage> saved, int gen) {
+    if (saved.isEmpty || !mounted || gen != adaChatGeneration) return;
+    final known = {for (final m in _messages) AiChatStore.identity(m)};
+    if (saved.every((m) => known.contains(AiChatStore.identity(m)))) return;
+    final clearedAt = AiGuideService.chatClearedAt();
+    final visible = saved
+        .where((m) => AiGuideService.visibleInChat(m, clearedAt))
+        .toList();
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(AiChatStore.adopt(_messages, visible));
+      _openedCount = _messages.length;
+    });
+    _scrollToBottom(animate: false);
   }
 
   Future<void> _loadPins() async {

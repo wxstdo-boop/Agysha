@@ -90,7 +90,7 @@ Future<String> _sendAgnes(
         lastError = Exception('Agnes refusal');
         continue;
       }
-      AiGuideService._noteModel('Agnes AI');
+      AiGuideService._noteModelWith('Agnes', model);
       return cleaned;
     } catch (e) {
       lastError = e;
@@ -147,7 +147,10 @@ Future<String> _sendPoolside(
     try {
       final body = await _poolsideRound(messages, model, apiKey, url);
       if (body is String) {
-        AiGuideService._noteModel(isOpenRouter ? 'OpenRouter' : 'Poolside');
+        AiGuideService._noteModelWith(
+          isOpenRouter ? 'OpenRouter' : 'Poolside',
+          model,
+        );
         return body; // обычный текстовый ответ
       }
       final answer = await _poolsideRoundWithTools(
@@ -157,7 +160,10 @@ Future<String> _sendPoolside(
         apiKey,
         url,
       );
-      AiGuideService._noteModel(isOpenRouter ? 'OpenRouter' : 'Poolside');
+      AiGuideService._noteModelWith(
+        isOpenRouter ? 'OpenRouter' : 'Poolside',
+        model,
+      );
       return answer;
     } catch (e) {
       lastError = e;
@@ -389,7 +395,7 @@ Future<String> _sendLlm7(
       final cleaned = AiGuideService._cleanText(raw);
       if (cleaned.length < 2) continue;
       if (AiGuideService._isRefusal(cleaned)) continue;
-      AiGuideService._noteModel('LLM7');
+      AiGuideService._noteModelWith('LLM7', model);
       return cleaned;
     } catch (_) {}
   }
@@ -474,7 +480,8 @@ Future<String> _sendPollinations(
       if (!body.startsWith('<')) {
         final cleaned = AiGuideService._cleanText(body);
         if (cleaned.isNotEmpty && !AiGuideService._isRefusal(cleaned)) {
-          AiGuideService._noteModel('Pollinations');
+          // GET-маршрут всегда идёт моделью openai-fast (см. URL выше).
+          AiGuideService._noteModelWith('Pollinations', 'openai-fast');
           return cleaned;
         }
       }
@@ -520,7 +527,7 @@ Future<String> _sendPollinations(
         if (!body.startsWith('<')) {
           final cleaned = AiGuideService._cleanText(body);
           if (cleaned.isNotEmpty && !AiGuideService._isRefusal(cleaned)) {
-            AiGuideService._noteModel('Pollinations');
+            AiGuideService._noteModelWith('Pollinations', model);
             return cleaned;
           }
         }
@@ -592,7 +599,10 @@ Future<String> _sendHorde(String userText, String languageCode) async {
       final first = generations.first;
       final text = first is Map ? first['text'] : null;
       if (text is String && text.trim().isNotEmpty) {
-        AiGuideService._noteModel('AI Horde');
+        AiGuideService._noteModelWith(
+          'AI Horde',
+          first is Map ? first['model'] as String? : null,
+        );
         final body = text.startsWith(prompt)
             ? text.substring(prompt.length)
             : text;
@@ -663,7 +673,7 @@ Future<String> _sendOvh(
       final cleaned = AiGuideService._cleanText(raw);
       if (cleaned.length < 2) continue;
       if (AiGuideService._isRefusal(cleaned)) continue;
-      AiGuideService._noteModel('OVHcloud');
+      AiGuideService._noteModelWith('OVHcloud', model);
       return cleaned;
     } catch (_) {}
   }
@@ -721,6 +731,11 @@ Future<String> _sendKilo(
   if (raw is! String) throw Exception('Kilo empty text');
   final cleaned = AiGuideService._cleanText(raw);
   if (cleaned.isEmpty) throw Exception('Kilo empty text');
-  AiGuideService._noteModel('Kilo');
+  AiGuideService._noteModelWith(
+    'Kilo',
+    decoded['model'] is String
+        ? decoded['model'] as String
+        : 'kilo-auto/free',
+  );
   return cleaned;
 }

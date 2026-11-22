@@ -114,13 +114,27 @@ class _TasksScreenState extends State<TasksScreen>
     curve: Curves.easeInOutCubic,
   );
 
-  /// Вертикальный «приезд» карточки: доля высоты карточки, поэтому сдвиг
-  /// сам масштабируется под её размер (без чтения .value в build — иначе
-  /// смещение застыло бы на значении момента сборки).
-  late final Animation<Offset> _cardDropSlide = Tween<Offset>(
-    begin: const Offset(0, -0.16),
-    end: Offset.zero,
-  ).animate(_cardDropT);
+  /// Настоящий путь карточки в пикселях: от того места, где она стояла в
+  /// активных, до места в архивной полке. Раньше приезд всегда был сдвигом
+  /// на 16 % собственной высоты — на глаз это «проявилась», а не «переехала»;
+  /// с реальным смещением карточка едет через весь список, как её и тащат.
+  double _cardDropFromPx = 0;
+
+  /// Ключи карточек для замера их места на экране. Составной ключ
+  /// «полка:id»: во время переезда одна и та же задача живёт в ДВУХ полках
+  /// (схлопывается в старой, приезжает в новой), а два одинаковых GlobalKey
+  /// в дереве — это исключение.
+  final Map<String, GlobalKey> _cardGeoKeys = {};
+  GlobalKey _cardGeoKey(String shelf, String id) => _cardGeoKeys.putIfAbsent(
+    '$shelf:$id',
+    () => GlobalKey(debugLabel: 'task_${shelf}_$id'),
+  );
+
+  Rect? _cardRect(String shelf, String id) {
+    final box = _cardGeoKeys['$shelf:$id']?.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
 
   /// id только что переключённой задачи — её карточка «приезжает» в новую
   /// полку анимированно; остальные рисуются сразу.
@@ -367,12 +381,31 @@ class _TasksScreenState extends State<TasksScreen>
         }
       });
     }
+    // Где карточка стояла до переезда — замеряем ДО мутации: после неё этой
+    // карточки в активных уже нет.
+    final fromRect = archiveMove ? _cardRect('active', task.id) : null;
+    await _service.toggle(task.id);
+    if (!mounted) return;
     // «Приезд» сверху — только для отметки (активная полка → архив).
     // При снятии галки карточка возвращается из архива ВВЕРХ: если гнать
     // её тем же спуском сверху, она прыгает над списком и «скачет туда-сюда».
     // Возврат идёт обычной волной списка ([_revealSlide]) — плавно и вниз-
     // вверх, без перелёта.
     if (!wasDone) {
+      // Карточка уже в архивной полке: её новое место известно, и приезд
+      // пойдёт ровно на это расстояние, а не на «16 % высоты».
+      if (fromRect != null) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
+        final toRect = _cardRect('done', task.id);
+        if (toRect != null) {
+          final dy = fromRect.top - toRect.top;
+          _cardDropFromPx = dy.clamp(-1200.0, 1200.0);
+        }
+      } else {
+        _cardDropFromPx = 0;
+      }
+      if (!mounted) return;
       setState(() => _justCompletedId = task.id);
       _cardDrop.forward(from: 0).whenComplete(() {
         // Снимаем «анимируемую» метку: карточка больше не оборачивается
@@ -382,8 +415,6 @@ class _TasksScreenState extends State<TasksScreen>
         }
       });
     }
-    await _service.toggle(task.id);
-    if (!mounted) return;
     // Похвалу выдаём только за ОТМЕТКУ, не за снятие галки.
     if (wasDone) return;
     try {
@@ -678,7 +709,14 @@ class _TasksScreenState extends State<TasksScreen>
           ),
         ),
         if (archiveEnabled)
-          _taskSliver(context, theme, done, all, reveal: _splitFade),
+          _taskSliver(
+            context,
+            theme,
+            done,
+            all,
+            shelf: 'done',
+            reveal: _splitFade,
+          ),
       ],
     );
 
@@ -701,7 +739,7 @@ class _TasksScreenState extends State<TasksScreen>
         // Активные задачи идут БЕЗ заголовка: они и есть основной список —
         // подписывать их «Активные» значит подписывать очевидное. Заголовок
         // несёт только архивная полка, чтобы отличаться от остального.
-        _taskSliver(context, theme, active, all),
+        _taskSliver(context, theme, active, all, shelf: 'active'),
         if (archiveEnabled && _archiveVisible)
           SliverFadeTransition(opacity: _splitFade, sliver: completedGroup),
         const SliverToBoxAdapter(child: SizedBox(height: 4)),
@@ -717,6 +755,7 @@ class _TasksScreenState extends State<TasksScreen>
     ThemeData theme,
     List<Task> list,
     List<Task> all, {
+    required String shelf,
     Animation<double>? reveal,
   }) {
     if (list.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
@@ -757,15 +796,18 @@ class _TasksScreenState extends State<TasksScreen>
           if (task.id == _leavingTask?.id) {
             return KeyedSubtree(
               key: ValueKey('item_task_${task.id}'),
-              child: SizeTransition(
-                sizeFactor: _cardExitSize,
-                alignment: Alignment.topCenter,
-                child: FadeTransition(
-                  opacity: _cardExitFade,
-                  child: SlideTransition(
-                    position: _cardExitSlide,
-                    child: IgnorePointer(
-                      child: _buildTaskCard(context, theme, task, i),
+              child: KeyedSubtree(
+                key: _cardGeoKey(shelf, task.id),
+                child: SizeTransition(
+                  sizeFactor: _cardExitSize,
+                  alignment: Alignment.topCenter,
+                  child: FadeTransition(
+                    opacity: _cardExitFade,
+                    child: SlideTransition(
+                      position: _cardExitSlide,
+                      child: IgnorePointer(
+                        child: _buildTaskCard(context, theme, task, i),
+                      ),
                     ),
                   ),
                 ),
@@ -778,16 +820,29 @@ class _TasksScreenState extends State<TasksScreen>
           if (task.id == _justCompletedId) {
             return KeyedSubtree(
               key: ValueKey('item_task_${task.id}'),
-              child: SlideTransition(
-                position: _revealSlide,
-                child: FadeTransition(
-                  opacity: _cardDropT,
-                  child: SizeTransition(
-                    sizeFactor: _cardDropT,
-                    alignment: Alignment.topCenter,
-                    child: SlideTransition(
-                      position: _cardDropSlide,
-                      child: _buildTaskCard(context, theme, task, i),
+              child: KeyedSubtree(
+                key: _cardGeoKey(shelf, task.id),
+                child: SlideTransition(
+                  position: _revealSlide,
+                  child: FadeTransition(
+                    opacity: _cardDropT,
+                    child: SizeTransition(
+                      sizeFactor: _cardDropT,
+                      alignment: Alignment.topCenter,
+                      child: AnimatedBuilder(
+                        animation: _cardDropT,
+                        // Реальное расстояние переезда: карточка едет от
+                        // своего прежнего места в активных до места в архиве,
+                        // а не «проявляется» сдвигом на 16 % высоты.
+                        builder: (context, child) => Transform.translate(
+                          offset: Offset(
+                            0,
+                            _cardDropFromPx * (1 - _cardDropT.value),
+                          ),
+                          child: child,
+                        ),
+                        child: _buildTaskCard(context, theme, task, i),
+                      ),
                     ),
                   ),
                 ),
@@ -817,7 +872,10 @@ class _TasksScreenState extends State<TasksScreen>
           // элемента, и обёртка SizeTransition его не должна «съедать».
           return KeyedSubtree(
             key: ValueKey('item_task_${task.id}'),
-            child: card,
+            child: KeyedSubtree(
+              key: _cardGeoKey(shelf, task.id),
+              child: card,
+            ),
           );
         },
       ),

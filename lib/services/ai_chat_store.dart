@@ -62,6 +62,31 @@ class AiChatStore {
     return [...incoming, ...extra];
   }
 
+  /// Запись истории с ОБЯЗАТЕЛЬНЫМ принятием результата.
+  ///
+  /// [JsonFile] при одновременной записи из второго движка сливает списки и
+  /// возвращает слияние. Если вызывающий оставляет в памяти свою старую
+  /// копию, следующая запись считает «лишние» сообщения удалёнными и стирает
+  /// их с диска — именно так история чата и пропадала после перезахода.
+  /// Поэтому отдаём наружу разобранный ответ, а не только снимок.
+  static Future<({List<AiMessage> messages, String? snapshot})> persist(
+    List<AiMessage> messages,
+    String? snapshot,
+  ) async {
+    final toSave = messages.length > 1000
+        ? messages.sublist(messages.length - 1000)
+        : messages;
+    final value = jsonEncode(
+      toSave.map((message) => message.toJson()).toList(),
+    );
+    final resolved = await JsonFile.writeWithSnapshotRetrying(
+      key,
+      value,
+      snapshot,
+    );
+    return (messages: parse(resolved), snapshot: resolved);
+  }
+
   static String identity(AiMessage message) =>
       '${message.ts}:${message.isUser}:${message.text}';
 }

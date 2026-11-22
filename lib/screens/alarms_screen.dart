@@ -118,13 +118,15 @@ class _AlarmsScreenState extends State<AlarmsScreen>
   /// (320 мс). Пока это идёт, внешняя `AnimatedSize` секции работает без
   /// задержки — иначе она догоняла уже ужавшуюся строку вторым, более
   /// долгим движением, и удаление выглядело как двойной рывок.
-  bool _timerCollapsing = false;
 
   /// Последний таймер только что удалили. Секция (если эксперимент выключен)
   /// не должна исчезать кадром: даём ей доиграть схлопывание и прощание
   /// плейсхолдера «таймеров пока нет», и лишь потом убираем из дерева.
   bool _timersHiding = false;
   Timer? _timerHideTimer;
+
+  /// Состав и видимость секции таймеров на прошлой сборке: высоту анимируем
+  /// только при их изменении, а не на каждом тике идущего таймера.
 
   /// Раздел стал активным — форсируем ресинк офсета таблетки (keep-alive
   /// вкладка не присылает событий скролла, а общий notifier мог остаться с
@@ -653,27 +655,32 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       header: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ListenableBuilder(
-            listenable: _timerSvc,
-            builder: (context, _) => AnimatedSize(
-              duration: _timerCollapsing
-                  ? Duration.zero
-                  : const Duration(milliseconds: 320),
-              curve: Curves.easeInOutCubic,
-              alignment: Alignment.topCenter,
-              // Место под таблетку и сама секция живут в ОДНОМ AnimatedSize:
-              // иначе при включении/выключении секции зарезервированная
-              // полоса исчезала мгновенно, пока секция ещё дорастала, и
-              // список дёргался на её высоту.
-              child: _timersVisible
-                  ? _buildTimersSection(context, theme, _timerSvc.timers)
-                  : const SizedBox(
-                      height: kSectionPillSlotHeight,
-                      width: double.infinity,
-                    ),
-            ),
+          // Слот под стекло таблетки разделов больше не живёт внутри
+          // секции таймеров: он постоянный, поэтому его высота не «дышит»
+          // при добавлении/удалении таймера и список не дёргается.
+          const SizedBox(
+            height: kSectionPillSlotHeight,
+            width: double.infinity,
           ),
           _buildNextAlarmPill(context, theme, alarms),
+          ListenableBuilder(
+            listenable: _timerSvc,
+            builder: (context, _) {
+              // Длительность всегда одна и та же: AnimatedSize с нулевой
+              // длительностью перезапускает анимацию прямо в performLayout
+              // и падает («mutated in its own performLayout»). Высоту
+              // «дышать» на каждом тике не заставляем — размер секции от
+              // тика не меняется, меняется только текст внутри.
+              return AnimatedSize(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeInOutCubic,
+                alignment: Alignment.topCenter,
+                child: _timersVisible
+                    ? _buildTimersSection(context, theme, _timerSvc.timers)
+                    : const SizedBox(width: double.infinity),
+              );
+            },
+          ),
           if (alarms.isEmpty) _buildAlarmEmpty(context, theme),
         ],
       ),
@@ -949,16 +956,9 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          // Секция непрокручиваемая и стоит в самом верху — резервирует
-          // под таблеткой разделов столько же, сколько резервировал бы
-          // список, будь она выключена. Без этого слота таймеры налезали
-          // на таблетку разделов (её стекло перекрывало заголовок).
-          padding: const EdgeInsets.fromLTRB(
-            16,
-            kSectionPillSlotHeight + 4,
-            16,
-            0,
-          ),
+          // Слот под таблетку разделов резервирует header списка (он стоит
+          // ВЫШЕ статуса и секции), поэтому здесь только обычный отступ.
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
           child: Row(
             children: [
               Text(
@@ -1094,8 +1094,8 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       dismissKey: ValueKey('dismiss_${timer.id}'),
       borderRadius: 16,
       // Строка ужимается сама, как у будильников (320 мс), а не исчезает
-      // кадром. Внешний AnimatedSize секции в это время стоит без задержки
-      // (`_timerCollapsing`), поэтому рывок один, а не два.
+      // кадром; высоту секции ведёт внешний AnimatedSize с той же
+      // длительностью, поэтому рывок один, а не два.
       resizeDuration: const Duration(milliseconds: 320),
       // Фон удаления = границы карточки (у неё горизонтальный margin 12).
       inset: const EdgeInsets.symmetric(horizontal: 12),
@@ -1108,13 +1108,11 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           confirmLabel: Translations.deleteOf(context),
           destructive: true,
         );
-        if (ok == true && mounted) setState(() => _timerCollapsing = true);
         return ok;
       },
       onDismissed: (_) {
         final wasLast = _timerSvc.timers.length <= 1;
         setState(() {
-          _timerCollapsing = false;
           if (wasLast && !SettingsService.experimentalEnabled.value) {
             _timersHiding = true;
           }

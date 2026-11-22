@@ -625,16 +625,28 @@ class JsonFile {
     return 'value:${_canonical(item)}';
   }
 
-  static Map<String, dynamic> _index(String key, List<dynamic> items) {
-    final indexed = <String, dynamic>{};
+  /// Ключи списка с учётом повторов: у двух одинаковых сообщений без
+  /// метки времени (или двух одинаковых «value») ключ один и тот же, и
+  /// раньше слияние падало с конфликтом — из-за этого общий чат Ады
+  /// терял историю при записи из второго движка. Повтор получает
+  /// суффикс `#2`, `#3`, … в порядке появления.
+  static List<String> _identities(List<dynamic> items) {
+    final counts = <String, int>{};
+    final ids = <String>[];
     for (final item in items) {
       final id = _identity(item);
-      if (indexed.containsKey(id)) {
-        throw JsonFileConflictException(
-          'Duplicate entries cannot be merged safely for "$key"',
-        );
-      }
-      indexed[id] = item;
+      final n = (counts[id] ?? 0) + 1;
+      counts[id] = n;
+      ids.add(n == 1 ? id : '$id#$n');
+    }
+    return ids;
+  }
+
+  static Map<String, dynamic> _index(List<dynamic> items) {
+    final ids = _identities(items);
+    final indexed = <String, dynamic>{};
+    for (var i = 0; i < items.length; i++) {
+      indexed[ids[i]] = items[i];
     }
     return indexed;
   }
@@ -645,12 +657,12 @@ class JsonFile {
     List<dynamic> local,
     List<dynamic> remote,
   ) {
-    final b = _index(key, base);
-    final l = _index(key, local);
-    final r = _index(key, remote);
-    final bo = base.map(_identity).toList();
-    final lo = local.map(_identity).toList();
-    final ro = remote.map(_identity).toList();
+    final b = _index(base);
+    final l = _index(local);
+    final r = _index(remote);
+    final bo = _identities(base);
+    final lo = _identities(local);
+    final ro = _identities(remote);
     final shared = bo
         .where((id) => l.containsKey(id) && r.containsKey(id))
         .toList();

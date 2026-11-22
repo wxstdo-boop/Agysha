@@ -206,21 +206,32 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
 
   Future<void> _saveHistory() async {
     try {
-      var toSave = _messages;
-      if (toSave.length > 1000) {
-        toSave = toSave.sublist(toSave.length - 1000);
-      }
-      final value = jsonEncode(toSave.map((m) => m.toJson()).toList());
-      final resolved = await JsonFile.writeWithSnapshot(
-        _historyKey,
-        value,
-        _historySnapshot,
-      );
-      if (resolved == value) _historySnapshot = resolved;
+      final saved = await AiChatStore.persist(_messages, _historySnapshot);
+      _historySnapshot = saved.snapshot;
       _storageErrorShown = false;
+      _adoptSavedHistory(saved.messages);
     } catch (error, stackTrace) {
       _reportStorageFailure(error, stackTrace);
     }
+  }
+
+  /// Принять слияние с диском: мини-окно и полный чат пишут одну историю,
+  /// и непринятое слияние стиралось следующей записью (сообщения
+  /// пропадали после перезахода).
+  void _adoptSavedHistory(List<AiMessage> saved) {
+    if (saved.isEmpty || !mounted) return;
+    final known = {for (final m in _messages) AiChatStore.identity(m)};
+    if (saved.every((m) => known.contains(AiChatStore.identity(m)))) return;
+    final clearedAt = AiGuideService.chatClearedAt();
+    final visible = saved
+        .where((m) => AiGuideService.visibleInChat(m, clearedAt))
+        .toList();
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(AiChatStore.adopt(_messages, visible));
+      _openedCount = _messages.length;
+    });
   }
 
   void _scrollToBottom({bool animate = true, bool force = false}) {
