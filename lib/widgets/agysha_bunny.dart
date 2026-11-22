@@ -99,7 +99,10 @@ class _AnimatedBunnyState extends State<AnimatedBunny>
   void initState() {
     super.initState();
     _idle = ambientRepeat(
-      AnimationController(vsync: this, duration: widget.period),
+      AnimationController(
+        vsync: MotionPrefs.ambient(this),
+        duration: widget.period,
+      ),
     );
   }
 

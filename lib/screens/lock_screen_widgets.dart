@@ -1591,7 +1591,7 @@ class _PinMedallionState extends State<_PinMedallion>
     super.initState();
     _pulse = ambientRepeat(
       AnimationController(
-        vsync: this,
+        vsync: MotionPrefs.ambient(this),
         duration: const Duration(milliseconds: 7200),
         value: _lastPhase,
       ),

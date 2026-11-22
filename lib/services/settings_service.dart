@@ -16,7 +16,9 @@ class SettingsService {
   static const _keyDevMode = 'setting_dev_mode';
   static const _keyHaptics = 'setting_haptics';
   static const _keySounds = 'setting_sounds';
-  static const _keyReduceMotion = 'setting_reduce_motion';
+  // Ключ намеренно прежний: у кого режим уже был включён, тот останется
+  // в нём после переименования пункта в «Оптимизация».
+  static const _keyOptimize = 'setting_reduce_motion';
   static const _keyDeveloperPrompt = 'developer_prompt';
   static const _keyAutoExport = 'setting_auto_export';
   static const _keyAiGuide = 'setting_ai_guide';
@@ -272,14 +274,14 @@ class SettingsService {
     await _saveSettings(map);
   }
 
-  static Future<bool> loadReduceMotion() async {
+  static Future<bool> loadOptimize() async {
     final map = await _loadSettings();
-    return _bool(map[_keyReduceMotion], false);
+    return _bool(map[_keyOptimize], false);
   }
 
-  static Future<void> saveReduceMotion(bool value) async {
+  static Future<void> saveOptimize(bool value) async {
     final map = await _loadSettings();
-    map[_keyReduceMotion] = value;
+    map[_keyOptimize] = value;
     await _saveSettings(map);
   }
 

@@ -99,18 +99,25 @@ void main() {
     if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
   });
 
-  test('настройки вибрации и «убрать анимации» переживают перезапуск', () async {
+  test('настройки вибрации и «Оптимизация» переживают перезапуск', () async {
     await SettingsService.saveHaptics(false);
-    await SettingsService.saveReduceMotion(true);
+    await SettingsService.saveOptimize(true);
 
     // «Перезапуск»: перечитываем то, что записано на диск.
     expect(await SettingsService.loadHaptics(), isFalse);
-    expect(await SettingsService.loadReduceMotion(), isTrue);
+    expect(await SettingsService.loadOptimize(), isTrue);
   });
 
-  test('по умолчанию вибрация включена, анимации не убраны', () async {
+  test('по умолчанию вибрация включена, «Оптимизация» выключена', () async {
     expect(await SettingsService.loadHaptics(), isTrue);
-    expect(await SettingsService.loadReduceMotion(), isFalse);
+    expect(await SettingsService.loadOptimize(), isFalse);
+  });
+
+  test('«Оптимизация» читает старый ключ setting_reduce_motion', () async {
+    // У кого режим был включён до переименования, остаётся в нём: значение
+    // хранится под прежним ключом.
+    await JsonFile.write('app_settings', '{"setting_reduce_motion": true}');
+    expect(await SettingsService.loadOptimize(), isTrue);
   });
 
   test('выключенная вибрация гасит отклик, включённая — бьёт', () async {
@@ -123,11 +130,14 @@ void main() {
     expect(hapticCalls, ['select']);
   });
 
-  test('настройка звуков переживает перезапуск, по умолчанию выключена', () async {
-    expect(await SettingsService.loadSounds(), isFalse);
-    await SettingsService.saveSounds(true);
-    expect(await SettingsService.loadSounds(), isTrue);
-  });
+  test(
+    'настройка звуков переживает перезапуск, по умолчанию выключена',
+    () async {
+      expect(await SettingsService.loadSounds(), isFalse);
+      await SettingsService.saveSounds(true);
+      expect(await SettingsService.loadSounds(), isTrue);
+    },
+  );
 
   test('выключенные звуки молчат, включённые — играют', () async {
     Sounds.enabled = false;

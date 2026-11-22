@@ -254,9 +254,11 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
               ),
             ),
             const Divider(height: 1),
-            // «Убрать анимации»: гасит декоративные петли (блики, стая
-            // птиц, дыхание свечения) и переходы. Системный запрос
-            // «убрать анимации» действует независимо и всегда сильнее.
+            // «Оптимизация»: анимации остаются как есть, но приложение
+            // тратит меньше кадрового бюджета — декоративные петли тикают
+            // реже, карточки не наклоняются в 3D, кеш картинок меньше
+            // (см. PerfPrefs). Системное «убрать анимации» действует
+            // независимо и по-прежнему сильнее.
             PressScale(
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -264,7 +266,7 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 leading: Icon(
-                  Icons.motion_photos_off_outlined,
+                  Icons.speed_rounded,
                   color: theme.colorScheme.primary,
                 ),
                 title: Text(Translations.t('reduceMotion', context)),
@@ -275,12 +277,12 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                   ),
                 ),
                 onTap: () async {
-                  final v = !_reduceMotion;
-                  await _setReduceMotion(v);
+                  final v = !_optimize;
+                  await _setOptimize(v);
                 },
                 trailing: VolumetricSwitch(
-                  value: _reduceMotion,
-                  onChanged: _setReduceMotion,
+                  value: _optimize,
+                  onChanged: _setOptimize,
                   activeColor: theme.colorScheme.primary,
                   semanticLabel: Translations.t('reduceMotion', context),
                 ),

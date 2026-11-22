@@ -657,8 +657,9 @@ const Map<String, String> _en = {
   'hapticsDesc': 'Short vibration on taps and switches',
   'sounds': 'Sounds',
   'soundsDesc': 'Soft system click on confirmations',
-  'reduceMotion': 'Reduce motion',
-  'reduceMotionDesc': 'Turn off decorative animations and effects',
+  'reduceMotion': 'Optimization',
+  'reduceMotionDesc':
+      'Lighter graphics: animations stay, the app runs smoother',
   'devMode': 'Developer mode',
   'devModePrompt': 'Enter the access code to continue',
   'devModeInvalidCode': 'That code did not match. Try again.',

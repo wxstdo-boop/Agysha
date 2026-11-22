@@ -45,7 +45,7 @@ class _MutilatedSplatterState extends State<MutilatedSplatter>
     _cache.spots = _spots;
     _ctrl = ambientRepeat(
       AnimationController(
-        vsync: this,
+        vsync: MotionPrefs.ambient(this),
         duration: const Duration(seconds: 12),
       )..addListener(_syncPhase),
     );

@@ -40,7 +40,9 @@ final ValueNotifier<bool> lockBackgroundFrozen = ValueNotifier<bool>(false);
 /// делает тяжёлой работы. Раньше снимок делался прямо в тапе — синхронный
 /// `toImageSync` строил сцену и копировал кадр на UI-потоке в момент нажатия,
 /// из-за чего открытие окна дёргалось, а вся прога проседала.
-final ValueNotifier<ui.Image?> lockExitBackdrop = ValueNotifier<ui.Image?>(null);
+final ValueNotifier<ui.Image?> lockExitBackdrop = ValueNotifier<ui.Image?>(
+  null,
+);
 
 class LockScreen extends StatefulWidget {
   final bool isSetting;
@@ -104,7 +106,7 @@ class _LockScreenState extends State<LockScreen>
     );
     _glassLoop = ambientRepeat(
       AnimationController(
-        vsync: this,
+        vsync: MotionPrefs.ambient(this),
         duration: const Duration(milliseconds: 3600),
       ),
     );
@@ -258,227 +260,229 @@ class _LockScreenState extends State<LockScreen>
         // размывает его один раз (см. [lockBackgroundKey]).
         key: lockBackgroundKey,
         child: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? [
-                    cs.surface,
-                    cs.surfaceContainerLow,
-                    Color.lerp(cs.surface, cs.primaryContainer, 0.28)!,
-                  ]
-                : [
-                    cs.surfaceContainerLowest,
-                    cs.surface,
-                    Color.lerp(cs.surface, cs.primaryContainer, 0.35)!,
-                  ],
+          width: double.infinity,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isDark
+                  ? [
+                      cs.surface,
+                      cs.surfaceContainerLow,
+                      Color.lerp(cs.surface, cs.primaryContainer, 0.28)!,
+                    ]
+                  : [
+                      cs.surfaceContainerLowest,
+                      cs.surface,
+                      Color.lerp(cs.surface, cs.primaryContainer, 0.35)!,
+                    ],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(32),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  // Стекло окна KID ПРозрачнее, чем было: раньше плотный
-                  // слой surface (0.5/0.7) на пол-экрана глушил фирменный
-                  // градиент темы — «пропал красивый фон». Теперь градиент
-                  // читается сквозь стекло, а читается контент потому, что
-                  // сам фон темы — спокойный, без контрастных узоров.
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDark
-                        ? [
-                            cs.surfaceContainerLow.withValues(alpha: 0.34),
-                            Color.lerp(
-                              cs.surface,
-                              cs.primaryContainer,
-                              0.18,
-                            )!.withValues(alpha: 0.20),
-                          ]
-                        : [
-                            cs.surface.withValues(alpha: 0.42),
-                            Color.lerp(
-                              cs.surface,
-                              cs.primaryContainer,
-                              0.26,
-                            )!.withValues(alpha: 0.26),
-                          ],
-                  ),
-                  borderRadius: BorderRadius.circular(32),
-                  border: Border.all(
-                    color: isDark
-                        ? cs.outlineVariant.withValues(alpha: 0.35)
-                        : Colors.white.withValues(alpha: 0.8),
-                    width: 1,
-                  ),
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Бока окна KID: узкие полосы дымки по краям стекла.
-                    ..._kidFrostedEdges(cs, isDark),
-                    Column(
-                      children: [
-                        // ID-капсула: логотип + название/версия слева,
-                        // кнопка «Выйти» как продолжение капсулы справа.
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                          child: _IdBadgeCapsule(
-                            theme: theme,
-                            onExit: _openExitDialog,
-                            exitEnabled: !_resolving && !_initializing,
-                          ),
-                        ),
-                        const Spacer(flex: 2),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          transitionBuilder: (child, animation) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: SlideTransition(
-                                position: Tween<Offset>(
-                                  begin: const Offset(0, 0.3),
-                                  end: Offset.zero,
-                                ).animate(animation),
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: Column(
-                            key: ValueKey(_phaseKey),
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const _PinMedallion(size: 104),
-                              const SizedBox(height: 18),
-                              _PinPrompt(
-                                text: widget.isSetting
-                                    ? (_confirmPin == null
-                                          ? Translations.t('setPin', context)
-                                          : Translations.t(
-                                              'confirmPin',
-                                              context,
-                                            ))
-                                    : Translations.t('enterPin', context),
-                                style: theme.textTheme.titleLarge,
-                              ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    // Стекло окна KID ПРозрачнее, чем было: раньше плотный
+                    // слой surface (0.5/0.7) на пол-экрана глушил фирменный
+                    // градиент темы — «пропал красивый фон». Теперь градиент
+                    // читается сквозь стекло, а читается контент потому, что
+                    // сам фон темы — спокойный, без контрастных узоров.
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isDark
+                          ? [
+                              cs.surfaceContainerLow.withValues(alpha: 0.34),
+                              Color.lerp(
+                                cs.surface,
+                                cs.primaryContainer,
+                                0.18,
+                              )!.withValues(alpha: 0.20),
+                            ]
+                          : [
+                              cs.surface.withValues(alpha: 0.42),
+                              Color.lerp(
+                                cs.surface,
+                                cs.primaryContainer,
+                                0.26,
+                              )!.withValues(alpha: 0.26),
                             ],
+                    ),
+                    borderRadius: BorderRadius.circular(32),
+                    border: Border.all(
+                      color: isDark
+                          ? cs.outlineVariant.withValues(alpha: 0.35)
+                          : Colors.white.withValues(alpha: 0.8),
+                      width: 1,
+                    ),
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Бока окна KID: узкие полосы дымки по краям стекла.
+                      ..._kidFrostedEdges(cs, isDark),
+                      Column(
+                        children: [
+                          // ID-капсула: логотип + название/версия слева,
+                          // кнопка «Выйти» как продолжение капсулы справа.
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                            child: _IdBadgeCapsule(
+                              theme: theme,
+                              onExit: _openExitDialog,
+                              exitEnabled: !_resolving && !_initializing,
+                            ),
                           ),
-                        ),
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
-                          alignment: Alignment.topCenter,
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 240),
+                          const Spacer(flex: 2),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
                             switchInCurve: Curves.easeOutCubic,
                             switchOutCurve: Curves.easeInCubic,
-                            transitionBuilder: (child, animation) =>
-                                FadeTransition(
-                                  opacity: animation,
+                            transitionBuilder: (child, animation) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.3),
+                                    end: Offset.zero,
+                                  ).animate(animation),
                                   child: child,
                                 ),
-                            child: _error == null
-                                ? const SizedBox(
-                                    key: ValueKey('noerror'),
-                                    height: 20,
-                                  )
-                                : Padding(
-                                    key: const ValueKey('error'),
-                                    padding: const EdgeInsets.only(top: 10),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 7,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.error
-                                            .withValues(alpha: 0.10),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: theme.colorScheme.error
-                                              .withValues(alpha: 0.35),
-                                          width: 1,
+                              );
+                            },
+                            child: Column(
+                              key: ValueKey(_phaseKey),
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const _PinMedallion(size: 104),
+                                const SizedBox(height: 18),
+                                _PinPrompt(
+                                  text: widget.isSetting
+                                      ? (_confirmPin == null
+                                            ? Translations.t('setPin', context)
+                                            : Translations.t(
+                                                'confirmPin',
+                                                context,
+                                              ))
+                                      : Translations.t('enterPin', context),
+                                  style: theme.textTheme.titleLarge,
+                                ),
+                              ],
+                            ),
+                          ),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            alignment: Alignment.topCenter,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 240),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  ),
+                              child: _error == null
+                                  ? const SizedBox(
+                                      key: ValueKey('noerror'),
+                                      height: 20,
+                                    )
+                                  : Padding(
+                                      key: const ValueKey('error'),
+                                      padding: const EdgeInsets.only(top: 10),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 7,
                                         ),
-                                      ),
-                                      child: Text(
-                                        _error == 'Wrong PIN'
-                                            ? Translations.t(
-                                                'wrongPin',
-                                                context,
-                                              )
-                                            : _error == 'PINs do not match'
-                                            ? Translations.t(
-                                                'pinsDoNotMatch',
-                                                context,
-                                              )
-                                            : _error!,
-                                        style: TextStyle(
-                                          color: theme.colorScheme.error,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13,
-                                          letterSpacing: 0.2,
+                                        decoration: BoxDecoration(
+                                          color: theme.colorScheme.error
+                                              .withValues(alpha: 0.10),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          border: Border.all(
+                                            color: theme.colorScheme.error
+                                                .withValues(alpha: 0.35),
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _error == 'Wrong PIN'
+                                              ? Translations.t(
+                                                  'wrongPin',
+                                                  context,
+                                                )
+                                              : _error == 'PINs do not match'
+                                              ? Translations.t(
+                                                  'pinsDoNotMatch',
+                                                  context,
+                                                )
+                                              : _error!,
+                                          style: TextStyle(
+                                            color: theme.colorScheme.error,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                            letterSpacing: 0.2,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                        AnimatedBuilder(
-                          animation: _shakeCtrl,
-                          builder: (context, child) {
-                            final t = _shakeCtrl.value;
-                            final dx = t > 0.0
-                                ? (t < 0.92
-                                      ? math.sin(t * math.pi * 4) *
-                                            9 *
-                                            (1 - t) *
-                                            (1 - t)
-                                      : 0.0)
-                                : 0.0;
-                            return Transform.translate(
-                              offset: Offset(dx, 0),
-                              child: child,
-                            );
-                          },
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(_pinLength, (i) {
-                              final filled = i < _pin.length;
-                              final c = theme.colorScheme;
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                child: _PinSlot(
-                                  shape: i % 4,
-                                  filled: filled,
-                                  color: c.primary,
-                                  ghost: c.outlineVariant,
-                                ),
+                          const SizedBox(height: 20),
+                          AnimatedBuilder(
+                            animation: _shakeCtrl,
+                            builder: (context, child) {
+                              final t = _shakeCtrl.value;
+                              final dx = t > 0.0
+                                  ? (t < 0.92
+                                        ? math.sin(t * math.pi * 4) *
+                                              9 *
+                                              (1 - t) *
+                                              (1 - t)
+                                        : 0.0)
+                                  : 0.0;
+                              return Transform.translate(
+                                offset: Offset(dx, 0),
+                                child: child,
                               );
-                            }),
+                            },
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(_pinLength, (i) {
+                                final filled = i < _pin.length;
+                                final c = theme.colorScheme;
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: _PinSlot(
+                                    shape: i % 4,
+                                    filled: filled,
+                                    color: c.primary,
+                                    ghost: c.outlineVariant,
+                                  ),
+                                );
+                              }),
+                            ),
                           ),
-                        ),
-                        const Spacer(flex: 2),
-                        ..._buildNumpad(theme),
-                        const Spacer(),
-                      ],
-                    ),
-                  ],
+                          const Spacer(flex: 2),
+                          ..._buildNumpad(theme),
+                          const Spacer(),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
         ),
       ),
     );
