@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 
 import '../models/app_timer.dart';
+import 'haptics.dart';
 import 'json_file.dart';
 
 class TimerService extends ChangeNotifier {
@@ -234,6 +237,7 @@ class TimerService extends ChangeNotifier {
       for (final id in completed) {
         _running[id] = false;
         _endsAt.remove(id);
+        _vibrateOnDone(id);
         onTimerDone?.call(id);
       }
       _tickCount++;
@@ -243,6 +247,16 @@ class TimerService extends ChangeNotifier {
       _checkTicker();
       notifyListeners();
     });
+  }
+
+  /// Вибрация конца таймера — здесь, а не в экране будильников: экран мог
+  /// быть закрыт (или свёрнут другой раздел), и тогда событие проходило
+  /// молча. Тумблер вибрации у самого таймера решает, бить или нет.
+  void _vibrateOnDone(String id) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    final idx = _timers.indexWhere((t) => t.id == id);
+    if (idx == -1 || !_timers[idx].vibrate) return;
+    Haptics.alert();
   }
 
   void _checkTicker() {

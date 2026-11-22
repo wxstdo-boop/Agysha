@@ -73,6 +73,15 @@ final JankRouteObserver _jankObserver = JankRouteObserver();
 Timer? _autoSaveTimer;
 bool _autoSaveFailureActive = false;
 
+/// Короткая пауза перед записью после правки. Одна запись на серию правок
+/// (перетасовал пять задач — пишем один раз), но не десять секунд, как у
+/// периодического тика: если приложение свернут или убьют сразу после
+/// правки, данные уже на диске.
+Timer? _autoSaveDebounce;
+bool _autoSaveSaving = false;
+bool _autoSaveDirty = false;
+List<ChangeNotifier> _autoSaveSources = const [];
+
 /// Включено ли автосохранение прямо сейчас. Нужен, чтобы тик, который уже
 /// шёл в момент выключения, не завёл таймер заново, и чтобы уход в фон
 /// мог сохранить данные.
@@ -162,12 +171,54 @@ Future<String?> _readAlarmBootPayload() async {
 /// Маппинг prefs-ключей на короткие имена, чтобы при экспорте обратно
 /// в payload ключи совпадали с именами, которыми пользуется импорт
 /// в settings_screen.
+/// Все локальные хранилища, которые автосохранение обязано записывать.
+/// Подписка на их изменения — вторая половина автосохранения: десятисекундный
+/// тик не успевал, если человек правил данные и сразу закрывал приложение.
+List<ChangeNotifier> _localStores() => <ChangeNotifier>[
+  HabitService(),
+  TaskService(),
+  AlarmService(),
+  RealityCheckService(),
+  // Таймер — исключение: он тикает и зовёт слушателей каждую секунду, а
+  // свой runtime-снапшот уже пишет сам раз в 10 секунд. Подписка на него
+  // означала бы запись ВСЕХ файлов ежесекундно; для таймеров хватает
+  // десятисекундного тика автосохранения.
+  NutritionService(),
+  ProfileService(),
+];
+
 void startAutoSave() {
   _autoSaveOn = true;
   SettingsService.autoSaveEnabled.value = true;
   _autoSaveTimer?.cancel();
   _autoSaveTimer = null;
+  _listenLocalStores(true);
   _autoSaveTick();
+}
+
+void _listenLocalStores(bool attach) {
+  for (final store in _autoSaveSources) {
+    store.removeListener(_onLocalStoreChanged);
+  }
+  _autoSaveSources = attach ? _localStores() : const [];
+  if (attach) {
+    for (final store in _autoSaveSources) {
+      store.addListener(_onLocalStoreChanged);
+    }
+  }
+}
+
+void _onLocalStoreChanged() {
+  if (!_autoSaveOn) return;
+  if (_autoSaveSaving) {
+    // Правка пришла, пока шла запись: её данные в этот проход не попали.
+    _autoSaveDirty = true;
+    return;
+  }
+  _autoSaveDebounce?.cancel();
+  _autoSaveDebounce = Timer(const Duration(milliseconds: 900), () {
+    if (_autoSaveOn) _saveAllData();
+  });
 }
 
 /// Немедленная запись всех данных: включение автосохранения, уход в фон,
@@ -176,6 +227,8 @@ Future<void> flushAutoSaveNow() => _saveAllData();
 
 /// Пишет все локальные данные на диск один раз, без запуска таймера.
 Future<void> _saveAllData() async {
+  if (_autoSaveSaving) return;
+  _autoSaveSaving = true;
   try {
     // Параллельно — не блокируем UI последовательной записью 5 файлов
     await Future.wait([
@@ -193,6 +246,12 @@ Future<void> _saveAllData() async {
     if (!_autoSaveFailureActive) {
       _autoSaveFailureActive = true;
       _reportPersistenceFailure(error, stackTrace);
+    }
+  } finally {
+    _autoSaveSaving = false;
+    if (_autoSaveDirty && _autoSaveOn) {
+      _autoSaveDirty = false;
+      _onLocalStoreChanged();
     }
   }
 }
@@ -239,6 +298,10 @@ void stopAutoSave() {
   SettingsService.autoSaveEnabled.value = false;
   _autoSaveTimer?.cancel();
   _autoSaveTimer = null;
+  _autoSaveDebounce?.cancel();
+  _autoSaveDebounce = null;
+  _autoSaveDirty = false;
+  _listenLocalStores(false);
 }
 
 /// Показывает итог самообновления, когда он приходит.

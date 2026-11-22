@@ -110,6 +110,23 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// отклика во время кручения — тему она не трогает.
   int _hapticIndex = 0;
 
+  /// Сторона барабана в пикселях (приходит из LayoutBuilder): нужна, чтобы
+  /// считать положение пальца относительно центра круга.
+  double _side = 240;
+
+  /// Палец, который сейчас крутит барабан. Второй палец игнорируем, иначе
+  /// два касания выдают по очереди противоположные углы и барабан дёргается.
+  int? _pointerId;
+  Offset _lastLocal = Offset.zero;
+  Offset _downLocal = Offset.zero;
+  double _lastAngle = 0;
+
+  /// Жест оказался прокруткой страницы, а не вращением барабана. Вертикальные
+  /// драги мы НЕ перехватываем (иначе список настроек не листался бы с
+  /// барабана), поэтому распознаём прокрутку сами и просто не крутим колесо.
+  bool _scrollGesture = false;
+  double _lastRadius = 0;
+
   int get _n => widget.entries.length;
 
   int _norm(int i) => i % _n < 0 ? i % _n + _n : i % _n;
@@ -216,7 +233,15 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     });
   }
 
-  void _onDragStart(DragStartDetails details) {
+  void _onPointerDown(PointerDownEvent event) {
+    if (_pointerId != null) return;
+    _pointerId = event.pointer;
+    _scrollGesture = false;
+    _lastLocal = event.localPosition;
+    _downLocal = event.localPosition;
+    final v = event.localPosition - Offset(_side / 2, _side / 2);
+    _lastRadius = v.distance;
+    _lastAngle = math.atan2(v.dy, v.dx);
     _dragging = true;
     _dragStartPos = _pos;
     _hapticIndex = _index;
@@ -224,28 +249,57 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _spinToken++;
   }
 
-  void _onDragUpdate(DragUpdateDetails details) {
-    final delta = details.primaryDelta ?? 0;
+  /// Крутим барабан ПО КРУГУ, а не по горизонтали.
+  ///
+  /// Раньше поворот считался из горизонтального смещения пальца: пока палец
+  /// обводил круг, горизонтальная составляющая меняла знак на каждой
+  /// половине оборота, и барабан «сам» уезжал в обратную сторону. Теперь
+  /// берём угол пальца относительно центра: барабан идёт строго за пальцем,
+  /// в какую бы сторону его ни вели.
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_pointerId != event.pointer || _scrollGesture) return;
+    final local = event.localPosition;
+    final total = local - _downLocal;
+    if (total.distance > 12 && total.dy.abs() > total.dx.abs() * 1.2) {
+      // Палец пошёл вверх/вниз — это листание настроек. Барабан отпускаем
+      // без довода и остаёмся на прежней каморе.
+      _scrollGesture = true;
+      _dragging = false;
+      setState(() => _pos = _dragStartPos);
+      return;
+    }
+    final v = local - Offset(_side / 2, _side / 2);
+    final radius = v.distance;
+    final stepAngle = 2 * math.pi / _n;
+    double delta;
+    // У самого центра угол скачет от любого дрожания — там считаем обычное
+    // смещение по горизонтали (жест «через центр» тоже должен работать).
+    if (radius > _side * 0.22 && _lastRadius > _side * 0.22) {
+      final angle = math.atan2(v.dy, v.dx);
+      var d = angle - _lastAngle;
+      while (d > math.pi) {
+        d -= 2 * math.pi;
+      }
+      while (d < -math.pi) {
+        d += 2 * math.pi;
+      }
+      // Больше ~40° за кадр — это не поворот пальцем, а скачок через центр.
+      delta = d.abs() < 0.7 ? d / stepAngle : 0;
+    } else {
+      delta = (local.dx - _lastLocal.dx) / _dragStep;
+    }
+    _lastLocal = local;
+    _lastRadius = radius;
+    _lastAngle = math.atan2(v.dy, v.dx);
     if (delta == 0) return;
-    // Строго 1:1 за пальцем, без порогов «против хода». Раньше короткая
-    // дрожь отбрасывалась, а накопленный хват потом применялся одним кадром —
-    // барабан прыгал и крутился не туда, куда вели.
-    setState(() => _pos -= delta / _dragStep);
+    setState(() => _pos -= delta);
     _tickHaptics();
   }
 
-  void _onDragEnd(DragEndDetails details) {
+  void _onPointerUp(PointerEvent event) {
+    if (_pointerId != event.pointer) return;
+    _pointerId = null;
     _dragging = false;
-    // Инерцию не подкручиваем: на отпускании телефон иногда отдаёт скорость
-    // обратного знака, и барабан резко уезжал назад.
-    _settleFromDrag();
-  }
-
-  void _onDragCancel() {
-    _dragging = false;
-    // Жест перехватил вертикальный скролл. Возврат «в начало жеста» читался
-    // как «барабан встал и крутится в обратную сторону», поэтому и отмена
-    // довершает шаг туда, куда его увели.
     _settleFromDrag();
   }
 
@@ -293,6 +347,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     return LayoutBuilder(
       builder: (context, constraints) {
         final side = constraints.maxWidth.clamp(180.0, 252.0).toDouble();
+        _side = side;
         final hub = side * 0.44;
         // Центрируем барабан явно: при широкой карточке (планшет,
         // горизонтальная раскладка) колонка растягивалась, и круг уезжал
@@ -305,12 +360,12 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
               SizedBox(
                 width: side,
                 height: side,
-                child: GestureDetector(
+                child: Listener(
                   behavior: HitTestBehavior.opaque,
-                  onHorizontalDragStart: _onDragStart,
-                  onHorizontalDragUpdate: _onDragUpdate,
-                  onHorizontalDragEnd: _onDragEnd,
-                  onHorizontalDragCancel: _onDragCancel,
+                  onPointerDown: _onPointerDown,
+                  onPointerMove: _onPointerMove,
+                  onPointerUp: _onPointerUp,
+                  onPointerCancel: _onPointerUp,
                   child: Stack(
                     alignment: Alignment.center,
                     children: <Widget>[

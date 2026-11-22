@@ -191,9 +191,21 @@ class MainActivity : AudioServiceActivity() {
                             @Suppress("DEPRECATION")
                             getSystemService(VIBRATOR_SERVICE) as Vibrator
                         }
-                        val pattern = longArrayOf(0, 450, 180, 450)
+                        val pattern = longArrayOf(0, 450, 180, 450, 180, 450)
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            vib.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                            val effect = VibrationEffect.createWaveform(pattern, -1)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                // USAGE_ALARM — единственная категория, которую
+                                // HyperOS не гасит в «силе вибрации»: без явного
+                                // назначения сигнал уходил в UNKNOWN, а он у
+                                // пользователя выключен, и таймер молчал.
+                                val attrs = android.os.VibrationAttributes.Builder()
+                                    .setUsage(android.os.VibrationAttributes.USAGE_ALARM)
+                                    .build()
+                                vib.vibrate(effect, attrs)
+                            } else {
+                                vib.vibrate(effect)
+                            }
                         } else {
                             @Suppress("DEPRECATION")
                             vib.vibrate(pattern, -1)
