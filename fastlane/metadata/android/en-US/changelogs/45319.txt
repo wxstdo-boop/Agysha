@@ -1,0 +1,1 @@
+- fix: even strikethrough, slower pin tilt, calmer chat scroll and clear marker
