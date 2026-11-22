@@ -54,13 +54,14 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
   });
 
-  test('зачёркивание толще и идёт змейкой, а не прямой', () {
+  test('зачёркивание идёт змейкой с постоянной толщиной', () {
     final src = read('lib/widgets/animated_strike_text.dart');
-    expect(RegExp(r'fontSize \* 0\.20').hasMatch(src), isTrue);
-    expect(RegExp(r'math\.max\(2\.8,').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 0\.15').hasMatch(src), isTrue);
-    expect(RegExp(r'fontSize \* 1\.6').hasMatch(src), isTrue);
-    // Ровно одна гармоника: вторая давала «пупырки».
+    expect(RegExp(r'fontSize \* 0\.16').hasMatch(src), isTrue);
+    expect(RegExp(r'math\.max\(2\.6,').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 0\.055').hasMatch(src), isTrue);
+    expect(RegExp(r'fontSize \* 2\.8').hasMatch(src), isTrue);
+    // Кубические сегменты дают ровную волну без «пупырок».
+    expect(RegExp(r'path\.cubicTo\(').hasMatch(src), isTrue);
     expect(RegExp(r'amp \* 0\.28').hasMatch(src), isFalse);
   });
 

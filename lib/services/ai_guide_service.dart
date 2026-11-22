@@ -448,6 +448,32 @@ class AiGuideService {
       if (!invisible.contains(c) && !(c <= 0x20)) break;
       s = s.substring(1);
     }
+    // Служебные XML-блоки рассуждений некоторых бесплатных моделей
+    // («», «<reasoning>…</reasoning>») — вместе с телом.
+    // Раньше слово «think» попадало прямо в мини-окошко.
+    s = s.replaceAll(
+      RegExp(
+        r'<(think|thinking|reasoning|analysis|scratchpad)>[\s\S]*?</\1>',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    s = s.replaceAll(
+      RegExp(
+        r'</?(?:think|thinking|reasoning|analysis|scratchpad)>',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    // Строки-рассуждения без разметки: «Thinking: …», «Reasoning process: …».
+    s = s.replaceAll(
+      RegExp(
+        r'^\s*(?:thinking|reasoning|thought process|chain of thought)\b[^\n]*$',
+        multiLine: true,
+        caseSensitive: false,
+      ),
+      '',
+    );
     // Мелкие модели «рассуждают вслух» на английском: секции
     // «### Thinking/Reasoning/Thought…» режем вместе с содержимым
     // (до следующей секции или конца ответа).
@@ -1357,18 +1383,42 @@ class AiGuideService {
   /// ответ навсегда. Пишем в общий файл истории (со слиянием снимков, чтобы
   /// не затереть сообщения из второго движка) и толкаем тик — открытый
   /// мини-чат/полный чат перечитает ленту.
+  /// Момент последней очистки чата. Всё, что старше, не возвращается в
+  /// ленту: ни из файла, ни из фонового ответа, ни из второго движка.
+  static const chatClearedAtKey = 'ai_chat_cleared_at';
+
+  static int chatClearedAt() {
+    try {
+      return globalPrefs.getInt(chatClearedAtKey) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<void> markChatCleared() async {
+    try {
+      await globalPrefs.setInt(
+        chatClearedAtKey,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {}
+  }
+
   static Future<void> appendBackgroundAnswer(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
     try {
       final raw = await JsonFile.read(_chatHistoryKey);
+      final clearedAt = chatClearedAt();
       final list = <AiMessage>[];
       if (raw != null && raw.isNotEmpty) {
         final decoded = jsonDecode(raw);
         if (decoded is List) {
           for (final item in decoded) {
             if (item is Map<String, dynamic>) {
-              list.add(AiMessage.fromJson(item));
+              final message = AiMessage.fromJson(item);
+              // Не воскрешаем чат, стёртый уже после этого ответа.
+              if ((message.ts ?? 0) > clearedAt) list.add(message);
             }
           }
         }

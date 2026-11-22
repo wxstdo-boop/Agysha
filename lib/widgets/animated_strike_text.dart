@@ -264,11 +264,12 @@ class _StrikePainter extends CustomPainter {
 
     final linePaint = Paint()
       ..color = strikeColor
-      // «Перьевая» линия: 0.20 кегля с порогом 2.8. На 20px это 4 px —
-      // перечёркнутая привычка читается сразу, и толстая линия держит
-      // «рукописную» волну без визуального «волоса».
-      ..strokeWidth = math.max(2.8, fontSize * 0.20)
-      ..strokeCap = StrokeCap.round;
+      // Одна ровная толщина на всей линии: волна рисуется постоянным
+      // пером, поэтому не «толстеет» на подъёмах и не кажется тонкой на
+      // спусках. 0.16 кегля с порогом 2.6 — спокойная, но читаемая линия.
+      ..strokeWidth = math.max(2.6, fontSize * 0.16)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
     // «Перо» на растущем конце рисует со blur-маской, а это каждый вызов —
     // отдельный saveLayer. Краска создаётся один раз на кадр, а не на строку.
     final Paint? dotPaint;
@@ -293,39 +294,43 @@ class _StrikePainter extends CustomPainter {
       // 0.38 от верха (ascent), ближе к визуальной середине букв
       // (раньше 0.42/0.45 уходили к верху строки).
       final y = m.baseline - m.ascent * 0.38;
-      // ЗМЕЙКА, а не «пупырки»: ОДНА длинная синусоида и никакой второй
-      // гармоники. Период 1.7 кегля (~34 px на 20px) даёт широкие плавные
-      // изгибы; прежняя мелкая волна 0.62 кегля с добавкой вдвое короче
-      // читалась именно как рябь-«пупырки» на линии.
-      final amp = math.max(1.6, fontSize * 0.15);
-      final period = math.max(18.0, fontSize * 1.6);
-      double waveAt(double x) => math.sin(x / period * 2 * math.pi) * amp;
+      // ЗМЕЙКА, а не «пупырки»: одна длинная синусоида с постоянной
+      // толщиной пера. Амплитуда низкая (0.055 кегля), период длинный —
+      // изгибы читаются ровной волной, а не «то тонко, то жирно».
+      final amp = math.max(0.8, fontSize * 0.055);
+      final period = math.max(26.0, fontSize * 2.8);
+      final phase = 2 * math.pi / period;
+      final slopeAmp = amp * phase;
+      double waveAt(double x) => math.sin(x * phase) * amp;
+      double slopeAt(double x) => math.cos(x * phase) * slopeAmp;
 
-      // Квадратичные сегменты через середины: линия остаётся гладкой при
-      // любом кегле, без «лесенки» из коротких прямых.
+      // Кубические Безье по самой синусоиде: контрольные точки берут её
+      // касательные, поэтому линия не «гуляет» по толщине и не ломается
+      // на стыках сегментов.
       final path = Path()..moveTo(m.left, y + waveAt(0));
-      var prevX = 0.0;
-      var prevY = waveAt(0);
-      const step = 2.0;
-      for (var x = step; x <= lineWidth + step; x += step) {
-        final cx = math.min(x, lineWidth);
-        final cy = waveAt(cx);
-        path.quadraticBezierTo(
-          m.left + cx,
-          y + prevY,
-          m.left + (cx + prevX) / 2,
-          y + (cy + prevY) / 2,
+      const step = 6.0;
+      for (var x = 0.0; x < lineWidth;) {
+        final x1 = math.min(x + step, lineWidth);
+        final y0 = waveAt(x);
+        final y1 = waveAt(x1);
+        // На самом конце касательную не продолжаем за край строки.
+        final k1 = x1 >= lineWidth ? 0.0 : slopeAt(x1);
+        final dx = (x1 - x) / 3;
+        path.cubicTo(
+          m.left + x + dx,
+          y + y0 + slopeAt(x) * dx,
+          m.left + x1 - dx,
+          y + y1 - k1 * dx,
+          m.left + x1,
+          y + y1,
         );
-        prevX = cx;
-        prevY = cy;
-        if (cx >= lineWidth) break;
+        x = x1;
       }
-      path.lineTo(m.left + lineWidth, y + prevY);
       canvas.drawPath(path, linePaint);
       // Мягкое «перо» на растущем конце — линия выглядит живой.
       if (dotPaint != null) {
         canvas.drawCircle(
-          Offset(m.left + lineWidth, y + prevY),
+          Offset(m.left + lineWidth, y + waveAt(lineWidth)),
           m.ascent * 0.055,
           dotPaint,
         );

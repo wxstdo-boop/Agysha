@@ -684,36 +684,64 @@ class _MathChallengeState extends State<_MathChallenge> {
           const SizedBox(height: 24),
           SizedBox(
             width: 200,
-            child: SmoothTyping(
-              controller: _ctrl,
-              style: theme.textTheme.headlineSmall,
-              builder: (style) => TextField(
-                style: style,
-                cursorOpacityAnimates: true,
-                magnifierConfiguration: TextMagnifierConfiguration.disabled,
-                controller: _ctrl,
-                // Ответ набираем с клавиатуры: выделение, копирование и вставка
-                // в полях задач пробуждения запрещены.
-                enableInteractiveSelection: false,
-                contextMenuBuilder: noContextMenuBuilder,
-                keyboardType: TextInputType.number,
-                // Потолок в 10 цифр без счётчика под полем: `maxLength` рисует
-                // Material'овский «n/10», который и наезжал, и портил вид.
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
-                  LengthLimitingTextInputFormatter(10),
-                  WideDashFormatter(),
+            // Подсказка живёт отдельным слоем над полем: Material убирает
+            // hintText кадром, поэтому «Введите ответ» пропадал и
+            // возвращался рывком. AnimatedOpacity гасит и возвращает её
+            // мягко, а само поле при этом не пересобирается.
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _ctrl,
+              builder: (context, value, field) => Stack(
+                alignment: Alignment.center,
+                children: [
+                  IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: value.text.isEmpty ? 1 : 0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOutCubic,
+                      child: Text(
+                        Translations.t('wtAnswerHint', context, '?'),
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.62,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  field!,
                 ],
-                textAlign: TextAlign.center,
-                decoration: InputDecoration(
-                  // Вместо голого «?» — понятный призыв: «Введите ответ».
-                  hintText: Translations.t('wtAnswerHint', context, '?'),
-                  // `errorText` здесь убран: Material вставляет подпись ошибки
-                  // в макет поля, и поле вместе с кнопкой под ним каждый раз
-                  // перескакивало на высоту ошибки.
-                  border: const OutlineInputBorder(),
+              ),
+              child: SmoothTyping(
+                controller: _ctrl,
+                style: theme.textTheme.headlineSmall,
+                builder: (style) => TextField(
+                  style: style,
+                  cursorOpacityAnimates: true,
+                  magnifierConfiguration: TextMagnifierConfiguration.disabled,
+                  controller: _ctrl,
+                  // Ответ набираем с клавиатуры: выделение, копирование и вставка
+                  // в полях задач пробуждения запрещены.
+                  enableInteractiveSelection: false,
+                  contextMenuBuilder: noContextMenuBuilder,
+                  keyboardType: TextInputType.number,
+                  // Потолок в 10 цифр без счётчика под полем: `maxLength` рисует
+                  // Material'овский «n/10», который и наезжал, и портил вид.
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+                    LengthLimitingTextInputFormatter(10),
+                    WideDashFormatter(),
+                  ],
+                  textAlign: TextAlign.center,
+                  decoration: const InputDecoration(
+                    // Своя подсказка рисуется над полем (см. Stack выше).
+                    // `errorText` здесь убран: Material вставляет подпись
+                    // ошибки в макет поля, и поле вместе с кнопкой под ним
+                    // каждый раз перескакивало на высоту ошибки.
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _check(),
                 ),
-                onSubmitted: (_) => _check(),
               ),
             ),
           ),
