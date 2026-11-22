@@ -1213,6 +1213,11 @@ class _AiChatBodyState extends State<_AiChatBody>
     final gen = adaChatGeneration;
     Haptics.light();
     _inputCtrl.clear();
+    // Горячий стрик: первое сообщение нового дня растит счётчик. Строку
+    // вставляем сами тем же кадром, что и сообщение, — без перечитывания
+    // истории из файла и без лишних перестроек ленты.
+    final hotLine = await AiGuideService.bumpAdaStreak();
+    if (!mounted) return;
     setState(() {
       // Лимит чата: 1000 сообщений, дальше — стереть и начать новый диалог.
       if (_messages.length >= 1000) _messages.clear();
@@ -1225,14 +1230,22 @@ class _AiChatBodyState extends State<_AiChatBody>
           ),
         );
       }
-      // Горячий стрик: первое сообщение нового дня растит счётчик, и Ада
-      // подкидывает в чат горячую фразу (не чаще раза в день).
-      unawaited(AiGuideService.bumpAdaStreak());
+      if (hotLine != null) {
+        _messages.add(
+          AiMessage(
+            isUser: false,
+            text: hotLine,
+            ts: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+      }
       _busy = true;
       _error = false;
     });
     _dotsCtrl.repeat();
-    _saveHistory();
+    // Сохраняем ДО сетевого запроса: если окно закроют, фоновый ответ
+    // допишется в уже сохранённую историю и не потеряет сообщение.
+    await _saveHistory();
     _scrollToBottom();
     try {
       final answer = await AiGuideService.send(
@@ -1244,8 +1257,14 @@ class _AiChatBodyState extends State<_AiChatBody>
             ? await ScreenReaderService.snapshot()
             : null,
       );
-      // Чат успели очистить, пока Ада думала — ответ выбрасываем.
-      if (!mounted || gen != adaChatGeneration) return;
+      // Окно закрыли, пока Ада думала: дописываем ответ в историю, чтобы
+      // он ждал при следующем открытии. Чат очистили вручную — ответ
+      // выбрасываем (gen изменился).
+      if (!mounted) {
+        await AiGuideService.appendBackgroundAnswer(answer);
+        return;
+      }
+      if (gen != adaChatGeneration) return;
       // Эстафета «печатает…» → ответ: индикатор плавно гаснет, и только
       // потом ответ всплывает (его собственная анимация входа).
       _dotsCtrl.stop();
@@ -2104,8 +2123,9 @@ class _AiChatBodyState extends State<_AiChatBody>
         // прилипал к углам и «заедал» при наборе.
         Padding(
           // Бока клавиатуры больше не упираются в скруглённые края листа:
-          // 12 px от края окна + запас снизу до нижних углов.
-          padding: const EdgeInsets.only(top: 4, bottom: 10),
+          // 16 px от края окна + собственные 6 px панели + запас снизу до
+          // нижних углов. Крайние клавиши перестали «резаться» о стенку.
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
           child: InlineKeyboard(
             keyHeight: 46,
             onChar: _insertChar,

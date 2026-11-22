@@ -988,6 +988,55 @@ void main() {
       expect(reply, contains('суп'));
     });
 
+    test('фоновый ответ Ады дописывается, не затирая сообщение', () async {
+      final userMsg = jsonEncode(<Map<String, Object?>>[
+        <String, Object?>{'isUser': true, 'text': 'как дела', 'ts': 1},
+      ]);
+      await JsonFile.write('ai_chat_history', userMsg);
+      await AiGuideService.appendBackgroundAnswer('Всё отлично');
+      final raw = await JsonFile.read('ai_chat_history');
+      final list = jsonDecode(raw!) as List<dynamic>;
+      expect(list.length, 2);
+      expect((list.first as Map)['text'], 'как дела');
+      expect((list.last as Map)['text'], 'Всё отлично');
+      expect((list.last as Map)['isUser'], false);
+    });
+
+    test(
+      'парсер: калории без единицы не съедаются, хвост «ккал» не в названии',
+      () async {
+        await JsonFile.write('nutrition_meals', jsonEncode(<Object>[]));
+        await NutritionService().load();
+        final reply = await AiGuideService.send(
+          userText: 'я съел на обед суп 500 ккал',
+          history: const [],
+          languageCode: 'ru',
+        );
+        expect(reply, contains('суп'));
+        expect(reply, contains('500'));
+        final meal = NutritionService().meals.last;
+        expect(meal.name, 'суп');
+        expect(meal.calories, 500);
+      },
+    );
+
+    test(
+      'парсер: «запиши приём пищи творог 200 ккал» → творог, 200 ккал',
+      () async {
+        await JsonFile.write('nutrition_meals', jsonEncode(<Object>[]));
+        await NutritionService().load();
+        final reply = await AiGuideService.send(
+          userText: 'запиши приём пищи творог 200 ккал',
+          history: const [],
+          languageCode: 'ru',
+        );
+        expect(reply, contains('творог'));
+        final meal = NutritionService().meals.last;
+        expect(meal.name, 'творог');
+        expect(meal.calories, 200);
+      },
+    );
+
     test(
       'парсер: команда без названия отвечает по-русски, без облака',
       () async {
@@ -996,7 +1045,8 @@ void main() {
           history: const [],
           languageCode: 'ru',
         );
-        expect(reply, contains('Что записать'));
+        // Подсказка согласована с типом: для задачи — «Как назвать задачу?».
+        expect(reply, contains('задачу'));
         expect(reply, isNot(contains('курорт')));
       },
     );

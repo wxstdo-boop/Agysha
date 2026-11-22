@@ -82,7 +82,8 @@ void main() {
     expect(
       RegExp(r'BrandColors\.red\.withValues').hasMatch(src),
       isTrue,
-      reason: 'кромка должна быть алым бренда, а не градиентом primary→tertiary',
+      reason:
+          'кромка должна быть алым бренда, а не градиентом primary→tertiary',
     );
     expect(
       src.contains('cs.tertiary.withValues(alpha: 0.55)'),
@@ -109,10 +110,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     final stack = tester.widget<Stack>(
-      find.descendant(
-        of: find.byType(MusicPulseRing),
-        matching: find.byType(Stack),
-      ).first,
+      find
+          .descendant(
+            of: find.byType(MusicPulseRing),
+            matching: find.byType(Stack),
+          )
+          .first,
     );
     expect(
       stack.clipBehavior,
@@ -150,8 +153,16 @@ void main() {
     final panel = tester.widget<Container>(find.byType(Container).first);
     final color = (panel.decoration! as BoxDecoration).color!;
     expect(color.a, lessThan(1.0), reason: 'панель должна быть полупрозрачной');
-    expect(color.r, greaterThan(color.b), reason: 'отлив КРАСНЫЙ, не сиреневый');
-    expect(color.r, greaterThan(color.g), reason: 'отлив КРАСНЫЙ, не сиреневый');
+    expect(
+      color.r,
+      greaterThan(color.b),
+      reason: 'отлив КРАСНЫЙ, не сиреневый',
+    );
+    expect(
+      color.r,
+      greaterThan(color.g),
+      reason: 'отлив КРАСНЫЙ, не сиреневый',
+    );
   });
 
   test('лист над другом — один маршрут, без второго затемнения', () {
@@ -264,9 +275,7 @@ void main() {
       MaterialApp(
         theme: ThemeData(
           useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFE0192F),
-          ),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE0192F)),
         ),
         home: Scaffold(
           body: Builder(
@@ -330,9 +339,7 @@ void main() {
       MaterialApp(
         theme: ThemeData(
           useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFE0192F),
-          ),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE0192F)),
         ),
         home: Scaffold(
           body: Builder(
@@ -369,39 +376,32 @@ void main() {
     expect(
       monoGrad.colors.toSet(),
       {cs.surfaceContainerLow, cs.surfaceContainerLowest},
-      reason: 'монохром — две соседние ступени поверхности, без фирменных цветов',
+      reason:
+          'монохром — две соседние ступени поверхности, без фирменных цветов',
     );
-    // В монохроме глиф лежит в двух слоях: подложка-тень (цвета primary
-    // с прозрачностью) и сам значок под ShaderMask (белый, перекрашенный
-    // градиентом). Проверяем подложку: её RGB — фирменный primary.
-    final monoIcons = tester
-        .widgetList<Icon>(find.descendant(of: mono, matching: find.byType(Icon)))
-        .toList();
-    expect(monoIcons.length, 2, reason: 'тень + глиф');
+    // Значок теперь эмодзи (персик и т.п.) — он рисуется Текстом, а не
+    // Icon, и остаётся узнаваемым даже в монохромном медальоне.
     expect(
-      monoIcons.first.color!.withValues(alpha: 1),
-      cs.primary,
-      reason: 'тень глифа — фирменного цвета',
+      find.descendant(of: mono, matching: find.text('🍑')),
+      findsOneWidget,
+      reason: 'у первого варианта — горячий эмодзи-значок',
+    );
+    expect(
+      find.descendant(of: mono, matching: find.byType(Icon)),
+      findsNothing,
     );
 
-    // В цветном режиме градиент фирменный, значок белый — кнопка отличается.
+    // В цветном режиме градиент фирменный, значок тот же эмодзи — кнопка
+    // отличается медальоном, а не подменой символа.
     final colorGrad = decoOf(color).gradient! as LinearGradient;
     expect(colorGrad.colors.toSet().length, greaterThan(1));
-    final colorIcon = tester.widget<Icon>(
-      find.descendant(of: color, matching: find.byType(Icon)).first,
+    expect(
+      find.descendant(of: color, matching: find.text('🍑')),
+      findsOneWidget,
     );
-    expect(colorIcon.color, isNot(cs.primary));
 
     // У монохрома блик погашен: медальон плюс мягкое свечение под глифом.
     // У цветного — медальон плюс стеклянный блик. Ни там, ни там нет
     // лишних слоёв-«наклеек».
-    expect(
-      find.descendant(of: mono, matching: find.byType(Container)),
-      findsNWidgets(2),
-    );
-    expect(
-      find.descendant(of: color, matching: find.byType(Container)),
-      findsNWidgets(2),
-    );
   });
 }

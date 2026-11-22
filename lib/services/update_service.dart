@@ -470,25 +470,51 @@ class UpdateService {
     }
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/agysha-${info.versionName}.apk');
-    if (await file.exists()) {
+    // Докачка: если приложение убили посреди загрузки, рядом лежит .part.
+    // Продолжаем с его длины через Range, а не начинаем 27 МБ заново.
+    final part = File('${file.path}.part');
+    var have = 0;
+    try {
+      if (await part.exists()) have = await part.length();
+    } catch (_) {
+      have = 0;
+    }
+    if (have <= 0 && await file.exists()) {
       try {
         await file.delete();
       } catch (_) {}
+    }
+    // .part уже целый (загрузка успела до конца, а приложение убили до
+    // переименования) — Range на полный файл дал бы 416. Завершаем сразу.
+    if (have > 0 && info.size > 0 && have >= info.size) {
+      if (await file.exists()) {
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
+      await part.rename(file.path);
+      downloadProgress.value = 1;
+      return file.path;
     }
     final client = http.Client();
     IOSink? sink;
     try {
       final req = http.Request('GET', Uri.parse(info.downloadUrl));
       req.headers['User-Agent'] = 'Agysha';
+      if (have > 0) req.headers['Range'] = 'bytes=$have-';
       final res = await client
           .send(req)
           // Таймаут на открытие соединения: сервер может принять запрос и
           // не ответить — без таймаута прогресс-бар зависает навсегда.
           .timeout(const Duration(seconds: 20));
-      if (res.statusCode != 200) return null;
-      final total = res.contentLength ?? info.size;
-      var received = 0;
-      sink = file.openWrite();
+      // 206 — сервер принял Range и отдаёт хвост; 200 — Range не понят,
+      // качаем файл целиком, предварительно обнулив .part.
+      if (res.statusCode != 200 && res.statusCode != 206) return null;
+      final resumed = res.statusCode == 206 && have > 0;
+      if (!resumed) have = 0;
+      final total = (res.contentLength ?? info.size) + have;
+      var received = have;
+      sink = resumed ? part.openWrite(mode: FileMode.append) : part.openWrite();
       // Общий дедлайн на ВЕСЬ скачивание, а не только на паузу между
       // пакетами: «капающее» соединение (пакет раз в ~30 с) иначе тянется
       // бесконечно — таблетка крутится вечно, а APK так и не скачался.
@@ -510,6 +536,13 @@ class UpdateService {
       await sink.flush();
       await sink.close();
       sink = null;
+      // Готовый APK: .part становится финальным именем (перезапись старого).
+      if (await file.exists()) {
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
+      await part.rename(file.path);
       return file.path;
     } catch (_) {
       // Любой сбой (дедлайн, обрыв, ошибка записи) — тихий отказ:
@@ -522,9 +555,7 @@ class UpdateService {
         try {
           await sink.close();
         } catch (_) {}
-        try {
-          await file.delete();
-        } catch (_) {}
+        // .part ОСТАВЛЯЕМ: с него продолжим при следующем запуске.
       }
       client.close();
     }

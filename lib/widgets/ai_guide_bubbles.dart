@@ -262,14 +262,23 @@ class _MessageBubble extends StatelessWidget {
         final e = Curves.easeOutQuart.transform(t);
         return Opacity(
           opacity: e,
-          child: Transform.translate(
-            offset: Offset(0, 12.0 * (1.0 - e)),
-            child: Transform.scale(
-              scale: isUserMsg ? (0.99 + 0.01 * e) : (0.985 + 0.015 * e),
-              alignment: isUserMsg
-                  ? Alignment.bottomRight
-                  : Alignment.bottomLeft,
-              child: child,
+          // Высота растёт вместе с прозрачностью: лента не «прыгает» на
+          // полную высоту пузыря в первом кадре (из-за этого сообщения
+          // дёргались и толкали соседние). Растём от нижнего края.
+          child: ClipRect(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              heightFactor: e,
+              child: Transform.translate(
+                offset: Offset(0, 6.0 * (1.0 - e)),
+                child: Transform.scale(
+                  scale: isUserMsg ? (0.995 + 0.005 * e) : (0.99 + 0.01 * e),
+                  alignment: isUserMsg
+                      ? Alignment.bottomRight
+                      : Alignment.bottomLeft,
+                  child: child,
+                ),
+              ),
             ),
           ),
         );
@@ -769,18 +778,32 @@ class _QuickChips extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     // Шаблоны БЕЗ пробела в конце: раньше trailing-пробел вставлялся
     // в поле ввода и выглядел как «странный пробел в конце сообщения».
-    final chips = <(String, String)>[
-      (Translations.t('aiChipHabit', context, 'Привычка'), 'создай привычку'),
-      (Translations.t('aiChipTask', context, 'Задача'), 'создай задачу'),
+    final chips = <(String, String, IconData)>[
+      (
+        Translations.t('aiChipHabit', context, 'Привычка'),
+        'создай привычку',
+        Icons.eco_rounded,
+      ),
+      (
+        Translations.t('aiChipTask', context, 'Задача'),
+        'создай задачу',
+        Icons.check_circle_outline_rounded,
+      ),
       (
         Translations.t('aiChipAlarm', context, 'Будильник'),
         'поставь будильник на',
+        Icons.alarm_rounded,
       ),
       (
         Translations.t('aiChipRC', context, 'Проверка'),
         'создай проверку реальности',
+        Icons.visibility_outlined,
       ),
-      (Translations.t('aiChipMeal', context, 'Еда'), 'запиши приём пищи'),
+      (
+        Translations.t('aiChipMeal', context, 'Еда'),
+        'запиши приём пищи',
+        Icons.restaurant_menu_rounded,
+      ),
     ];
     final leadCount = leading.length;
     return SizedBox(
@@ -792,7 +815,7 @@ class _QuickChips extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (context, i) {
           if (i < leadCount) return leading[i];
-          final (label, template) = chips[i - leadCount];
+          final (label, template, chipIcon) = chips[i - leadCount];
           // Каскад появления + «вдавливание» при нажатии: раньше чипы были
           // абсолютно статичными — ни входа, ни отклика на тап.
           return StaggerIn(
@@ -806,22 +829,41 @@ class _QuickChips extends StatelessWidget {
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: cs.primaryContainer.withValues(alpha: 0.7),
+                    // Те же стеклянные таблетки с кровавой кромкой, что у
+                    // разделов и кнопок задачи: чипы больше не «чужой»
+                    // фиолетовой плашкой на фоне чата.
+                    color: Color.lerp(
+                      cs.surface,
+                      cs.primary,
+                      0.06,
+                    )!.withValues(alpha: 0.72),
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
-                      color: cs.primary.withValues(alpha: 0.22),
+                      color: cs.primary.withValues(alpha: 0.26),
                     ),
                   ),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: cs.onPrimaryContainer,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        chipIcon,
+                        size: 15,
+                        color: cs.primary.withValues(alpha: 0.9),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.1,
+                          color: cs.onSurface.withValues(alpha: 0.94),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
