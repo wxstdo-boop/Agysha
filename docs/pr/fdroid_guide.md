@@ -7,7 +7,7 @@
 
 ## Что уже подготовлено в репозитории Agysha
 1. **Fastlane Metadata**:
-   - `fastlane/metadata/android/ru-RU/` — русское описание, заголовки, краткие аннотации и скриншоты.
+   - `fastlane/metadata/android/ru/` — русское описание, заголовки, краткие аннотации и скриншоты.
    - `fastlane/metadata/android/en-US/` — английское описание и скриншоты.
 2. **F-Droid Build Recipe**:
    - `fdroid/metadata/com.wetcorp.agysha.yml` — готовый рецепт сборки для официального репозитория `fdroiddata`.
