@@ -44,8 +44,9 @@ class PressScale extends StatefulWidget {
   /// Включён ли тактильный 3D-наклон карточки по направлению касания.
   final bool enableTilt;
 
-  /// Максимальный угол наклона (радианы). По умолчанию 0.13 (~7.5°) —
-  /// выразительный, сочный, тактильный 3D-тилт.
+  /// Максимальный угол наклона (радианы). По умолчанию 0.17 (~10°) —
+  /// сочный, ощутимый 3D-тилт: у 0.13 карточка под пальцем почти не
+  /// отзывалась, и владелец просил вернуть прежнюю «пищдатость».
   final double maxTiltAngle;
 
   /// Подложка отдачи: цвет, который мягко проявляется под содержимым
@@ -82,7 +83,7 @@ class PressScale extends StatefulWidget {
     this.enabled = true,
     this.pressedOpacity = 1.0,
     this.enableTilt = true,
-    this.maxTiltAngle = 0.13,
+    this.maxTiltAngle = 0.17,
     this.pressTint,
     this.pressTintStrength = 0.12,
     this.pressTintRadius,
@@ -126,6 +127,14 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// Страховка от залипшей отдачи (см. [PressScale.maxPressDuration]).
   Timer? _stuckGuard;
 
+  /// Лежит ли палец на элементе прямо сейчас. По нему отдача «самолечится»:
+  /// если по какой-то причине нажатие осталось висеть без пальца, первый
+  /// же кадр перестройки мягко его снимет.
+  bool _pointerDown = false;
+
+  /// Самолечение уже запланировано (чтобы не плодить post-frame колбэки).
+  bool _selfHealScheduled = false;
+
   /// Где палец коснулся элемента и ушёл ли он в перетаскивание/прокрутку.
   /// Наклон живёт только у настоящего нажатия: если палец поехал, карточка
   /// не должна кривиться вслед за прокруткой — иначе наклон «залипает».
@@ -133,7 +142,8 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   bool _dragged = false;
 
   /// Палец считается ушедшим в жест после этого сдвига (логические пиксели).
-  static const double _dragSlop = 12.0;
+  /// 26 px: у 12 px наклон гас от малейшего дрожания руки при удержании.
+  static const double _dragSlop = 26.0;
 
   /// Мягкое асимптотическое сглаживание к границе наклона:
   /// в пределах карточки (abs <= 0.90) угол передаётся 1:1 без срезания,
@@ -165,9 +175,11 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         AnimationController(
           vsync: this,
           value: 1.0,
-          // 460 мс: наклон уходит и возвращается заметно мягче — при свайпе
-          // удаления карточка больше не «щёлкает» из наклона в плоскость.
-          duration: const Duration(milliseconds: 460),
+          // Вход наклона — быстрый (120 мс), выход — мягкий (320 мс).
+          // Раньше обе стороны шли 460 мс, и наклон «выползал»: карточка
+          // долго оставалась плоской, хотя палец уже на ней.
+          duration: const Duration(milliseconds: 120),
+          reverseDuration: const Duration(milliseconds: 320),
         )..addStatusListener((status) {
           if (status != AnimationStatus.dismissed) return;
           // Наклон уже невидим (сила 0) — можно обнулить углы без рывка.
@@ -180,10 +192,22 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   @override
   void didUpdateWidget(covariant PressScale oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.enabled && _ctrl.value > 0) _ctrl.reverse();
     if (!widget.enabled) {
+      // Жест забрал палец (прокрутка, перетаскивание таблетки разделов):
+      // отдачу и наклон снимаем сразу. Раньше здесь оставались следы
+      // нажатия — и при удержании таблетки её красноватый фон иногда
+      // оставался «нажатым» насовсем, потому что следующий `_down` уже
+      // не приходил.
+      _stuckGuard?.cancel();
+      _pointerDown = false;
+      _downPos = null;
       _dragged = false;
+      _releaseTilt = _tilt;
       _tiltFade.reverse();
+      if (_ctrl.value > 0) {
+        _ctrl.duration = widget.releaseDuration ?? widget.duration;
+        _ctrl.reverse();
+      }
     }
   }
 
@@ -208,7 +232,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     final rawNy = (pos.dy / size.height - 0.5) * 2.0;
     final target = Offset(_softClamp(rawNx), _softClamp(rawNy));
     if (smooth) {
-      _tilt = Offset.lerp(_tilt, target, 0.40) ?? target;
+      _tilt = Offset.lerp(_tilt, target, 0.55) ?? target;
     } else {
       _tilt = target;
     }
@@ -224,6 +248,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     if (_swipeCtrl.value < 1.0) _swipeCtrl.forward();
     _downPos = e.localPosition;
     _dragged = false;
+    _pointerDown = true;
     // Наклон включается своим каналом — и гаснет он тоже плавно.
     _tiltFade.forward();
     _updateTilt(e.localPosition, smooth: false);
@@ -261,7 +286,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         _tiltFade.reverse();
       }
     }
-    if (_dragged || _ctrl.value <= 0) return;
+    if (_dragged) return;
     if (SwipeToDeleteScope.of(context)) {
       // Смахивание забирает палец у кнопки: отдачу больше не ведём.
       // Гасим ТОЛЬКО прежнее нажатие до нуля мгновенно, а плавность
@@ -283,6 +308,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     _stuckGuard?.cancel();
     _downPos = null;
     _dragged = false;
+    _pointerDown = false;
     if (!mounted) return;
     _releaseTilt = _tilt;
     // Наклон гаснет СВОИМ каналом и ВСЕГДА, независимо от прогресса
@@ -298,6 +324,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     _stuckGuard?.cancel();
     _downPos = null;
     _dragged = false;
+    _pointerDown = false;
     if (!mounted) return;
     _releaseTilt = _tilt;
     _tiltFade.reverse();
@@ -326,6 +353,25 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         if (_ctrl.value > 0) _tiltFade.forward();
         _swipeCtrl.forward();
       }
+    }
+    // Самолечение залипшей отдачи: палец уже не на элементе, но вдавливание
+    // держится на полном значении — значит pointer-up где-то потерялся
+    // (перекрытие, уход приложения в фон). Снимаем его после кадра сборки:
+    // уведомлять слушателей контроллера посреди build нельзя.
+    if (!_pointerDown &&
+        _ctrl.value > 0 &&
+        _ctrl.status == AnimationStatus.completed &&
+        !_selfHealScheduled) {
+      _selfHealScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _selfHealScheduled = false;
+        if (!mounted || _pointerDown) return;
+        if (_ctrl.status != AnimationStatus.completed) return;
+        _releaseTilt = _tilt;
+        _tiltFade.reverse();
+        _ctrl.duration = widget.releaseDuration ?? widget.duration;
+        _ctrl.reverse();
+      });
     }
     return Listener(
       behavior: HitTestBehavior.translucent,

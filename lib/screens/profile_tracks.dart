@@ -207,3 +207,120 @@ class _TrackRowState extends State<_TrackRow>
     );
   }
 }
+
+/// Полоса прогресса трека. Живёт отдельным виджетом со своим контроллером:
+/// стрим позиции плеера приходит редко и ступеньками, поэтому полоса всегда
+/// едет линейной анимацией между двумя пришедшими точками, а не прыгает.
+/// Родительская карточка при этом не пересобирается — обновляется только
+/// сам RepaintBoundary полосы.
+class _MusicScrubber extends StatefulWidget {
+  const _MusicScrubber({required this.music, required this.labelStyle});
+
+  final MusicService music;
+  final TextStyle? labelStyle;
+
+  @override
+  State<_MusicScrubber> createState() => _MusicScrubberState();
+}
+
+class _MusicScrubberState extends State<_MusicScrubber>
+    with SingleTickerProviderStateMixin {
+  /// Шаг анимации между двумя тиками плеера. Совпадает с частотой
+  /// `positionStream` (~200 мс), поэтому полоса не догоняет и не отстаёт.
+  static const Duration _step = Duration(milliseconds: 260);
+
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: _step,
+  );
+  StreamSubscription<Duration>? _posSub;
+  StreamSubscription<Duration?>? _durSub;
+
+  Duration? _duration;
+  double _from = 0;
+  double _to = 0;
+  int _positionSeconds = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _duration = widget.music.duration;
+    _posSub = widget.music.positionStream.listen(_onPosition);
+    _durSub = widget.music.durationStream.listen(_onDuration);
+  }
+
+  @override
+  void dispose() {
+    _posSub?.cancel();
+    _durSub?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onDuration(Duration? value) {
+    if (!mounted || value == null || value == _duration) return;
+    setState(() => _duration = value);
+  }
+
+  void _onPosition(Duration value) {
+    if (!mounted) return;
+    final total = _duration?.inMilliseconds ?? 0;
+    final target = total <= 0
+        ? 0.0
+        : (value.inMilliseconds / total).clamp(0.0, 1.0);
+    // Новая точка — продолжаем ровно с того места, где полоса сейчас,
+    // без шага назад в начало анимации.
+    _from = _animatedValue();
+    _to = target;
+    _ctrl.forward(from: 0);
+    final seconds = value.inSeconds;
+    if (seconds != _positionSeconds) {
+      setState(() => _positionSeconds = seconds);
+    }
+  }
+
+  double _animatedValue() {
+    final t = Curves.linear.transform(_ctrl.value);
+    return _from + (_to - _from) * t;
+  }
+
+  String _stamp(int seconds) =>
+      '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = _duration;
+    if (duration == null || duration.inMilliseconds <= 0) {
+      return const SizedBox.shrink();
+    }
+    final cs = Theme.of(context).colorScheme;
+    final style = widget.labelStyle;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.xs),
+      child: Row(
+        children: [
+          // Секунды — статичной строкой: цифры меняются раз в секунду, и
+          // перерисовка подписи не должна тянуть за собой всю полосу.
+          Text(_stamp(_positionSeconds), style: style),
+          const SizedBox(width: Spacing.xs),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: AnimatedBuilder(
+                animation: _ctrl,
+                builder: (context, _) => LinearProgressIndicator(
+                  value: _animatedValue(),
+                  minHeight: 3,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: Spacing.xs),
+          Text(_stamp(duration.inSeconds), style: style),
+        ],
+      ),
+    );
+  }
+}

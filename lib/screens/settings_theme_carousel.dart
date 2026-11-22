@@ -477,60 +477,73 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     final hubBody = Semantics(
       button: true,
       label: entry.label,
-      child: GestureDetector(
-        onTap: _tapHub,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 320),
-          curve: Curves.easeOutCubic,
-          width: hub,
-          height: hub,
-          // Хаб тоже монохромный: цвет даёт только сама тема приложения.
-          // Раньше центр горел градиентом проезжающей темы, и барабан
-          // выглядел пёстрой мозаикой, а не одним механизмом.
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: cs.surfaceContainerHighest,
-            border: Border.all(
-              color: cs.primary.withValues(alpha: 0.55),
-              width: 1.4,
-            ),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: cs.shadow.withValues(alpha: 0.14),
-                blurRadius: 14,
-                spreadRadius: -4,
-                offset: const Offset(0, 6),
+      // Кнопка «применить тему» отзывалась только сменой палитры — сама
+      // она под пальцем не шевелилась. Теперь её так же вдавливает и
+      // наклоняет, как камору и карточки: отклик ровно там, куда нажали.
+      child: PressScale(
+        pressedScale: 0.93,
+        duration: const Duration(milliseconds: 120),
+        releaseDuration: const Duration(milliseconds: 220),
+        enableTilt: true,
+        maxTiltAngle: 0.16,
+        pressTint: cs.primary,
+        pressTintStrength: 0.10,
+        pressTintRadius: BorderRadius.circular(hub),
+        child: GestureDetector(
+          onTap: _tapHub,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            width: hub,
+            height: hub,
+            // Хаб тоже монохромный: цвет даёт только сама тема приложения.
+            // Раньше центр горел градиентом проезжающей темы, и барабан
+            // выглядел пёстрой мозаикой, а не одним механизмом.
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: cs.surfaceContainerHighest,
+              border: Border.all(
+                color: cs.primary.withValues(alpha: 0.70),
+                width: 1.6,
               ),
-            ],
-          ),
-          child: Center(
-            child: AnimatedSwitcher(
-              // Короткое чистое затухание: масштаб и 300 мс держали старый
-              // и новый значок видимыми одновременно, и они «перекрывали»
-              // друг друга при каждой смене каморы.
-              duration: const Duration(milliseconds: 150),
-              switchInCurve: Curves.easeOut,
-              switchOutCurve: Curves.easeIn,
-              transitionBuilder: (child, anim) =>
-                  FadeTransition(opacity: anim, child: child),
-              // Цвет значка едет за палитрой плавно. Раньше он брался
-              // напрямую из cs.primary: при смене темы значок успевал
-              // щёлкнуть новым цветом до окончания AnimatedTheme — это и
-              // читалось как «мигает».
-              child: TweenAnimationBuilder<Color?>(
-                // Ключ — на самом ребёнке AnimatedSwitcher: раньше он висел
-                // на Icon внутри билдера, и переключатель считал виджет тем
-                // же самым, подменяя значок одним кадром («перебор»).
-                key: ValueKey<String>(
-                  'hub_${entry.key}_${entry.icon.codePoint}',
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: cs.shadow.withValues(alpha: 0.14),
+                  blurRadius: 14,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 6),
                 ),
-                tween: ColorTween(end: cs.primary),
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeOutCubic,
-                builder: (context, color, _) => Icon(
-                  entry.icon,
-                  size: hub * 0.34,
-                  color: color ?? cs.primary,
+              ],
+            ),
+            child: Center(
+              child: AnimatedSwitcher(
+                // Короткое чистое затухание: масштаб и 300 мс держали старый
+                // и новый значок видимыми одновременно, и они «перекрывали»
+                // друг друга при каждой смене каморы.
+                duration: const Duration(milliseconds: 150),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                // Цвет значка едет за палитрой плавно. Раньше он брался
+                // напрямую из cs.primary: при смене темы значок успевал
+                // щёлкнуть новым цветом до окончания AnimatedTheme — это и
+                // читалось как «мигает».
+                child: TweenAnimationBuilder<Color?>(
+                  // Ключ — на самом ребёнке AnimatedSwitcher: раньше он висел
+                  // на Icon внутри билдера, и переключатель считал виджет тем
+                  // же самым, подменяя значок одним кадром («перебор»).
+                  key: ValueKey<String>(
+                    'hub_${entry.key}_${entry.icon.codePoint}',
+                  ),
+                  tween: ColorTween(end: cs.primary),
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, color, _) => Icon(
+                    entry.icon,
+                    size: hub * 0.36,
+                    color: color ?? cs.primary,
+                  ),
                 ),
               ),
             ),

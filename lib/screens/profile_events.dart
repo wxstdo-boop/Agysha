@@ -22,12 +22,16 @@ class _AgyshaEvent {
 class _Card extends StatelessWidget {
   final String? title;
   final IconData? icon;
+
+  /// Свой глиф вместо [icon] — например, логотип Agysha у карточки музыки.
+  final Widget? badge;
   final Widget? trailing;
   final Widget child;
 
   const _Card({
     this.title,
     this.icon,
+    this.badge,
     this.trailing,
     required this.child,
     this.pressable = true,
@@ -63,7 +67,10 @@ class _Card extends StatelessWidget {
             if (title != null)
               Row(
                 children: [
-                  if (icon != null) ...[
+                  if (badge != null) ...[
+                    badge!,
+                    const SizedBox(width: Spacing.xs),
+                  ] else if (icon != null) ...[
                     Icon(icon, size: 18, color: theme.colorScheme.primary),
                     const SizedBox(width: Spacing.xs),
                   ],

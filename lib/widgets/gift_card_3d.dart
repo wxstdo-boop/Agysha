@@ -98,7 +98,7 @@ class _GiftCard3DState extends State<GiftCard3D>
     final rawDx = (localPosition.dx / widget.width - 0.5) * 2.0;
     final rawDy = (localPosition.dy / widget.height - 0.5) * 2.0;
     final target = Offset(_softClamp(rawDx), _softClamp(rawDy));
-    final next = Offset.lerp(_tilt, target, 0.38) ?? target;
+    final next = Offset.lerp(_tilt, target, 0.55) ?? target;
     if ((next - _tilt).distance > 0.0005) {
       _tilt = next;
       _tiltNotifier.value = next;
@@ -126,11 +126,14 @@ class _GiftCard3DState extends State<GiftCard3D>
         final tilt = _resetController.isAnimating
             ? _tiltAnimation.value
             : _tilt;
-        final hasTilt = tilt.dx.abs() > 0.0005 || tilt.dy.abs() > 0.0005;
+        // Плотность перелива едет ВМЕСТЕ с наклоном, без переключения
+        // «стоит/наклонена»: раньше на отпускании альфы прыгали разом, и
+        // фон карточки мигал. Теперь это непрерывная величина 0…1.
+        final lift = (tilt.dx.abs() + tilt.dy.abs()).clamp(0.0, 1.0);
         return CustomPaint(
           painter: _HoloFoilPainter(
             tilt: tilt,
-            idle: !hasTilt,
+            glow: lift,
             rarityColor: widget.gift.isFavorite
                 ? BrandColors.red
                 : widget.gift.rarity.color,
@@ -327,20 +330,28 @@ class _GiftCard3DState extends State<GiftCard3D>
                 final currentTilt = _resetController.isAnimating
                     ? _tiltAnimation.value
                     : _tilt;
-                final hasTilt =
-                    currentTilt.dx.abs() > 0.0005 ||
-                    currentTilt.dy.abs() > 0.0005;
+                // Сочный наклон: 0.34 рад (~19°) — прежняя «пищдатость»,
+                // у 0.26 карточка под пальцем почти не отзывалась.
+                final tiltX = -currentTilt.dy * 0.34;
+                final tiltY = currentTilt.dx * 0.34;
 
-                if (!hasTilt) return child!;
+                // Пока карточка стоит ровно, матрица — единичная, без
+                // перспективы: перспективный Transform отключает кэш
+                // растра, и при листании полосы артефактов каждая карточка
+                // растеризовалась заново каждый кадр — отсюда рывки.
+                final flat =
+                    currentTilt.dx.abs() < 0.002 &&
+                    currentTilt.dy.abs() < 0.002;
+                final transform = flat
+                    ? Matrix4.identity()
+                    : (Matrix4.identity()
+                        ..setEntry(3, 2, 0.0018)
+                        ..rotateX(tiltX)
+                        ..rotateY(tiltY));
 
-                final tiltX = -currentTilt.dy * 0.26;
-                final tiltY = currentTilt.dx * 0.26;
-
-                final transform = Matrix4.identity()
-                  ..setEntry(3, 2, 0.0014)
-                  ..rotateX(tiltX)
-                  ..rotateY(tiltY);
-
+                // Transform держим всегда, даже с единичной матрицей: раньше
+                // при возврате карточка меняла поддерево (Transform → child),
+                // и перелив пересоздавался — отсюда мигание фона.
                 return Transform(
                   transform: transform,
                   alignment: FractionalOffset.center,
@@ -1039,15 +1050,18 @@ class _HoloFoilPainter extends CustomPainter {
   final Offset tilt;
   final Color rarityColor;
 
-  /// Карточка стоит ровно: перелив светит чуть плотнее, иначе на светлой
-  /// теме его почти не видно и фон читается «пропавшим».
-  final bool idle;
+  /// Насколько карточка отклонена (0 — ровно, 1 — под самым краем). Перелив
+  /// плавно перетекает между двумя плотностями, без скачка на отпускании.
+  final double glow;
 
   _HoloFoilPainter({
     required this.tilt,
     required this.rarityColor,
-    this.idle = false,
+    this.glow = 0.0,
   });
+
+  static double _mix(double resting, double tilted, double t) =>
+      resting + (tilted - resting) * t;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1061,9 +1075,9 @@ class _HoloFoilPainter extends CustomPainter {
       ),
       radius: 0.95,
       colors: [
-        Colors.white.withValues(alpha: idle ? 0.22 : 0.16),
-        rarityColor.withValues(alpha: idle ? 0.16 : 0.12),
-        BrandColors.red.withValues(alpha: idle ? 0.11 : 0.08),
+        Colors.white.withValues(alpha: _mix(0.24, 0.16, glow)),
+        rarityColor.withValues(alpha: _mix(0.17, 0.12, glow)),
+        BrandColors.red.withValues(alpha: _mix(0.12, 0.08, glow)),
         Colors.transparent,
       ],
       stops: const [0.0, 0.35, 0.65, 1.0],
@@ -1101,7 +1115,7 @@ class _HoloFoilPainter extends CustomPainter {
   bool shouldRepaint(covariant _HoloFoilPainter oldDelegate) {
     return oldDelegate.tilt != tilt ||
         oldDelegate.rarityColor != rarityColor ||
-        oldDelegate.idle != idle;
+        oldDelegate.glow != glow;
   }
 }
 

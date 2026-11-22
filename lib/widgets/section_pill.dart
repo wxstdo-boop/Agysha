@@ -706,16 +706,14 @@ class _SectionPillState extends State<SectionPill>
                         // Если pointer-up потеряется при быстрых тапах и
                         // переключениях, красная подложка снимется сама:
                         // раньше она иногда «заедала» нажатой навсегда.
-                        maxPressDuration: const Duration(milliseconds: 1200),
+                        maxPressDuration: const Duration(milliseconds: 1600),
                         // Отдача как у кнопок Ады и «плюсика»: вдавливание
-                        // 220 мс, возврат 1100 мс. Возврат заметно длиннее:
-                        // красноватая подложка при тапе должна растворяться
-                        // следом, а не исчезать за долю секунды. Владелец
-                        // несколько раз возвращался к этому пункту — «фон при
-                        // тапе по-прежнему быстро исчезает» — поэтому отдача
-                        // растянута до 1.1 с и идёт по мягкой кривой.
+                        // 220 мс, возврат 620 мс. Возврат заметно длиннее
+                        // вдавливания, чтобы подложка растворялась следом,
+                        // но короче прежних 1.1 с: при удержании таблетки
+                        // она читалась как «фон застрял нажатым».
                         duration: const Duration(milliseconds: 220),
-                        releaseDuration: const Duration(milliseconds: 1100),
+                        releaseDuration: const Duration(milliseconds: 620),
                         releaseCurve: Curves.easeOutQuart,
                         child: Material(
                           type: MaterialType.transparency,

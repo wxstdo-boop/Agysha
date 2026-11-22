@@ -122,6 +122,16 @@ class MusicService extends ChangeNotifier {
   /// Активный режим очереди.
   QueueMode get mode => _mode;
 
+  /// Позиция текущего трека — для плавной полосы на карточке музыки.
+  Stream<Duration> get positionStream => _player.positionStream;
+
+  /// Текущая позиция (на случай, когда поток ещё не отдал первое значение).
+  Duration get position => _player.position;
+
+  /// Длительность текущего трека; `null`, пока плеер не разобрал файл.
+  Duration? get duration => _player.duration;
+  Stream<Duration?> get durationStream => _player.durationStream;
+
   /// Включить подъём громкости там, где он есть (Android).
   Future<void> _applyLoudnessBoost() async {
     if (!Platform.isAndroid) return;
@@ -144,19 +154,25 @@ class MusicService extends ChangeNotifier {
   Future<bool> play(String path) async {
     final file = File(path);
     if (!file.existsSync() || file.lengthSync() == 0) return false;
-    // Без разрешения на уведомления (Android 13+) система молча не
-    // показывает уведомление foreground-сервиса — то есть трек играет, а
-    // шторка пустая. Спрашиваем ровно перед стартом, пока экран активен.
-    if (Platform.isAndroid) {
-      try {
-        await NotificationService().ensureNotificationPermission();
-      } catch (_) {}
-    }
     // Состояние и иконка меняются СРАЗУ, фейд идёт следом — тап по «плей»
     // отзывается мгновенно, а не через полсекунды.
     _playing = true;
     _path = path;
     notifyListeners();
+    // Без разрешения на уведомления (Android 13+) система молча не
+    // показывает уведомление foreground-сервиса — то есть трек играет, а
+    // шторка пустая. Спрашиваем, но НЕ ждём ответа: раньше старт трека
+    // висел, пока человек не закроет системный диалог, и «всё появлялось
+    // не сразу».
+    if (Platform.isAndroid) {
+      unawaited(
+        NotificationService().ensureNotificationPermission().catchError((
+          Object _,
+        ) {
+          return false;
+        }),
+      );
+    }
     try {
       await _ensureSource(path);
       _level = 0;
