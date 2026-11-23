@@ -161,7 +161,12 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// серединой небольшой кнопки, и наклон там выходил почти нулевым: у
   /// «Сохранить» 3D «не ощущался». Направление по-прежнему задаёт палец,
   /// а амплитуда не проваливается ниже этого значения.
-  static const double _minTilt = 0.45;
+  static const double _minTilt = 0.62;
+
+  /// Наклон для нажатия ровно по центру, где направления от пальца нет
+  /// (сдвиг от точки касания нулевой): верх элемента уходит от пальца, низ
+  /// поднимается — «вдавливание» читается и без смещения руки.
+  static const Offset _centerTilt = Offset(0.0, -1.0);
 
   /// Мягкое асимптотическое сглаживание к границе наклона:
   /// в пределах карточки (abs <= 0.90) угол передаётся 1:1 без срезания,
@@ -282,9 +287,14 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     );
     // Держим наклон заметным и в центре элемента (см. [_minTilt]).
     final len = target.distance;
-    final floored = len > 0.02 && len < _minTilt
-        ? target * (_minTilt / len)
-        : target;
+    final Offset floored;
+    if (len > 0.02) {
+      floored = len < _minTilt ? target * (_minTilt / len) : target;
+    } else {
+      // Палец ровно по центру: направления нет, а наклон нужен — иначе
+      // «Сохранить» под серединой пальца остаётся плоской.
+      floored = _centerTilt * _minTilt;
+    }
     if (smooth) {
       _tilt = Offset.lerp(_tilt, floored, 0.55) ?? floored;
     } else {
@@ -529,27 +539,49 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   }
 }
 
-/// Готовый блик для [PressScale.pressOverlay]: мягкое световое пятно сверху,
-/// гаснущее книзу, — «мокрое стекло» под пальцем. Живёт только на время
-/// нажатия и повторяет скругление самой кнопки, поэтому у плашек с заливкой
-/// (FilledButton, капсулы) читается как глянец, а не как прямоугольник.
+/// Готовый блик для [PressScale.pressOverlay]: узкая световая полоска у
+/// ВЕРХНЕГО края, гаснущая книзу, — «мокрое стекло» под пальцем.
+///
+/// Раньше градиент заливал всю плашку от края до края, и на сплошной заливке
+/// это читалось не бликом, а лишним светлым ФОНОМ позади содержимого
+/// (владелец: «фоны добавились сзади»). Теперь блик живёт только в верхней
+/// половине, отступает от краёв и повторяет скругление кнопки — глянец, а не
+/// прямоугольник.
 Widget Function(BuildContext context, double progress) pressGloss(
   BorderRadius radius, {
   double strength = 0.20,
 }) {
-  return (context, progress) => IgnorePointer(
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            Colors.white.withValues(alpha: strength * progress),
-            Colors.transparent,
-          ],
+  return (context, progress) {
+    if (progress <= 0) return const SizedBox.shrink();
+    final a = (strength * progress).clamp(0.0, 1.0);
+    return IgnorePointer(
+      child: Padding(
+        // Отступ от краёв: полоска не касается рамки, поэтому не выглядит
+        // второй плашкой внутри кнопки.
+        padding: const EdgeInsets.all(1.0),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: FractionallySizedBox(
+              heightFactor: 0.45,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      Colors.white.withValues(alpha: a * 0.55),
+                      Colors.white.withValues(alpha: 0.0),
+                    ],
+                    stops: const <double>[0.0, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  };
 }
