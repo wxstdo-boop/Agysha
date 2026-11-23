@@ -75,6 +75,7 @@ done
 # 3. Дымовые: общий старт, логирование, конфигурация сборки.
 for smoke in \
   test/swallow_test.dart \
+  test/boot_backdrop_colors_test.dart \
   test/widget_polish_behaviour_test.dart \
   test/startup_*_test.dart; do
   [[ -e $smoke ]] && pick "$smoke"

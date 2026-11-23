@@ -1021,6 +1021,31 @@ Play Protect, file an appeal», support.google.com/googleplay/answer/2812853).
   (fake-async виснет): профиль читается в `setUp` (настоящая async-зона), а
   сам виджет-тест только рендерит и скроллит.
 
+## Системный сплэш на запуске (Android)
+
+- Системный сплэш Android 12+ ОТКЛЮЧИТЬ НЕЛЬЗЯ: система рисует его сама на
+  каждом холодном/тёплом старте. Убрать его «из глаз» можно только одним
+  способом — сделать ровно того же цвета, что первый кадр приложения.
+- Три цвета, которые обязаны совпадать (их держит
+  `test/boot_backdrop_colors_test.dart`):
+  `android/app/src/main/res/values/colors.xml` → `brand_background` (#FFF8F6,
+  он же `surface` светлой темы) и `window_background` (#17181C, тёмная);
+  `@drawable/launch_background` (светлая + `drawable-v21`, оба на
+  `@color/brand_background`); `drawable-night/launch_background` на
+  `@color/window_background`; и `kBootBackdropLight/kBootBackdropDark`
+  в `lib/main.dart`. Разъедутся — на телефоне снова будет «вспышка при
+  запуске». НЕ возвращать `@android:color/white` и `?android:colorBackground`
+  (на MIUI/Realme второй — серый).
+- Иконка системного сплэша — `@drawable/splash_blank`, и это обязан быть
+  `<vector>` с явными `android:width/height` и хотя бы одним `<path>`:
+  у `<shape>` нет intrinsic-размера, и прошивки (Realme UI, MIUI) подставляют
+  вместо неё ЛОНЧЕР-ИКОНКУ — та самая «аватарка с фоном» на старте.
+  Атрибута `android:windowSplashScreenIconSize` в Android НЕ существует:
+  с ним падает сборка.
+- `_BootBackdrop` в `main.dart` рисует первый кадр до тяжёлой инициализации,
+  и его цвет выбирается по СИСТЕМНОЙ яркости — так же, как Android выбирает
+  `values-night` для окна.
+
 ## Тесты: склонность к хрупкости и как её лечим
 
 - Регресс-тесты «кругов» (`test/polish_round_*_test.dart`) в основном читают

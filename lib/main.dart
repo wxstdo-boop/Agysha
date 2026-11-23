@@ -1022,17 +1022,31 @@ Future<void> _startApp([Stopwatch? bootClock]) async {
 /// Заставка первого кадра: тот же фирменный фон, что рисует Flutter-сплэш,
 /// поэтому переход «окно Android → сплэш» незаметен. Своей анимации нет:
 /// она стартует вместе с настоящим [SplashScreen], когда данные готовы.
+/// Цвета первого кадра Flutter. ОБЯЗАНЫ совпадать с Android-ресурсами
+/// (`values/colors.xml`: `brand_background` и `window_background`), иначе
+/// между системным сплэшем прошивки и первым кадром снова мелькнёт другой
+/// цвет. Совпадение держит `test/boot_backdrop_colors_test.dart`.
+const Color kBootBackdropLight = Color(0xFFFFF8F6); // brand_background
+const Color kBootBackdropDark = Color(0xFF17181C); // window_background
+
 class _BootBackdrop extends StatelessWidget {
   const _BootBackdrop();
 
+  static const Color _light = kBootBackdropLight;
+  static const Color _dark = kBootBackdropDark;
+
   @override
   Widget build(BuildContext context) {
-    // Пока тема не прочитана, берём светлый фирменный фон: он совпадает с
-    // `@color/brand_background` в android/res/values/colors.xml. На тёмной
-    // теме разница на один кадр не читается — сплэш сразу перекрывает его.
-    return const ColoredBox(
-      color: Color(0xFFFFF0F5),
-      child: SizedBox.expand(),
+    // Пока тема из настроек не прочитана, ориентируемся на СИСТЕМНУЮ
+    // яркость — ровно так же, как Android выбирает `values-night` для окна.
+    // Благодаря этому системный сплэш, окно и первый кадр Flutter идут
+    // одним цветом: вспышки между ними нет, сплэш прошивки как будто
+    // отсутствует. Раньше здесь был #FFF0F5 при белом окне — три разных
+    // цвета подряд и читались как мигание.
+    final brightness = View.of(context).platformDispatcher.platformBrightness;
+    return ColoredBox(
+      color: brightness == Brightness.dark ? _dark : _light,
+      child: const SizedBox.expand(),
     );
   }
 }

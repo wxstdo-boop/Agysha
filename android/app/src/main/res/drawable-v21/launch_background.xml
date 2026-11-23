@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Фон окна Android до первого кадра Flutter (API 21+).
+     `?android:colorBackground` на Realme/MIUI отдаёт серый: между системным
+     сплэшем и приложением мелькала серая полоса. Теперь цвет один и тот же
+     на всём пути — системный сплэш, окно и первый кадр `_BootBackdrop`. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+    <item android:drawable="@color/brand_background" />
 </layer-list>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Тёмная тема: фон окна до первого кадра Flutter.
+     На тёмной теме светлый `brand_background` давал вспышку. Здесь тот же
+     тёмный цвет, что у `windowSplashScreenBackground` (values-night-v31). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/window_background" />
+</layer-list>
