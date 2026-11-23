@@ -807,16 +807,37 @@ class _HabitsScreenState extends State<HabitsScreen>
                           ? const SizedBox.shrink(
                               key: ValueKey('habits_loading'),
                             )
-                          : habits.isNotEmpty
-                          ? SizedBox.expand(
-                              key: const ValueKey('list'),
-                              child: _buildBody(context, theme, habits),
-                            )
-                          : Padding(
-                              padding: const EdgeInsets.only(
-                                top: kSectionPillSlotHeight,
-                              ),
-                              child: _buildEmpty(context, theme),
+                          // Список и пустое состояние перетекают друг в друга
+                          // кросс-фейдом: удалил последнюю привычку — карточка-
+                          // совет проявляется, а не прыгает кадром (в будильниках
+                          // и задачах это уже было, привычки выбивались).
+                          : AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 320),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: 0.98,
+                                        end: 1.0,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                              child: habits.isNotEmpty
+                                  ? SizedBox.expand(
+                                      key: const ValueKey('list'),
+                                      child: _buildBody(context, theme, habits),
+                                    )
+                                  : Padding(
+                                      key: const ValueKey('empty_state'),
+                                      padding: const EdgeInsets.only(
+                                        top: kSectionPillSlotHeight,
+                                      ),
+                                      child: _buildEmpty(context, theme),
+                                    ),
                             ),
                     ),
                   ],

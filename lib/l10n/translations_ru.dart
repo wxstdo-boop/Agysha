@@ -984,6 +984,8 @@ const Map<String, String> _ru = {
   'permAlarmsOff': 'Будильники и уведомления не будут работать',
   'permGrant': 'Выдать',
   'timeTitle': 'Время',
+  'timeStepUp': 'Прибавить',
+  'timeStepDown': 'Убавить',
   'updateBadge': 'Обновление',
   'giftArtifact': 'Артефакт #{n}',
   'giftFavOn': 'В избранном (до 5)',

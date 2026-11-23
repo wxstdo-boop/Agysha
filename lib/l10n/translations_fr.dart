@@ -1025,6 +1025,8 @@ const Map<String, String> _fr = {
   'permAlarmsOff': 'Les alarmes et notifications ne fonctionneront pas',
   'permGrant': 'Accorder',
   'timeTitle': 'Heure',
+  'timeStepUp': 'Augmenter',
+  'timeStepDown': 'Diminuer',
   'updateBadge': 'Mise à jour',
   'giftArtifact': 'Artefact n° {n}',
   'giftFavOn': 'Dans les favoris (5 max)',

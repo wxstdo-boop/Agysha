@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 
@@ -525,57 +527,70 @@ class _SectionPillState extends State<SectionPill>
       // Таблетка в Home чуть выше (под AppBar), компактный отступ.
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
       child: Center(
-        child: SizedBox(
-          width: 336,
-          height: 54,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-            child: ClipRRect(
-              clipBehavior: Clip.antiAlias,
-              borderRadius: BorderRadius.circular(21),
-              child: AnimatedBuilder(
-                // ЕДИНЫЙ слушатель на все каналы изменения таблетки:
-                // устраняет вложенный AnimatedBuilder, исключая двойную пересборку
-                // дерева на каждый тик (нет микрофризов и дёрганий).
-                animation: Listenable.merge([
-                  _edgeSettle,
-                  _landingCtrl,
-                  _edgePullNotifier,
-                  sectionCurrentIndex,
-                  sectionDragPage,
-                  sectionRailPage,
-                ]),
-                builder: (context, _) {
-                  final current = sectionCurrentIndex.value;
-                  final dragPage = sectionDragPage.value;
-                  final page = sectionRailPage.value;
-                  final cs = Theme.of(context).colorScheme;
-                  final dark = Theme.of(context).brightness == Brightness.dark;
-                  double rawPage;
-                  if (_dragging && dragPage != null) {
-                    rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
-                  } else if (_landingCtrl.isAnimating) {
-                    final t = Curves.easeOutCubic.transform(_landingCtrl.value);
-                    final base = page.isFinite ? page : current.toDouble();
-                    rawPage = _landingFrom + (base - _landingFrom) * t;
-                  } else {
-                    // Непрерывное следование за каруселью без ступенчатых мертвых зон
-                    rawPage = page.isFinite ? page : current.toDouble();
-                  }
-                  return _buildStoneRow(
-                    context: context,
-                    cs: cs,
-                    dark: dark,
-                    current: current,
-                    rawPage: rawPage,
-                    count: count,
-                    icons: iconBuilders,
-                    labels: labels,
-                  );
-                },
+        // Ширина подстраивается под число разделов: при включённых проверках
+        // реальности их четыре, и на прежних 336 px ячейка сужалась настолько,
+        // что подписи ужимались мельче, чем в трёх-раздельной таблетке —
+        // четыре таба читались «неровнее» и теснее остальных состояний.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final target = count >= 4 ? 372.0 : 336.0;
+            final width = math.min(target, constraints.maxWidth);
+            return SizedBox(
+              width: width,
+              height: 54,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                child: ClipRRect(
+                  clipBehavior: Clip.antiAlias,
+                  borderRadius: BorderRadius.circular(21),
+                  child: AnimatedBuilder(
+                    // ЕДИНЫЙ слушатель на все каналы изменения таблетки:
+                    // устраняет вложенный AnimatedBuilder, исключая двойную пересборку
+                    // дерева на каждый тик (нет микрофризов и дёрганий).
+                    animation: Listenable.merge([
+                      _edgeSettle,
+                      _landingCtrl,
+                      _edgePullNotifier,
+                      sectionCurrentIndex,
+                      sectionDragPage,
+                      sectionRailPage,
+                    ]),
+                    builder: (context, _) {
+                      final current = sectionCurrentIndex.value;
+                      final dragPage = sectionDragPage.value;
+                      final page = sectionRailPage.value;
+                      final cs = Theme.of(context).colorScheme;
+                      final dark =
+                          Theme.of(context).brightness == Brightness.dark;
+                      double rawPage;
+                      if (_dragging && dragPage != null) {
+                        rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
+                      } else if (_landingCtrl.isAnimating) {
+                        final t = Curves.easeOutCubic.transform(
+                          _landingCtrl.value,
+                        );
+                        final base = page.isFinite ? page : current.toDouble();
+                        rawPage = _landingFrom + (base - _landingFrom) * t;
+                      } else {
+                        // Непрерывное следование за каруселью без ступенчатых мертвых зон
+                        rawPage = page.isFinite ? page : current.toDouble();
+                      }
+                      return _buildStoneRow(
+                        context: context,
+                        cs: cs,
+                        dark: dark,
+                        current: current,
+                        rawPage: rawPage,
+                        count: count,
+                        icons: iconBuilders,
+                        labels: labels,
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

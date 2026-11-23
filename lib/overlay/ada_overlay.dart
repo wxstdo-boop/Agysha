@@ -302,21 +302,18 @@ class _AdaBubbleState extends State<_AdaBubble>
           // (запас — 4 dp с каждой стороны). Одна трансформация, ребёнок под
           // RepaintBoundary — «самокатание» стоит композитору, не растеризатору.
           final free = 1.0 - Curves.easeOutCubic.transform(_hold.value);
+          // Отдачу нажатия НЕ делаем масштабом: полупрозрачное окно поверх
+          // чужих обоев при каждом кадре пересэмплировало готовую текстуру
+          // круга, и край мигал. Теперь плита и значок отзываются цветом и
+          // размером глифа (см. [_bubbleBody]) — перерисовки края нет вовсе,
+          // а качание остаётся переносом уже закэшированного кадра.
           final drift = Transform.translate(
             offset: Offset(math.sin(t) * 3.4 * free, math.cos(t) * 2.8 * free),
-            child: child,
+            child: RepaintBoundary(child: child),
           );
-          final squeeze = _press.value;
-          final pressed = squeeze <= 0.001
-              ? drift
-              : Transform.scale(
-                  scale: 1 - 0.07 * Curves.easeOutCubic.transform(squeeze),
-                  alignment: Alignment.center,
-                  child: drift,
-                );
           final e = _appear.value;
           // Слой альфы живёт только пока идёт вход или выход: в покое его нет.
-          if (e >= 0.999) return pressed;
+          if (e >= 0.999) return drift;
           final eased = Curves.easeOutCubic.transform(e.clamp(0.0, 1.0));
           return IgnorePointer(
             ignoring: eased < 0.5,
@@ -325,12 +322,12 @@ class _AdaBubbleState extends State<_AdaBubble>
               child: Transform.scale(
                 scale: 0.86 + 0.14 * eased,
                 alignment: Alignment.center,
-                child: pressed,
+                child: drift,
               ),
             ),
           );
         },
-        child: RepaintBoundary(child: Center(child: _bubbleBody())),
+        child: Center(child: _bubbleBody()),
       ),
     );
   }
@@ -345,24 +342,36 @@ class _AdaBubbleState extends State<_AdaBubble>
     final cs = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
     final index = _variant < 0 ? 0 : _variant % adaVariants.length;
+    final plate = dark ? cs.surfaceContainerHighest : cs.surfaceContainerLowest;
     return SizedBox(
       width: _windowSize,
       height: _windowSize,
       child: Center(
-        child: Container(
-          width: _bubbleSize,
-          height: _bubbleSize,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: dark
-                ? cs.surfaceContainerHighest
-                : cs.surfaceContainerLowest,
-          ),
-          child: Icon(
-            adaVariants[index].icon,
-            size: _bubbleSize * 0.5,
-            color: cs.onSurface,
-          ),
+        // Плита и глиф слушают ТОЛЬКО нажатие: качание двигает цельный
+        // закэшированный кадр, а отдача перекрашивает маленький круг внутри
+        // кэша. Пересэмплирования полупрозрачного края (и мигания) нет.
+        child: AnimatedBuilder(
+          animation: _press,
+          builder: (context, _) {
+            final p = Curves.easeOutCubic.transform(_press.value);
+            return Container(
+              width: _bubbleSize,
+              height: _bubbleSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: p <= 0.001
+                    ? plate
+                    : Color.lerp(plate, cs.onSurface, 0.10 * p),
+              ),
+              child: Icon(
+                adaVariants[index].icon,
+                size: _bubbleSize * (0.5 - 0.05 * p),
+                color: p <= 0.001
+                    ? cs.onSurface
+                    : Color.lerp(cs.onSurface, cs.onSurfaceVariant, 0.55 * p),
+              ),
+            );
+          },
         ),
       ),
     );

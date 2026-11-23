@@ -376,9 +376,8 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                             // Указатель — единственный цветной акцент барабана:
                             // приглушённо-красный, чтобы сразу читался как
                             // стрелка, но не спорил с монохромными каморами.
-                            color: const Color(
-                              0xFFFF3B30,
-                            ).withValues(alpha: 0.55),
+                            color: const Color(0xFFFF3B30)
+                                .withValues(alpha: 0.55),
                           ),
                         ),
                       ],
@@ -636,7 +635,28 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                           ]
                         : null,
                   ),
-                  child: Icon(entry.icon, size: dot * 0.42, color: ink),
+                  // Значок каморы меняется вместе с темой под ней — и это
+                  // ПЛАВНО: при повороте барабана индекс каморы перещёлкивается
+                  // в один кадр, а значок раньше подменялся мгновенно (читалось
+                  // как «перебор» иконок, особенно светлая → mutilated).
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.82, end: 1).animate(anim),
+                        child: child,
+                      ),
+                    ),
+                    child: Icon(
+                      entry.icon,
+                      key: ValueKey<String>('chamber_${entry.key}'),
+                      size: dot * 0.42,
+                      color: ink,
+                    ),
+                  ),
                 ),
               ),
             ),
