@@ -92,8 +92,8 @@ extension _SettingsDevTools on _SettingsScreenState {
     if (!mounted) return;
     Navigator.of(context).push(
       PageRouteBuilder<void>(
-        transitionDuration: const Duration(milliseconds: 520),
-        reverseTransitionDuration: const Duration(milliseconds: 420),
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 260),
         pageBuilder: (routeContext, animation, secondaryAnimation) {
           // ЛОКАЛЬНОЕ состояние переключателей уголка: ValueNotifier'ы
           // живут внутри роута, и стрелка рисует значение мгновенно.
@@ -291,17 +291,39 @@ extension _SettingsDevTools on _SettingsScreenState {
                 ),
                 trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
                 onTap: () {
-                  // Экран Кузницы открывается поверх уголка: закрыл — вернулся
-                  // туда же, без пересборки всего стека настроек.
-                  Navigator.of(routeContext).push(
-                    MaterialPageRoute<void>(
-                      // Владелец и репозиторий — те же, что у автообновления:
-                      // одна константа на оба места, чтобы не разъехались.
-                      builder: (_) => const ForgeScreen(
-                        owner: kUpdateRepoOwner,
-                        repo: kUpdateRepoName,
+                  // Снимаем фокус с полей ввода перед переходом в Кузницу и при возврате
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  unawaited(
+                    Navigator.of(routeContext).push(
+                      PageRouteBuilder<void>(
+                        transitionDuration: const Duration(milliseconds: 320),
+                        reverseTransitionDuration:
+                            const Duration(milliseconds: 260),
+                        pageBuilder: (_, __, ___) => const ForgeScreen(
+                          owner: kUpdateRepoOwner,
+                          repo: kUpdateRepoName,
+                        ),
+                        transitionsBuilder: (context, animation, _, child) {
+                          final curved = CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                            reverseCurve: Curves.easeInCubic,
+                          );
+                          return SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0.08, 0),
+                              end: Offset.zero,
+                            ).animate(curved),
+                            child: FadeTransition(
+                              opacity: curved,
+                              child: RepaintBoundary(child: child),
+                            ),
+                          );
+                        },
                       ),
-                    ),
+                    ).then((_) {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                    }),
                   );
                 },
               ),
@@ -309,28 +331,23 @@ extension _SettingsDevTools on _SettingsScreenState {
           );
         },
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          // Въезд — easeOutCubic, выезд (жест «назад»/свайп вправо) —
-          // easeInOutCubic: экран не «падает» мгновенно в начале отдачи
-          // (easeInCubic стартовал на нуле скорости и потом рванул), а
-          // уходит с той же скоростью, с которой читался въезд. Обратный
-          // переезд тоже подольше (420 мс).
           final entrance = CurvedAnimation(
             parent: animation,
             curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInOutCubic,
+            reverseCurve: Curves.easeInCubic,
           );
           return FadeTransition(
-            opacity: Tween<double>(begin: 0, end: 1).animate(entrance),
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: const Interval(0.0, 0.65, curve: Curves.easeOut),
+              reverseCurve: const Interval(0.35, 1.0, curve: Curves.easeIn),
+            ),
             child: SlideTransition(
               position: Tween<Offset>(
-                begin: const Offset(0.16, 0),
+                begin: const Offset(0.08, 0),
                 end: Offset.zero,
               ).animate(entrance),
-              child: ScaleTransition(
-                alignment: Alignment.centerRight,
-                scale: Tween<double>(begin: 0.94, end: 1).animate(entrance),
-                child: child,
-              ),
+              child: RepaintBoundary(child: child),
             ),
           );
         },

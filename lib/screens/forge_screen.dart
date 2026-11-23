@@ -16,6 +16,7 @@ import '../widgets/press_scale.dart';
 import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
+import '../utils/wide_dash_formatter.dart';
 import 'developer_corner_screen.dart';
 
 /// «Кузница» — мастерская внутри уголка разработчика: вставляешь токен
@@ -54,6 +55,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
   final TextEditingController _tokenController = TextEditingController();
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _tokenFocus = FocusNode();
+  final FocusNode _inputFocus = FocusNode();
 
   bool _loadingToken = true;
   bool _checking = false;
@@ -80,12 +83,18 @@ class _ForgeScreenState extends State<ForgeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
     unawaited(_restoreToken());
     unawaited(_restoreChat());
   }
 
   @override
   void dispose() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _tokenFocus.dispose();
+    _inputFocus.dispose();
     _tokenController.dispose();
     _inputController.dispose();
     _scrollController.dispose();
@@ -387,72 +396,80 @@ class _ForgeScreenState extends State<ForgeScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final accent = cs.primary;
-    return Scaffold(
-      appBar: AppBar(
-        leading: const BackButtonTooltip(),
-        title: Text(Translations.t('forgeTitle', context, 'Кузница')),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        actions: [
-          if (_messages.isNotEmpty)
-            IconButton(
-              tooltip: Translations.t('forgeClearChat', context),
-              onPressed: _running ? null : () => unawaited(_clearChat()),
-              icon: const Icon(Icons.cleaning_services_rounded),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                children: [
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 700),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _hero(theme, accent),
-                          const SizedBox(height: 22),
-                          _sectionLabel(
-                            theme,
-                            accent,
-                            Icons.key_rounded,
-                            Translations.t('forgeTokenSection', context),
-                          ),
-                          const SizedBox(height: 8),
-                          _tokenCard(theme, cs, accent),
-                          const SizedBox(height: 22),
-                          _sectionLabel(
-                            theme,
-                            accent,
-                            Icons.forum_rounded,
-                            Translations.t('forgeChatSection', context),
-                          ),
-                          const SizedBox(height: 8),
-                          if (_messages.isEmpty && !_running)
-                            _emptyChat(theme, cs),
-                          for (final message in _messages)
-                            _bubble(theme, cs, accent, message),
-                          if (_running) _runningBubble(theme, cs, accent),
-                          if (_runError != null) ...[
-                            const SizedBox(height: 12),
-                            _errorCard(theme, cs),
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          FocusManager.instance.primaryFocus?.unfocus();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: const BackButtonTooltip(),
+          title: Text(Translations.t('forgeTitle', context, 'Кузница')),
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          actions: [
+            if (_messages.isNotEmpty)
+              IconButton(
+                tooltip: Translations.t('forgeClearChat', context),
+                onPressed: _running ? null : () => unawaited(_clearChat()),
+                icon: const Icon(Icons.cleaning_services_rounded),
+              ),
+          ],
+        ),
+        body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                  children: [
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 700),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _hero(theme, accent),
+                            const SizedBox(height: 22),
+                            _sectionLabel(
+                              theme,
+                              accent,
+                              Icons.key_rounded,
+                              Translations.t('forgeTokenSection', context),
+                            ),
+                            const SizedBox(height: 8),
+                            _tokenCard(theme, cs, accent),
+                            const SizedBox(height: 22),
+                            _sectionLabel(
+                              theme,
+                              accent,
+                              Icons.forum_rounded,
+                              Translations.t('forgeChatSection', context),
+                            ),
+                            const SizedBox(height: 8),
+                            if (_messages.isEmpty && !_running)
+                              _emptyChat(theme, cs),
+                            for (final message in _messages)
+                              _bubble(theme, cs, accent, message),
+                            if (_running) _runningBubble(theme, cs, accent),
+                            if (_runError != null) ...[
+                              const SizedBox(height: 12),
+                              _errorCard(theme, cs),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            _inputBar(theme, cs, accent),
-          ],
+              _inputBar(theme, cs, accent),
+            ],
+          ),
         ),
       ),
     );
@@ -460,15 +477,21 @@ class _ForgeScreenState extends State<ForgeScreen> {
 
   Widget _hero(ThemeData theme, Color accent) {
     final cs = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: devCardDecoration(theme, accent),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
+    return RepaintBoundary(
+      child: PressScale(
+        pressedScale: 0.985,
+        enableTilt: true,
+        duration: const Duration(milliseconds: 140),
+        releaseDuration: const Duration(milliseconds: 220),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: devCardDecoration(theme, accent),
+          child: Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: accent.withValues(alpha: 0.16),
               border: Border.all(color: accent.withValues(alpha: 0.4)),
@@ -499,6 +522,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
           ),
         ],
       ),
+    ),
+    ),
     );
   }
 
@@ -525,140 +550,151 @@ class _ForgeScreenState extends State<ForgeScreen> {
   }
 
   Widget _tokenCard(ThemeData theme, ColorScheme cs, Color accent) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: devCardDecoration(theme, accent),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            Translations.t('forgeTokenHint', context),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: cs.onSurfaceVariant,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Токен показываем точками и БЕЗ «глазка»: раскрывать секрет на
-          // экране незачем, а подтверждение всё равно приходит логином ниже.
-          // Оформление — как у остальных полей приложения (плотное, радиус
-          // 14, минимальное меню, без лупы).
-          TextField(
-            controller: _tokenController,
-            obscureText: true,
-            obscuringCharacter: '•',
-            autocorrect: false,
-            enableSuggestions: false,
-            maxLines: 1,
-            textInputAction: TextInputAction.done,
-            cursorOpacityAnimates: true,
-            magnifierConfiguration: TextMagnifierConfiguration.disabled,
-            contextMenuBuilder: minimalContextMenuBuilder,
-            decoration: InputDecoration(
-              isDense: true,
-              counterText: '',
-              hintText: 'ghp_… / github_pat_…',
-              filled: true,
-              fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-              contentPadding: const EdgeInsets.symmetric(
-                vertical: 14,
-                horizontal: 14,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(
-                  color: cs.outlineVariant.withValues(alpha: 0.65),
+    return RepaintBoundary(
+      child: PressScale(
+        pressedScale: 0.985,
+        enableTilt: true,
+        duration: const Duration(milliseconds: 140),
+        releaseDuration: const Duration(milliseconds: 220),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: devCardDecoration(theme, accent),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                Translations.t('forgeTokenHint', context),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  height: 1.35,
                 ),
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: accent, width: 1.6),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: PressScale(
-                  child: FilledButton.icon(
-                    onPressed: _checking || _loadingToken
-                        ? null
-                        : () => _checkToken(),
-                    icon: _checking
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.verified_user_outlined, size: 18),
-                    label: Text(
-                      Translations.t('forgeTokenCheck', context),
+              const SizedBox(height: 10),
+              // Токен показываем точками и БЕЗ «глазка»: раскрывать секрет на
+              // экране незачем, а подтверждение всё равно приходит логином ниже.
+              // Оформление — как у остальных полей приложения (плотное, радиус
+              // 14, минимальное меню, без лупы).
+              TextField(
+                controller: _tokenController,
+                focusNode: _tokenFocus,
+                obscureText: true,
+                obscuringCharacter: '•',
+                autocorrect: false,
+                enableSuggestions: false,
+                maxLines: 1,
+                textInputAction: TextInputAction.done,
+                cursorOpacityAnimates: true,
+                magnifierConfiguration: TextMagnifierConfiguration.disabled,
+                contextMenuBuilder: minimalContextMenuBuilder,
+                decoration: InputDecoration(
+                  isDense: true,
+                  counterText: '',
+                  hintText: 'ghp_… / github_pat_…',
+                  filled: true,
+                  fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 14,
+                    horizontal: 14,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: cs.outlineVariant.withValues(alpha: 0.65),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Зажатие «тонет» неспешно и поднимается ещё медленнее —
-              // как у кнопки сохранения в уголке: резкий щелчок значка
-              // читался как отсутствие отдачи.
-              PressScale(
-                pressedScale: 0.94,
-                duration: const Duration(milliseconds: 460),
-                releaseDuration: const Duration(milliseconds: 720),
-                child: IconButton(
-                  tooltip: Translations.t('forgeTokenForget', context),
-                  onPressed: _loadingToken
-                      ? null
-                      : () {
-                          Haptics.light();
-                          unawaited(_forgetToken());
-                        },
-                  icon: Icon(Icons.delete_outline_rounded, color: cs.error),
-                ),
-              ),
-            ],
-          ),
-          if (_tokenError != null) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.error_outline, size: 16, color: cs.error),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _tokenError!,
-                    style: theme.textTheme.bodySmall?.copyWith(color: cs.error),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: accent, width: 1.6),
                   ),
                 ),
-              ],
-            ),
-          ] else if (_login != null) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(
-                  Icons.check_circle_outline,
-                  size: 16,
-                  color: Colors.green,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: PressScale(
+                      pressedScale: 0.96,
+                      enableTilt: true,
+                      duration: const Duration(milliseconds: 140),
+                      releaseDuration: const Duration(milliseconds: 220),
+                      child: FilledButton.icon(
+                        onPressed: _checking || _loadingToken
+                            ? null
+                            : () => _checkToken(),
+                        icon: _checking
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.verified_user_outlined, size: 18),
+                        label: Text(
+                          Translations.t('forgeTokenCheck', context),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  PressScale(
+                    pressedScale: 0.94,
+                    enableTilt: true,
+                    duration: const Duration(milliseconds: 140),
+                    releaseDuration: const Duration(milliseconds: 220),
+                    child: IconButton(
+                      tooltip: Translations.t('forgeTokenForget', context),
+                      onPressed: _loadingToken
+                          ? null
+                          : () {
+                              Haptics.light();
+                              unawaited(_forgetToken());
+                            },
+                      icon: Icon(Icons.delete_outline_rounded, color: cs.error),
+                    ),
+                  ),
+                ],
+              ),
+              if (_tokenError != null) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(Icons.error_outline, size: 16, color: cs.error),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _tokenError!,
+                        style: theme.textTheme.bodySmall?.copyWith(color: cs.error),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${Translations.t('forgeTokenOk', context)}: $_login · '
-                    '${widget.owner}/${widget.repo} ($_baseBranch)',
-                    style: theme.textTheme.bodySmall?.copyWith(
+              ] else if (_login != null) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle_outline,
+                      size: 16,
                       color: Colors.green,
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${Translations.t('forgeTokenOk', context)}: $_login · '
+                        '${widget.owner}/${widget.repo} ($_baseBranch)',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.green,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -884,6 +920,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                 controller: _inputController,
                 builder: (typingStyle) => TextField(
                   controller: _inputController,
+                  focusNode: _inputFocus,
                   style: typingStyle,
                   minLines: 1,
                   maxLines: 6,
@@ -896,6 +933,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                   magnifierConfiguration: TextMagnifierConfiguration.disabled,
                   contextMenuBuilder: minimalContextMenuBuilder,
                   buildCounter: smoothCharCounterBuilder,
+                  inputFormatters: [WideDashFormatter()],
                   decoration: InputDecoration(
                     hintText: Translations.t('forgeTaskHint', context),
                     alignLabelWithHint: true,
@@ -920,6 +958,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
               ),
               const SizedBox(height: 4),
               PressScale(
+                pressedScale: 0.95,
+                enableTilt: true,
+                duration: const Duration(milliseconds: 140),
+                releaseDuration: const Duration(milliseconds: 220),
                 child: FilledButton.icon(
                   onPressed: _running ? null : _send,
                   icon: _running

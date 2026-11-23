@@ -73,20 +73,47 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
       axis: Axis.vertical,
       child: FadeTransition(
         opacity: _perfFade,
-        // Свой прозрачный Material: иначе ListTile внутри цветной подложки
-        // красит всплеск тапа на дальнем Material и Flutter ругается
-        // ассертом о невидимом фоне.
-        child: Material(
-          type: MaterialType.transparency,
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-            // Канарейка вместо «телефонной» иконки developer-mode: стоит
-            // статично, при тапе плавно машет крылом; повторные тапы,
-            // пока анимация жива, игнорируются внутри самой канарейки.
-            leading: const CanaryIcon(size: 40),
-            title: Text(_developerCornerTitle(context)),
-            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-            onTap: _devOpening ? null : _showDevToolsScreen,
+
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: PressScale(
+            pressedScale: 0.98,
+            enableTilt: true,
+            duration: const Duration(milliseconds: 140),
+            releaseDuration: const Duration(milliseconds: 220),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.22 : 0.32,
+                ),
+                border: Border.all(
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: theme.brightness == Brightness.dark ? 0.16 : 0.24,
+                  ),
+                  width: 1.0,
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  splashColor: theme.colorScheme.primary.withValues(alpha: 0.18),
+                  highlightColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.12),
+                  onTap: _devOpening ? null : _showDevToolsScreen,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                    leading: const CanaryIcon(size: 40),
+                    title: Text(_developerCornerTitle(context)),
+                    trailing:
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -214,6 +241,7 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
               ),
             ),
             const SizedBox(height: 8),
+
             // Имя в самом низу — тоже кнопка (скрытый вход в dev-режим),
             // поэтому у неё та же отдача, что у остальных: вдавливание,
             // мягкий наклон под палец и едва заметное пятно под текстом.

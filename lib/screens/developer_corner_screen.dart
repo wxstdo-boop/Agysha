@@ -11,6 +11,7 @@ import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/stagger_in.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
+import '../utils/wide_dash_formatter.dart';
 
 /// Единая «карточная» пластика экрана — в стиле карточек питания:
 /// тёплый градиент от поверхности к насыщенной, тонкая цветная кайма
@@ -48,64 +49,68 @@ Widget devWavyTile(
   final cs = theme.colorScheme;
   final dark = theme.brightness == Brightness.dark;
   // ПЕРЕФЕРИЙНАЯ ГРАНИЦА ПЕРЕРИСОВКИ: каждая плитка — собственный raster.
-  // Любые setState страницы (счётчики символов, фокус полей, входы
-  // StaggerIn) больше не перекрашивают все карточки целиком — тормоза
-  // «всё блестит, но подтормаживает» уходят, вид не тронут.
+  // Тактильный 3D-наклон и плавная отдача уменьшения всей карточки целиком.
   return RepaintBoundary(
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            accent.withValues(alpha: dark ? 0.60 : 0.42),
-            accent.withValues(alpha: dark ? 0.12 : 0.10),
-            cs.tertiary.withValues(alpha: dark ? 0.45 : 0.28),
-          ],
-          stops: const <double>[0, 0.55, 1],
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.34 : 0.14),
-            blurRadius: 16,
-            spreadRadius: -6,
-            offset: const Offset(0, 6),
+    child: PressScale(
+      pressedScale: 0.985,
+      enableTilt: true,
+      duration: const Duration(milliseconds: 140),
+      releaseDuration: const Duration(milliseconds: 220),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[
+              accent.withValues(alpha: dark ? 0.60 : 0.42),
+              accent.withValues(alpha: dark ? 0.12 : 0.10),
+              cs.tertiary.withValues(alpha: dark ? 0.45 : 0.28),
+            ],
+            stops: const <double>[0, 0.55, 1],
           ),
-        ],
-      ),
-      padding: const EdgeInsets.all(1.3),
-      child: Stack(
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.all(Radius.circular(Radii.ringInner)),
-            child: ColoredBox(
-              // Плотная подложка, чтобы градиент кольца не просвечивал
-              // сквозь карточку посередине.
-              color: cs.surface,
-              child: child,
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: dark ? 0.34 : 0.14),
+              blurRadius: 16,
+              spreadRadius: -6,
+              offset: const Offset(0, 6),
             ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              // Змеёвая кайма рисуется раз-и-навсегда: своя граница не даёт
-              // растеризованному слою пересчитываться, когда в карточке
-              // анимируется контент.
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  painter: _SquigglyRingPainter(
-                    color: accent.withValues(alpha: 0.60),
-                    radius: Radii.ringInner,
-                    amplitude: 1.6,
-                    wavelength: 9,
-                    inset: 1.1,
+          ],
+        ),
+        padding: const EdgeInsets.all(1.3),
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.all(Radius.circular(Radii.ringInner)),
+              child: ColoredBox(
+                // Плотная подложка, чтобы градиент кольца не просвечивал
+                // сквозь карточку посередине.
+                color: cs.surface,
+                child: child,
+              ),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                // Змеёвая кайма рисуется раз-и-навсегда: своя граница не даёт
+                // растеризованному слою пересчитываться, когда в карточке
+                // анимируется контент.
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _SquigglyRingPainter(
+                      color: accent.withValues(alpha: 0.60),
+                      radius: Radii.ringInner,
+                      amplitude: 1.6,
+                      wavelength: 9,
+                      inset: 1.1,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );
@@ -460,33 +465,45 @@ class _DeveloperModePasswordDialogState
                         Row(
                           children: [
                             Expanded(
-                              child: TextButton(
-                                onPressed: _busy ? null : widget.onCancel,
-                                child: Text(widget.cancelLabel),
+                              child: PressScale(
+                                pressedScale: 0.96,
+                                enableTilt: true,
+                                duration: const Duration(milliseconds: 140),
+                                releaseDuration: const Duration(milliseconds: 220),
+                                child: TextButton(
+                                  onPressed: _busy ? null : widget.onCancel,
+                                  child: Text(widget.cancelLabel),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: FilledButton.icon(
-                                onPressed: _busy ? null : _submit,
-                                icon: SizedBox.square(
-                                  dimension: 18,
-                                  child: _busy
-                                      ? const CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        )
-                                      : const Icon(
-                                          Icons.lock_open_rounded,
-                                          size: 18,
-                                        ),
-                                ),
-                                label: Text(widget.unlockLabel),
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 15,
+                              child: PressScale(
+                                pressedScale: 0.96,
+                                enableTilt: true,
+                                duration: const Duration(milliseconds: 140),
+                                releaseDuration: const Duration(milliseconds: 220),
+                                child: FilledButton.icon(
+                                  onPressed: _busy ? null : _submit,
+                                  icon: SizedBox.square(
+                                    dimension: 18,
+                                    child: _busy
+                                        ? const CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          )
+                                        : const Icon(
+                                            Icons.lock_open_rounded,
+                                            size: 18,
+                                          ),
                                   ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(15),
+                                  label: Text(widget.unlockLabel),
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 15,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(15),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -536,122 +553,150 @@ class DeveloperCornerScreen extends StatefulWidget {
 
 class _DeveloperCornerScreenState extends State<DeveloperCornerScreen> {
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        leading: const BackButtonTooltip(),
-        title: Text(widget.title),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-      ),
-      body: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 700),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  RepaintBoundary(
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: devCardDecoration(theme, widget.accent),
-                      child: Row(
-                      children: [
-                        Container(
-                          width: 54,
-                          height: 54,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: widget.accent.withValues(alpha: 0.16),
-                            border: Border.all(
-                              color: widget.accent.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: const Center(child: CanaryIcon(size: 36)),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          FocusManager.instance.primaryFocus?.unfocus();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: const BackButtonTooltip(),
+          title: Text(widget.title),
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+        ),
+        body: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 700),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    RepaintBoundary(
+                      child: PressScale(
+                        pressedScale: 0.985,
+                        enableTilt: true,
+                        duration: const Duration(milliseconds: 140),
+                        releaseDuration: const Duration(milliseconds: 220),
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: devCardDecoration(theme, widget.accent),
+                          child: Row(
                             children: [
-                              Text(
-                                widget.title,
-                                style: theme.textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w800,
+                              Container(
+                                width: 54,
+                                height: 54,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: widget.accent.withValues(alpha: 0.16),
+                                  border: Border.all(
+                                    color: widget.accent.withValues(alpha: 0.4),
+                                  ),
                                 ),
+                                child: const Center(child: CanaryIcon(size: 36)),
                               ),
-                              const SizedBox(height: 5),
-                              Text(
-                                widget.subtitle,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: colors.onSurfaceVariant,
-                                  height: 1.4,
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.title,
+                                      style: theme.textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      widget.subtitle,
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: colors.onSurfaceVariant,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Row(
+                      children: [
+                        Icon(Icons.tune_rounded, size: 18, color: widget.accent),
+                        const SizedBox(width: 9),
+                        Text(
+                          widget.controlsLabel,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: widget.accent,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                  ),
-                  const SizedBox(height: 28),
-                  Row(
-                    children: [
-                      Icon(Icons.tune_rounded, size: 18, color: widget.accent),
-                      const SizedBox(width: 9),
-                      Text(
-                        widget.controlsLabel,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: widget.accent,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
+                    const SizedBox(height: 8),
+                    DeveloperPromptEditor(
+                      initialValue: widget.developerPrompt,
+                      accent: widget.accent,
+                      onSave: widget.onSaveDeveloperPrompt,
+                    ),
+                    const SizedBox(height: 22),
+                    for (var i = 0; i < widget.children.length; i++)
+                      StaggerIn(
+                        index: i,
+                        step: const Duration(milliseconds: 95),
+                        duration: const Duration(milliseconds: 440),
+                        // Плашки — как карточки питания: градиентное
+                        // «кольцо»-обводка + извилистая линия по краю.
+                        child: devWavyTile(
+                          context,
+                          accent: widget.accent,
+                          child: widget.children[i],
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  DeveloperPromptEditor(
-                    initialValue: widget.developerPrompt,
-                    accent: widget.accent,
-                    onSave: widget.onSaveDeveloperPrompt,
-                  ),
-                  const SizedBox(height: 22),
-                  for (var i = 0; i < widget.children.length; i++)
-                    StaggerIn(
-                      index: i,
-                      step: const Duration(milliseconds: 95),
-                      duration: const Duration(milliseconds: 440),
-                      // Плашки — как карточки питания: градиентное
-                      // «кольцо»-обводка + извилистая линия по краю.
-                      child: devWavyTile(
-                        context,
-                        accent: widget.accent,
-                        child: widget.children[i],
-                      ),
-                    ),
-                  const SizedBox(height: 22),
-                  Align(
-                    alignment: Alignment.center,
-                    child: TextButton.icon(
-                      onPressed: widget.onDisable,
-                      icon: const Icon(Icons.lock_outline_rounded, size: 18),
-                      label: Text(widget.disableLabel),
-                      style: TextButton.styleFrom(
-                        foregroundColor: colors.error,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 12,
+                    const SizedBox(height: 22),
+                    Align(
+                      alignment: Alignment.center,
+                      child: PressScale(
+                        pressedScale: 0.96,
+                        enableTilt: true,
+                        duration: const Duration(milliseconds: 140),
+                        releaseDuration: const Duration(milliseconds: 220),
+                        child: TextButton.icon(
+                          onPressed: widget.onDisable,
+                          icon: const Icon(Icons.lock_outline_rounded, size: 18),
+                          label: Text(widget.disableLabel),
+                          style: TextButton.styleFrom(
+                            foregroundColor: colors.error,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -684,6 +729,7 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initialValue,
   );
+  late final FocusNode _focusNode = FocusNode();
   Timer? _saveTimer;
   late String _draft = widget.initialValue;
   late String _savedValue = widget.initialValue;
@@ -695,13 +741,16 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
   void dispose() {
     _saveTimer?.cancel();
     if (_draft != _savedValue) unawaited(_save());
+    _focusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   void _onChanged(String value) {
     _draft = value;
-    setState(() => _saveFailed = false);
+    if (_saveFailed) {
+      setState(() => _saveFailed = false);
+    }
     _saveTimer?.cancel();
     _saveTimer = Timer(_saveDelay, () => unawaited(_save()));
   }
@@ -741,252 +790,250 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final accent = widget.accent;
-    final isDirty = _draft != _savedValue;
-    final status = _saving
-        ? Translations.t('devPromptSaving', context)
-        : _saveFailed
-        ? Translations.t('devPromptSaveError', context)
-        : isDirty
-        ? Translations.t('devPromptUnsaved', context)
-        : Translations.t('devPromptSaved', context);
 
     return RepaintBoundary(
-    child: Container(
-      decoration: devCardDecoration(theme, accent),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+      child: PressScale(
+        pressedScale: 0.99,
+        enableTilt: true,
+        duration: const Duration(milliseconds: 140),
+        releaseDuration: const Duration(milliseconds: 220),
+        child: Container(
+          decoration: devCardDecoration(theme, accent),
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.edit_note_rounded, color: accent, size: 24),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  Translations.t('devPromptTitle', context),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+              Row(
+                children: [
+                  Icon(Icons.edit_note_rounded, color: accent, size: 24),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      Translations.t('devPromptTitle', context),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                Translations.t('devPromptDescription', context),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Поле — в том же обёрточном стиле, что и остальные поля ввода
+              // приложения (питание, PIN-диалог): SmoothTyping плавно
+              // проявляет каждую букву, курсор анимированный, лупа и выделение отключены.
+              SmoothTyping(
+                controller: _controller,
+                builder: (typingStyle) => TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  style: typingStyle,
+                  onChanged: _onChanged,
+                  minLines: 4,
+                  maxLines: 8,
+                  maxLength: _maxLength,
+                  maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                  buildCounter:
+                      (
+                        context, {
+                        required currentLength,
+                        required isFocused,
+                        required maxLength,
+                      }) => null,
+                  textCapitalization: TextCapitalization.sentences,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  cursorOpacityAnimates: true,
+                  magnifierConfiguration: TextMagnifierConfiguration.disabled,
+                  enableInteractiveSelection: false,
+                  contextMenuBuilder: (context, _) => const SizedBox.shrink(),
+                  inputFormatters: [WideDashFormatter()],
+                  decoration: InputDecoration(
+                    hintText: Translations.t('devPromptHint', context),
+                    alignLabelWithHint: true,
+                    filled: true,
+                    fillColor: colors.surfaceContainerHighest.withValues(
+                      alpha: 0.45,
+                    ),
+                    contentPadding: const EdgeInsets.all(16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: colors.outlineVariant.withValues(alpha: 0.65),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: colors.outlineVariant.withValues(alpha: 0.65),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: accent, width: 1.6),
+                    ),
                   ),
                 ),
+              ),
+              const SizedBox(height: 8),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, textVal, _) {
+                  final currentText = textVal.text;
+                  final isDirty = currentText != _savedValue;
+                  final isBlank = currentText.trim().isEmpty;
+                  final status = _saving
+                      ? Translations.t('devPromptSaving', context)
+                      : _saveFailed
+                      ? Translations.t('devPromptSaveError', context)
+                      : isDirty
+                      ? Translations.t('devPromptUnsaved', context)
+                      : Translations.t('devPromptSaved', context);
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: Text(
+                          status,
+                          key: ValueKey(status),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: _saveFailed ? colors.error : colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: PressScale(
+                          pressedScale: 0.94,
+                          enableTilt: true,
+                          duration: const Duration(milliseconds: 140),
+                          releaseDuration: const Duration(milliseconds: 220),
+                          child: AnimatedOpacity(
+                            opacity: isBlank ? 0.48 : 1.0,
+                            duration: const Duration(milliseconds: 240),
+                            curve: Curves.easeOutCubic,
+                            child: Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                splashColor: Colors.white.withValues(alpha: 0.22),
+                                highlightColor: Colors.white.withValues(alpha: 0.12),
+                                onTap: !_saving && !isBlank
+                                    ? () => unawaited(_save())
+                                    : null,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  curve: Curves.easeOutCubic,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    // Кроваво-рубиновый градиент с объёмом
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFFFF1E38), // Артериальный рубин
+                                        Color(0xFFC60018), // Густая багровая кровь
+                                        Color(0xFF7A000E), // Тёмное винное ядро
+                                        Color(0xFF380006), // Глубокая обсидиановая тень
+                                      ],
+                                      stops: [0.0, 0.38, 0.76, 1.0],
+                                    ),
+                                    border: Border.all(
+                                      color: const Color(0xFFFF5268).withValues(alpha: 0.75),
+                                      width: 1.3,
+                                    ),
+                                    boxShadow: [
+                                      // Рубиновое неоновое свечение крови
+                                      BoxShadow(
+                                        color: const Color(0xFFFF1E38).withValues(alpha: 0.42),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                      // Внутренний светлый ободок сверху
+                                      BoxShadow(
+                                        color: Colors.white.withValues(alpha: 0.22),
+                                        blurRadius: 0,
+                                        spreadRadius: -1,
+                                        offset: const Offset(0, -1),
+                                      ),
+                                      // Тёмная тень снизу для глубины
+                                      BoxShadow(
+                                        color: const Color(0xFF220003).withValues(alpha: 0.55),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 320),
+                                        switchInCurve: Curves.easeInOutCubic,
+                                        switchOutCurve: Curves.easeInOutCubic,
+                                        transitionBuilder: (child, anim) => ScaleTransition(
+                                          scale: Tween<double>(begin: 0.75, end: 1.0).animate(anim),
+                                          child: FadeTransition(opacity: anim, child: child),
+                                        ),
+                                        child: _saving
+                                            ? const SizedBox.square(
+                                                key: ValueKey('save_spin'),
+                                                dimension: 18,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2.2,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : Icon(
+                                                isDirty
+                                                    ? Icons.bookmark_added_rounded
+                                                    : Icons.check_circle_rounded,
+                                                key: ValueKey(isDirty ? 'save_dirty' : 'save_ok'),
+                                                size: 19,
+                                                color: Colors.white,
+                                              ),
+                                      ),
+                                      const SizedBox(width: 9),
+                                      Text(
+                                        Translations.t('devPromptSave', context),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 15,
+                                          letterSpacing: 0.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            Translations.t('devPromptDescription', context),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colors.onSurfaceVariant,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 14),
-          // Поле — в том же обёрточном стиле, что и остальные поля ввода
-          // приложения (питание, PIN-диалог): SmoothTyping плавно
-          // проявляет каждую букву, курсор анимированный, лупа отключена.
-          SmoothTyping(
-            controller: _controller,
-            builder: (typingStyle) => TextField(
-              controller: _controller,
-              style: typingStyle,
-              onChanged: _onChanged,
-              minLines: 4,
-              maxLines: 8,
-              maxLength: _maxLength,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              buildCounter:
-                  (
-                    context, {
-                    required currentLength,
-                    required isFocused,
-                    required maxLength,
-                  }) => null,
-              textCapitalization: TextCapitalization.sentences,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
-              cursorOpacityAnimates: true,
-              magnifierConfiguration: TextMagnifierConfiguration.disabled,
-              contextMenuBuilder: minimalContextMenuBuilder,
-              decoration: InputDecoration(
-                hintText: Translations.t('devPromptHint', context),
-                alignLabelWithHint: true,
-                filled: true,
-                fillColor: colors.surfaceContainerHighest.withValues(
-                  alpha: 0.45,
-                ),
-                contentPadding: const EdgeInsets.all(16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(
-                    color: colors.outlineVariant.withValues(alpha: 0.65),
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(
-                    color: colors.outlineVariant.withValues(alpha: 0.65),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: accent, width: 1.6),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: Text(
-              status,
-              key: ValueKey(status),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: _saveFailed ? colors.error : colors.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: PressScale(
-              // Зажатие — долгое и бархатное: кнопка «тонет» неспешно
-              // (460 мс) и поднимается ещё медленнее (720 мс), возврат
-              // без отдачи.
-              pressedScale: 0.94,
-              duration: const Duration(milliseconds: 460),
-              releaseDuration: const Duration(milliseconds: 720),
-              child: AnimatedOpacity(
-                // Пустое поле — кнопка мягко притухает: без текста её
-                // нажатие всё равно ничего не сохранит.
-                opacity: _draft.trim().isEmpty ? 0.55 : 1.0,
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                child: TextButton(
-                  // ИСПРАВЛЕНИЕ БАГА: раньше кнопка была активна только пока
-                  // есть несохранённая разница (isDirty), а автосохранение
-                  // через 700 мс её обнуляло — пользователь печатал текст,
-                  // тапал «Сохранить» и кнопка никак не реагировала. Теперь
-                  // кнопка жива всегда, пока поле не пустое и не идёт сейв.
-                  // Явный тап отменяет отложенный автосейв и сохраняет сразу.
-                  onPressed: !_saving && _draft.trim().isNotEmpty
-                      ? () => unawaited(_save())
-                      : null,
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    foregroundColor: Colors.white,
-                    disabledForegroundColor: Colors.white.withValues(
-                      alpha: 0.95,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          // Полированный объём agysha: светлый блик сверху,
-                          // насыщенное ядро, глубокая кромка снизу.
-                          Color.lerp(accent, Colors.white, 0.42)!,
-                          accent,
-                          Color.lerp(accent, Colors.black, 0.32)!,
-                          Color.lerp(accent, Colors.black, 0.55)!,
-                        ],
-                        stops: const [0.0, 0.42, 0.78, 1.0],
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.55),
-                        width: 1.3,
-                      ),
-                      boxShadow: [
-                        // Исходное свечение акцентом.
-                        BoxShadow(
-                          color: accent.withValues(alpha: 0.42),
-                          blurRadius: 16,
-                          offset: const Offset(0, 5),
-                        ),
-                        // Внутренний светлый ободок — делает кнопку выпуклой.
-                        BoxShadow(
-                          color: Colors.white.withValues(alpha: 0.16),
-                          blurRadius: 0,
-                          spreadRadius: -1,
-                          offset: const Offset(0, -1),
-                        ),
-                        // Тень снизу для глубины.
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.22),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 380),
-                          switchInCurve: Curves.easeInOutCubic,
-                          switchOutCurve: Curves.easeInOutCubic,
-                          transitionBuilder: (child, anim) => ScaleTransition(
-                            // Значок «дозревает» мягко: масштаб + кросс-фейд —
-                            // смена спиннер↔дискета↔галочка читается
-                            // перетеканием, а не подменой.
-                            scale: Tween<double>(
-                              begin: 0.75,
-                              end: 1.0,
-                            ).animate(anim),
-                            child: FadeTransition(opacity: anim, child: child),
-                          ),
-                          child: _saving
-                              ? const SizedBox.square(
-                                  key: ValueKey('save_spin'),
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Icon(
-                                  isDirty
-                                      ? Icons.save_rounded
-                                      : Icons.check_circle_rounded,
-                                  key: ValueKey(
-                                    isDirty ? 'save_save' : 'save_ok',
-                                  ),
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                        ),
-                        const SizedBox(width: 9),
-                        Text(
-                          Translations.t('devPromptSave', context),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
     );
   }
 }
