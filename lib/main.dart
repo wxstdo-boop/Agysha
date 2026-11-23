@@ -54,6 +54,7 @@ import 'overlay/ada_overlay.dart'
         kOpenAdaChatCmd,
         AdaOverlayApp;
 import 'overlay/overlay_bridge.dart';
+import 'overlay/launch_intent.dart' show listenOpenAdaChat, consumeOpenAdaChat;
 import 'widgets/ada_avatars.dart';
 import 'widgets/ai_guide.dart';
 import 'utils/page_transitions.dart';
@@ -928,6 +929,19 @@ void main() async {
   // кадра: окно Android (аватарка Realme/белый экран) висело секундами.
   unawaited(_initBackgroundAudio());
   await _startApp(bootClock);
+  unawaited(_wireBubbleLaunch());
+}
+
+/// Тап по пузырю Ады должен вернуть обычный чат — и когда приложение уже
+/// в памяти, и когда его поднимают с нуля.
+///
+/// Тёплый путь приходит сообщением по каналу, холодный — меткой, которую
+/// MainActivity держит до первого запроса. Оба ведут в один и тот же
+/// [_openAdaFromBubble], поэтому вторая точка входа ничего не дублирует.
+Future<void> _wireBubbleLaunch() async {
+  if (kIsWeb) return;
+  listenOpenAdaChat(_openAdaFromBubble);
+  if (await consumeOpenAdaChat()) _openAdaFromBubble();
 }
 
 /// Медиауведомление для «своей музыки» профиля: без этой инициализации

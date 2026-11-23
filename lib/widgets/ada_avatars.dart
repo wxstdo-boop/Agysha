@@ -406,6 +406,14 @@ class AdaAvatar extends StatelessWidget {
   /// обоях читалось как жёлтые подчёркивания по краю аватарки.
   final bool showRing;
 
+  /// Мягкое свечение под глифом — цветная тень значка (и радиальный ореол
+  /// в монохроме).
+  ///
+  /// Выключается только у пузыря поверх других приложений: тень красится в
+  /// `primary`, и на маленьком круге её размытый край читался жёлтой
+  /// полосой вокруг эмодзи — «подчёркивания» у аватарки.
+  final bool showGlow;
+
   const AdaAvatar({
     super.key,
     this.size = 34,
@@ -414,6 +422,7 @@ class AdaAvatar extends StatelessWidget {
     // на плите и пузырь мини-окна (monochrome: true).
     this.monochrome = false,
     this.showRing = true,
+    this.showGlow = true,
   });
 
   @override
@@ -602,7 +611,7 @@ class AdaAvatar extends StatelessWidget {
               ),
             ),
           // Мягкое свечение под глифом: объём без blur-фильтра.
-          if (monochrome)
+          if (monochrome && showGlow)
             Container(
               width: size * 0.72,
               height: size * 0.72,
@@ -619,7 +628,13 @@ class AdaAvatar extends StatelessWidget {
             ),
           // Значок Ады: чуть крупнее и с мягкой тенью — на маленьких
           // размерах (18 px в пузырях) контур не «растворяется» в градиенте.
-          _iconGlyph(v, cs, monochrome: monochrome, dark: dark),
+          _iconGlyph(
+            v,
+            cs,
+            monochrome: monochrome,
+            dark: dark,
+            withGlow: showGlow,
+          ),
         ],
       ),
     );
@@ -634,6 +649,7 @@ class AdaAvatar extends StatelessWidget {
     ColorScheme cs, {
     required bool monochrome,
     required bool dark,
+    required bool withGlow,
   }) {
     final glow = Shadow(
       color: cs.primary.withValues(alpha: dark ? 0.34 : 0.20),
@@ -647,7 +663,11 @@ class AdaAvatar extends StatelessWidget {
     if (emoji != null && !monochrome) {
       return Text(
         emoji,
-        style: TextStyle(fontSize: size * 0.58, height: 1.0, shadows: [glow]),
+        style: TextStyle(
+          fontSize: size * 0.58,
+          height: 1.0,
+          shadows: withGlow ? <Shadow>[glow] : const <Shadow>[],
+        ),
       );
     }
     final icon = ShaderMask(
@@ -673,7 +693,7 @@ class AdaAvatar extends StatelessWidget {
       alignment: Alignment.center,
       children: [
         // Тень — под маской, поэтому не перекрашивается и держит контур.
-        if (monochrome)
+        if (monochrome && withGlow)
           Icon(
             v.icon,
             size: size * 0.52,

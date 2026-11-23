@@ -17,8 +17,10 @@ void initOverlayChannel() {
   const MethodChannel('x-slayer/overlay');
 }
 
-/// Размер окна пузыря (dp). Окно ровно по пузырю: всё, что за ним, —
-/// настоящий экран приложения под Адой.
+/// Размер окна пузыря (dp) и диаметр самого круга. Окно на 8 dp больше
+/// круга: тени нужен запас, иначе её обрезает прямоугольник окна и по краю
+/// пузыря проступает тёмная кайма. Заодно площадка нажатия — 44 dp.
+const double _windowSize = 44;
 const double _bubbleSize = 36;
 
 /// Команда главному приложению: «верни Agysha на экран и открой чат Ады».
@@ -111,7 +113,7 @@ class _AdaBubbleState extends State<_AdaBubble>
 
   late final AnimationController _appear = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 260),
+    duration: const Duration(milliseconds: 200),
     value: 1,
   );
 
@@ -180,14 +182,17 @@ class _AdaBubbleState extends State<_AdaBubble>
   Future<void> _openChat() async {
     if (_opening) return;
     _opening = true;
-    Haptics.select();
-    await _rememberPosition();
+    // Команда уходит ПЕРВОЙ. Раньше её ждал запрос позиции окна: если
+    // канал не отвечал (сервис ещё не прицепил вид), тап молча съедался,
+    // а `_opening` оставался взведённым — пузырь «умирал» до перезапуска.
     try {
       await FlutterOverlayWindow.shareData({'cmd': kOpenAdaChatCmd});
     } catch (_) {
       _opening = false;
       return;
     }
+    unawaited(Haptics.select());
+    unawaited(_rememberPosition());
     // Пузырь остаётся на месте: короткий дебаунс вместо вечной блокировки —
     // иначе после первого тапа пузырь «замирал» до перезапуска оверлея.
     Timer(const Duration(milliseconds: 900), () {
@@ -234,7 +239,10 @@ class _AdaBubbleState extends State<_AdaBubble>
           return Opacity(
             opacity: e,
             child: Transform.scale(
-              scale: 0.72 + 0.28 * e,
+              // Окно само проявляется альфой (см. OverlayService), поэтому
+              // здесь только короткое «дыхание» масштаба: сильный зум из
+              // 0.72 поверх фейда читался рывком.
+              scale: 0.86 + 0.14 * e,
               alignment: Alignment.center,
               child: child,
             ),
@@ -256,25 +264,38 @@ class _AdaBubbleState extends State<_AdaBubble>
     // Пузырь — это сама Ада во весь круг, без цветной подложки. Градиентная
     // кайма вокруг аватарки давала по краю тёплые жёлто-розовые полосы на
     // светлых обоях — читалось как «подчёркивания» у аватарки.
-    final size = _bubbleSize - 2;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          // Только тень: она отделяет пузырь от обоев, но не рисует кольцо.
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.34),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+    return SizedBox(
+      width: _windowSize,
+      height: _windowSize,
+      child: Center(
+        child: Container(
+          width: _bubbleSize,
+          height: _bubbleSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              // Тень отделяет пузырь от обоев. Она целиком лежит внутри
+              // окна: обрезанная по краю тень рисовала ту же полосу, что и
+              // кольцо.
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.28),
+                blurRadius: 7,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipOval(
-        // Без кольца: круг лежит на чужих обоях, и тёмная обводка по краю
-        // читалась тёплой полосой под аватаркой. Тень уже отделяет пузырь.
-        child: AdaAvatar(size: size, variantIndex: _variant, showRing: false),
+          child: ClipOval(
+            // Без кольца и без свечения: круг лежит на чужих обоях, а
+            // тень значка красится в primary — её размытый край читался
+            // жёлтой полосой под эмодзи. Тень медальона уже отделяет пузырь.
+            child: AdaAvatar(
+              size: _bubbleSize,
+              variantIndex: _variant,
+              showRing: false,
+              showGlow: false,
+            ),
+          ),
+        ),
       ),
     );
   }

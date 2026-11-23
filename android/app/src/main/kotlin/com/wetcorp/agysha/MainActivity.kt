@@ -35,7 +35,24 @@ import java.io.FileOutputStream
 class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "com.wetcorp.agysha/alarm_payload"
     private val HAPTICS_CHANNEL = "com.wetcorp.agysha/haptics"
+    private val LAUNCH_CHANNEL = "com.wetcorp.agysha/launch"
     private var methodChannel: MethodChannel? = null
+    private var launchChannel: MethodChannel? = null
+
+    // Тап по пузырю Ады поднимает Agysha с меткой в intent'е. Метка живёт
+    // до первого запроса из Dart: на холодном старте движок ещё не готов
+    // её принять, и без этого флага чат не открывался вообще.
+    private var pendingOpenAdaChat = false
+
+    private fun captureOpenAdaChat(intent: Intent?) {
+        if (intent == null) return
+        if (!intent.getBooleanExtra("agysha_open_ada_chat", false)) return
+        intent.removeExtra("agysha_open_ada_chat")
+        pendingOpenAdaChat = true
+        // Приложение уже на экране — команду можно отдать сразу. Если Dart
+        // ещё не слушает канал, флаг останется и его заберут при старте.
+        launchChannel?.invokeMethod("open_ada_chat", null)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,6 +71,8 @@ class MainActivity : AudioServiceActivity() {
         // На холодном старте он приходит прямо в onCreate — глушим
         // фоновый звонок/вибрацию там же.
         handleCancelAlarm()
+        // Холодный старт по тапу на пузырь Ады.
+        captureOpenAdaChat(intent)
     }
 
     /**
@@ -165,6 +184,22 @@ class MainActivity : AudioServiceActivity() {
         super.configureFlutterEngine(flutterEngine)
         AlarmSchedulerPlugin.registerWith(flutterEngine, applicationContext)
         registerUpdaterChannel(flutterEngine)
+
+        // Канал «подняли тапом по пузырю». Dart либо получает команду
+        // сразу, либо забирает флаг на старте — метка из intent'а не
+        // теряется, даже если движок поднимался минуту.
+        val launch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LAUNCH_CHANNEL)
+        launch.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "consumeOpenAdaChat" -> {
+                    val pending = pendingOpenAdaChat
+                    pendingOpenAdaChat = false
+                    result.success(pending)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        launchChannel = launch
 
         // Уведомления НЕ отменяем — fullScreenIntent только что показал
         // alarm-нотификацию с играющим звуком. cancelAlarmNotifications()
@@ -1292,6 +1327,8 @@ class MainActivity : AudioServiceActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // Приложение было в памяти: пузырь просит открыть чат Ады.
+        captureOpenAdaChat(intent)
         // Активность уже жива (приложение было на экране) — флаги
         // «поверх блокировки / не гасить экран» нужно ставить заново,
         // в onCreate они уже не попадут.

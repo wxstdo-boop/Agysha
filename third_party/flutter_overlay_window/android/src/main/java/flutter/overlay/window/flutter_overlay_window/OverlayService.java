@@ -15,6 +15,7 @@ import android.graphics.Point;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.view.Choreographer;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -76,6 +77,21 @@ public class OverlayService extends Service implements View.OnTouchListener {
     private int moveFrameGeneration = 0;
     private int pendingMoveX;
     private int pendingMoveY;
+    // Пузырь живёт сам: мягко покачивается вокруг точки, где его оставили,
+    // и замирает под пальцем. Держим это на Handler, а не на Choreographer:
+    // 30 кадров в секунду для 44 dp окна достаточно, а заряд не жжём.
+    private static final int FLOAT_INTERVAL_MS = 33;
+    private static final double FLOAT_AMPLITUDE_X_DP = 5.0;
+    private static final double FLOAT_AMPLITUDE_Y_DP = 9.0;
+    private static final double FLOAT_SPEED_X = 1.35;
+    private static final double FLOAT_SPEED_Y = 0.95;
+    private boolean floatEnabled = false;
+    private boolean floatPosted = false;
+    private int floatHomeX;
+    private int floatHomeY;
+    private long floatStartMs = 0L;
+    private long floatHoldUntilMs = 0L;
+    private boolean entryFadeRunning = false;
     private static final float MAXIMUM_OPACITY_ALLOWED_FOR_S_AND_HIGHER = 0.8f;
     private Point szWindow = new Point();
     private Timer mTrayAnimationTimer;
@@ -191,7 +207,17 @@ public class OverlayService extends Service implements View.OnTouchListener {
                     && "open_ada_chat".equals(((java.util.Map<?, ?>) message).get("cmd"))) {
                 bringAppToFront();
             }
-            WindowSetup.messenger.send(message);
+            // Мессенджер главного движка может быть уже отцеплен (приложение
+            // выгрузили). Раньше это роняло обработчик — и тап по пузырю
+            // терялся молча. Теперь путь «поднять приложение» остаётся живым.
+            final BasicMessageChannel<Object> messenger = WindowSetup.messenger;
+            if (messenger != null) {
+                try {
+                    messenger.send(message);
+                } catch (RuntimeException error) {
+                    Log.w("OverlayService", "Host engine is gone, message dropped", error);
+                }
+            }
         });
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
@@ -246,12 +272,16 @@ public class OverlayService extends Service implements View.OnTouchListener {
             return START_NOT_STICKY;
         }
         moveOverlay(dx, dy, null);
+        // Окно проявляется альфой, а маленький пузырь начинает жить сам.
+        startEntryFade();
+        refreshFloatMode(WindowSetup.width, WindowSetup.height);
         return START_NOT_STICKY;
     }
 
     private void removeOverlayViewSafely() {
         moveFrameGeneration++;
         moveFramePosted = false;
+        stopFloating();
         if (mTrayAnimationTimer != null) {
             mTrayAnimationTimer.cancel();
             mTrayAnimationTimer = null;
@@ -370,6 +400,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
             params.height = (height == 1999 || height == -1) ? -1 : dpToPx(height);
             WindowSetup.enableDrag = enableDrag;
             manager.updateViewLayout(view, params);
+            // Пузырь 44 dp катается сам, окно чата — нет.
+            refreshFloatMode(width, height);
             // Не вызываем invalidate: он конкурирует с TextureView во время
             // resize и оставляет старый кадр на границе пузыря.
             result.success(true);
@@ -410,8 +442,12 @@ public class OverlayService extends Service implements View.OnTouchListener {
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) service.flutterView.getLayoutParams();
             if (params == null) return null;
             Map<String, Double> position = new HashMap<>();
-            position.put("x", service.pxToDp(params.x));
-            position.put("y", service.pxToDp(params.y));
+            // Пока пузырь катается сам, «место, где его оставили» — это дом
+            // качания, а не текущий кадр: иначе сохранённая точка уползала бы
+            // вместе с покачиванием.
+            final boolean floating = service.floatEnabled && service.floatPosted;
+            position.put("x", service.pxToDp(floating ? service.floatHomeX : params.x));
+            position.put("y", service.pxToDp(floating ? service.floatHomeY : params.y));
             return position;
         } catch (RuntimeException error) {
             Log.w("OverlayService", "Unable to read overlay position", error);
@@ -516,6 +552,10 @@ public class OverlayService extends Service implements View.OnTouchListener {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                     | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                     | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            // Метка для MainActivity: пришли тапом по пузырю, надо открыть
+            // чат Ады. Канал оверлея живёт только пока жив главный движок,
+            // а intent доходит и до холодного старта.
+            launch.putExtra("agysha_open_ada_chat", true);
             startActivity(launch);
         } catch (Exception error) {
             Log.w("OverlayService", "Could not bring app to front", error);
@@ -567,6 +607,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 dragging = false;
+                // Палец на пузыре — стоим: иначе окно уползает из-под пальца.
+                floatHoldUntilMs = SystemClock.uptimeMillis() + 1500L;
                 lastX = event.getRawX();
                 lastY = event.getRawY();
                 dragPositionX = params.x;
@@ -593,6 +635,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                floatHoldUntilMs = SystemClock.uptimeMillis() + 1200L;
                 lastYPosition = Math.round(dragPositionY);
                 if (!WindowSetup.positionGravity.equals("none")) {
                     mTrayTimerTask = new TrayAnimationTimerTask();
@@ -617,6 +660,146 @@ public class OverlayService extends Service implements View.OnTouchListener {
         return Math.max(0, Math.min(y, Math.max(0, screen - viewHeight)));
     }
 
+    /** Пузырь (а не окно чата): маленькое окно, которое можно катать. */
+    private void refreshFloatMode(int widthDp, int heightDp) {
+        final boolean bubble = widthDp > 0 && heightDp > 0 && widthDp <= 48 && heightDp <= 48;
+        if (bubble == floatEnabled) {
+            if (bubble) startFloating();
+            return;
+        }
+        floatEnabled = bubble;
+        if (bubble) {
+            startFloating();
+        } else {
+            stopFloating();
+        }
+    }
+
+    private void startFloating() {
+        if (!floatEnabled || floatPosted || !viewAttached || flutterView == null) return;
+        final WindowManager.LayoutParams params =
+                (WindowManager.LayoutParams) flutterView.getLayoutParams();
+        if (params == null) return;
+        floatHomeX = params.x;
+        floatHomeY = params.y;
+        floatStartMs = SystemClock.uptimeMillis();
+        floatPosted = true;
+        mAnimationHandler.postDelayed(floatRunnable, FLOAT_INTERVAL_MS);
+    }
+
+    private void stopFloating() {
+        floatPosted = false;
+        mAnimationHandler.removeCallbacks(floatRunnable);
+    }
+
+    /**
+     * Самокатание пузыря: круг мягко ходит вокруг точки, где его оставили.
+     * Амплитуда — единицы dp, скорость — доли dp за кадр, поэтому шаг в
+     * 1 физический пиксель не читается как рывок. Под пальцем и секунду
+     * после — стоит ровно, чтобы попадать по нему без промахов.
+     */
+    private final Runnable floatRunnable = new Runnable() {
+        @Override
+        public void run() {
+            floatPosted = false;
+            if (!floatEnabled || !viewAttached) return;
+            final WindowManager manager = windowManager;
+            final FlutterView view = flutterView;
+            if (manager == null || view == null) return;
+            final WindowManager.LayoutParams params =
+                    (WindowManager.LayoutParams) view.getLayoutParams();
+            if (params == null) return;
+            final long now = SystemClock.uptimeMillis();
+            if (dragging || now < floatHoldUntilMs) {
+                // Пауза: точкой отсчёта становится текущее место, чтобы
+                // пузырь не «прыгал» к старому дому после паузы.
+                floatHomeX = params.x;
+                floatHomeY = params.y;
+                floatStartMs = now;
+                floatPosted = true;
+                mAnimationHandler.postDelayed(this, FLOAT_INTERVAL_MS);
+                return;
+            }
+            final double t = (now - floatStartMs) / 1000.0;
+            final int targetX = clampToScreenX(
+                    floatHomeX + (int) Math.round(Math.sin(t * FLOAT_SPEED_X) * dpToPxF(FLOAT_AMPLITUDE_X_DP)),
+                    view.getWidth());
+            final int targetY = clampToScreenY(
+                    floatHomeY + (int) Math.round(Math.cos(t * FLOAT_SPEED_Y) * dpToPxF(FLOAT_AMPLITUDE_Y_DP)),
+                    view.getHeight());
+            if (params.x != targetX || params.y != targetY) {
+                params.x = targetX;
+                params.y = targetY;
+                try {
+                    manager.updateViewLayout(view, params);
+                } catch (RuntimeException error) {
+                    Log.w("OverlayService", "Ignoring float move", error);
+                    return;
+                }
+            }
+            floatPosted = true;
+            mAnimationHandler.postDelayed(this, FLOAT_INTERVAL_MS);
+        }
+    };
+
+    /**
+     * Проявление окна: альфа 0 → 1 за ~190 мс с замедлением к концу. Раньше
+     * окно появлялось одним кадром, и на фоне Flutter-анимации это читалось
+     * как вспышка — «пузырь входит неплавно».
+     */
+    private void startEntryFade() {
+        if (entryFadeRunning) return;
+        final WindowManager manager = windowManager;
+        final FlutterView view = flutterView;
+        if (manager == null || view == null || !viewAttached) return;
+        final WindowManager.LayoutParams params =
+                (WindowManager.LayoutParams) view.getLayoutParams();
+        if (params == null) return;
+        final float ceiling = (WindowSetup.flag == clickableFlag)
+                ? MAXIMUM_OPACITY_ALLOWED_FOR_S_AND_HIGHER
+                : 1f;
+        entryFadeRunning = true;
+        params.alpha = 0f;
+        try {
+            manager.updateViewLayout(view, params);
+        } catch (RuntimeException error) {
+            entryFadeRunning = false;
+            return;
+        }
+        final int steps = 12;
+        mAnimationHandler.postDelayed(new Runnable() {
+            int i = 0;
+
+            @Override
+            public void run() {
+                i++;
+                if (!viewAttached) {
+                    entryFadeRunning = false;
+                    return;
+                }
+                final WindowManager.LayoutParams p = (WindowManager.LayoutParams) view.getLayoutParams();
+                if (p == null) {
+                    entryFadeRunning = false;
+                    return;
+                }
+                final double t = Math.min(1.0, (double) i / steps);
+                final double eased = 1.0 - Math.pow(1.0 - t, 3.0);
+                p.alpha = (float) (ceiling * eased);
+                try {
+                    manager.updateViewLayout(view, p);
+                } catch (RuntimeException ignored) {
+                    // Окно могли закрыть прямо во время проявления.
+                }
+                if (i < steps) {
+                    mAnimationHandler.postDelayed(this, 16);
+                } else {
+                    p.alpha = ceiling;
+                    entryFadeRunning = false;
+                }
+            }
+        }, 16);
+    }
+
     private void postMoveFrame() {
         if (moveFramePosted) return;
         moveFramePosted = true;
@@ -637,6 +820,10 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 params.x = targetX;
                 params.y = targetY;
                 manager.updateViewLayout(view, params);
+                // Программный сдвиг — новый дом для самокатания.
+                floatHomeX = targetX;
+                floatHomeY = targetY;
+                floatStartMs = SystemClock.uptimeMillis();
             } catch (RuntimeException error) {
                 Log.w("OverlayService", "Ignoring stale overlay move", error);
             }
