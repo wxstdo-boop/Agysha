@@ -18,7 +18,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: ^0.20.2
-  # Набор версий подобран под Flutter 3.47 / Dart 3.12. file_picker 13 и
+  # Набор версий подобран под Flutter 3.50 / Dart 3.14. file_picker 13 и
   # flutter_local_notifications 23 требуют win32 ^6 — возврат file_picker к ^10
   # ломает solve, не откатывать без нужды.
   #
@@ -31,6 +31,9 @@ dependencies:
   # `grep -rn "share_plus" lib test` пуст, а упоминания встречались только в
   # генерируемых registrant-файлах, которые появляются именно потому, что
   # пакет объявлен в зависимостях.
+  # 2.x перешёл на пакет `material_ui` и отдаёт ЕГО ColorScheme: с
+  # `package:flutter/material.dart` типы несовместимы. Обновлять вместе с
+  # переездом всего приложения на material_ui, не раньше.
   dynamic_color: ^1.9.0
   characters: ^1.4.1
   cryptography: ^2.7.0
@@ -43,8 +46,8 @@ dependencies:
   audioplayers: ^6.1.0
   just_audio: ^0.10.6
   just_audio_background: ^0.0.1-beta.17
-  file_picker: ^13.3.3
-  flutter_local_notifications: ^23.0.2
+  file_picker: ^13.4.1
+  flutter_local_notifications: ^23.0.3
   timezone: ^0.11.2
   url_launcher: ^6.3.1
   android_intent_plus: ^6.1.0

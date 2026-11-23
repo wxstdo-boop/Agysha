@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/rolling_text.dart';
@@ -256,6 +257,9 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
     if (s == 'Default') return tile;
     return Dismissible(
       key: ValueKey('sound_dismiss_$s'),
+      // Как в SwipeToDelete: смещение считается от касания, а не от конца
+      // touch slop, иначе первые ~18 px пальца строка стоит на месте.
+      dragStartBehavior: DragStartBehavior.down,
       movementDuration: const Duration(milliseconds: 320),
       direction: DismissDirection.endToStart,
       background: Container(

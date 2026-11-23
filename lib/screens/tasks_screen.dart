@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../services/haptics.dart';
 import '../services/sounds.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import '../models/task.dart';
 import '../services/task_service.dart';
 import '../services/ai_guide_service.dart';
