@@ -995,12 +995,15 @@ void _openAdaFromBubble() {
       unawaited(showAiGuideChat(ctx));
       return;
     }
-    if (++attempts < 24) {
-      Future.delayed(const Duration(milliseconds: 120), attempt);
+    // Холодный старт на слабом телефоне идёт секундами: ждём навигатор
+    // ~10 с, иначе тап по пузырю молча теряется, и кажется, что он не
+    // работает вовсе.
+    if (++attempts < 70) {
+      Future.delayed(const Duration(milliseconds: 150), attempt);
     }
   }
 
-  Future.delayed(const Duration(milliseconds: 120), attempt);
+  Future.delayed(const Duration(milliseconds: 150), attempt);
 }
 
 /// Запуск приложения. Вынесено из [main], чтобы экран диагностики сбоя
