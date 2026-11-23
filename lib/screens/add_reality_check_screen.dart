@@ -97,6 +97,11 @@ class _AddRealityCheckScreenState extends State<AddRealityCheckScreen> {
             pressedScale: 0.96,
             duration: const Duration(milliseconds: 200),
             releaseDuration: const Duration(milliseconds: 340),
+            pressOverlay: pressGloss(
+              BorderRadius.circular(999),
+              strength: 0.12,
+            ),
+            maxTiltAngle: 0.22,
             child: TextButton(
               onPressed: _save,
               child: Text(Translations.saveOf(context)),

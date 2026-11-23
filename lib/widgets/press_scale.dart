@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../utils/motion_prefs.dart';
-import '../utils/perf_prefs.dart';
 import 'swipe_to_delete.dart' show SwipeToDeleteScope;
 
 /// Плавная отдача «вдавливания» и тактильного 3D-наклона для карточек и кнопок:
@@ -120,6 +119,10 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   late final AnimationController _tiltFade;
 
   Offset _tilt = Offset.zero;
+
+  /// Размер элемента на момент последнего наклона: по нему подбирается сила
+  /// перспективы (см. [_perspectiveFor]).
+  Size? _tiltSize;
   Offset _releaseTilt = Offset.zero;
   final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(
     Offset.zero,
@@ -154,6 +157,12 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// 26 px: у 12 px наклон гас от малейшего дрожания руки при удержании.
   static const double _dragSlop = 26.0;
 
+  /// Минимальная сила наклона при зажатии. Палец почти всегда лежит
+  /// серединой небольшой кнопки, и наклон там выходил почти нулевым: у
+  /// «Сохранить» 3D «не ощущался». Направление по-прежнему задаёт палец,
+  /// а амплитуда не проваливается ниже этого значения.
+  static const double _minTilt = 0.45;
+
   /// Мягкое асимптотическое сглаживание к границе наклона:
   /// в пределах карточки (abs <= 0.90) угол передаётся 1:1 без срезания,
   /// а у границы и за её пределами плавно и упруго амортизирует (soft rubber-band cushion).
@@ -164,6 +173,21 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     final excess = abs - 0.90;
     final damped = 0.90 + 0.25 * (1.0 - math.exp(-excess / 0.50));
     return sign * damped;
+  }
+
+  /// Сила перспективы для матрицы наклона.
+  ///
+  /// Перспектива — это projective-преобразование, и при растеризации (слой
+  /// карточки в списке) её край «выпадает»: у 300 px карточки под пальцем
+  /// пропадала полоса фона ~10 px (alpha 0). Поэтому силу держим обратно
+  /// пропорциональной длинной стороне: у кнопок 40–90 px она полная
+  /// (0.0012 — сочный объём, который и просили «ощущать»), у карточек и
+  /// широких плашек — около 0.0002, и фон под пальцем цел.
+  static double _perspectiveFor(Size? size) {
+    if (size == null) return 0.0;
+    final longest = math.max(size.width, size.height);
+    if (longest <= 0) return 0.0;
+    return math.min(0.0012, 0.072 / longest);
   }
 
   @override
@@ -231,11 +255,10 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   }
 
   void _updateTilt(Offset pos, {bool smooth = false}) {
-    // В режиме «Оптимизация» наклон выключен: перспективный Transform
-    // поднимает слой и перерисовывает его каждый кадр драга.
-    if (!widget.enableTilt ||
-        MotionPrefs.shouldReduceMotion ||
-        PerfPrefs.active) {
+    // «Оптимизация» наклон НЕ выключает: это отклик на палец, а не фоновая
+    // анимация, и живёт он только пока палец на элементе. Уважаем лишь
+    // системное «убрать анимации».
+    if (!widget.enableTilt || MotionPrefs.shouldReduceMotion) {
       return;
     }
     final size = context.size;
@@ -243,6 +266,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     // Тактильный 3D-наклон работает для всех карточек, плашек и кнопок.
     // Для микро-иконок меньше 20px наклон не нужен.
     if (size.width < 20 || size.height < 20) return;
+    _tiltSize = size;
     final rawNx = (pos.dx / size.width - 0.5) * 2.0;
     final rawNy = (pos.dy / size.height - 0.5) * 2.0;
     // Плюс «потяг» за пальцем от точки нажатия: кнопка отзывается наклоном
@@ -256,10 +280,15 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       _softClamp(rawNx * 0.75 + dragNx * 1.15),
       _softClamp(rawNy * 0.75 + dragNy * 1.15),
     );
+    // Держим наклон заметным и в центре элемента (см. [_minTilt]).
+    final len = target.distance;
+    final floored = len > 0.02 && len < _minTilt
+        ? target * (_minTilt / len)
+        : target;
     if (smooth) {
-      _tilt = Offset.lerp(_tilt, target, 0.55) ?? target;
+      _tilt = Offset.lerp(_tilt, floored, 0.55) ?? floored;
     } else {
-      _tilt = target;
+      _tilt = floored;
     }
     _tiltNotifier.value = _tilt;
   }
@@ -434,7 +463,6 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
           final tiltActive =
               widget.enableTilt &&
               !MotionPrefs.shouldReduceMotion &&
-              !PerfPrefs.active &&
               tiltFade > 0.001 &&
               currentTilt != Offset.zero;
 
@@ -445,7 +473,8 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
 
           final matrix = Matrix4.identity();
           if (tiltActive) {
-            matrix.setEntry(3, 2, 0.0012);
+            final perspective = _perspectiveFor(_tiltSize);
+            if (perspective > 0) matrix.setEntry(3, 2, perspective);
             matrix.rotateX(tiltX);
             matrix.rotateY(tiltY);
           }
@@ -498,4 +527,29 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       ),
     );
   }
+}
+
+/// Готовый блик для [PressScale.pressOverlay]: мягкое световое пятно сверху,
+/// гаснущее книзу, — «мокрое стекло» под пальцем. Живёт только на время
+/// нажатия и повторяет скругление самой кнопки, поэтому у плашек с заливкой
+/// (FilledButton, капсулы) читается как глянец, а не как прямоугольник.
+Widget Function(BuildContext context, double progress) pressGloss(
+  BorderRadius radius, {
+  double strength = 0.20,
+}) {
+  return (context, progress) => IgnorePointer(
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Colors.white.withValues(alpha: strength * progress),
+            Colors.transparent,
+          ],
+        ),
+      ),
+    ),
+  );
 }

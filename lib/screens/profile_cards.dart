@@ -1166,6 +1166,8 @@ extension _ProfileCards on _ProfileScreenState {
     final rows = _service.leaderboard(
       selfFallback: Translations.t('profileMe', context, 'Я'),
     );
+    final glide = MotionPrefs.shouldReduceMotion ? Duration.zero : Motion.glide;
+    const leaderCurve = Curves.easeOutCubic;
     return _Card(
       title: Translations.t('profileLeaderboard', context, 'Рейтинг'),
       icon: Icons.emoji_events_outlined,
@@ -1193,40 +1195,23 @@ extension _ProfileCards on _ProfileScreenState {
       // друга), поэтому смена очков меняет места анимацией, а не мгновенной
       // перестановкой. AnimatedSize тянет высоту при добавлении/удалении.
       child: AnimatedSize(
-        duration: MotionPrefs.shouldReduceMotion ? Duration.zero : Motion.slow,
-        curve: Curves.easeOutCubic,
+        // Высота карточки и переезд строк идут ОДНОЙ длительностью и кривой.
+        // Разные значения (320 против 500 мс) оставляли строку, едущую вверх,
+        // за нижним краем схлопывающейся карточки — удаление читалось как
+        // рывок, особенно когда у удалённого друга меньше очков и вверх едут
+        // все строки под ним.
+        duration: glide,
+        curve: leaderCurve,
         alignment: Alignment.topCenter,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              height: rows.length * _leaderRowHeight,
-              child: Stack(
-                children: [
-                  for (var i = 0; i < rows.length; i++)
-                    AnimatedPositioned(
-                      // Ключ — id друга: при смене очков Flutter видит тот же
-                      // виджет на новой позиции и анимирует переезд.
-                      key: ValueKey(rows[i].id),
-                      duration: MotionPrefs.shouldReduceMotion
-                          ? Duration.zero
-                          : Motion.glide,
-                      curve: Curves.easeOutCubic,
-                      left: 0,
-                      right: 0,
-                      top: i * _leaderRowHeight,
-                      child: SizedBox(
-                        height: _leaderRowHeight,
-                        child: _leaderRow(
-                          theme,
-                          rows[i],
-                          rank: i + 1,
-                          isMe: rows[i].id == 'me',
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+            _LeaderboardRows(
+              rows: rows,
+              duration: glide,
+              curve: leaderCurve,
+              rowBuilder: (f, i) =>
+                  _leaderRow(theme, f, rank: i + 1, isMe: f.id == 'me'),
             ),
             if (_service.friends.isEmpty)
               Padding(
@@ -1380,6 +1365,103 @@ extension _ProfileCards on _ProfileScreenState {
                       ),
                     ],
                   ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Слой строк рейтинга с плавным удалением.
+///
+/// Владелец: «если у друга меньше очков чем у меня и при удалении он удаляется
+/// неплавно». Строка исчезала одним кадром: `AnimatedPositioned` вёз соседей
+/// на освободившееся место, а самой удалённой строки уже не было. Здесь она
+/// остаётся «призраком» на своём месте и гаснет ровно столько же, сколько едут
+/// соседи, — удаление читается как одно движение.
+class _LeaderboardRows extends StatefulWidget {
+  const _LeaderboardRows({
+    required this.rows,
+    required this.duration,
+    required this.curve,
+    required this.rowBuilder,
+  });
+
+  final List<ProfileFriend> rows;
+  final Duration duration;
+  final Curve curve;
+  final Widget Function(ProfileFriend friend, int index) rowBuilder;
+
+  @override
+  State<_LeaderboardRows> createState() => _LeaderboardRowsState();
+}
+
+class _LeaderboardRowsState extends State<_LeaderboardRows> {
+  ProfileFriend? _ghost;
+  int _ghostIndex = 0;
+  int _ghostToken = 0;
+
+  @override
+  void didUpdateWidget(covariant _LeaderboardRows old) {
+    super.didUpdateWidget(old);
+    final oldIds = old.rows.map((f) => f.id).toSet();
+    final newIds = widget.rows.map((f) => f.id).toSet();
+    if (oldIds.length == newIds.length + 1) {
+      final gone = old.rows.where((f) => !newIds.contains(f.id)).toList();
+      if (gone.length == 1) {
+        _ghost = gone.single;
+        _ghostIndex = old.rows.indexOf(gone.single);
+        _ghostToken++;
+      }
+    }
+  }
+
+  void _clearGhost() {
+    if (_ghost == null || !mounted) return;
+    setState(() => _ghost = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = widget.rows;
+    final ghost = _ghost;
+    return SizedBox(
+      height: rows.length * _leaderRowHeight,
+      child: Stack(
+        children: [
+          for (var i = 0; i < rows.length; i++)
+            AnimatedPositioned(
+              // Ключ — id друга: при смене очков Flutter видит тот же виджет
+              // на новой позиции и анимирует переезд.
+              key: ValueKey(rows[i].id),
+              duration: widget.duration,
+              curve: widget.curve,
+              left: 0,
+              right: 0,
+              top: i * _leaderRowHeight,
+              child: SizedBox(
+                height: _leaderRowHeight,
+                child: widget.rowBuilder(rows[i], i),
+              ),
+            ),
+          if (ghost != null)
+            Positioned(
+              key: ValueKey('ghost_${ghost.id}_$_ghostToken'),
+              left: 0,
+              right: 0,
+              top: _ghostIndex * _leaderRowHeight,
+              height: _leaderRowHeight,
+              child: IgnorePointer(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 1, end: 0),
+                  duration: widget.duration,
+                  curve: widget.curve,
+                  onEnd: _clearGhost,
+                  builder: (context, v, child) =>
+                      Opacity(opacity: v.clamp(0.0, 1.0), child: child),
+                  child: widget.rowBuilder(ghost, _ghostIndex),
                 ),
               ),
             ),

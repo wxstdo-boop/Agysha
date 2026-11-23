@@ -926,6 +926,11 @@ class _FriendScoreSheetState extends State<_FriendScoreSheet> {
                       width: double.infinity,
                       child: PressScale(
                         pressedScale: 0.96,
+                        pressOverlay: pressGloss(
+                          BorderRadius.circular(999),
+                          strength: 0.22,
+                        ),
+                        maxTiltAngle: 0.22,
                         child: FilledButton.tonal(
                           onPressed: () {
                             final score = int.tryParse(_ctrl.text.trim()) ?? 0;

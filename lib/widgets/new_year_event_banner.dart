@@ -978,6 +978,10 @@ class _DayBadge extends StatelessWidget {
         children: [
           _RollDigits(
             value: dayShown,
+            // Разряды держим под САМОЕ БОЛЬШОЕ число ивента: без этого на
+            // «9 → 10» капсула расширялась одним кадром и подпись «/ 12»
+            // уезжала вправо — владелец видел «таблетка расширяется сужается».
+            minDigits: '$total'.length,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -1893,7 +1897,15 @@ class _RollDigits extends StatelessWidget {
   final double value;
   final TextStyle style;
 
-  const _RollDigits({required this.value, required this.style});
+  /// Сколько разрядов держать всегда (лишние старшие — пустые, но место под
+  /// них занято): ширина блока не меняется, соседи не съезжают.
+  final int minDigits;
+
+  const _RollDigits({
+    required this.value,
+    required this.style,
+    this.minDigits = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1905,18 +1917,21 @@ class _RollDigits extends StatelessWidget {
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     final chars = '$lo'.split('');
-    final last = chars.length - 1;
+    final count = math.max(minDigits, chars.length);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (var i = 0; i < chars.length; i++)
+        for (var i = 0; i < count; i++)
           _DigitSlot(
             // Позиция от ПРАВОГО края: единицы остаются единицами, и при
-            // «9 → 10» появляется ровно один новый разряд.
-            position: last - i,
+            // «9 → 10» меняются ровно два разряда, а не вся ширина.
+            position: count - 1 - i,
             lo: lo,
             fraction: f,
             style: s,
+            // Разряды выше значащих — пустые: «03» вместо «3» не показываем,
+            // но место под них занято, поэтому капсула не дышит.
+            padLeading: i < count - chars.length,
           ),
       ],
     );
@@ -1937,11 +1952,15 @@ class _DigitSlot extends StatelessWidget {
   final double fraction;
   final TextStyle style;
 
+  /// Разряд-заполнитель: нули в нём не рисуются (место остаётся занятым).
+  final bool padLeading;
+
   const _DigitSlot({
     required this.position,
     required this.lo,
     required this.fraction,
     required this.style,
+    this.padLeading = false,
   });
 
   Size _measure() {
@@ -1976,6 +1995,9 @@ class _DigitSlot extends StatelessWidget {
     TextStyle at(double a) => style.copyWith(
       color: fade.withValues(alpha: fade.a * a.clamp(0.0, 1.0)),
     );
+    // Заполнитель с нулём — пустое место: «0» перед «3» читался бы как код.
+    final hideOld = padLeading && d0 == 0;
+    final hideNew = padLeading && d1 == 0;
     return SizedBox(
       width: size.width,
       height: size.height,
@@ -1984,13 +2006,13 @@ class _DigitSlot extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           // Уходящая цифра: гаснет и чуть уменьшается — «отходит» назад.
-          if (eased < 1.0)
+          if (eased < 1.0 && !hideOld)
             Transform.scale(
               scale: 1 - 0.16 * eased,
               child: Text('$d0', style: at(1 - eased), maxLines: 1),
             ),
           // Приходящая: проявляется и надувается из 0.84 до полного.
-          if (eased > 0.0)
+          if (eased > 0.0 && !hideNew)
             Transform.scale(
               scale: 0.84 + 0.16 * eased,
               child: Text('$d1', style: at(eased), maxLines: 1),
