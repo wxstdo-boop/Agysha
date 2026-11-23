@@ -1427,9 +1427,23 @@ class _LeaderboardRowsState extends State<_LeaderboardRows> {
   Widget build(BuildContext context) {
     final rows = widget.rows;
     final ghost = _ghost;
-    return SizedBox(
-      height: rows.length * _leaderRowHeight,
+    // Высота слоя едет к новой ВМЕСТЕ с призраком. Раньше `SizedBox` щёлкал
+    // на строку вниз в тот же кадр, и у последнего друга (меньше очков —
+    // значит, последняя строка) призрак оказывался ЗА нижним краем: `Stack`
+    // режет по своей границе, поэтому строка исчезала мгновенно, хотя
+    // соседи ехали плавно. Теперь граница поджимается кривой, а призрак
+    // догорает на своём месте.
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: rows.length * _leaderRowHeight),
+      duration: widget.duration,
+      curve: widget.curve,
+      builder: (context, height, child) =>
+          SizedBox(height: height, child: child),
+      // Слои строк строятся один раз на сборку, а не на каждый кадр высоты.
       child: Stack(
+        // Не режем по нижнему краю: призрак последней строки должен догореть,
+        // пока карточка поджимается (обрежет уже сам край карточки).
+        clipBehavior: Clip.none,
         children: [
           for (var i = 0; i < rows.length; i++)
             AnimatedPositioned(

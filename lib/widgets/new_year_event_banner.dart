@@ -796,6 +796,10 @@ class _NewYearEventBannerState extends State<NewYearEventBanner>
                                             ),
                                             shown: _hatsShown,
                                             isFinalDay: isFinalDay,
+                                            // Разряды под самое большое
+                                            // число ивента: строка не дышит
+                                            // на «9 → 10» и не ужимается.
+                                            minDigits: '$_kTotalHats'.length,
                                             style: TextStyle(
                                               fontSize: 12,
                                               color: textSub,
@@ -1838,12 +1842,18 @@ class _HatSubtitle extends StatelessWidget {
   final bool isFinalDay;
   final String finalText;
 
+  /// Сколько разрядов держать в счётчике всегда. Без резерва «9 → 10»
+  /// расширяло строку, и внешний `scaleDown` поджимал ВЕСЬ текст — смена
+  /// цифры читалась рывком («цифры неплавно сменяются»).
+  final int minDigits;
+
   const _HatSubtitle({
     required this.template,
     required this.shown,
     required this.style,
     required this.isFinalDay,
     required this.finalText,
+    this.minDigits = 0,
   });
 
   @override
@@ -1868,7 +1878,7 @@ class _HatSubtitle extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(head, style: style, maxLines: 1),
-                _RollDigits(value: shown, style: style),
+                _RollDigits(value: shown, style: style, minDigits: minDigits),
                 if (tail.isNotEmpty) Text(tail, style: style, maxLines: 1),
               ],
             ),

@@ -186,4 +186,126 @@ void main() {
       }
     });
   });
+
+  /// Правки по замечаниям «3 не сделано, 4 не сделано, 6 хуже сделал».
+  group('удаление друга, счётчик шапок, нажатие', () {
+    test('слой строк рейтинга не режет призрак последнего друга', () {
+      final src = File('lib/screens/profile_cards.dart').readAsStringSync();
+      expect(
+        src.contains('tween: Tween<double>(end: rows.length * _leaderRowHeight)'),
+        isTrue,
+        reason: 'высота слоя должна ехать к новой вместе с призраком',
+      );
+      expect(
+        src.contains('clipBehavior: Clip.none'),
+        isTrue,
+        reason: 'иначе призрак последней строки обрезается в первом же кадре',
+      );
+      expect(
+        src.contains('height: rows.length * _leaderRowHeight,'),
+        isFalse,
+        reason: 'высота больше не должна щёлкать на строку одним кадром',
+      );
+    });
+
+    test('счётчик шапок в подписи держит разряды и не ужимает строку', () {
+      final src = File(
+        'lib/widgets/new_year_event_banner.dart',
+      ).readAsStringSync();
+      expect(
+        src.contains("minDigits: '\$_kTotalHats'.length"),
+        isTrue,
+        reason: 'на «9 → 10» строка расширялась, и scaleDown поджимал весь текст',
+      );
+      expect(
+        src.contains(
+          '_RollDigits(value: shown, style: style, minDigits: minDigits)',
+        ),
+        isTrue,
+        reason: 'зарезервированные разряды должны доходить до счётчика',
+      );
+    });
+
+    testWidgets('наклон читается при нажатии ровно по центру', (tester) async {
+      await tester.pumpWidget(
+        wrap(
+          Center(
+            child: PressScale(
+              maxTiltAngle: 0.2,
+              child: SizedBox(
+                width: 200,
+                height: 56,
+                child: const ColoredBox(color: Color(0xFF2266CC)),
+              ),
+            ),
+          ),
+        ),
+      );
+      final center = tester.getCenter(find.byType(PressScale));
+      final gesture = await tester.startGesture(center);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final transform = tester.widget<Transform>(
+        find
+            .descendant(
+              of: find.byType(PressScale),
+              matching: find.byType(Transform),
+            )
+            .first,
+      );
+      // Матрица rotateX: sin угла лежит в [9].
+      final tilt = transform.transform.storage[9].abs();
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        tilt,
+        greaterThan(0.06),
+        reason: 'без сдвига пальца направления нет, и наклон оставался нулевым',
+      );
+    });
+
+    testWidgets('блик — полоска у верхнего края, а не фон на всю кнопку', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(
+          Center(
+            child: PressScale(
+              pressOverlay: pressGloss(
+                BorderRadius.circular(14),
+                strength: 0.22,
+              ),
+              child: SizedBox(
+                width: 200,
+                height: 52,
+                child: const ColoredBox(color: Color(0xFFD8394F)),
+              ),
+            ),
+          ),
+        ),
+      );
+      final center = tester.getCenter(find.byType(PressScale));
+      final gesture = await tester.startGesture(center);
+      // Первый кадр только заводит тикер — блик нужен на пике нажатия.
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final gloss = tester.widget<FractionallySizedBox>(
+        find
+            .descendant(
+              of: find.byType(PressScale),
+              matching: find.byType(FractionallySizedBox),
+            )
+            .first,
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        gloss.heightFactor,
+        lessThan(1.0),
+        reason: 'блик на всю плашку читался лишним светлым фоном позади текста',
+      );
+    });
+  });
 }
