@@ -14,10 +14,12 @@ import 'package:agysha/screens/settings_screen.dart';
 import 'package:agysha/services/alarm_service.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
+import 'package:agysha/services/settings_service.dart';
 import 'package:agysha/services/timer_service.dart';
 import 'package:agysha/utils/motion_prefs.dart';
 import 'package:agysha/utils/perf_prefs.dart';
 import 'source_scope.dart';
+import 'package:agysha/widgets/premium_empty_state.dart';
 import 'package:agysha/widgets/press_scale.dart';
 
 /// Раунд «Оптимизация»:
@@ -111,60 +113,59 @@ void main() {
     } catch (_) {}
   });
 
-  test(
-    '«Оптимизация» реже тикает циклы и ужимает кеш, но не гасит анимации',
-    () {
-      PerfPrefs.install();
-      final cache = PaintingBinding.instance.imageCache;
+  test('«Оптимизация» ужимает кеш и не гасит анимации', () {
+    PerfPrefs.install();
+    final cache = PaintingBinding.instance.imageCache;
 
-      expect(PerfPrefs.active, isFalse);
-      expect(PerfPrefs.ambientEveryFrames, 3);
-      expect(cache.maximumSize, 1000);
-
-      PerfPrefs.enabled.value = true;
-      expect(PerfPrefs.ambientEveryFrames, 5);
-      expect(cache.maximumSizeBytes, 64 << 20);
-      expect(cache.maximumSize, 400);
-      // Главное: тумблер — не «убрать анимации».
-      expect(MotionPrefs.enabled.value, isFalse);
-
-      PerfPrefs.enabled.value = false;
-      expect(cache.maximumSizeBytes, 100 << 20);
-      expect(cache.maximumSize, 1000);
-    },
-  );
-
-  testWidgets('вечный цикл в оптимизации тикает вдвое реже', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: _Ticking()));
-    await tester.pump();
-
-    _ticks = 0;
-    for (var i = 0; i < 30; i++) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    final normal = _ticks;
+    expect(PerfPrefs.active, isFalse);
+    expect(cache.maximumSize, 1000);
 
     PerfPrefs.enabled.value = true;
-    _ticks = 0;
-    for (var i = 0; i < 30; i++) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    final optimized = _ticks;
+    expect(cache.maximumSizeBytes, 64 << 20);
+    expect(cache.maximumSize, 400);
+    // Главное: тумблер — не «убрать анимации».
+    expect(MotionPrefs.enabled.value, isFalse);
 
-    expect(
-      normal,
-      greaterThan(7),
-      reason: 'обычный режим тикает раз в 3 кадра',
-    );
-    expect(
-      optimized,
-      lessThan(normal),
-      reason: 'в оптимизации цикл тикает реже (раз в 5 кадров)',
-    );
-    expect(normal - optimized, greaterThanOrEqualTo(2));
-
-    await tester.pumpWidget(const SizedBox());
+    PerfPrefs.enabled.value = false;
+    expect(cache.maximumSizeBytes, 100 << 20);
+    expect(cache.maximumSize, 1000);
   });
+
+  testWidgets(
+    'вечный цикл в оптимизации идёт с той же частотой, без ступенек',
+    (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: _Ticking()));
+      await tester.pump();
+
+      _ticks = 0;
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final normal = _ticks;
+
+      PerfPrefs.enabled.value = true;
+      _ticks = 0;
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final optimized = _ticks;
+
+      expect(
+        normal,
+        greaterThan(7),
+        reason: 'обычный режим тикает раз в 3 кадра',
+      );
+      // Регресс прошлого раунда: в оптимизации цикл резался до 5 кадров, и
+      // полноэкранные слои шли ступеньками — это читалось как лаги всей прилки.
+      expect(
+        optimized,
+        normal,
+        reason: 'тумблер не должен делать движение реже и ступенчатее',
+      );
+
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('настройки: пункт называется «Оптимизация» и включает режим', (
     tester,
@@ -306,9 +307,77 @@ void main() {
     );
     expect(section, isNot(contains('AnimatedSwitcher(')));
     expect(section, contains('_FadeInText'));
-    // Секция гаснет до того, как её высота схлопывается.
-    expect(src, contains('_timersFadingOut'));
-    expect(src, contains('Duration(milliseconds: 220)'));
+    // Высоту секции ведёт РОВНО ОДНА анимация: своя у строки таймера её
+    // больше не дублирует, иначе удаление шло двумя волнами с паузой.
+    expect(
+      section,
+      isNot(contains('AnimatedSize(')),
+      reason: 'секция не должна анимировать высоту второй раз',
+    );
+    expect(src, contains('resizeDuration: null'));
+    expect(src, isNot(contains('_timersHiding')));
+  });
+
+  testWidgets('удаление последнего таймера: одна волна, без провала и отката', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(520, 1000) * 3;
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+    // Экспериментальная секция включена — именно в этом режиме видно
+    // «Таймеров пока нет» после удаления последнего таймера.
+    SettingsService.experimentalEnabled.value = true;
+    addTearDown(() => SettingsService.experimentalEnabled.value = false);
+
+    await tester.pumpWidget(
+      LocaleProvider(
+        locale: const Locale('ru'),
+        child: const MaterialApp(home: Scaffold(body: AlarmsScreen())),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1200));
+
+    final card = find.byKey(const ValueKey('card_t1'));
+    expect(card, findsOneWidget);
+    // Контент ниже секции: он уезжает вверх ровно на высоту схлопывания.
+    final below = find.byType(PremiumEmptyState);
+    expect(below, findsOneWidget);
+    final startY = tester.getTopLeft(below).dy;
+
+    await tester.drag(card, const Offset(-320, 0));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('Удалить').last);
+    await tester.pump(const Duration(milliseconds: 120));
+
+    final ys = <double>[startY];
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+      ys.add(tester.getTopLeft(below).dy);
+    }
+
+    // Монотонно вверх: секция схлопывается один раз и не раскрывается обратно.
+    for (var i = 1; i < ys.length; i++) {
+      expect(
+        ys[i],
+        lessThanOrEqualTo(ys[i - 1] + 0.5),
+        reason: 'на шаге $i контент поехал вниз: ${ys[i - 1]} → ${ys[i]}',
+      );
+    }
+    expect(ys.last, lessThan(startY - 25), reason: 'секция действительно ушла');
+    // Свайп+доезд+схлопывание укладываются в ~0,6 с: к 0,7 с всё стоит на
+    // месте, то есть после «Удалить» нет паузы-зависания.
+    final at700 = ys[17];
+    expect(
+      (ys.last - at700).abs(),
+      lessThan(1.0),
+      reason: 'удаление ещё ехало после 0,7 с: ${ys.last} против $at700',
+    );
+
+    expect(find.byKey(const ValueKey('timers_empty')), findsOneWidget);
+    expect(find.byKey(const ValueKey('timers_list')), findsNothing);
+    expect(TimerService().timers, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 
   test('счётчик таймера тикает по границе секунды, а не 12 раз в секунду', () {
