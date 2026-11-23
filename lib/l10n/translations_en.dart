@@ -471,11 +471,11 @@ const Map<String, String> _en = {
   'aiUndo': 'Undo',
   'aiWindow': 'Collapse to window',
   'aiWindowOff': 'Turn off window',
-  'aiWindowHint': 'Collapsed to a mini window — drag it, tap it to return',
+  'aiWindowHint': 'Collapsed to a bubble — tap it to return',
   'aiSystemWindowHint':
-      'Ada is now a mini window above other apps — close it there',
+      'Ada is now a bubble above other apps — tap it to open the chat',
   'aiOverlayPermissionHint':
-      'Allow Agysha to draw over other apps to enable the mini window',
+      'Allow Agysha to draw over other apps so Ada can live in a bubble',
   'aiOverlayEmpty': 'Chat with Ada',
   'aiInputHint': 'Message…',
   'pinLimit': 'You can pin up to 10 messages',
@@ -1023,7 +1023,7 @@ const Map<String, String> _en = {
   'aiErrorDisconnected':
       'The connection to Ada was lost. Tap refresh — I will try again.',
   'aiErrorTimeout': 'Ada did not get a reply in time. Try again in a moment.',
-  'aiFloatingMode': 'Floating window mode',
+  'aiFloatingMode': 'Bubble mode',
   'clearChat': 'Clear chat',
   'close': 'Close',
   'copied': 'Copied',

@@ -41,6 +41,10 @@ part 'ai_guide_floating.dart';
 /// Значение хранится в prefs ('ai_floating') — переживает перезапуск.
 final ValueNotifier<bool> aiFloating = ValueNotifier<bool>(false);
 
+/// Чат плавно уходит в пузырь: пока true — лист сжимается к правому
+/// нижнему углу и гаснет, а не пропадает скачком.
+final ValueNotifier<bool> aiCollapsing = ValueNotifier<bool>(false);
+
 /// Приватность: плавающее окошко скрывается, когда открыт экран блокировки
 /// (PIN) — чтобы нельзя было открыть чат в обход блокировки.
 final ValueNotifier<bool> aiLockScreenVisible = ValueNotifier<bool>(false);
@@ -301,6 +305,7 @@ Future<void> showAiGuideChat(BuildContext context) {
     _activeChats = 0;
     _chatBusy = false;
     _chatCloseAt = DateTime.now();
+    aiCollapsing.value = false;
   });
 }
 
@@ -380,7 +385,24 @@ class _AiChatSheetState extends State<_AiChatSheet> {
               child: MediaQuery.removeViewInsets(
                 context: context,
                 removeBottom: true,
-                child: const _AiChatBody(),
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: aiCollapsing,
+                  builder: (context, collapsing, child) => AnimatedScale(
+                    // Уходим в пузырь тем же движением, каким он появляется:
+                    // сжатие к правому нижнему углу + затухание.
+                    scale: collapsing ? 0.86 : 1.0,
+                    alignment: Alignment.bottomRight,
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeInCubic,
+                    child: AnimatedOpacity(
+                      opacity: collapsing ? 0.0 : 1.0,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInCubic,
+                      child: child,
+                    ),
+                  ),
+                  child: const _AiChatBody(),
+                ),
               ),
             ),
           ),
@@ -1551,7 +1573,9 @@ class _AiChatBodyState extends State<_AiChatBody>
       aiFloating.value = true;
       globalPrefs.setBool('ai_floating', true);
       // Свернули — закрываем чат (на Android живёт системный оверлей,
-      // на web — внутренний пузырь).
+      // на web — внутренний пузырь). Лист не «исчезает»: сначала он
+      // плавно сжимается в сторону пузыря, и только потом уезжает.
+      aiCollapsing.value = true;
       if (!mounted) return;
       showBeautifulSnackBar(
         context,
@@ -1565,6 +1589,7 @@ class _AiChatBodyState extends State<_AiChatBody>
         duration: const Duration(seconds: 2),
         groupKey: 'ada_window',
       );
+      await Future<void>.delayed(const Duration(milliseconds: 150));
       if (mounted && context.mounted) Navigator.pop(context);
     } else {
       // Выключили — окошко исчезает, чат остаётся открытым.

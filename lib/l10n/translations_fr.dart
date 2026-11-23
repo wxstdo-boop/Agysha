@@ -474,12 +474,11 @@ const Map<String, String> _fr = {
   'aiClear': 'Effacer le chat',
   'aiWindow': 'Réduire en fenêtre',
   'aiWindowOff': 'Désactiver la fenêtre',
-  'aiWindowHint':
-      'Réduite en mini-fenêtre — faites-la glisser, touchez pour revenir',
+  'aiWindowHint': 'Réduite en bulle — touchez pour revenir',
   'aiSystemWindowHint':
-      'Ada est maintenant en mini-fenêtre au-dessus des autres apps — fermez-la là-bas',
+      'Ada est maintenant une bulle au-dessus des autres apps — touchez-la pour ouvrir le chat',
   'aiOverlayPermissionHint':
-      'Autorisez Agysha à s’afficher par-dessus les autres apps pour activer la mini-fenêtre',
+      'Autorisez Agysha à s’afficher par-dessus les autres apps pour qu’Ada vive dans une bulle',
   'aiOverlayEmpty': 'Discute avec Ada',
   'aiInputHint': 'Message…',
   'pinLimit': 'Vous pouvez épingler jusqu’à 10 messages',
@@ -1069,7 +1068,7 @@ const Map<String, String> _fr = {
       'La connexion avec Ada a été interrompue. Appuie sur actualiser — je réessaie.',
   'aiErrorTimeout':
       'Ada n’a pas reçu de réponse à temps. Réessaie dans un instant.',
-  'aiFloatingMode': 'Mode fenêtre flottante',
+  'aiFloatingMode': 'Mode bulle',
   'clearChat': 'Effacer le chat',
   'close': 'Fermer',
   'copied': 'Copié',

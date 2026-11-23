@@ -164,8 +164,9 @@ class _OverlayChatState extends State<_OverlayChat>
     s.setState(() {
       s._closing = false;
       s._inputFocused = false;
-      s._collapsed = false;
+      s._collapsed = true;
     });
+    s._placeBubbleCorner();
     // Приглушаем ДО нуля: даже если окно мгновенно появится, оно не
     // «вспыхнет» — fade стартует через момент.
     s._appearCtrl.value = 0;
@@ -185,6 +186,7 @@ class _OverlayChatState extends State<_OverlayChat>
       s._appearCtrl.forward(from: 0);
       s._contentCtrl.forward(from: 0);
       s._clampToScreen();
+      if (s._collapsed) s._startDrift();
     });
   }
 
@@ -197,7 +199,10 @@ class _OverlayChatState extends State<_OverlayChat>
   String? _historySnapshot;
   bool _busy = false;
   bool _typingFade = false;
-  bool _collapsed = false; // Стартуем как ЧАТ.
+  // Стартуем ПУЗЫРЁМ: кнопка «режим в пузыре» больше не открывает
+  // мини-окно с чатом — Ада сразу появляется пузырём, а чат
+  // разворачивается тапом по нему.
+  bool _collapsed = true;
 
   /// Размеры экрана в dp (пишет основное приложение при показе оверлея).
   double get _screenW =>
@@ -499,6 +504,9 @@ class _OverlayChatState extends State<_OverlayChat>
     try {
       globalPrefs.setDouble('ada_overlay_x', _pos.dx);
       globalPrefs.setDouble('ada_overlay_y', _pos.dy);
+      // Запоминаем, в каком виде окно закрыли: координаты панели чата
+      // пузырю не годятся, а координаты пузыря — годятся.
+      globalPrefs.setBool('ada_overlay_bubble', _collapsed);
     } catch (_) {}
   }
 
@@ -515,20 +523,15 @@ class _OverlayChatState extends State<_OverlayChat>
     // открытие «прыгало» в центр).
     final sx = globalPrefs.getDouble('ada_overlay_x');
     final sy = globalPrefs.getDouble('ada_overlay_y');
-    if (sx != null && sy != null) {
+    final wasBubble = globalPrefs.getBool('ada_overlay_bubble') ?? false;
+    if (wasBubble && sx != null && sy != null) {
+      // Пузырь вернулся туда, куда его утащили пальцем.
       _pos = Offset(sx, sy);
       _sendPos();
     } else {
-      // Первый запуск — синхронизируемся с реальным положением окошка
-      // (нативные координаты), чтобы первый драг не «прыгал».
-      try {
-        final p = await FlutterOverlayWindow.getOverlayPosition();
-        if (mounted) {
-          _pos = Offset(p.x, p.y);
-        }
-      } catch (_) {
-        // Окошко ещё не готово — просто оставляем центр экрана.
-      }
+      // Координаты старого мини-окна с чатом пузырю не подходят — угол.
+      _placeBubbleCorner();
+      _sendPos();
     }
     try {
       final raw = await JsonFile.read(_historyKey);
@@ -625,9 +628,7 @@ class _OverlayChatState extends State<_OverlayChat>
         setState(() => _collapsed = true);
         // Пузырь ставим в правый нижний угол — на месте, где был низ
         // панели: окно не «улетает» в центр экрана.
-        _kbInset = 0;
-        _lastKbInset = 0;
-        _pos = Offset(_screenW - _bubbleSize - 16, _screenH - _bubbleSize - 96);
+        _placeBubbleCorner();
         final resized =
             await FlutterOverlayWindow.resizeOverlay(
               _bubbleSize.round(),
@@ -672,6 +673,14 @@ class _OverlayChatState extends State<_OverlayChat>
     _kbInset = 0;
     _lastKbInset = 0;
     _pos = Offset((_screenW - _chatW) / 2, _screenH - _chatH - 16);
+  }
+
+  /// Пузырь в правом нижнем углу — там же, где низ панели чата, чтобы
+  /// окно не «улетало» в центр экрана при сворачивании.
+  void _placeBubbleCorner() {
+    _kbInset = 0;
+    _lastKbInset = 0;
+    _pos = Offset(_screenW - _bubbleSize - 16, _screenH - _bubbleSize - 96);
   }
 
   /// Плавно переставляет окно: резкий MethodChannel-прыжок на подъёме

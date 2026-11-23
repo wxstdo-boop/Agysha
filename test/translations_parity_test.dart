@@ -104,4 +104,16 @@ void main() {
       }
     }
   });
+  test('кнопка режима называет пузырь, а не окно', () {
+    // Мини-окно с чатом больше не открывается: кнопка сворачивает чат в
+    // летающий пузырь, поэтому и подпись должна говорить про пузырь.
+    for (final locale in ['en', 'ru', 'fr']) {
+      final text = dictionaries[locale]!['aiFloatingMode']!;
+      expect(
+        text.toLowerCase(),
+        anyOf(contains('bubble'), contains('пузыр'), contains('bulle')),
+        reason: 'В локали «$locale» подпись режима не про пузырь: $text',
+      );
+    }
+  });
 }

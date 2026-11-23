@@ -53,12 +53,11 @@ Future<bool> showAdaOverlay({
     }
     final sw = screenWidth ?? 400;
     final sh = screenHeight ?? 850;
-    // Нижняя панель чата: почти вся ширина, меньше половины высоты.
-    // Стартуем сразу в ней (а не в центре экрана) — оверлей больше не
-    // «плавающее окно», а привычный нижний лист.
-    final startW = (sw - 16).clamp(280.0, 560.0);
-    final startH = (sh * 0.44).clamp(300.0, 460.0);
-    final startPos = OverlayPosition((sw - startW) / 2, sh - startH - 16);
+    // Стартуем СРАЗУ пузырём: кнопка «режим в пузыре» больше не открывает
+    // мини-окно с чатом — Ада сразу живёт маленьким пузырём в правом нижнем
+    // углу, а чат открывается тапом по нему (окно само растягивается).
+    const bubble = 36.0;
+    final startPos = OverlayPosition(sw - bubble - 16, sh - bubble - 96);
     // 1. Команда «сбросься и покажись» прямо в живой движок оверлея.
     //    Движок КЭШИРУЕТСЯ между открытиями: его Dart-состояние живёт
     //    даже когда окна нет, и lifecycle-событие при переоткрытии
@@ -74,10 +73,9 @@ Future<bool> showAdaOverlay({
       }
     } catch (_) {}
     await FlutterOverlayWindow.showOverlay(
-      // Нижняя панель чата: ширина почти во весь экран, высота — меньше
-      // половины, чтобы над клавиатурой оставалось место.
-      height: startH.round(),
-      width: startW.round(),
+      // Маленький пузырь: чат разворачивается тапом по нему.
+      height: bubble.round(),
+      width: bubble.round(),
       alignment: OverlayAlignment.topLeft,
       startPosition: startPos,
       // NOT_FOCUSABLE по дефолту — жест «назад» работает в основном
@@ -90,9 +88,9 @@ Future<bool> showAdaOverlay({
       enableDrag: false,
       positionGravity: PositionGravity.none,
       overlayTitle: 'Agysha — Ада',
-      overlayContent: 'Мини-чат Ады',
+      overlayContent: 'Ада в пузыре',
     );
-    // Окно уже 64×64 — overlay сам resize при тапе.
+    // Окно уже 36×36 — overlay сам растягивается в чат при тапе.
     return true;
   } catch (_) {
     return false;
