@@ -1383,11 +1383,35 @@ class AiGuideService {
   /// провайдера) НЕ должен затирать «Agnes • agnes-…» голым «Agnes»: без
   /// заявки метка просто остаётся прежней.
   static void commitStaged([String? fallback]) {
-    final label = _stagedModel.isNotEmpty ? _stagedModel : (fallback ?? '');
+    final staged = _stagedModel;
     _stagedModel = '';
+    final label = staged.isNotEmpty ? staged : (fallback ?? '');
     if (label.isEmpty) return;
+    if (_erasesModel(label)) return;
     if (fallback == null && _shownModel == label) return;
     _setModel(label);
+  }
+
+  /// Метка «провайдер • модель» (в отличие от голого имени провайдера).
+  static bool _hasModel(String label) => label.contains('•');
+
+  /// Имя провайдера из метки: «Agnes • agnes-…» → «agnes».
+  static String _providerOf(String label) {
+    final cut = label.indexOf('•');
+    return (cut == -1 ? label : label.substring(0, cut)).trim().toLowerCase();
+  }
+
+  /// Голое имя провайдера затирает «провайдер • модель» только у ДРУГОГО
+  /// провайдера. Тот же провайдер без модели (частый повтор публикации в
+  /// цепочке) оставляет модель на месте: иначе плашка показывала модель на
+  /// миг и «дёргалась» на голое «Agnes»/«Kilo»/«OVHcloud».
+  static bool _erasesModel(String label) {
+    if (_hasModel(label)) return false;
+    final shown = _hasModel(_shownModel)
+        ? _shownModel
+        : (_hasModel(_lastModel) ? _lastModel : '');
+    if (shown.isEmpty) return false;
+    return _providerOf(shown) == _providerOf(label);
   }
 
   /// Плашка статуса — «провайдер • модель» единым видом у всех: Agnes,
@@ -1484,7 +1508,16 @@ class AiGuideService {
   static final ValueNotifier<List<String>> providerTrace = ValueNotifier(
     <String>[],
   );
-  static void recordModelUsed(String label) => _setModel(label);
+  static void recordModelUsed(String label) {
+    final clean = _shortLabel(label);
+    if (clean.isEmpty) return;
+    // Метка из файла синхронизации/старых сборок может быть голым именем
+    // провайдера. Она НЕ должна стирать уже показанную «провайдер • модель»
+    // того же провайдера: ровно из-за этого модель мелькала и «дёргалась»
+    // на «Agnes»/«Kilo».
+    if (_erasesModel(clean)) return;
+    _setModel(clean);
+  }
 
   /// Тестовый прогон публикации статуса ровно как в живой цепочке:
   /// провайдер заявляет «Провайдер • модель», затем успех публикует заявку,

@@ -34,6 +34,32 @@ void main() {
       expect(await AiGuideService.currentModelLabel(), 'LUMA • llama-3.3-70b');
     });
 
+    test('голое имя того же провайдера не стирает модель', () async {
+      // Живой баг: плашка показывала «Agnes • agnes-…», а через мгновение
+      // повтор публикации клал голое «Agnes» — модель мелькала и пропадала.
+      AiGuideService.debugPublishProviderModel('Agnes', 'agnes-3.0-flash');
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect(
+        await AiGuideService.currentModelLabel(),
+        'Agnes • agnes-3.0-flash',
+      );
+
+      AiGuideService.recordModelUsed('Agnes');
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect(
+        await AiGuideService.currentModelLabel(),
+        'Agnes • agnes-3.0-flash',
+      );
+
+      // Тот же повтор, но через заявку цепочки (провайдер не назвал модель).
+      AiGuideService.debugPublishProviderModel('Agnes', null);
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect(
+        await AiGuideService.currentModelLabel(),
+        'Agnes • agnes-3.0-flash',
+      );
+    });
+
     test('имя без модели остаётся как есть', () async {
       AiGuideService.recordModelUsed('LLM7');
       await Future<void>.delayed(const Duration(milliseconds: 1100));

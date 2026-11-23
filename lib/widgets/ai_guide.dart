@@ -2419,9 +2419,22 @@ class _AdaStatusLine extends StatelessWidget {
       height: 16,
       child: ClipRect(
         child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 260),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
+          // Дольше и симметрично: две метки не «перещёлкиваются» в одном
+          // кадре, а мягко растворяются одна в другую. Плюс лёгкий подъём
+          // текста — смена читается как одна строка, а не как подмена.
+          duration: const Duration(milliseconds: 340),
+          switchInCurve: Curves.easeInOutCubic,
+          switchOutCurve: Curves.easeInOutCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.35),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          ),
           child: text.isEmpty
               ? const SizedBox.shrink(key: ValueKey('ada_status_empty'))
               : Align(

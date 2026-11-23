@@ -10,7 +10,7 @@ import '../l10n/translations.dart';
 /// скорость возврата постоянна (`ширина / movementDuration`), поэтому
 /// короткий свайп («чуть дёрнуть») возвращался за пару кадров — резкий щелчок
 /// вместо движения. Теперь длительность возврата пропорциональна пройденному
-/// пути: `180 мс + 260 мс * прогресс`, кривая [Curves.easeOutCubic]. Даже 5 %
+/// пути: `240 мс + 320 мс * прогресс`, кривая [Curves.easeOutCubic]. Даже 5 %
 /// пути заметно и мягко едут назад, а полный свайп не тормозит.
 ///
 /// Прогресс 0..1 — единственный источник правды: от него зависят и позиция
@@ -103,7 +103,14 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
 
   /// Удаление уже подтверждено, карточка уезжает за край.
   bool _dismissPending = false;
+
+  /// Карточка уже за краем: плашку удаления больше не рисуем.
   bool _dismissed = false;
+
+  /// Строка уже схлопывается по высоте. Начинается ДО того, как карточка
+  /// долетела до края, — иначе после улёта был мёртвый отрезок в 320 мс,
+  /// где на экране ничего не происходит («зависает в конце»).
+  bool _collapsing = false;
 
   /// `onDismissed` уже отдан наружу — второй раз не зовём.
   bool _notified = false;
@@ -117,10 +124,13 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
   @override
   void initState() {
     super.initState();
-    _move = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 450),
-    )..addStatusListener(_onMoveStatus);
+    _move =
+        AnimationController(
+            vsync: this,
+            duration: const Duration(milliseconds: 450),
+          )
+          ..addStatusListener(_onMoveStatus)
+          ..addListener(_onMoveTick);
     _resize = AnimationController(
       vsync: this,
       duration: widget.resizeDuration ?? Duration.zero,
@@ -134,6 +144,15 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
     super.dispose();
   }
 
+  void _onMoveTick() {
+    // Схлопывание стартует, пока карточка ещё летит: два движения идут
+    // навстречу друг другу, и в конце нет паузы, где карточка уже за краем,
+    // а строка ещё стоит на полную высоту.
+    if (_dismissPending && !_collapsing && _move.value >= 0.62) {
+      _startCollapse();
+    }
+  }
+
   void _onMoveStatus(AnimationStatus status) {
     // Доехали до края по подтверждённому удалению — удаляем ровно один раз.
     if (status == AnimationStatus.completed && _dismissPending) {
@@ -142,20 +161,26 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
     }
   }
 
+  /// Строка начинает ужиматься. Удаление наружу отдаём только после того,
+  /// как высота уже ушла — иначе список прыгал бы, теряя карточку кадром.
+  void _startCollapse() {
+    if (_collapsing || (_dismissed && _notified)) return;
+    if (widget.resizeDuration == null) return;
+    setState(() => _collapsing = true);
+    _resize
+      ..duration = widget.resizeDuration
+      ..forward(from: 0);
+  }
+
   void _completeDismiss() {
-    if (_dismissed) return;
-    _dismissed = true;
-    setState(() {});
+    if (!_dismissed) setState(() => _dismissed = true);
     // Порядок как у [Dismissible]: без своего схлопывания отдаём удаление
-    // сразу, а со схлопыванием — только когда строка уже ужалась, иначе
-    // список терял высоту карточки кадром и под ним всё прыгало.
+    // сразу, а со схлопыванием — только когда строка уже ужалась.
     if (widget.resizeDuration == null) {
       _notifyDismissed();
       return;
     }
-    _resize
-      ..duration = widget.resizeDuration
-      ..forward(from: 0);
+    _startCollapse();
   }
 
   void _onResizeStatus(AnimationStatus status) {
@@ -165,11 +190,12 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
   void _notifyDismissed() {
     if (_notified) return;
     _notified = true;
+    if (mounted) setState(() {});
     widget.onDismissed?.call(DismissDirection.endToStart);
   }
 
   void _onDragStart(DragStartDetails details) {
-    if (_dismissed || _confirming) return;
+    if (_dismissed || _collapsing || _confirming) return;
     _move.stop();
     _dismissPending = false;
     _dragStartProgress = _move.value;
@@ -177,14 +203,14 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
-    if (_dismissed || _confirming) return;
+    if (_dismissed || _collapsing || _confirming) return;
     _dragDx += details.delta.dx;
     // Влево (delta.dx < 0) — прогресс растёт; вправо — упираемся в 0.
     _move.value = (_dragStartProgress - _dragDx / _width).clamp(0.0, 1.0);
   }
 
   Future<void> _onDragEnd(DragEndDetails details) async {
-    if (_dismissed || _confirming) return;
+    if (_dismissed || _collapsing || _confirming) return;
     final p = _move.value;
     // Скорость учитываем ВМЕСТЕ с позицией: резкий короткий мах влево —
     // это тоже удаление, а быстрый возврат вправо — отмена. Без этого
@@ -220,7 +246,7 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
   }
 
   void _onDragCancel() {
-    if (_dismissed || _confirming) return;
+    if (_dismissed || _collapsing || _confirming) return;
     _animateBack(_move.value);
   }
 
@@ -235,13 +261,23 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
       return;
     }
     // Возврат мягче и длиннее: прежние 180–440 мс на быстром реверсе
-    // читались как рывок. easeOutQuint гасит хвост почти в ноль.
+    // читались как рывок. easeOutCubic, а НЕ easeOutQuint: у квинта
+    // производная в конце почти ноль — карточка возвращалась за первые
+    // ~20 % времени и потом «зависала», доползая последние проценты.
     _move.animateTo(
       0,
-      duration: _scaled(260 + 340 * p),
-      curve: Curves.easeOutQuint,
+      duration: _scaled(240 + 320 * p),
+      curve: Curves.easeOutCubic,
     );
   }
+
+  /// Схлопывание строки: easeInOutCubic гасит и начало, и конец ужатия —
+  /// с линейной кривой высота таяла равномерно и обрывалась на последнем
+  /// кадре, а соседи «доскакивали» вверх.
+  late final Animation<double> _resizeT = CurvedAnimation(
+    parent: _resize,
+    curve: Curves.easeInOutCubic,
+  );
 
   /// Доезд за край: та же мягкая кривая, длительность — по остатку пути.
   ///
@@ -250,10 +286,15 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
   /// и так невелик (порог 0.24), поэтому 160–360 мс хватает с запасом.
   void _animateOut(double p) {
     _dismissPending = true;
+    // easeOutCubic, а не easeOutQuint: квинт почти всю дистанцию проходит
+    // в первые кадры, а потом бесконечно доползает — карточка «зависает»
+    // у самого края. Кубли доезжает ровно и без хвоста.
     _move.animateTo(
       1,
+      // Длительность короткая (PR #55): палец уже не ведёт карточку, и
+      // долгий доезд читается как зависание. Кривая — куб без «хвоста».
       duration: _scaled(160 + 200 * (1 - p)),
-      curve: Curves.easeOutQuint,
+      curve: Curves.easeOutCubic,
     );
   }
 
@@ -265,7 +306,9 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
         final content = AnimatedBuilder(
-          animation: _move,
+          // Слушаем и _move, и _resize: плашка удаления гаснет вместе с
+          // ужатием строки, а не остаётся красным прямоугольником до конца.
+          animation: Listenable.merge([_move, _resize]),
           builder: (context, _) {
             final p = _move.value;
             return SwipeToDeleteScope(
@@ -283,13 +326,18 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
                   fit: StackFit.passthrough,
                   children: [
                     // Плашка удаления лежит ПОД карточкой и открывается справа.
-                    // После подтверждения карточка уже уехала, и пока строка
-                    // схлопывается, плашку не рисуем: иначе на её месте ещё
-                    // 320 мс висел красный прямоугольник — «мигающий квадрат».
+                    // Пока строка схлопывается, плашка гаснет вместе с её
+                    // высотой: иначе на месте удалённой строки ещё 320 мс
+                    // висел красный прямоугольник — «мигающий квадрат».
                     Positioned.fill(
-                      child: _dismissed
+                      child: (_dismissed && !_collapsing)
                           ? const SizedBox.shrink()
-                          : _buildBackground(context, p),
+                          : Opacity(
+                              opacity: _collapsing
+                                  ? (1 - _resizeT.value).clamp(0.0, 1.0)
+                                  : 1.0,
+                              child: _buildBackground(context, p),
+                            ),
                     ),
                     Transform.translate(
                       offset: Offset(-p * _width, 0),
@@ -302,11 +350,15 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
           },
         );
 
-        if (!_dismissed) return content;
-        if (widget.resizeDuration == null) return const SizedBox.shrink();
+        if (!_collapsing) {
+          // Без своего схлопывания место освобождает внешний [AnimatedSize]:
+          // строку убираем из раскладки сразу, как только её отдали наружу.
+          if (_notified) return const SizedBox.shrink();
+          return content;
+        }
         // Высота 1 -> 0, как у [Dismissible]: строка ужимается, а не растёт.
         return SizeTransition(
-          sizeFactor: _resize.drive(Tween<double>(begin: 1.0, end: 0.0)),
+          sizeFactor: _resizeT.drive(Tween<double>(begin: 1.0, end: 0.0)),
           alignment: Alignment.topCenter,
           child: content,
         );

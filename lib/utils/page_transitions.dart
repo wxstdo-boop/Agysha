@@ -18,7 +18,7 @@ Duration _routeDuration(Duration d) =>
 /// НАЧАЛЕ этого отрезка, а не в конце. Кто после закрытия окна меняет
 /// порядок списка (переезд карточки), обязан дождаться конца, иначе
 /// анимация перестановки накладывается на выезд страницы.
-const Duration slideUpReverseDuration = Duration(milliseconds: 240);
+const Duration slideUpReverseDuration = Duration(milliseconds: 300);
 
 /// Плавный переход снизу вверх (для горизонтальных списков).
 ///
@@ -37,6 +37,11 @@ Route<T> slideUpRoute<T>(Widget page) {
       final curved = CurvedAnimation(
         parent: animation,
         curve: Curves.easeOutCubic,
+        // Закрытие — своя кривая. С easeOutCubic на реверсе страница в
+        // первый кадр почти не двигалась, а в конце «падала» рывком: у
+        // easeOutCubic производная в t=1 равна нулю. easeInCubic даёт
+        // обратное — быстрый отъезд и мягкое торможение внизу.
+        reverseCurve: Curves.easeInCubic,
       );
       return SlideTransition(
         position: Tween<Offset>(
@@ -110,7 +115,9 @@ Route<T> homeEntryRoute<T>(Widget page) {
     // проявка размазывает его по кадрам, поэтому переход не читается
     // «толчком», а наплывает.
     transitionDuration: _routeDuration(const Duration(milliseconds: 340)),
-    reverseTransitionDuration: _routeDuration(const Duration(milliseconds: 220)),
+    reverseTransitionDuration: _routeDuration(
+      const Duration(milliseconds: 220),
+    ),
     pageBuilder: (context, animation, secondaryAnimation) => page,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
@@ -127,7 +134,9 @@ Route<T> fadeRoute<T>(Widget page) {
   return PageRouteBuilder<T>(
     settings: RouteSettings(name: page.runtimeType.toString()),
     transitionDuration: _routeDuration(const Duration(milliseconds: 300)),
-    reverseTransitionDuration: _routeDuration(const Duration(milliseconds: 200)),
+    reverseTransitionDuration: _routeDuration(
+      const Duration(milliseconds: 200),
+    ),
     pageBuilder: (context, animation, secondaryAnimation) => page,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
@@ -175,9 +184,7 @@ Route<T> slideSideRoute<T>(Widget page) {
           // Лёгкое затемнение старого экрана — дёшево, без saveLayer/blur.
           FadeTransition(
             opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
-            child: const ColoredBox(
-              color: Colors.black12,
-            ),
+            child: const ColoredBox(color: Colors.black12),
           ),
           SlideTransition(
             position: Tween<Offset>(

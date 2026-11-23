@@ -159,10 +159,14 @@ class TaskService extends ChangeNotifier {
     // вехи 5/10/25/50/100… Считаем только переходы в done=true; отмена
     // честно уменьшает счётчик, чтобы снятые галочки не «фармили» награды.
     final sign = _tasks[idx].done ? 1 : -1;
+    // Слушателей будим ДО первого await: иначе список задач на экране
+    // перестраивался только после записи prefs, и анимация переезда карточки
+    // в архив стартовала раньше, чем карточка появлялась в новой полке —
+    // переезд читался как «прыжок туда-сюда через фоны».
+    notifyListeners();
     final total = (globalPrefs.getInt('ai_tasks_done_total') ?? 0) + sign;
     final clamped = total < 0 ? 0 : total;
     await globalPrefs.setInt('ai_tasks_done_total', clamped);
-    notifyListeners();
     await _save();
     // Очки за выполненную задачу: только при переходе в «сделано». Отмена
     // галочки копилку не уменьшает — достижения не отбираем.

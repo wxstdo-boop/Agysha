@@ -121,8 +121,11 @@ void main() {
   }
 
   /// Текст задачи рендерится через RichText (AnimatedStrikeText), поэтому
-  /// find.text его не видит — ищем саму карточку по ключу.
-  Finder card(String id) => find.byKey(ValueKey('card__$id'));
+  /// find.text его не видит — ищем саму карточку по ключу. skipOffstage: false
+  /// нужен возврату из архива: карточка стартует с нулевой высоты и первый
+  /// кадр формально «не на экране» — это не повод считать её пропавшей.
+  Finder card(String id) =>
+      find.byKey(ValueKey('card__$id'), skipOffstage: false);
 
   Future<void> tapAndSettle(WidgetTester tester, Finder finder) async {
     await tester.tap(finder);

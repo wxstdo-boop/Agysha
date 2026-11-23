@@ -292,10 +292,15 @@ void main() {
     expect(src, contains('_dismissed'));
     expect(
       src,
-      contains(
-        'child: _dismissed\n                          ? const SizedBox.shrink()',
-      ),
+      contains('child: (_dismissed && !_collapsing)'),
       reason: 'красный прямоугольник удаления не должен переживать карточку',
+    );
+    // Пока строка схлопывается, плашка гаснет вместе с её высотой.
+    expect(
+      src,
+      contains(
+        '_collapsing\n                                  ? (1 - _resizeT.value)',
+      ),
     );
   });
 
