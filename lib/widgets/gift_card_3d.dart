@@ -65,7 +65,7 @@ class _GiftCard3DState extends State<GiftCard3D>
     super.initState();
     _resetController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 620),
+      duration: const Duration(milliseconds: 720),
     );
     _tiltAnimation = Tween<Offset>(begin: Offset.zero, end: Offset.zero)
         .animate(
@@ -114,12 +114,12 @@ class _GiftCard3DState extends State<GiftCard3D>
         ? 0.0
         : (localPosition.dy - start.dy) / widget.height * 2.0;
     final target = Offset(
-      _softClamp(rawDx * 0.85 + dragDx * 1.95),
-      _softClamp(rawDy * 0.85 + dragDy * 1.95),
+      _softClamp(rawDx * 0.92 + dragDx * 2.05),
+      _softClamp(rawDy * 0.92 + dragDy * 2.05),
     );
     // Первый кадр нажатия — сразу в цель: иначе карточка «думает» перед
     // тем, как отозваться. Дальше ведём плавно за пальцем.
-    final next = snap ? target : (Offset.lerp(_tilt, target, 0.62) ?? target);
+    final next = snap ? target : (Offset.lerp(_tilt, target, 0.55) ?? target);
     if ((next - _tilt).distance > 0.0005) {
       _tilt = next;
       _tiltNotifier.value = next;
@@ -377,8 +377,8 @@ class _GiftCard3DState extends State<GiftCard3D>
                   : _tilt;
               // Сочный наклон: 0.34 рад (~19°) — прежняя «пищдатость»,
               // у 0.26 карточка под пальцем почти не отзывалась.
-              final tiltX = -currentTilt.dy * 0.46;
-              final tiltY = currentTilt.dx * 0.46;
+              final tiltX = -currentTilt.dy * 0.50;
+              final tiltY = currentTilt.dx * 0.50;
 
               // Перспектива стоит постоянно. При нулевом наклоне такая
               // матрица рисует ровно те же пиксели, что и единичная, но
@@ -396,7 +396,12 @@ class _GiftCard3DState extends State<GiftCard3D>
                 key: const ValueKey('gift_tilt_transform'),
                 transform: transform,
                 alignment: FractionalOffset.center,
-                child: child!,
+                // Кэш растра живёт ВНУТРИ поворота: карточка растрируется
+                // один раз, а наклон каждый кадр меняет только матрицу
+                // слоя. Снаружи (как было в полосе артефактов) наклон
+                // перерисовывал всю карточку целиком — на быстром листании
+                // соседние карточки не успевали отрисоваться и пропадали.
+                child: RepaintBoundary(child: child!),
               );
             },
             child: cardContent,

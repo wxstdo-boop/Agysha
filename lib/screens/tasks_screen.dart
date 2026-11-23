@@ -136,22 +136,6 @@ class _TasksScreenState extends State<TasksScreen>
     return box.localToGlobal(Offset.zero) & box.size;
   }
 
-  /// Верх того места, куда встанет карточка в архивной полке. Меряем ДО
-  /// мутации по низу последней архивной карточки: тогда карточка едет ровно
-  /// на своё место, а не «проявляется» сдвигом на долю высоты. Если полка
-  /// пуста или её карточки ещё не построены — null, и карточка просто
-  /// вырастает на месте.
-  double? _doneInsertTop(String excludingId) {
-    final done = _service.tasks
-        .where((t) => t.done && t.id != excludingId)
-        .toList();
-    if (done.isEmpty) return null;
-    final last = _cardRect('done', done.last.id);
-    if (last == null) return null;
-    // Тот же вертикальный зазор, что у карточек в полке (margin 5 × 2).
-    return last.bottom + 10;
-  }
-
   /// id только что переключённой задачи — её карточка «приезжает» в новую
   /// полку анимированно; остальные рисуются сразу.
   String? _justCompletedId;
@@ -405,7 +389,6 @@ class _TasksScreenState extends State<TasksScreen>
     // Где карточка стоит сейчас и куда она приедет — меряем ДО мутации:
     // после неё старой карточки уже нет.
     final fromRect = archiveMove ? _cardRect('active', task.id) : null;
-    final doneTop = archiveMove ? _doneInsertTop(task.id) : null;
     // Возврат из архива: стартовая точка полёта — место карточки в архивной
     // полке. Меряем ДО мутации, после неё её там уже нет.
     final returnRect = (wasDone && splitVisible)
@@ -424,10 +407,14 @@ class _TasksScreenState extends State<TasksScreen>
         // Раньше метка ставилась ПОСЛЕ первого кадра: карточка появлялась
         // в полную высоту и на следующем кадре схлопывалась — переезд
         // читался как прыжок. Теперь она просто вырастает на новом месте.
+        // Стартовое смещение считаем после первого кадра новой раскладки
+        // (см. запуск ниже): до мутации карточки в архивной полке нет, а
+        // «низ последней архивной карточки» — это НЕ то место, куда её
+        // ставит порядок списка (она встаёт по своему индексу, часто выше) —
+        // отсюда и было лишнее смещение на целую карточку, читавшееся
+        // рывком.
         _cardDrop.value = 0;
-        _cardDropFromPx = (fromRect != null && doneTop != null)
-            ? (fromRect.top - doneTop).clamp(-1200.0, 1200.0).toDouble()
-            : 0;
+        _cardDropFromPx = 0;
         _justCompletedId = task.id;
       });
     } else if (wasDone && splitVisible) {
@@ -453,12 +440,22 @@ class _TasksScreenState extends State<TasksScreen>
       // «Приезд» — только для отметки (активная полка → архив). При снятии
       // галки карточка возвращается из архива ВВЕРХ: если гнать её тем же
       // спуском сверху, она прыгает над списком — см. [_cardReturn].
-      _cardDrop.forward(from: 0).whenComplete(() {
-        // Снимаем «анимируемую» метку: карточка больше не оборачивается
-        // переходом (иначе один лишний набор слоёв висел бы на ней всегда).
-        if (mounted && _justCompletedId == task.id) {
-          setState(() => _justCompletedId = null);
+      // Начало пути меряем по ПЕРВОМУ кадру новой раскладки: до мутации
+      // этой карточки в архивной полке ещё нет, а гадать по соседям нельзя —
+      // она встаёт на своё место по порядку списка, не обязательно в конец.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _justCompletedId != task.id) return;
+        final dst = _cardRect('done', task.id);
+        if (fromRect != null && dst != null) {
+          _cardDropFromPx = (fromRect.top - dst.top).clamp(-2400.0, 2400.0);
         }
+        _cardDrop.forward(from: 0).whenComplete(() {
+          // Снимаем «анимируемую» метку: карточка больше не оборачивается
+          // переходом (иначе один лишний набор слоёв висел бы на ней всегда).
+          if (mounted && _justCompletedId == task.id) {
+            setState(() => _justCompletedId = null);
+          }
+        });
       });
     } else if (wasDone && splitVisible) {
       // Возврат из архива: карточка одна — она растёт в активной полке и

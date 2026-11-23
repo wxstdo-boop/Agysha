@@ -579,16 +579,18 @@ extension _ProfileCards on _ProfileScreenState {
           itemExtent: GiftCard3D.defaultWidth + Spacing.sm,
           // Соседние карточки держим заранее собранными: иначе на быстром
           // листании крайняя карточка успевала появиться и пропасть.
-          scrollCacheExtent: const ScrollCacheExtent.pixels(420),
+          // Запас по краям шире одной карточки: при быстром листании
+          // следующая карточка уже собрана и не успевает «прорадать».
+          scrollCacheExtent: const ScrollCacheExtent.pixels(900),
           itemCount: gifts.length,
           itemBuilder: (context, i) => Padding(
             padding: const EdgeInsets.only(right: Spacing.sm),
-            child: RepaintBoundary(
+            // RepaintBoundary — внутри GiftCard3D, под поворотом: так наклон
+            // не растрирует карточку заново на каждом кадре.
+            child: GiftCard3D(
               key: ValueKey('gift_card_${gifts[i].id}'),
-              child: GiftCard3D(
-                gift: gifts[i],
-                onFavoriteToggled: () => refreshUi(() {}),
-              ),
+              gift: gifts[i],
+              onFavoriteToggled: () => refreshUi(() {}),
             ),
           ),
         ),
@@ -941,7 +943,9 @@ extension _ProfileCards on _ProfileScreenState {
   /// общем блоке с треками, поэтому переход к пустому состоянию (и обратно)
   /// идёт одной плавной раскладкой, без рывка текста влево.
   Widget _emptyMusicHint(ThemeData theme, {required bool visible}) {
-    final dur = MotionPrefs.shouldReduceMotion ? Duration.zero : _ProfileScreenState._trackCollapse;
+    final dur = MotionPrefs.shouldReduceMotion
+        ? Duration.zero
+        : _ProfileScreenState._trackCollapse;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: visible ? 1.0 : 0.0),
       duration: dur,
@@ -977,7 +981,9 @@ extension _ProfileCards on _ProfileScreenState {
     final playing = _music.playing && _music.path == track.path;
     final removing = _removingTrackIds.contains(track.id);
     final isNew = _newTrackIds.contains(track.id);
-    final dur = MotionPrefs.shouldReduceMotion ? Duration.zero : _ProfileScreenState._trackCollapse;
+    final dur = MotionPrefs.shouldReduceMotion
+        ? Duration.zero
+        : _ProfileScreenState._trackCollapse;
     return TweenAnimationBuilder<double>(
       key: ValueKey('track_${track.id}'),
       tween: Tween(begin: 0.0, end: removing ? 0.0 : 1.0),

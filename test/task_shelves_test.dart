@@ -439,4 +439,72 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'переезд В архив: карточка едет СО СВОЕГО места, а не из-за края экрана',
+    (tester) async {
+      await seedAndPump(tester, [
+        Task(id: 'a1', title: 'Купить молоко'),
+        Task(id: 'z0', title: 'Старое дело', done: true),
+      ]);
+
+      final sourceTop = tester.getTopLeft(card('a1')).dy;
+
+      /// Верх копии, которая ПРИЕЗЖАЕТ в архивную полку: уезжающая копия
+      /// обёрнута в IgnorePointer, её не берём.
+      double? arrivingTop() {
+        final matches = card('a1');
+        for (var i = 0; i < matches.evaluate().length; i++) {
+          final one = matches.at(i);
+          final frame = find.ancestor(
+            of: one,
+            matching: find.byType(SizeTransition),
+          );
+          if (frame.evaluate().isEmpty) continue;
+          final leaving = find
+              .descendant(
+                of: frame.first,
+                matching: find.byType(IgnorePointer),
+              )
+              .evaluate()
+              .isNotEmpty;
+          if (leaving) continue;
+          return tester.renderObject<RenderBox>(one).localToGlobal(
+            Offset.zero,
+          ).dy;
+        }
+        return null;
+      }
+
+      await tester.tap(find.byKey(const ValueKey('task_toggle_a1')));
+      final tops = <double>[];
+      for (var i = 0; i < 60; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 25)),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+        final t = arrivingTop();
+        if (t != null) tops.add(t);
+      }
+
+      expect(tops, isNotEmpty, reason: 'карточка так и не приехала в архив');
+      // Раньше старт пути считался по низу последней архивной карточки, а
+      // новая встаёт по своему индексу — часто выше. Из-за этого карточка
+      // начинала полёт на целую высоту выше своего места (улетала за край) и
+      // «приезжала» рывком. Теперь она стартует там, где стояла.
+      final minTop = tops.reduce(math.min);
+      expect(
+        minTop,
+        greaterThanOrEqualTo(sourceTop - 8),
+        reason:
+            'карточка стартует выше своего места (мин $minTop, было '
+            '$sourceTop): полёт начинается не от карточки',
+      );
+      expect(
+        tops.last,
+        greaterThan(sourceTop + 20),
+        reason: 'карточка не доехала до архивной полки: ${tops.last}',
+      );
+    },
+  );
 }

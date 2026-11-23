@@ -508,19 +508,13 @@ const Map<String, String> _ru = {
   'aiGuideToggle': 'Включить проводника',
   'aiGuideDesc':
       'Рядом с кнопкой «+» появится мелкий кружок — он открывает мини-чат.',
-  'aiGuideKeysTitle': 'Ключи провайдеров',
-  'aiGuideKey': 'Ключ Poolside (необязательно)',
+  'aiGuideKeysTitle': 'КЛЮЧ ПРОВАЙДЕРА',
+  'aiGuideKey': 'Свой ключ нужен для платных моделей',
   'aiGuideAgnesKey': 'Ключ Agnes AI (необязательно)',
   'aiGuideAgnesKeyHint': 'Вставь ключ Agnes AI',
-  'aiGuideKeyHint': 'Вставь свой ключ Laguna',
+  'aiGuideKeyHint': 'Вставь свой ключ провайдера',
   'aiGuideKeyNote':
-      'Бесплатные анонимные модели: LLM7, Pollinations и AI Horde — без ключа и регистрации. Свой ключ нужен только для премиум-моделей.',
-  'aiGuideKeyNoteProviders': 'Kilo · Pollinations · LLM7 · OVH · Horde',
-  'aiGuideSharedKey':
-      'Один ключ подходит и для Poolside (Laguna), и для Agnes AI. Ада сначала пробует его, а к бесплатным моделям переходит только если ключ отклонён.',
-  'adaFreeProviders': 'Бесплатные без ключа',
-  'adaFreeProvidersDesc':
-      'LLM7, Pollinations и AI Horde. Если один шлюз устал — Ада молча пробует следующий.',
+      'Без ключа Ада отвечает на бесплатных моделях.',
   'aiGuideKeyNoteTail': '',
   'geminiKey': 'Ключ Gemini (необязательно — самая живая и горячая Ада)',
   'geminiKeyHint': 'Вставь ключ из Google AI Studio',

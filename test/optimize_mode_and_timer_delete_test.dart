@@ -362,7 +362,10 @@ void main() {
       isNot(contains('AnimatedSize(')),
       reason: 'секция не должна анимировать высоту второй раз',
     );
-    expect(src, contains('resizeDuration: null'));
+    // У нескольких таймеров строку ужимает она сама (иначе нижние прыгают),
+    // у последней — внешняя анимация секции: под ней уже ничего нет.
+    expect(src, contains('resizeDuration: _timerSvc.timers.length > 1'));
+    expect(src, contains(': null,'));
     expect(src, isNot(contains('_timersHiding')));
   });
 
@@ -427,6 +430,73 @@ void main() {
     expect(TimerService().timers, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'удаление таймера ИЗ СЕРЕДИНЫ: нижние таймеры поднимаются плавно, без скачка',
+    (tester) async {
+      tester.view.physicalSize = const Size(520, 1000) * 3;
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      SettingsService.experimentalEnabled.value = true;
+      addTearDown(() => SettingsService.experimentalEnabled.value = false);
+
+      await tester.runAsync(
+        () async => TimerService().add(AppTimer(id: 't2', totalSeconds: 300)),
+      );
+
+      await tester.pumpWidget(
+        LocaleProvider(
+          locale: const Locale('ru'),
+          child: const MaterialApp(home: Scaffold(body: AlarmsScreen())),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1200));
+
+      final first = find.byKey(const ValueKey('card_t1'));
+      final second = find.byKey(const ValueKey('card_t2'));
+      expect(first, findsOneWidget);
+      expect(second, findsOneWidget);
+      final startTop = tester.getTopLeft(second).dy;
+
+      await tester.drag(first, const Offset(-320, 0));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.text('Удалить').last);
+      await tester.pump(const Duration(milliseconds: 60));
+
+      final tops = <double>[startTop];
+      for (var i = 0; i < 70; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        if (second.evaluate().isEmpty) break;
+        tops.add(tester.getTopLeft(second).dy);
+      }
+
+      // Верх второй карточки не должен прыгать: раньше удалённая строка
+      // исчезала кадром, и соседняя за один кадр вставала на её место.
+      for (var i = 1; i < tops.length; i++) {
+        expect(
+          tops[i],
+          lessThanOrEqualTo(tops[i - 1] + 0.5),
+          reason:
+              'на шаге $i вторая карточка поехала вниз: '
+              '${tops[i - 1]} → ${tops[i]}',
+        );
+        expect(
+          (tops[i - 1] - tops[i]).abs(),
+          lessThan(22),
+          reason:
+              'на шаге $i скачок ${(tops[i - 1] - tops[i]).round()} px — '
+              'строка исчезла кадром, а не ужалась',
+        );
+      }
+      expect(
+        startTop - tops.last,
+        greaterThan(60),
+        reason: 'вторая карточка так и не поднялась на освободившееся место',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   test('счётчик таймера тикает по границе секунды, а не 12 раз в секунду', () {
     final src = readLibrary('lib/screens/alarms_screen.dart');

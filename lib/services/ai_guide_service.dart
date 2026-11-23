@@ -18,6 +18,7 @@ import 'score_service.dart';
 import 'settings_service.dart';
 import '../utils/date_keys.dart';
 import '../utils/time_format.dart';
+import 'ada_text.dart';
 import 'notification_service.dart';
 import 'task_service.dart';
 
@@ -1585,9 +1586,15 @@ class AiGuideService {
     final ru = languageCode == 'ru' || languageCode == 'system';
     final tasks = TaskService().tasks.length;
     final habits = HabitService().habits.length;
-    return ru
-        ? 'Я рядом 😊 У тебя сегодня $tasks задач и $habits привычек. Хочешь, помогу выбрать один маленький шаг?'
-        : 'I’m here 😊 You have $tasks tasks and $habits habits today. Want help choosing one small step?';
+    if (ru) {
+      final t = '$tasks ${pluralRu(tasks, 'задача', 'задачи', 'задач')}';
+      final h =
+          '$habits ${pluralRu(habits, 'привычка', 'привычки', 'привычек')}';
+      return 'Я рядом 😊 У тебя сегодня $t и $h. '
+          'Хочешь, помогу выбрать один маленький шаг?';
+    }
+    return 'I’m here 😊 You have $tasks tasks and $habits habits today. '
+        'Want help choosing one small step?';
   }
 
   /// Доставляет отчёты Ады в ЧАТ, если наступило время и они ещё не
@@ -1609,9 +1616,12 @@ class AiGuideService {
     final delivered = <AiMessage>[];
     _deliveringReports = true;
     try {
-      // Утро: наступило 08:00, отчёт ещё не был.
+      // Утро: окно 08:00–11:59. Раньше хватало `now.hour >= 8`, и человек,
+      // впервые открывший приложение в 22:00, получал «Доброе утро» вместе с
+      // вечерним разбором — два отчёта подряд и оба не вовремя.
       if (globalPrefs.getString('ada_track_morning') != today &&
-          now.hour >= 8) {
+          now.hour >= 8 &&
+          now.hour < 12) {
         try {
           final text = await morningReportText(languageCode);
           if (text.trim().isNotEmpty) {

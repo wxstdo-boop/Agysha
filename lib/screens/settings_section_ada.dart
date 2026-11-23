@@ -107,7 +107,7 @@ extension _SettingsSectionAda on _SettingsScreenState {
                             Translations.t(
                               'aiGuideKey',
                               context,
-                              'Poolside / Agnes key (optional)',
+                              'Your own key is needed for paid models',
                             ),
                             style: theme.textTheme.labelMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
@@ -197,90 +197,17 @@ extension _SettingsSectionAda on _SettingsScreenState {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          // Одно поле на оба ключа: Poolside (Laguna) и Agnes
-                          // пробуются одним и тем же ключом, поэтому второй
-                          // пустой ввод больше не сбивает с толку и не мешает
-                          // Аде отвечать платной моделью.
+                          // Одна короткая строка: зачем вообще ключ.
+                          // Перечисление бесплатных провайдеров владелец
+                          // просил убрать — оно только засоряло экран.
                           Text(
                             Translations.t(
-                              'aiGuideSharedKey',
+                              'aiGuideKeyNote',
                               context,
-                              'One key works for both Poolside (Laguna) and Agnes AI.',
+                              'Без ключа Ада отвечает на бесплатных моделях.',
                             ),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          // Описание Ады: одна фраза про бесплатные модели.
-                          Builder(
-                            builder: (context) {
-                              final note = Translations.t(
-                                'aiGuideKeyNote',
-                                context,
-                                'Ада использует встроенные бесплатные модели (100 сообщений на ADA, остальное — FreeLLMPool).',
-                              );
-                              return Text(
-                                note,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          // Видимый список бесплатных провайдеров: владелец
-                          // спрашивал «анонимные так и не добавил» — теперь
-                          // они не только в коде, но и в настройках.
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.35),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.auto_awesome_outlined,
-                                  size: 18,
-                                  color: theme.colorScheme.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        Translations.t(
-                                          'adaFreeProviders',
-                                          context,
-                                          'Free, no key',
-                                        ),
-                                        style: theme.textTheme.labelLarge,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        Translations.t(
-                                          'adaFreeProvidersDesc',
-                                          context,
-                                          'Kilo Gateway, Pollinations, LLM7, OVHcloud and AI Horde.',
-                                        ),
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
                             ),
                           ),
                           const Divider(height: 20),

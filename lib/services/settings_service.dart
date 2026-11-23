@@ -497,15 +497,22 @@ class SettingsService {
   }
 
   /// Ада-трекинг: утренний отчёт «что сегодня по плану» + вечерний разбор.
+  /// Значение дублируется в нотифаер: по нему оболочка сразу переставляет
+  /// (или снимает) пуши 08:00/21:00, не дожидаясь следующего запуска.
+  static final ValueNotifier<bool> aiTracking = ValueNotifier<bool>(true);
+
   static Future<bool> loadAiTracking() async {
     final map = await _loadSettings();
-    return _bool(map[_keyAiTracking], true);
+    final v = _bool(map[_keyAiTracking], true);
+    aiTracking.value = v;
+    return v;
   }
 
   static Future<void> saveAiTracking(bool value) async {
     final map = await _loadSettings();
     map[_keyAiTracking] = value;
     await _saveSettings(map);
+    aiTracking.value = value;
   }
 
   static Future<bool> loadAdaProactive() async => true;

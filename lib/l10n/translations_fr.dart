@@ -506,19 +506,13 @@ const Map<String, String> _fr = {
   'aiGuideToggle': 'Activer le guide IA',
   'aiGuideDesc':
       'Un petit cercle apparaît à côté du bouton « + » et ouvre un mini-chat.',
-  'aiGuideKeysTitle': 'Clés des fournisseurs',
-  'aiGuideKey': 'Clé Poolside (optionnelle)',
+  'aiGuideKeysTitle': 'CLÉ DU FOURNISSEUR',
+  'aiGuideKey': 'Votre clé sert aux modèles payants',
   'aiGuideAgnesKey': 'Clé Agnes AI (optionnelle)',
   'aiGuideAgnesKeyHint': 'Colle ta clé Agnes AI',
-  'aiGuideKeyHint': 'Collez votre clé Laguna',
+  'aiGuideKeyHint': 'Colle ta clé de fournisseur',
   'aiGuideKeyNote':
-      'Modèles anonymes gratuits : LLM7, Pollinations et AI Horde — sans clé ni inscription. Votre clé ne sert qu’aux modèles premium.',
-  'aiGuideKeyNoteProviders': 'Kilo · Pollinations · LLM7 · OVH · Horde',
-  'aiGuideSharedKey':
-      'Une seule clé suffit pour Poolside (Laguna) et Agnes AI. Ada l’essaie d’abord et ne bascule sur les modèles gratuits que si la clé est refusée.',
-  'adaFreeProviders': 'Gratuit, sans clé',
-  'adaFreeProvidersDesc':
-      'LLM7, Pollinations et AI Horde. Si une passerelle est occupée, Ada essaie la suivante.',
+      'Sans clé, Ada répond avec les modèles gratuits.',
   'aiGuideKeyNoteTail': '',
   'geminiKey':
       'Clé Gemini (optionnelle — l’Ada la plus vive et la plus chaude)',

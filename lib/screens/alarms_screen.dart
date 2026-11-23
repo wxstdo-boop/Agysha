@@ -1061,11 +1061,14 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       key: ValueKey('item_timer_${timer.id}'),
       dismissKey: ValueKey('dismiss_${timer.id}'),
       borderRadius: 16,
-      // Своего схлопывания у строки НЕТ: иначе оно и внешний AnimatedSize
-      // тянули высоту одновременно, и удаление шло двумя волнами с паузой.
-      // Строка исчезает в момент удаления, а высоту ведёт ровно одна
-      // анимация секции (320 мс).
-      resizeDuration: null,
+      // Своё схлопывание строки: без него удалённая строка исчезала кадром, и
+      // все таймеры ПОД ней прыгали вверх сразу. Исключение — последняя
+      // строка: под ней ничего нет, и высоту секции (вместе с плашкой
+      // «Таймеров пока нет») ведёт внешняя анимация заголовка списка —
+      // тогда движение одно и без провала.
+      resizeDuration: _timerSvc.timers.length > 1
+          ? const Duration(milliseconds: 300)
+          : null,
       // Фон удаления = границы карточки (у неё горизонтальный margin 12).
       inset: const EdgeInsets.symmetric(horizontal: 12),
       confirmDismiss: (_) async {

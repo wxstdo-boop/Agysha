@@ -1642,7 +1642,15 @@ class AgyshaAppState extends State<AgyshaApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _languageCode == 'system') setState(() {});
     });
+    // Тумблер «Ада-трекинг» в настройках: пуши 08:00/21:00 переставляются
+    // сразу, а не только при следующем запуске/возврате из фона.
+    SettingsService.aiTracking.addListener(_onAiTrackingChanged);
     _armAdaTrackingTimer();
+  }
+
+  void _onAiTrackingChanged() {
+    _armAdaTrackingTimer();
+    unawaited(_scheduleAdaTrackingNotifs());
   }
 
   /// Ставит таймер до следующего отчёта Ады (ближайшие 08:00 или 21:00).

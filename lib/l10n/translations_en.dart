@@ -501,19 +501,13 @@ const Map<String, String> _en = {
   'aiGuideToggle': 'Enable AI guide',
   'aiGuideDesc':
       'A small circle appears next to the “+” button and opens a mini chat.',
-  'aiGuideKeysTitle': 'Provider keys',
-  'aiGuideKey': 'Poolside key (optional)',
+  'aiGuideKeysTitle': 'PROVIDER KEY',
+  'aiGuideKey': 'Your own key is needed for paid models',
   'aiGuideAgnesKey': 'Agnes AI key (optional)',
   'aiGuideAgnesKeyHint': 'Paste your Agnes AI key',
-  'aiGuideKeyHint': 'Paste your Laguna API key',
+  'aiGuideKeyHint': 'Paste your provider key',
   'aiGuideKeyNote':
-      'Free anonymous models: LLM7, Pollinations and AI Horde — no key or sign-up needed. Your own key is only for premium models.',
-  'aiGuideKeyNoteProviders': 'Kilo · Pollinations · LLM7 · OVH · Horde',
-  'aiGuideSharedKey':
-      'One key works for both Poolside (Laguna) and Agnes AI. Ada tries it first and falls back to the free models only if the key is rejected.',
-  'adaFreeProviders': 'Free, no key',
-  'adaFreeProvidersDesc':
-      'LLM7, Pollinations and AI Horde. If one gateway is busy, Ada quietly tries the next.',
+      'Without a key Ada answers on the free models.',
   'aiGuideKeyNoteTail': '',
   'geminiKey': 'Gemini key (optional — the best, hottest Ada)',
   'geminiKeyHint': 'Paste your Google AI Studio key',
