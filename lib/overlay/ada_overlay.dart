@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -17,11 +18,11 @@ void initOverlayChannel() {
   const MethodChannel('x-slayer/overlay');
 }
 
-/// Размер окна пузыря (dp) и диаметр самого круга. Окно на 8 dp больше
-/// круга: тени нужен запас, иначе её обрезает прямоугольник окна и по краю
-/// пузыря проступает тёмная кайма. Заодно площадка нажатия — 44 dp.
-const double _windowSize = 44;
-const double _bubbleSize = 36;
+/// Размер окна пузыря (dp) и диаметр самой кнопки. Кнопка — 44 dp, как у
+/// фаба: палец попадает без прицеливания. Окно на 8 dp больше, чтобы
+/// «самокатание» ходило внутри окна и не упиралось в его край.
+const double _windowSize = 52;
+const double _bubbleSize = 44;
 
 /// Команда главному приложению: «верни Agysha на экран и открой чат Ады».
 const String kOpenAdaChatCmd = 'open_ada_chat';
@@ -97,13 +98,13 @@ class _AdaBubble extends StatefulWidget {
 }
 
 class _AdaBubbleState extends State<_AdaBubble>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static _AdaBubbleState? _live;
 
   /// Тап по пузырю — не «нажатие на кнопку в окне»: палец ведёт окно по
   /// экрану. Поэтому тап считаем сами: короткое касание почти без сдвига.
-  static const double _tapSlop = 8;
-  static const Duration _tapTime = Duration(milliseconds: 420);
+  static const double _tapSlop = 16;
+  static const Duration _tapTime = Duration(milliseconds: 1200);
 
   int _variant = -1;
   bool _pressed = false;
@@ -113,8 +114,17 @@ class _AdaBubbleState extends State<_AdaBubble>
 
   late final AnimationController _appear = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 200),
+    duration: const Duration(milliseconds: 240),
     value: 1,
+  );
+
+  /// Пузырь катается сам: медленный синус внутри окна, рисуется Flutter'ом.
+  /// Раньше это делал нативный таймер через `updateViewLayout` каждые 33 мс —
+  /// перекладывание окна через WindowManager стоит кадров, и «самокатание»
+  /// выходило рваным. Сдвиг на пару dp внутри окна стоит одного transform.
+  late final AnimationController _drift = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 9000),
   );
 
   @override
@@ -126,6 +136,7 @@ class _AdaBubbleState extends State<_AdaBubble>
     // Окно появляется в тот же кадр, в котором его показал сервис: короткий
     // «выдох» из 0.72 → 1 читается как плавный выезд, а не как вспышка.
     _appear.forward(from: 0);
+    _drift.repeat();
   }
 
   @override
@@ -133,6 +144,7 @@ class _AdaBubbleState extends State<_AdaBubble>
     if (identical(_live, this)) _live = null;
     WidgetsBinding.instance.removeObserver(this);
     _appear.dispose();
+    _drift.dispose();
     super.dispose();
   }
 
@@ -182,27 +194,31 @@ class _AdaBubbleState extends State<_AdaBubble>
   Future<void> _openChat() async {
     if (_opening) return;
     _opening = true;
-    // Команда уходит ПЕРВОЙ. Раньше её ждал запрос позиции окна: если
-    // канал не отвечал (сервис ещё не прицепил вид), тап молча съедался,
-    // а `_opening` оставался взведённым — пузырь «умирал» до перезапуска.
-    try {
-      await FlutterOverlayWindow.shareData({'cmd': kOpenAdaChatCmd});
-    } catch (_) {
-      _opening = false;
-      return;
-    }
-    unawaited(Haptics.select());
-    unawaited(_rememberPosition());
-    // Пузырь остаётся на месте: короткий дебаунс вместо вечной блокировки —
-    // иначе после первого тапа пузырь «замирал» до перезапуска оверлея.
-    Timer(const Duration(milliseconds: 900), () {
+    // Флаг снимаем по таймеру, а не по ответу канала: сервис окна может не
+    // ответить вовсе, и тогда пузырь навсегда оставался «занятым» — второй
+    // тап уже ничего не делал. Это и был баг «нажимаю — ничего».
+    Timer(const Duration(milliseconds: 700), () {
       if (mounted) _opening = false;
     });
+    unawaited(Haptics.select());
+    unawaited(_rememberPosition());
+    // Команда уходит первой и без ожидания: сервис сам поднимет Agysha и
+    // передаст метку. Ждать ответа здесь нельзя — он не обязателен.
+    try {
+      await FlutterOverlayWindow.shareData({
+        'cmd': kOpenAdaChatCmd,
+      }).timeout(const Duration(milliseconds: 350));
+    } catch (_) {
+      // Таймаут или отцепленный канал: метку в prefs сервис уже записал,
+      // приложение заберёт её на следующем resume.
+    }
   }
 
   void _onDown(PointerDownEvent event) {
     _downAt = event.position;
     _downTime = DateTime.now();
+    // Под пальцем пузырь замирает: целиться в качающуюся кнопку нельзя.
+    _drift.stop();
     setState(() => _pressed = true);
   }
 
@@ -212,15 +228,20 @@ class _AdaBubbleState extends State<_AdaBubble>
     _downAt = null;
     _downTime = null;
     if (mounted && _pressed) setState(() => _pressed = false);
-    if (downAt == null || downTime == null) return;
+    if (downAt == null || downTime == null) {
+      _drift.repeat();
+      return;
+    }
     final moved = (event.position - downAt).distance;
     final held = DateTime.now().difference(downTime);
     if (moved <= _tapSlop && held <= _tapTime) unawaited(_openChat());
+    _drift.repeat();
   }
 
   void _onCancel(PointerCancelEvent event) {
     _downAt = null;
     _downTime = null;
+    _drift.repeat();
     if (mounted && _pressed) setState(() => _pressed = false);
   }
 
@@ -233,27 +254,38 @@ class _AdaBubbleState extends State<_AdaBubble>
       onPointerUp: _onUp,
       onPointerCancel: _onCancel,
       child: AnimatedBuilder(
-        animation: _appear,
+        animation: Listenable.merge([_appear, _drift]),
         builder: (context, child) {
-          final e = Curves.easeOutCubic.transform(_appear.value);
+          final t = _drift.value * 2 * math.pi;
+          // Качание — 2.4 × 1.8 dp внутри окна: одна трансформация, ребёнок
+          // не перерисовывается (он под RepaintBoundary), поэтому «само-
+          // катание» стоит композитору, а не растеризатору.
+          final drift = Transform.translate(
+            offset: Offset(math.sin(t) * 2.4, math.cos(t) * 1.8),
+            child: child,
+          );
+          final e = _appear.value;
+          // Альфа и масштаб нужны только на входе: после него остаётся
+          // голая трансформация без лишних слоёв.
+          if (e >= 1.0) return drift;
+          final eased = Curves.easeOutCubic.transform(e);
           return Opacity(
-            opacity: e,
+            opacity: eased,
             child: Transform.scale(
-              // Окно само проявляется альфой (см. OverlayService), поэтому
-              // здесь только короткое «дыхание» масштаба: сильный зум из
-              // 0.72 поверх фейда читался рывком.
-              scale: 0.86 + 0.14 * e,
+              scale: 0.90 + 0.10 * eased,
               alignment: Alignment.center,
-              child: child,
+              child: drift,
             ),
           );
         },
-        child: Center(
-          child: AnimatedScale(
-            scale: _pressed ? 0.90 : 1.0,
-            duration: Duration(milliseconds: _pressed ? 90 : 220),
-            curve: _pressed ? Curves.easeOut : Curves.easeOutBack,
-            child: _bubbleBody(),
+        child: RepaintBoundary(
+          child: Center(
+            child: AnimatedScale(
+              scale: _pressed ? 0.92 : 1.0,
+              duration: Duration(milliseconds: _pressed ? 80 : 200),
+              curve: _pressed ? Curves.easeOut : Curves.easeOutBack,
+              child: _bubbleBody(),
+            ),
           ),
         ),
       ),
@@ -261,9 +293,15 @@ class _AdaBubbleState extends State<_AdaBubble>
   }
 
   Widget _bubbleBody() {
-    // Пузырь — это сама Ада во весь круг, без цветной подложки. Градиентная
-    // кайма вокруг аватарки давала по краю тёплые жёлто-розовые полосы на
-    // светлых обоях — читалось как «подчёркивания» у аватарки.
+    // Пузырь — плоский монохромный фаб Ады: одна непрозрачная плита темы и
+    // одноцветный значок. Ни обводок, ни градиентов, ни ShaderMask: любая
+    // тонкая линия на маленьком круге поверх чужих обоев читалась жёлтым
+    // «подчёркиванием», а градиентная маска ещё и стоила кадров. Значок
+    // остаётся глифом варианта Ады — пузырь по-прежнему она, но без цвета.
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final index = _variant < 0 ? 0 : _variant % adaVariants.length;
     return SizedBox(
       width: _windowSize,
       height: _windowSize,
@@ -273,27 +311,14 @@ class _AdaBubbleState extends State<_AdaBubble>
           height: _bubbleSize,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            boxShadow: [
-              // Тень отделяет пузырь от обоев. Она целиком лежит внутри
-              // окна: обрезанная по краю тень рисовала ту же полосу, что и
-              // кольцо.
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
-                blurRadius: 7,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            color: dark
+                ? cs.surfaceContainerHighest
+                : cs.surfaceContainerLowest,
           ),
-          child: ClipOval(
-            // Без кольца и без свечения: круг лежит на чужих обоях, а
-            // тень значка красится в primary — её размытый край читался
-            // жёлтой полосой под эмодзи. Тень медальона уже отделяет пузырь.
-            child: AdaAvatar(
-              size: _bubbleSize,
-              variantIndex: _variant,
-              showRing: false,
-              showGlow: false,
-            ),
+          child: Icon(
+            adaVariants[index].icon,
+            size: _bubbleSize * 0.5,
+            color: cs.onSurface,
           ),
         ),
       ),

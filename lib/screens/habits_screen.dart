@@ -3,6 +3,7 @@ import 'dart:math';
 import '../services/haptics.dart';
 import '../services/sounds.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 
 import '../models/habit.dart';

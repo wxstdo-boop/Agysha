@@ -1,5 +1,6 @@
 package flutter.overlay.window.flutter_overlay_window;
 
+import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -15,7 +16,6 @@ import android.graphics.Point;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
-import android.os.SystemClock;
 import android.view.Choreographer;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -37,6 +37,7 @@ import java.util.TimerTask;
 
 import io.flutter.embedding.android.FlutterTextureView;
 import io.flutter.embedding.android.FlutterView;
+import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
 import io.flutter.FlutterInjector;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.FlutterEngineCache;
@@ -71,27 +72,19 @@ public class OverlayService extends Service implements View.OnTouchListener {
     private float dragPositionX, dragPositionY;
     private int lastYPosition;
     private boolean dragging;
+    /** Время касания: тап без движения открывает чат. */
+    private long tapDownAtMs = 0;
+    private static final long TAP_MAX_MS = 1200L;
     // Координаты движения сливаются в один updateViewLayout на vsync.
     // Это не даёт MethodChannel и WindowManager накапливать старые кадры.
     private boolean moveFramePosted = false;
     private int moveFrameGeneration = 0;
     private int pendingMoveX;
     private int pendingMoveY;
-    // Пузырь живёт сам: мягко покачивается вокруг точки, где его оставили,
-    // и замирает под пальцем. Держим это на Handler, а не на Choreographer:
-    // 30 кадров в секунду для 44 dp окна достаточно, а заряд не жжём.
-    private static final int FLOAT_INTERVAL_MS = 33;
-    private static final double FLOAT_AMPLITUDE_X_DP = 5.0;
-    private static final double FLOAT_AMPLITUDE_Y_DP = 9.0;
-    private static final double FLOAT_SPEED_X = 1.35;
-    private static final double FLOAT_SPEED_Y = 0.95;
-    private boolean floatEnabled = false;
-    private boolean floatPosted = false;
-    private int floatHomeX;
-    private int floatHomeY;
-    private long floatStartMs = 0L;
-    private long floatHoldUntilMs = 0L;
-    private boolean entryFadeRunning = false;
+    // Окно показываем одним кадром после первого кадра Flutter: пошаговая
+    // альфа через updateViewLayout перекладывала окно 60 раз в секунду и
+    // давала рывки на входе. Само проявление рисует Flutter (GPU).
+    private boolean entryRevealed = false;
     private static final float MAXIMUM_OPACITY_ALLOWED_FOR_S_AND_HIGHER = 0.8f;
     private Point szWindow = new Point();
     private Timer mTrayAnimationTimer;
@@ -205,6 +198,10 @@ public class OverlayService extends Service implements View.OnTouchListener {
             // Так пузырь не превращается в мини-окно, а возвращает обычную Аду.
             if (message instanceof java.util.Map
                     && "open_ada_chat".equals(((java.util.Map<?, ?>) message).get("cmd"))) {
+                // Просьбу запоминаем в prefs: даже если сервис не сможет
+                // поднять задачу (агрессивные прошивки), Dart заберёт метку
+                // на следующем resume и откроет чат.
+                rememberOpenAdaChat();
                 bringAppToFront();
             }
             // Мессенджер главного движка может быть уже отцеплен (приложение
@@ -218,6 +215,9 @@ public class OverlayService extends Service implements View.OnTouchListener {
                     Log.w("OverlayService", "Host engine is gone, message dropped", error);
                 }
             }
+            // Без ответа `shareData` во Flutter висел вечно, а пузырь держал
+            // флаг «открываюсь» — второй тап уже ничего не делал.
+            if (reply != null) reply.reply(null);
         });
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
@@ -251,9 +251,14 @@ public class OverlayService extends Service implements View.OnTouchListener {
                         | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT
         );
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && WindowSetup.flag == clickableFlag) {
-            params.alpha = MAXIMUM_OPACITY_ALLOWED_FOR_S_AND_HIGHER;
-        }
+        // До первого кадра Flutter окно прозрачное: иначе пользователь
+        // видит пустой прямоугольник, пока движок оверлея стартует.
+        final float opacityCeiling = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                && WindowSetup.flag == clickableFlag)
+                ? MAXIMUM_OPACITY_ALLOWED_FOR_S_AND_HIGHER
+                : 1f;
+        params.alpha = 0f;
+        entryRevealed = false;
         params.gravity = WindowSetup.gravity;
         // Оверлей не должен получать resize/pan-анимацию от IME: иначе
         // Android дёргает TextureView при каждом кадре клавиатуры и рисует
@@ -272,16 +277,33 @@ public class OverlayService extends Service implements View.OnTouchListener {
             return START_NOT_STICKY;
         }
         moveOverlay(dx, dy, null);
-        // Окно проявляется альфой, а маленький пузырь начинает жить сам.
-        startEntryFade();
-        refreshFloatMode(WindowSetup.width, WindowSetup.height);
+        // Показываем окно ровно на первом отрисованном кадре: один вызов
+        // WindowManager вместо анимации по кадрам.
+        flutterView.addIsDisplayingFlutterUiListener(new FlutterUiDisplayListener() {
+            @Override
+            public void onFlutterUiDisplayed() {
+                revealOverlay(opacityCeiling);
+            }
+
+            @Override
+            public void onFlutterUiNoLongerDisplayed() {
+            }
+        });
+        // Страховка: если движок не сообщит о кадре, окно не должно остаться
+        // невидимым.
+        mAnimationHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                revealOverlay(opacityCeiling);
+            }
+        }, 900);
         return START_NOT_STICKY;
     }
 
     private void removeOverlayViewSafely() {
         moveFrameGeneration++;
         moveFramePosted = false;
-        stopFloating();
+        entryRevealed = false;
         if (mTrayAnimationTimer != null) {
             mTrayAnimationTimer.cancel();
             mTrayAnimationTimer = null;
@@ -401,7 +423,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
             WindowSetup.enableDrag = enableDrag;
             manager.updateViewLayout(view, params);
             // Пузырь 44 dp катается сам, окно чата — нет.
-            refreshFloatMode(width, height);
+            // Размер окна больше не влияет на «самокатание»: пузырь качается
+            // внутри своего окна силами Flutter.
             // Не вызываем invalidate: он конкурирует с TextureView во время
             // resize и оставляет старый кадр на границе пузыря.
             result.success(true);
@@ -442,12 +465,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) service.flutterView.getLayoutParams();
             if (params == null) return null;
             Map<String, Double> position = new HashMap<>();
-            // Пока пузырь катается сам, «место, где его оставили» — это дом
-            // качания, а не текущий кадр: иначе сохранённая точка уползала бы
-            // вместе с покачиванием.
-            final boolean floating = service.floatEnabled && service.floatPosted;
-            position.put("x", service.pxToDp(floating ? service.floatHomeX : params.x));
-            position.put("y", service.pxToDp(floating ? service.floatHomeY : params.y));
+            position.put("x", service.pxToDp(params.x));
+            position.put("y", service.pxToDp(params.y));
             return position;
         } catch (RuntimeException error) {
             Log.w("OverlayService", "Unable to read overlay position", error);
@@ -546,6 +565,24 @@ public class OverlayService extends Service implements View.OnTouchListener {
      * чтобы не пересоздавать Activity и не терять состояние чата.
      */
     private void bringAppToFront() {
+        // Сначала поднимаем СВОЮ задачу: moveToFront не считается «запуском
+        // активности из фона», а на Realme/ColorOS именно это правило глушит
+        // startActivity из сервиса — тап по пузырю выглядел как «ничего».
+        try {
+            ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            if (manager != null) {
+                for (ActivityManager.AppTask task : manager.getAppTasks()) {
+                    try {
+                        task.moveToFront();
+                    } catch (RuntimeException error) {
+                        Log.w("OverlayService", "moveToFront refused", error);
+                    }
+                    break;
+                }
+            }
+        } catch (RuntimeException error) {
+            Log.w("OverlayService", "Could not raise the task", error);
+        }
         try {
             Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
             if (launch == null) return;
@@ -607,12 +644,11 @@ public class OverlayService extends Service implements View.OnTouchListener {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 dragging = false;
-                // Палец на пузыре — стоим: иначе окно уползает из-под пальца.
-                floatHoldUntilMs = SystemClock.uptimeMillis() + 1500L;
                 lastX = event.getRawX();
                 lastY = event.getRawY();
                 dragPositionX = params.x;
                 dragPositionY = params.y;
+                tapDownAtMs = System.currentTimeMillis();
                 break;
             case MotionEvent.ACTION_MOVE:
                 final float dx = event.getRawX() - lastX;
@@ -634,8 +670,20 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 postMoveFrame();
                 break;
             case MotionEvent.ACTION_UP:
+                lastYPosition = Math.round(dragPositionY);
+                // Тап по пузырю открываем и отсюда: Dart-оверлей мог не
+                // получить событие (окно только что показалось, движок
+                // оверлея ещё поднимается). Пальцем не двигали и держали
+                // недолго — значит это тап, а не перетаскивание.
+                if (!dragging && tapDownAtMs > 0
+                        && System.currentTimeMillis() - tapDownAtMs <= TAP_MAX_MS) {
+                    rememberOpenAdaChat();
+                    bringAppToFront();
+                }
+                tapDownAtMs = 0;
+                break;
             case MotionEvent.ACTION_CANCEL:
-                floatHoldUntilMs = SystemClock.uptimeMillis() + 1200L;
+                tapDownAtMs = 0;
                 lastYPosition = Math.round(dragPositionY);
                 if (!WindowSetup.positionGravity.equals("none")) {
                     mTrayTimerTask = new TrayAnimationTimerTask();
@@ -660,144 +708,42 @@ public class OverlayService extends Service implements View.OnTouchListener {
         return Math.max(0, Math.min(y, Math.max(0, screen - viewHeight)));
     }
 
-    /** Пузырь (а не окно чата): маленькое окно, которое можно катать. */
-    private void refreshFloatMode(int widthDp, int heightDp) {
-        final boolean bubble = widthDp > 0 && heightDp > 0 && widthDp <= 48 && heightDp <= 48;
-        if (bubble == floatEnabled) {
-            if (bubble) startFloating();
-            return;
-        }
-        floatEnabled = bubble;
-        if (bubble) {
-            startFloating();
-        } else {
-            stopFloating();
-        }
-    }
-
-    private void startFloating() {
-        if (!floatEnabled || floatPosted || !viewAttached || flutterView == null) return;
-        final WindowManager.LayoutParams params =
-                (WindowManager.LayoutParams) flutterView.getLayoutParams();
-        if (params == null) return;
-        floatHomeX = params.x;
-        floatHomeY = params.y;
-        floatStartMs = SystemClock.uptimeMillis();
-        floatPosted = true;
-        mAnimationHandler.postDelayed(floatRunnable, FLOAT_INTERVAL_MS);
-    }
-
-    private void stopFloating() {
-        floatPosted = false;
-        mAnimationHandler.removeCallbacks(floatRunnable);
-    }
-
     /**
-     * Самокатание пузыря: круг мягко ходит вокруг точки, где его оставили.
-     * Амплитуда — единицы dp, скорость — доли dp за кадр, поэтому шаг в
-     * 1 физический пиксель не читается как рывок. Под пальцем и секунду
-     * после — стоит ровно, чтобы попадать по нему без промахов.
+     * Показать окно: одна установка альфы вместо пошаговой анимации.
+     * Раньше окно перекладывалось каждый кадр через WindowManager — это
+     * дорогая операция, и вход пузыря дёргался. Плавность рисует Flutter.
      */
-    private final Runnable floatRunnable = new Runnable() {
-        @Override
-        public void run() {
-            floatPosted = false;
-            if (!floatEnabled || !viewAttached) return;
-            final WindowManager manager = windowManager;
-            final FlutterView view = flutterView;
-            if (manager == null || view == null) return;
-            final WindowManager.LayoutParams params =
-                    (WindowManager.LayoutParams) view.getLayoutParams();
-            if (params == null) return;
-            final long now = SystemClock.uptimeMillis();
-            if (dragging || now < floatHoldUntilMs) {
-                // Пауза: точкой отсчёта становится текущее место, чтобы
-                // пузырь не «прыгал» к старому дому после паузы.
-                floatHomeX = params.x;
-                floatHomeY = params.y;
-                floatStartMs = now;
-                floatPosted = true;
-                mAnimationHandler.postDelayed(this, FLOAT_INTERVAL_MS);
-                return;
-            }
-            final double t = (now - floatStartMs) / 1000.0;
-            final int targetX = clampToScreenX(
-                    floatHomeX + (int) Math.round(Math.sin(t * FLOAT_SPEED_X) * dpToPxF(FLOAT_AMPLITUDE_X_DP)),
-                    view.getWidth());
-            final int targetY = clampToScreenY(
-                    floatHomeY + (int) Math.round(Math.cos(t * FLOAT_SPEED_Y) * dpToPxF(FLOAT_AMPLITUDE_Y_DP)),
-                    view.getHeight());
-            if (params.x != targetX || params.y != targetY) {
-                params.x = targetX;
-                params.y = targetY;
-                try {
-                    manager.updateViewLayout(view, params);
-                } catch (RuntimeException error) {
-                    Log.w("OverlayService", "Ignoring float move", error);
-                    return;
-                }
-            }
-            floatPosted = true;
-            mAnimationHandler.postDelayed(this, FLOAT_INTERVAL_MS);
-        }
-    };
-
-    /**
-     * Проявление окна: альфа 0 → 1 за ~190 мс с замедлением к концу. Раньше
-     * окно появлялось одним кадром, и на фоне Flutter-анимации это читалось
-     * как вспышка — «пузырь входит неплавно».
-     */
-    private void startEntryFade() {
-        if (entryFadeRunning) return;
+    private void revealOverlay(float ceiling) {
+        if (entryRevealed) return;
         final WindowManager manager = windowManager;
         final FlutterView view = flutterView;
         if (manager == null || view == null || !viewAttached) return;
         final WindowManager.LayoutParams params =
                 (WindowManager.LayoutParams) view.getLayoutParams();
         if (params == null) return;
-        final float ceiling = (WindowSetup.flag == clickableFlag)
-                ? MAXIMUM_OPACITY_ALLOWED_FOR_S_AND_HIGHER
-                : 1f;
-        entryFadeRunning = true;
-        params.alpha = 0f;
+        entryRevealed = true;
+        params.alpha = ceiling;
         try {
             manager.updateViewLayout(view, params);
         } catch (RuntimeException error) {
-            entryFadeRunning = false;
-            return;
+            entryRevealed = false;
         }
-        final int steps = 12;
-        mAnimationHandler.postDelayed(new Runnable() {
-            int i = 0;
+    }
 
-            @Override
-            public void run() {
-                i++;
-                if (!viewAttached) {
-                    entryFadeRunning = false;
-                    return;
-                }
-                final WindowManager.LayoutParams p = (WindowManager.LayoutParams) view.getLayoutParams();
-                if (p == null) {
-                    entryFadeRunning = false;
-                    return;
-                }
-                final double t = Math.min(1.0, (double) i / steps);
-                final double eased = 1.0 - Math.pow(1.0 - t, 3.0);
-                p.alpha = (float) (ceiling * eased);
-                try {
-                    manager.updateViewLayout(view, p);
-                } catch (RuntimeException ignored) {
-                    // Окно могли закрыть прямо во время проявления.
-                }
-                if (i < steps) {
-                    mAnimationHandler.postDelayed(this, 16);
-                } else {
-                    p.alpha = ceiling;
-                    entryFadeRunning = false;
-                }
-            }
-        }, 16);
+    /**
+     * Тап по пузырю: запоминаем просьбу «открой чат Ады» в тех же prefs,
+     * что читает Dart. Метка переживёт и отказ прошивки поднять задачу:
+     * приложение заберёт её на следующем resume.
+     */
+    private void rememberOpenAdaChat() {
+        try {
+            getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("flutter.pending_open_ada_chat", true)
+                    .apply();
+        } catch (RuntimeException error) {
+            Log.w("OverlayService", "Could not persist open-chat request", error);
+        }
     }
 
     private void postMoveFrame() {
@@ -820,10 +766,6 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 params.x = targetX;
                 params.y = targetY;
                 manager.updateViewLayout(view, params);
-                // Программный сдвиг — новый дом для самокатания.
-                floatHomeX = targetX;
-                floatHomeY = targetY;
-                floatStartMs = SystemClock.uptimeMillis();
             } catch (RuntimeException error) {
                 Log.w("OverlayService", "Ignoring stale overlay move", error);
             }

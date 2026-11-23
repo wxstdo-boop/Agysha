@@ -414,6 +414,11 @@ class AdaAvatar extends StatelessWidget {
   /// полосой вокруг эмодзи — «подчёркивания» у аватарки.
   final bool showGlow;
 
+  /// Нейтральный глиф: значок красится ролями темы (onSurfaceVariant →
+  /// onSurface), а не `primary`. Нужен там, где аватарка лежит на чужих
+  /// обоях: цветной значок на маленьком круге читался пятном.
+  final bool neutralGlyph;
+
   const AdaAvatar({
     super.key,
     this.size = 34,
@@ -423,6 +428,7 @@ class AdaAvatar extends StatelessWidget {
     this.monochrome = false,
     this.showRing = true,
     this.showGlow = true,
+    this.neutralGlyph = false,
   });
 
   @override
@@ -469,6 +475,9 @@ class AdaAvatar extends StatelessWidget {
   Widget _core(BuildContext context, AdaVariant v) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
+    // Акцент медальона: обычно primary, но у пузыря поверх чужих обоев —
+    // нейтральные роли темы, чтобы на круге не было цветных полос.
+    final accent = neutralGlyph ? cs.onSurfaceVariant : cs.primary;
     // Монохромная тональная гамма из ТЕКУЩЕЙ темы: аватарка автоматически
     // подстраивается под смену темы (primary → secondary → tertiary),
     // а не остаётся ярким цветным кружком в любой теме.
@@ -603,7 +612,7 @@ class AdaAvatar extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: cs.primary.withValues(alpha: dark ? 0.26 : 0.16),
+                      color: accent.withValues(alpha: dark ? 0.26 : 0.16),
                       width: 1,
                     ),
                   ),
@@ -619,8 +628,8 @@ class AdaAvatar extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    cs.primary.withValues(alpha: dark ? 0.26 : 0.16),
-                    cs.primary.withValues(alpha: 0),
+                    accent.withValues(alpha: dark ? 0.26 : 0.16),
+                    accent.withValues(alpha: 0),
                   ],
                   stops: const [0.0, 1.0],
                 ),
@@ -634,6 +643,7 @@ class AdaAvatar extends StatelessWidget {
             monochrome: monochrome,
             dark: dark,
             withGlow: showGlow,
+            accent: accent,
           ),
         ],
       ),
@@ -650,9 +660,11 @@ class AdaAvatar extends StatelessWidget {
     required bool monochrome,
     required bool dark,
     required bool withGlow,
+    Color? accent,
   }) {
+    final tint = accent ?? cs.primary;
     final glow = Shadow(
-      color: cs.primary.withValues(alpha: dark ? 0.34 : 0.20),
+      color: tint.withValues(alpha: dark ? 0.34 : 0.20),
       blurRadius: size * 0.18,
     );
     // В цветном режиме значок — эмодзи своего варианта: пул уникален,
@@ -677,9 +689,9 @@ class AdaAvatar extends StatelessWidget {
         end: Alignment.bottomRight,
         colors: monochrome
             ? [
-                Color.lerp(cs.primary, Colors.white, dark ? 0.55 : 0.35)!,
-                cs.primary,
-                Color.lerp(cs.primary, cs.tertiary, 0.55)!,
+                Color.lerp(tint, Colors.white, dark ? 0.55 : 0.35)!,
+                tint,
+                Color.lerp(tint, cs.tertiary, 0.55)!,
               ]
             : [Colors.white, Colors.white.withValues(alpha: 0.92)],
       ).createShader(rect),
@@ -697,7 +709,7 @@ class AdaAvatar extends StatelessWidget {
           Icon(
             v.icon,
             size: size * 0.52,
-            color: cs.primary.withValues(alpha: dark ? 0.30 : 0.16),
+            color: tint.withValues(alpha: dark ? 0.30 : 0.16),
             shadows: [glow],
           ),
         icon,

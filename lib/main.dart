@@ -54,7 +54,8 @@ import 'overlay/ada_overlay.dart'
         kOpenAdaChatCmd,
         AdaOverlayApp;
 import 'overlay/overlay_bridge.dart';
-import 'overlay/launch_intent.dart' show listenOpenAdaChat, consumeOpenAdaChat;
+import 'overlay/launch_intent.dart'
+    show listenOpenAdaChat, consumeOpenAdaChat, consumePendingOpenAdaChat;
 import 'widgets/ada_avatars.dart';
 import 'widgets/ai_guide.dart';
 import 'utils/page_transitions.dart';
@@ -941,7 +942,20 @@ void main() async {
 Future<void> _wireBubbleLaunch() async {
   if (kIsWeb) return;
   listenOpenAdaChat(_openAdaFromBubble);
+  // Метка, которую сервис окна записал в настройки: страховка на случай,
+  // когда прошивка (Realme, ColorOS) не даёт сервису поднять задачу.
+  _bubbleResumeListener ??= AppLifecycleListener(
+    onResume: () => unawaited(_openAdaIfPending()),
+  );
   if (await consumeOpenAdaChat()) _openAdaFromBubble();
+}
+
+/// Подписка на возврат в приложение: держим ссылку, иначе сборщик мусора
+/// снимет слушатель и метка из пузыря не сработает.
+AppLifecycleListener? _bubbleResumeListener;
+
+Future<void> _openAdaIfPending() async {
+  if (await consumePendingOpenAdaChat()) _openAdaFromBubble();
 }
 
 /// Медиауведомление для «своей музыки» профиля: без этой инициализации
@@ -1131,8 +1145,10 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
   // станет домашним экраном (см. [_AlarmBootHost]). Это один вызов
   // platform-канала; на случай зависшего канала ограничиваем его, чтобы
   // приложение не осталось на заставке навсегда.
-  _alarmBootPayload = await _readAlarmBootPayload()
-      .timeout(const Duration(milliseconds: 1500), onTimeout: () => null);
+  _alarmBootPayload = await _readAlarmBootPayload().timeout(
+    const Duration(milliseconds: 1500),
+    onTimeout: () => null,
+  );
 
   runApp(
     AgyshaApp(

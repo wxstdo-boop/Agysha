@@ -96,15 +96,19 @@ void main() {
 
   test('пузырь не рисует кольцо вокруг аватарки', () {
     // Кольцо аватарки (тёмное в светлой теме) на чужих обоях читалось
-    // жёлтой полосой под кружком. В пузыре его выключаем: тень уже
-    // отделяет пузырь от фона.
+    // жёлтой полосой под кружком. Пузырь больше не рисует медальон с
+    // кольцами вовсе: плита темы и одноцветный значок.
     final overlay = read('lib/overlay/ada_overlay.dart');
-    expect(overlay.contains('showRing: false'), isTrue,
-        reason: 'пузырь обязан рисовать аватарку без обводки');
+    expect(
+      overlay.contains('Border.all'),
+      isFalse,
+      reason: 'пузырь обязан рисовать круг без обводки',
+    );
+    expect(overlay.contains('AdaAvatar('), isFalse);
     expect(
       read('lib/widgets/ada_avatars.dart').contains('final bool showRing;'),
       isTrue,
-      reason: 'без флага кольцо не отключить',
+      reason: 'в остальном приложении кольцо остаётся настраиваемым',
     );
   });
 
