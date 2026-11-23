@@ -113,6 +113,11 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
   /// где на экране ничего не происходит («зависает в конце»).
   bool _collapsing = false;
 
+  /// Высота строки в момент начала схлопывания. По ней ужимается слот, а
+  /// сама карточка рисуется в полную высоту: SizeTransition резал её снизу,
+  /// и удаление читалось как «карточка вжалась и пропала».
+  double _collapseFromHeight = 0;
+
   /// `onDismissed` уже отдан наружу — второй раз не зовём.
   bool _notified = false;
 
@@ -197,6 +202,9 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
 
   void _onDragStart(DragStartDetails details) {
     if (_dismissed || _collapsing || _confirming) return;
+    // Высоту строки снимаем здесь, а не в начале схлопывания: там мы внутри
+    // тика анимации, и `context.size` ещё не посчитан (render dirty).
+    _collapseFromHeight = context.size?.height ?? 0;
     _move.stop();
     _dismissPending = false;
     _dragStartProgress = _move.value;
@@ -369,10 +377,37 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
           if (_notified) return const SizedBox.shrink();
           return content;
         }
-        // Высота 1 -> 0, как у [Dismissible]: строка ужимается, а не растёт.
-        return SizeTransition(
-          sizeFactor: _resizeT.drive(Tween<double>(begin: 1.0, end: 0.0)),
-          alignment: Alignment.topCenter,
+        // Высота 1 -> 0, как у [Dismissible], но без среза: слот ужимается,
+        // а карточка целиком уходит фейдом и лёгким уменьшением. Размер
+        // строки неизвестен в первом кадре — тогда прежний SizeTransition.
+        if (_collapseFromHeight <= 0) {
+          return SizeTransition(
+            sizeFactor: _resizeT.drive(Tween<double>(begin: 1.0, end: 0.0)),
+            alignment: Alignment.topCenter,
+            child: content,
+          );
+        }
+        return AnimatedBuilder(
+          animation: _resizeT,
+          builder: (context, child) {
+            final t = _resizeT.value.clamp(0.0, 1.0);
+            return SizedBox(
+              height: _collapseFromHeight * (1 - t),
+              child: OverflowBox(
+                alignment: Alignment.topCenter,
+                minHeight: _collapseFromHeight,
+                maxHeight: _collapseFromHeight,
+                child: Opacity(
+                  opacity: (1 - t).clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: 1 - 0.04 * t,
+                    alignment: Alignment.topCenter,
+                    child: child,
+                  ),
+                ),
+              ),
+            );
+          },
           child: content,
         );
       },

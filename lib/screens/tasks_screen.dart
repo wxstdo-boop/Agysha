@@ -170,6 +170,10 @@ class _TasksScreenState extends State<TasksScreen>
   bool _leavingWasDone = false;
   int _leavingIndex = 0;
 
+  /// Высота уезжающей карточки в момент отметки: по ней схлопывается её
+  /// слот, а сама карточка рисуется целиком (см. ветку `_leavingTask`).
+  double _leavingCardHeight = 0;
+
   /// Схлопывание уезжающей карточки: высота вниз, лёгкий уход вниз и фейд.
   late final AnimationController _cardExit = AnimationController(
     vsync: this,
@@ -404,6 +408,7 @@ class _TasksScreenState extends State<TasksScreen>
         _leavingTask = task;
         _leavingWasDone = wasDone;
         _leavingIndex = idx < 0 ? 0 : idx;
+        _leavingCardHeight = fromRect?.height ?? 0;
         // Карточка в архивной полке рождается уже сплющенной (t = 0).
         // Раньше метка ставилась ПОСЛЕ первого кадра: карточка появлялась
         // в полную высоту и на следующем кадре схлопывалась — переезд
@@ -864,23 +869,53 @@ class _TasksScreenState extends State<TasksScreen>
           // и в архивной полке (схлопывается), и в активной (вырастает).
           if (task.id == _leavingTask?.id &&
               shelf == (_leavingWasDone ? 'done' : 'active')) {
+            // Слот ужимается по высоте, а САМА карточка рисуется в полную
+            // высоту и мягко уменьшается с фейдом: SizeTransition резал её
+            // по нижней кромке, и переезд в архив читался как «карточка
+            // сжалась и пропала». Без замера (первый кадр, тесты) — прежний
+            // срез по высоте.
+            final exitCard = IgnorePointer(
+              child: _buildTaskCard(context, theme, task, i),
+            );
             return KeyedSubtree(
               key: ValueKey('item_task_${task.id}'),
               child: KeyedSubtree(
                 key: _cardGeoKey(shelf, task.id),
-                child: SizeTransition(
-                  sizeFactor: _cardExitSize,
-                  alignment: Alignment.topCenter,
-                  child: FadeTransition(
-                    opacity: _cardExitFade,
-                    child: SlideTransition(
-                      position: _cardExitSlide,
-                      child: IgnorePointer(
-                        child: _buildTaskCard(context, theme, task, i),
+                child: _leavingCardHeight <= 0
+                    ? SizeTransition(
+                        sizeFactor: _cardExitSize,
+                        alignment: Alignment.topCenter,
+                        child: FadeTransition(
+                          opacity: _cardExitFade,
+                          child: SlideTransition(
+                            position: _cardExitSlide,
+                            child: exitCard,
+                          ),
+                        ),
+                      )
+                    : AnimatedBuilder(
+                        animation: _cardExitFade,
+                        builder: (context, child) {
+                          final t = _cardExitFade.value;
+                          return SizedBox(
+                            height: _leavingCardHeight * (1 - t),
+                            child: OverflowBox(
+                              alignment: Alignment.topCenter,
+                              minHeight: _leavingCardHeight,
+                              maxHeight: _leavingCardHeight,
+                              child: Opacity(
+                                opacity: (1 - t).clamp(0.0, 1.0),
+                                child: Transform.scale(
+                                  scale: 1 - 0.06 * t,
+                                  alignment: Alignment.topCenter,
+                                  child: child,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        child: exitCard,
                       ),
-                    ),
-                  ),
-                ),
               ),
             );
           }

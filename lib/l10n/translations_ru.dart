@@ -508,16 +508,16 @@ const Map<String, String> _ru = {
   'aiGuideToggle': 'Включить проводника',
   'aiGuideDesc':
       'Рядом с кнопкой «+» появится мелкий кружок — он открывает мини-чат.',
-  'aiGuideKeysTitle': 'КЛЮЧ ПРОВАЙДЕРА',
+  'aiGuideKeysTitle': 'КЛЮЧ ПРОВАЙДЕРА (Agnes AI, Poolside)',
   'aiGuideKey': 'Свой ключ нужен для платных моделей',
   'aiGuideAgnesKey': 'Ключ Agnes AI (необязательно)',
   'aiGuideAgnesKeyHint': 'Вставь ключ Agnes AI',
   'aiGuideKeyHint': 'Вставь свой ключ провайдера',
-  'aiGuideKeyNote':
-      'Без ключа Ада отвечает на бесплатных моделях.',
-  'aiGuideKeyNoteTail': '',
   'geminiKey': 'Ключ Gemini (необязательно — самая живая и горячая Ада)',
   'geminiKeyHint': 'Вставь ключ из Google AI Studio',
+  'adaFreeProviders': 'Бесплатно, без ключа',
+  'adaFreeProvidersDesc':
+      'LLM7, Pollinations и AI Horde отвечают без всякого ключа.',
   'freeFallbacks': 'Бесплатные фолбэки:',
   'aiResort': 'ИИ на курорте, подожди немного',
   'retry': 'Повторить',

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../l10n/translations.dart';
 import '../models/profile_gift.dart';
@@ -45,8 +46,7 @@ class GiftCard3D extends StatefulWidget {
   State<GiftCard3D> createState() => _GiftCard3DState();
 }
 
-class _GiftCard3DState extends State<GiftCard3D>
-    with SingleTickerProviderStateMixin {
+class _GiftCard3DState extends State<GiftCard3D> with TickerProviderStateMixin {
   late final AnimationController _resetController;
   late Animation<Offset> _tiltAnimation;
 
@@ -54,6 +54,14 @@ class _GiftCard3DState extends State<GiftCard3D>
   final ValueNotifier<Offset> _tiltNotifier = ValueNotifier<Offset>(
     Offset.zero,
   );
+
+  /// Куда карточка хочет наклониться прямо сейчас. Сам [_tilt] догоняет цель
+  /// ПОКАДРОВО, с экспоненциальным сглаживанием: раньше смешивание шло только
+  /// в событиях пальца, и при неравномерном потоке событий (120 Гц, прерывания)
+  /// карточка шла рывками.
+  Offset _targetTilt = Offset.zero;
+  Ticker? _tiltTicker;
+  Duration _lastTiltTick = Duration.zero;
 
   /// Куда палец лёг на карточку. Наклон считается ещё и от смещения
   /// относительно этой точки: раньше он зависел только от положения
@@ -71,6 +79,7 @@ class _GiftCard3DState extends State<GiftCard3D>
         .animate(
           CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic),
         );
+    _tiltTicker = createTicker(_onTiltTick);
   }
 
   @override
@@ -81,6 +90,7 @@ class _GiftCard3DState extends State<GiftCard3D>
 
   @override
   void dispose() {
+    _tiltTicker?.dispose();
     _tiltNotifier.dispose();
     _resetController.dispose();
     super.dispose();
@@ -113,22 +123,56 @@ class _GiftCard3DState extends State<GiftCard3D>
     final dragDy = start == null
         ? 0.0
         : (localPosition.dy - start.dy) / widget.height * 2.0;
-    final target = Offset(
-      _softClamp(rawDx * 0.92 + dragDx * 2.05),
-      _softClamp(rawDy * 0.92 + dragDy * 2.05),
+    // Амплитуда мягче прежней (0.92 + 2.05 по потягу): владелец сказал, что
+    // наклон слишком сильный и от этого не плавный на глаз.
+    _targetTilt = Offset(
+      _softClamp(rawDx * 0.70 + dragDx * 1.60),
+      _softClamp(rawDy * 0.70 + dragDy * 1.60),
     );
-    // Первый кадр нажатия — сразу в цель: иначе карточка «думает» перед
-    // тем, как отозваться. Дальше ведём плавно за пальцем.
-    final next = snap ? target : (Offset.lerp(_tilt, target, 0.55) ?? target);
-    if ((next - _tilt).distance > 0.0005) {
-      _tilt = next;
-      _tiltNotifier.value = next;
+    // Первый кадр нажатия — сразу в цель: иначе карточка «думает» перед тем,
+    // как отозваться. Дальше ведём плавно за пальцем кадрами.
+    if (snap) {
+      _tiltTicker?.stop();
+      _lastTiltTick = Duration.zero;
+      _setTilt(_targetTilt);
+      return;
     }
+    if (_tiltTicker != null && !_tiltTicker!.isActive) {
+      _lastTiltTick = Duration.zero;
+      _tiltTicker!.start();
+    }
+  }
+
+  /// Экспоненциальное сглаживание с постоянной ~45 мс: карточка не дёргается
+  /// вслед за каждым событием пальца, но и не отстаёт заметно.
+  void _onTiltTick(Duration elapsed) {
+    final dt = _lastTiltTick == Duration.zero
+        ? 1 / 60
+        : (elapsed - _lastTiltTick).inMicroseconds / 1000000.0;
+    _lastTiltTick = elapsed;
+    final k = (1 - math.exp(-dt.clamp(0.001, 0.05) / 0.045)).clamp(0.0, 1.0);
+    final next = Offset.lerp(_tilt, _targetTilt, k) ?? _targetTilt;
+    if ((next - _targetTilt).distance < 0.0015) {
+      _setTilt(_targetTilt);
+      _tiltTicker?.stop();
+      _lastTiltTick = Duration.zero;
+      return;
+    }
+    _setTilt(next);
+  }
+
+  void _setTilt(Offset value) {
+    if ((value - _tilt).distance <= 0.0002) return;
+    _tilt = value;
+    _tiltNotifier.value = value;
   }
 
   /// Мгновенно поставить карточку ровно (без анимации возврата).
   void _flattenNow() {
     _resetController.stop();
+    _tiltTicker?.stop();
+    _lastTiltTick = Duration.zero;
+    _targetTilt = Offset.zero;
     if (_tilt == Offset.zero) return;
     _tilt = Offset.zero;
     _tiltNotifier.value = Offset.zero;
@@ -152,6 +196,9 @@ class _GiftCard3DState extends State<GiftCard3D>
   }
 
   void _resetTilt() {
+    _tiltTicker?.stop();
+    _lastTiltTick = Duration.zero;
+    _targetTilt = Offset.zero;
     if (MotionPrefs.shouldReduceMotion) return;
     if (_tilt == Offset.zero && !_resetController.isAnimating) return;
     _tiltAnimation = Tween<Offset>(begin: _tilt, end: Offset.zero).animate(
@@ -375,17 +422,18 @@ class _GiftCard3DState extends State<GiftCard3D>
               final currentTilt = _resetController.isAnimating
                   ? _tiltAnimation.value
                   : _tilt;
-              // Сочный наклон: 0.34 рад (~19°) — прежняя «пищдатость»,
-              // у 0.26 карточка под пальцем почти не отзывалась.
-              final tiltX = -currentTilt.dy * 0.50;
-              final tiltY = currentTilt.dx * 0.50;
+              // Наклон заметный, но не «вывернутый»: 0.30 рад (~17°) на
+              // полном отклонении. 0.50 карточка заваливала так, что половина
+              // коллекции справа уходила за край плашки.
+              final tiltX = -currentTilt.dy * 0.30;
+              final tiltY = currentTilt.dx * 0.30;
 
               // Перспектива стоит постоянно. При нулевом наклоне такая
               // матрица рисует ровно те же пиксели, что и единичная, но
               // переключения «плоско ↔ перспектива» на старте нажатия
               // больше нет — фон карточки не прыгает.
               final transform = Matrix4.identity()
-                ..setEntry(3, 2, 0.0018)
+                ..setEntry(3, 2, 0.0012)
                 ..rotateX(tiltX)
                 ..rotateY(tiltY);
 

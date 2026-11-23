@@ -501,16 +501,16 @@ const Map<String, String> _en = {
   'aiGuideToggle': 'Enable AI guide',
   'aiGuideDesc':
       'A small circle appears next to the “+” button and opens a mini chat.',
-  'aiGuideKeysTitle': 'PROVIDER KEY',
+  'aiGuideKeysTitle': 'PROVIDER KEY (Agnes AI, Poolside)',
   'aiGuideKey': 'Your own key is needed for paid models',
   'aiGuideAgnesKey': 'Agnes AI key (optional)',
   'aiGuideAgnesKeyHint': 'Paste your Agnes AI key',
   'aiGuideKeyHint': 'Paste your provider key',
-  'aiGuideKeyNote':
-      'Without a key Ada answers on the free models.',
-  'aiGuideKeyNoteTail': '',
   'geminiKey': 'Gemini key (optional — the best, hottest Ada)',
   'geminiKeyHint': 'Paste your Google AI Studio key',
+  'adaFreeProviders': 'Free, no key',
+  'adaFreeProvidersDesc':
+      'LLM7, Pollinations and AI Horde answer without any key.',
   'freeFallbacks': 'Free fallbacks:',
   'aiResort': 'AI is on vacation, wait a bit',
   'retry': 'Retry',

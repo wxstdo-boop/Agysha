@@ -35,13 +35,7 @@ class _Card extends StatelessWidget {
     this.trailing,
     required this.child,
     this.pressable = true,
-    this.clipContent = true,
   });
-
-  /// Резать ли содержимое по скруглённым краям карточки. Полосе артефактов
-  /// это мешает: наклонённая карточка упирается в срез, и её угол
-  /// «выглядывал», а потом пропадал.
-  final bool clipContent;
 
   /// Отдача «вдавливанием» на зажатие. По умолчанию включена: все карточки
   /// профиля мягко уменьшаются под пальцем (владелец: «у всех карточек пусть
@@ -58,7 +52,7 @@ class _Card extends StatelessWidget {
     final card = Material(
       color: theme.colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(Radii.xl),
-      clipBehavior: clipContent ? Clip.antiAlias : Clip.none,
+      clipBehavior: Clip.antiAlias,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(Radii.xl),

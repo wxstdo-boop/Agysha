@@ -196,18 +196,64 @@ extension _SettingsSectionAda on _SettingsScreenState {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          // Одна короткая строка: зачем вообще ключ.
-                          // Перечисление бесплатных провайдеров владелец
-                          // просил убрать — оно только засоряло экран.
-                          Text(
-                            Translations.t(
-                              'aiGuideKeyNote',
-                              context,
-                              'Без ключа Ада отвечает на бесплатных моделях.',
-                            ),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
+                          const SizedBox(height: 10),
+                          // Карточка (а не строка текста) про бесплатный
+                          // режим: владелец просил вернуть именно её.
+                          PressScale(
+                            pressedOpacity: 1.0,
+                            child: Container(
+                              key: const ValueKey('ada_free_card'),
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.35),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.auto_awesome_outlined,
+                                    size: 18,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          Translations.t(
+                                            'adaFreeProviders',
+                                            context,
+                                            'Бесплатно, без ключа',
+                                          ),
+                                          style: theme.textTheme.labelLarge,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          Translations.t(
+                                            'adaFreeProvidersDesc',
+                                            context,
+                                            'LLM7, Pollinations и AI Horde '
+                                                'отвечают без всякого ключа.',
+                                          ),
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           const Divider(height: 20),

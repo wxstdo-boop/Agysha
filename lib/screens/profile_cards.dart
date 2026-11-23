@@ -547,8 +547,10 @@ extension _ProfileCards on _ProfileScreenState {
         'Коллекция артефактов',
       ),
       icon: Icons.auto_awesome,
-      // Наклонённая карточка не должна срезаться краем плашки.
-      clipContent: false,
+      // Полосу артефактов режем по краю плашки: с Clip.none карточка,
+      // уехавшая за вьюпорт, рисовалась ПОВЕРХ фона страницы («заезжает за
+      // фон»), а при нажатии её частично съедал слой прозрачности плашки —
+      // она «пропадала» и возвращалась при прокрутке.
       trailing: Text(
         Translations.t(
           'countShort',
@@ -572,7 +574,9 @@ extension _ProfileCards on _ProfileScreenState {
         // карточка сама отличает листание от игры и гаснет без анимации.
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
-          clipBehavior: Clip.none,
+          // hardEdge: за краем вьюпорта карточка обрезается ровно по
+          // границе плашки, а не дорисовывается поверх страницы.
+          clipBehavior: Clip.hardEdge,
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
           ),

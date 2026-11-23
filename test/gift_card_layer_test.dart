@@ -35,7 +35,7 @@ void main() {
     );
   });
 
-  testWidgets('наклон заметно сильнее прежнего', (tester) async {
+  testWidgets('наклон заметный, но не выворачивает карточку', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -57,7 +57,11 @@ void main() {
         .widget<Transform>(find.byKey(const ValueKey('gift_tilt_transform')))
         .transform;
     final angle = m.entry(0, 2).abs();
-    expect(angle, greaterThan(0.40), reason: 'поворот по Y, рад');
+    // Владелец: прежние ~0.5 рад «слишком сильные», карточка заваливалась за
+    // край плашки. Наклон должен читаться, но оставаться в пределах 0.30 рад
+    // на полном отклонении — и набираться плавно, кадрами.
+    expect(angle, greaterThan(0.10), reason: 'поворот по Y, рад');
+    expect(angle, lessThan(0.30), reason: 'наклон не выворачивает карточку');
 
     await gesture.up();
     await tester.pumpAndSettle();

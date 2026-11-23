@@ -506,17 +506,17 @@ const Map<String, String> _fr = {
   'aiGuideToggle': 'Activer le guide IA',
   'aiGuideDesc':
       'Un petit cercle apparaît à côté du bouton « + » et ouvre un mini-chat.',
-  'aiGuideKeysTitle': 'CLÉ DU FOURNISSEUR',
+  'aiGuideKeysTitle': 'CLÉ DU FOURNISSEUR (Agnes AI, Poolside)',
   'aiGuideKey': 'Votre clé sert aux modèles payants',
   'aiGuideAgnesKey': 'Clé Agnes AI (optionnelle)',
   'aiGuideAgnesKeyHint': 'Colle ta clé Agnes AI',
   'aiGuideKeyHint': 'Colle ta clé de fournisseur',
-  'aiGuideKeyNote':
-      'Sans clé, Ada répond avec les modèles gratuits.',
-  'aiGuideKeyNoteTail': '',
   'geminiKey':
       'Clé Gemini (optionnelle — l’Ada la plus vive et la plus chaude)',
   'geminiKeyHint': 'Colle ta clé Google AI Studio',
+  'adaFreeProviders': 'Gratuit, sans clé',
+  'adaFreeProvidersDesc':
+      'LLM7, Pollinations et AI Horde répondent sans aucune clé.',
   'freeFallbacks': 'Solutions de secours gratuites :',
   'aiResort': 'L’IA est en vacances, attends un peu',
   'retry': 'Réessayer',
