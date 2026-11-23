@@ -37,7 +37,6 @@ import java.util.TimerTask;
 
 import io.flutter.embedding.android.FlutterTextureView;
 import io.flutter.embedding.android.FlutterView;
-import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener;
 import io.flutter.FlutterInjector;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.FlutterEngineCache;
@@ -277,26 +276,16 @@ public class OverlayService extends Service implements View.OnTouchListener {
             return START_NOT_STICKY;
         }
         moveOverlay(dx, dy, null);
-        // Показываем окно ровно на первом отрисованном кадре: один вызов
-        // WindowManager вместо анимации по кадрам.
-        flutterView.addIsDisplayingFlutterUiListener(new FlutterUiDisplayListener() {
-            @Override
-            public void onFlutterUiDisplayed() {
-                revealOverlay(opacityCeiling);
-            }
-
-            @Override
-            public void onFlutterUiNoLongerDisplayed() {
-            }
-        });
-        // Страховка: если движок не сообщит о кадре, окно не должно остаться
-        // невидимым.
+        // Окно прозрачное: до первого кадра Flutter в нём всё равно ничего
+        // не нарисовано, поэтому показывать его можно сразу. Одна установка
+        // альфы через 120 мс вместо слушателя кадров движка (его API
+        // меняется между версиями Flutter) и вместо анимации по кадрам.
         mAnimationHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 revealOverlay(opacityCeiling);
             }
-        }, 900);
+        }, 120);
         return START_NOT_STICKY;
     }
 

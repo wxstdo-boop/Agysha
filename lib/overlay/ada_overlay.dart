@@ -134,7 +134,7 @@ class _AdaBubbleState extends State<_AdaBubble>
     WidgetsBinding.instance.addObserver(this);
     unawaited(_restoreAvatar());
     // Окно появляется в тот же кадр, в котором его показал сервис: короткий
-    // «выдох» из 0.72 → 1 читается как плавный выезд, а не как вспышка.
+    // «выдох» альфы 0 → 1 и масштаб 0.90 → 1 читаются плавным выездом.
     _appear.forward(from: 0);
     _drift.repeat();
   }
