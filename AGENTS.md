@@ -55,7 +55,7 @@ but keeps `/workspace`, so a `/workspace` SDK survives and only needs
 
 ```
 mkdir -p /workspace/sdk_tmp && cd /workspace/sdk_tmp
-curl -sL -o f.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.5-stable.tar.xz
+curl -sL -o f.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.50.1-stable.tar.xz
 tar xf f.tar.xz && rm f.tar.xz
 export PATH="/workspace/sdk_tmp/flutter/bin:$PATH"
 git config --global --add safe.directory /workspace/sdk_tmp/flutter
@@ -93,7 +93,14 @@ from `test/section_pill_transition_test.dart`.
   плагины (`file_picker` и т.п.). AGP под 37: **9.1.1** (9.0.1 не тянет),
   ему нужен **Gradle ≥ 9.3.1**. CI на JDK 17 запускает их без правок.
 - `dynamic_color` держим на **1.9.x**: 2.x ушёл на пакет `material_ui`
-  (второй `ColorScheme`) и несовместим с Flutter 3.47.5.
+  (второй `ColorScheme`) и несовместим с приложением, пока оно на
+  `package:flutter/material.dart`.
+- Flutter **3.50.1** (Dart 3.14) объявил `package:flutter/material.dart`
+  устаревшим в пользу пакета `material_ui` — на каждый файл приходится
+  info-подсказка. Поэтому CI гоняет `flutter analyze --no-fatal-infos`
+  (ошибки и предупреждения по-прежнему валят сборку). Переезд на
+  `material_ui` — отдельная задача, вместе с ним можно поднять и
+  `dynamic_color` до 2.x.
 - `flutter_secure_storage` 11 поднял minSdk до 23 и мигрирует алгоритм
   шифрования сам; ключ в Keystore не теряем (`resetOnError=false`).
 - Локальная проверка сборки: JDK 17 (не 21) + Android SDK в `/workspace`,

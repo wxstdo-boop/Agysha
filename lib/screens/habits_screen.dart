@@ -5,7 +5,6 @@ import '../services/sounds.dart';
 import 'package:flutter/material.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import '../models/habit.dart';
 import '../services/habit_service.dart';
 import '../services/settings_service.dart';

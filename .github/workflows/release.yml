@@ -78,7 +78,7 @@ jobs:
         with:
           # Тот же SDK, что в ci.yml. Плавающий `channel: stable` означал бы,
           # что релиз может собраться на непротестированной версии Flutter.
-          flutter-version: '3.47.5'
+          flutter-version: '3.50.1'
           cache: true
 
       - name: Применить версию
@@ -99,7 +99,8 @@ jobs:
         run: flutter pub get --enforce-lockfile
 
       - name: Анализ
-        run: flutter analyze
+        # --no-fatal-infos: см. комментарий в ci.yml про переезд на material_ui.
+        run: flutter analyze --no-fatal-infos
 
       - name: Тесты
         run: flutter test --concurrency=1

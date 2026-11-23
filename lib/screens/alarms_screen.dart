@@ -2,7 +2,6 @@ import 'dart:async';
 
 import '../services/haptics.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import '../widgets/section_pill.dart';
 import '../models/alarm.dart';
 import '../models/app_timer.dart';

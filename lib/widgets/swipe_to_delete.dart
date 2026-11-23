@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/translations.dart';
@@ -315,6 +316,13 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
               isSwiping: p > 0.002,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
+                // `down`, а не `start`: иначе первые ~18 px (touch slop)
+                // съедаются распознавателем, и карточка стоит, пока палец
+                // уже едет — это и есть то самое «заедание» в начале свайпа.
+                // С `down` стартовая точка берётся от касания, и смещение
+                // считается от неё, поэтому карточка идёт за пальцем с
+                // первого же пикселя.
+                dragStartBehavior: DragStartBehavior.down,
                 onHorizontalDragStart: _onDragStart,
                 onHorizontalDragUpdate: _onDragUpdate,
                 onHorizontalDragEnd: _onDragEnd,
@@ -339,9 +347,14 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
                               child: _buildBackground(context, p),
                             ),
                     ),
-                    Transform.translate(
-                      offset: Offset(-p * _width, 0),
-                      child: widget.child,
+                    // Свой слой: при драге меняется только смещение
+                    // отрисованной карточки, а не перерисовка стекла и
+                    // фона за ней — на слабом железе это и давало рывки.
+                    RepaintBoundary(
+                      child: Transform.translate(
+                        offset: Offset(-p * _width, 0),
+                        child: widget.child,
+                      ),
                     ),
                   ],
                 ),

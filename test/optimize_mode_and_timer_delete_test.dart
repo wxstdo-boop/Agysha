@@ -113,22 +113,25 @@ void main() {
     } catch (_) {}
   });
 
-  test('«Оптимизация» ужимает кеш и не гасит анимации', () {
+  test('«Оптимизация» не трогает кеш картинок и не гасит анимации', () {
     PerfPrefs.install();
     final cache = PaintingBinding.instance.imageCache;
+    final bytesBefore = cache.maximumSizeBytes;
+    final entriesBefore = cache.maximumSize;
 
     expect(PerfPrefs.active, isFalse);
-    expect(cache.maximumSize, 1000);
 
     PerfPrefs.enabled.value = true;
-    expect(cache.maximumSizeBytes, 64 << 20);
-    expect(cache.maximumSize, 400);
+    // Включение режима не должно выбивать уже декодированные картинки:
+    // именно повторное декодирование в кадре читалось как «всё подлагивает».
+    expect(cache.maximumSizeBytes, bytesBefore);
+    expect(cache.maximumSize, entriesBefore);
     // Главное: тумблер — не «убрать анимации».
     expect(MotionPrefs.enabled.value, isFalse);
 
     PerfPrefs.enabled.value = false;
-    expect(cache.maximumSizeBytes, 100 << 20);
-    expect(cache.maximumSize, 1000);
+    expect(cache.maximumSizeBytes, bytesBefore);
+    expect(cache.maximumSize, entriesBefore);
   });
 
   testWidgets(
@@ -249,6 +252,46 @@ void main() {
       reason: 'подложка должна повторять скругление, а не быть квадратом',
     );
     expect(widget.pressTintStrength, lessThan(0.12));
+  });
+
+  testWidgets('свайп таймера трогается с первого движения, без заедания', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(520, 1000) * 3;
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      LocaleProvider(
+        locale: const Locale('ru'),
+        child: const MaterialApp(home: Scaffold(body: AlarmsScreen())),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1200));
+
+    final card = find.byKey(const ValueKey('card_t1'));
+    final startX = tester.getTopLeft(card).dx;
+
+    final g = await tester.startGesture(tester.getCenter(card));
+    await tester.pump();
+    await g.moveBy(const Offset(-10, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    await g.moveBy(const Offset(-10, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // С `DragStartBehavior.start` (было) карточка за эти 20 px стояла на
+    // месте: их съедал touch slop. Теперь смещение считается от касания.
+    final moved =
+        tester.getTopLeft(find.byKey(const ValueKey('card_t1'))).dx - startX;
+    expect(
+      moved,
+      lessThan(-15),
+      reason: 'карточка не поехала за пальцем: $moved',
+    );
+
+    await g.up();
+    await tester.pump(const Duration(milliseconds: 800));
   });
 
   testWidgets('таймер свайпается и спрашивает подтверждение', (tester) async {
