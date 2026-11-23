@@ -156,23 +156,25 @@ class _TasksScreenState extends State<TasksScreen>
   /// полку анимированно; остальные рисуются сразу.
   String? _justCompletedId;
 
-  /// id задачи, вернувшейся из архива: карточка ВЫРАСТАЕТ в активной полке
-  /// ровно пока её копия схлопывается в архивной — переезд обратно читается
-  /// как одно движение, а не как «пропала внизу и появилась сверху кадром».
+  /// id задачи, вернувшейся из архива. Карточка одна (второй копии нет):
+  /// она растёт по высоте в активной полке и ЛЕТИТ к своему новому месту от
+  /// того места, где стояла в архивной. Без полёта карточка «выныривала»
+  /// сверху на месте, пока внизу её старая копия пропадала кадром, — это и
+  /// читалось как скачок.
   String? _returningId;
+
+  /// Стартовое смещение полёта (px, вниз от нового места). Меряется после
+  /// мутации: до неё у активной полки этой карточки ещё нет.
+  double _cardReturnFromPx = 0;
   late final AnimationController _cardReturn = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 340),
+    duration: const Duration(milliseconds: 380),
     value: 1,
   );
   late final Animation<double> _cardReturnT = CurvedAnimation(
     parent: _cardReturn,
     curve: Curves.easeInOutCubic,
   );
-  late final Animation<Offset> _cardReturnSlide = Tween<Offset>(
-    begin: const Offset(0, 0.06),
-    end: Offset.zero,
-  ).animate(_cardReturnT);
 
   /// Карточка, которая прямо сейчас «уезжает» из СВОЕЙ полки в соседнюю.
   /// Пока идёт [_cardExit], она остаётся отрисованной в исходном списке и
@@ -393,17 +395,22 @@ class _TasksScreenState extends State<TasksScreen>
     // рывок). Когда архивная полка включена (категория «Все»), карточка
     // сначала схлопывается на СВОЁМ месте — тогда переезд читается как
     // движение из полки в полку, а не как «пропала и появилась».
-    // Снятие галки в архиве — это ВОЗВРАТ в активные. Держать при этом
-    // вторую копию в архивной полке нельзя: две карточки на экране читаются
-    // как «скачет туда-сюда» (уже откатывали). Поэтому возврат ведёт одна
-    // растущая карточка на новом месте — см. [_cardReturn], а архивная
-    // копия уходит вместе со своей полкой.
+    // Снятие галки в архиве — это ВОЗВРАТ в активные. Второй копии быть не
+    // должно (две карточки на экране читались как «скачет туда-сюда»), так
+    // что возврат ведёт ОДНА карточка: она вырастает в активной полке и
+    // летит туда от своего места в архивной — см. [_cardReturn]. Архивная
+    // копия уходит кадром, но её подхватывает летящая.
     final splitVisible = _filter == '' && _archiveVisible;
     final archiveMove = splitVisible && !wasDone;
     // Где карточка стоит сейчас и куда она приедет — меряем ДО мутации:
     // после неё старой карточки уже нет.
     final fromRect = archiveMove ? _cardRect('active', task.id) : null;
     final doneTop = archiveMove ? _doneInsertTop(task.id) : null;
+    // Возврат из архива: стартовая точка полёта — место карточки в архивной
+    // полке. Меряем ДО мутации, после неё её там уже нет.
+    final returnRect = (wasDone && splitVisible)
+        ? _cardRect('done', task.id)
+        : null;
     if (archiveMove) {
       final source = _service.tasks
           .where((t) => wasDone ? t.done : !t.done)
@@ -427,6 +434,7 @@ class _TasksScreenState extends State<TasksScreen>
       // Возврат из архива: метку ставим ДО мутации, чтобы активная полка
       // получила карточку сразу в «растущем» виде.
       _cardReturn.value = 0;
+      _cardReturnFromPx = 0;
       setState(() => _returningId = task.id);
     }
     // Мутация и notifyListeners внутри toggle() происходят СИНХРОННО, до
@@ -453,13 +461,25 @@ class _TasksScreenState extends State<TasksScreen>
         }
       });
     } else if (wasDone && splitVisible) {
-      // Возврат из архива: карточка вырастает в активной полке на своём
-      // новом месте (высота 0 → 1, мягкий подъём) — вместо мгновенной
-      // вставки кадром.
-      _cardReturn.forward().whenComplete(() {
-        if (mounted && _returningId == task.id) {
-          setState(() => _returningId = null);
+      // Возврат из архива: карточка одна — она растёт в активной полке и
+      // одновременно едет от места, где стояла в архивной. Стартовое
+      // смещение считается по первому кадру новой раскладки (высота 0, так
+      // что кадра со старой позицией не видно), и только потом стартует
+      // анимация: иначе полёт начинался бы «с середины».
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _returningId != task.id) return;
+        final dst = _cardRect('active', task.id);
+        if (returnRect != null && dst != null) {
+          _cardReturnFromPx = (returnRect.top - dst.top).clamp(0.0, 2400.0);
         }
+        _cardReturn.forward(from: 0).whenComplete(() {
+          if (mounted && _returningId == task.id) {
+            setState(() {
+              _returningId = null;
+              _cardReturnFromPx = 0;
+            });
+          }
+        });
       });
     }
     await toggling;
@@ -914,8 +934,18 @@ class _TasksScreenState extends State<TasksScreen>
                   alignment: Alignment.topCenter,
                   child: FadeTransition(
                     opacity: _cardReturnT,
-                    child: SlideTransition(
-                      position: _cardReturnSlide,
+                    child: AnimatedBuilder(
+                      animation: _cardReturnT,
+                      builder: (context, child) => Transform.translate(
+                        // Полёт от архивной полки к своему месту: смещение
+                        // тает вместе с ростом высоты, поэтому карточка не
+                        // «выныривает» на месте, а поднимается наверх.
+                        offset: Offset(
+                          0,
+                          _cardReturnFromPx * (1 - _cardReturnT.value),
+                        ),
+                        child: child,
+                      ),
                       child: _buildTaskCard(context, theme, task, i),
                     ),
                   ),

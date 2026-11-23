@@ -288,6 +288,49 @@ void main() {
     expect(card('a1'), findsOneWidget);
   });
 
+  testWidgets(
+    'возврат из архива: карточка едет вверх, а не появляется на месте',
+    (tester) async {
+      await seedAndPump(tester, [
+        Task(id: 'a1', title: 'Купить молоко'),
+        Task(id: 'a2', title: 'Позвонить маме', done: true),
+      ]);
+
+      final archiveTop = tester.getTopLeft(card('a2')).dy;
+      await tester.tap(find.byKey(const ValueKey('task_toggle_a2')));
+      // Пишем на диск по-настоящему: анимация стартует после первого кадра
+      // новой раскладки, поэтому кадры и реальное время чередуем.
+      await tester.pump();
+      var mid = 0.0;
+      for (var i = 0; i < 6; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      mid = tester.getTopLeft(card('a2')).dy;
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 25));
+      }
+      final settled = tester.getTopLeft(card('a2')).dy;
+
+      expect(card('a2'), findsOneWidget);
+      expect(
+        mid,
+        greaterThan(settled + 20),
+        reason:
+            'карточка должна ехать от архивной полки вверх '
+            '(в середине $mid, в конце $settled, в архиве было $archiveTop), '
+            'а не появляться сразу на своём месте',
+      );
+      expect(
+        settled,
+        lessThan(archiveTop),
+        reason: 'после возврата карточка стоит выше, чем стояла в архиве',
+      );
+    },
+  );
+
   testWidgets('переезд В архив: карточка вырастает, а не щёлкает кадром', (
     tester,
   ) async {
