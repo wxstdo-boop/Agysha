@@ -477,7 +477,10 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
     // клавиатуры лупа/магнифай не отключается, поэтому время вводим
     // через собственные TextField'ы без выделения.
     final picked = await showManualTimePicker(context, initial: _time);
-    if (picked != null) setState(() => _time = picked);
+    // Экран могли закрыть, пока открыт системный пикер: без проверки
+    // setState падал бы на размонтированном State.
+    if (!mounted || picked == null) return;
+    setState(() => _time = picked);
   }
 
   void _toggleDay(int day) {

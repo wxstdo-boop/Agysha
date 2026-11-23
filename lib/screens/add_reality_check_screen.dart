@@ -50,7 +50,8 @@ class _AddRealityCheckScreenState extends State<AddRealityCheckScreen> {
 
   void _pickIcon() async {
     final result = await IconPickerSheet.show(context, _iconCodePoint);
-    if (result != null) setState(() => _iconCodePoint = result);
+    if (!mounted || result == null) return;
+    setState(() => _iconCodePoint = result);
   }
 
   /// Выход с формы при включённом автосохранении: сохраняем введённое, но

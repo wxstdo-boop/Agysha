@@ -28,6 +28,7 @@ import 'services/sounds.dart';
 import 'theme/app_theme.dart';
 import 'utils/motion_prefs.dart';
 import 'utils/perf_prefs.dart';
+import 'utils/swallow.dart';
 import 'models/alarm.dart';
 import 'models/wake_task.dart';
 import 'services/alarm_service.dart';
@@ -172,9 +173,10 @@ Future<String?> _readAlarmBootPayload() async {
       'com.wetcorp.agysha/alarm_payload',
     ).invokeMethod<String>('getAlarmPayload');
     if (p != null && p.startsWith('alarm:')) return p;
-  } catch (_) {
-    // Канал не зарегистрирован (например, другой ABI-движок) — просто
-    // идём обычным путём, обработчик после runApp подхватит payload.
+  } catch (error, stack) {
+    // Канал не зарегистрирован (например, другой ABI-движок) — идём
+    // обычным путём, обработчик после runApp подхватит payload.
+    swallow('alarm payload', error, stack);
   }
   return null;
 }
@@ -739,8 +741,9 @@ Future<void> _predecodeSplashLogo() async {
     final frame = await codec.getNextFrame();
     preDecodedLogo = frame.image;
     codec.dispose();
-  } catch (_) {
+  } catch (error, stack) {
     // Если декод не удался — сплэш просто покажет Image.asset как раньше.
+    swallow('splash logo predecode', error, stack);
   }
 }
 
@@ -915,9 +918,16 @@ Future<void> _restoreStartupBackup(Map<String, dynamic> backup) async {
 }
 
 void main() async {
+  // Засекаем старт: если инициализация затянется, счёт пойдёт в сплэш
+  // (см. [AgyshaApp.splashElapsedMs]) и двойного ожидания не будет.
+  final bootClock = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
-  await _initBackgroundAudio();
-  await _startApp();
+  // Фоновый аудиоплагин и стартовое состояние не зависят друг от друга —
+  // раньше они шли ЦЕПОЧКОЙ (init аудио → затем prefs, ключ, плагин
+  // уведомлений, часовой пояс), и на Android их сумма платилась до первого
+  // кадра: окно Android (аватарка Realme/белый экран) висело секундами.
+  unawaited(_initBackgroundAudio());
+  await _startApp(bootClock);
 }
 
 /// Медиауведомление для «своей музыки» профиля: без этой инициализации
@@ -938,8 +948,10 @@ Future<void> _initBackgroundAudio() async {
       androidNotificationOngoing: true,
       androidNotificationClickStartsActivity: true,
     );
-  } catch (_) {
-    // Платформа без фонового сервиса — музыка работает как раньше.
+  } catch (error, stack) {
+    // Платформа без фонового сервиса — музыка работает как раньше, но
+    // причина остаётся в логе: иначе «в шторке нет кнопок» не отладить.
+    swallow('background audio init', error, stack);
   }
 }
 
@@ -980,7 +992,54 @@ void _openAdaFromBubble() {
 /// Запуск приложения. Вынесено из [main], чтобы экран диагностики сбоя
 /// старта мог повторить попытку: `onRetry` вызывает эту же функцию, и
 /// успешный запуск просто заменяет диагностический корень рабочим.
-Future<void> _startApp() async {
+Future<void> _startApp([Stopwatch? bootClock]) async {
+  // ПЕРВЫЙ КАДР — ДО загрузки. Раньше `runApp` вызывался только после всей
+  // инициализации (SharedPreferences → Keystore-ключ → плагин уведомлений →
+  // часовой пояс → intent будильника). На Realme/бюджетном железе каждый
+  // шаг — обращение к диску или platform-каналу, их сумма висела до первого
+  // кадра: окно Android с аватаркой просто замирало, и только потом
+  // появлялся сплэш. Теперь мгновенно рисуем фирменный фон, а тяжёлое
+  // делаем на его фоне.
+  if (kIsWeb) {
+    await _runStartup(bootClock);
+  } else {
+    runApp(const _BootBackdrop());
+    // Даём движку нарисовать первый кадр, чтобы окно Android гарантированно
+    // сменилось фоном до дисковых и platform-вызовов. Ожидание ОГРАНИЧЕНО:
+    // если приложение открылось, но кадры пока не идут (окно перекрыто
+    // системным диалогом, экран погас при старте по будильнику), `endOfFrame`
+    // не завершился бы никогда — и загрузка не началась бы вовсе. Это ровно
+    // тот «намертво завис, потом очухался» сценарий, поэтому не ждём дольше
+    // 500 мс: фон всё равно на экране, а инициализация важнее.
+    await WidgetsBinding.instance.endOfFrame.timeout(
+      const Duration(milliseconds: 500),
+      onTimeout: () {},
+    );
+    await _runStartup(bootClock);
+  }
+}
+
+/// Заставка первого кадра: тот же фирменный фон, что рисует Flutter-сплэш,
+/// поэтому переход «окно Android → сплэш» незаметен. Своей анимации нет:
+/// она стартует вместе с настоящим [SplashScreen], когда данные готовы.
+class _BootBackdrop extends StatelessWidget {
+  const _BootBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    // Пока тема не прочитана, берём светлый фирменный фон: он совпадает с
+    // `@color/brand_background` в android/res/values/colors.xml. На тёмной
+    // теме разница на один кадр не читается — сплэш сразу перекрывает его.
+    return const ColoredBox(
+      color: Color(0xFFFFF0F5),
+      child: SizedBox.expand(),
+    );
+  }
+}
+
+/// Тяжёлая часть запуска: настройки, ключ, плагины, сплэш-логотип, payload
+/// будильника. Вызывается уже ПОСЛЕ первого кадра (см. [_startApp]).
+Future<void> _runStartup(Stopwatch? bootClock) async {
   // Edge-to-edge: контент рисуется ПОД системным статус-баром, чтобы
   // глобальное скругление углов (ClipRRect в корне) доходило и до верхних
   // углов экрана. Без этого сверху остаётся чёрная квадратная полоса
@@ -1038,8 +1097,11 @@ Future<void> _startApp() async {
     return;
   }
   // Payload будильника читаем до первого кадра: от него зависит, что
-  // станет домашним экраном (см. [_AlarmBootHost]).
-  _alarmBootPayload = await _readAlarmBootPayload();
+  // станет домашним экраном (см. [_AlarmBootHost]). Это один вызов
+  // platform-канала; на случай зависшего канала ограничиваем его, чтобы
+  // приложение не осталось на заставке навсегда.
+  _alarmBootPayload = await _readAlarmBootPayload()
+      .timeout(const Duration(milliseconds: 1500), onTimeout: () => null);
 
   runApp(
     AgyshaApp(

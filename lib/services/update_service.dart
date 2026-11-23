@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'installer.dart';
 import 'prefs.dart';
 import '../models/changelog_entry.dart';
+import '../utils/swallow.dart';
 
 /// Репозиторий, из релизов которого приложение берёт обновления.
 const String kUpdateRepoOwner = 'wxstdo-boop';
@@ -578,7 +579,9 @@ class UpdateService {
     if (have <= 0 && await file.exists()) {
       try {
         await file.delete();
-      } catch (_) {}
+      } catch (error, stack) {
+        swallow('update: delete partial download', error, stack);
+      }
     }
     // .part уже целый (загрузка успела до конца, а приложение убили до
     // переименования) — Range на полный файл дал бы 416. Завершаем сразу.
@@ -586,7 +589,9 @@ class UpdateService {
       if (await file.exists()) {
         try {
           await file.delete();
-        } catch (_) {}
+        } catch (error, stack) {
+          swallow('update: replace finished download', error, stack);
+        }
       }
       await part.rename(file.path);
       downloadProgress.value = 1;

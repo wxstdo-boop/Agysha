@@ -3,6 +3,7 @@ import '../models/alarm.dart';
 import 'alarm_scheduler.dart';
 import 'json_file.dart';
 import 'prefs.dart';
+import '../utils/swallow.dart';
 
 class AlarmService extends ChangeNotifier {
   static final AlarmService _instance = AlarmService._();
@@ -55,7 +56,11 @@ class AlarmService extends ChangeNotifier {
     try {
       await AlarmScheduler.cancelAlarmClock(id.hashCode);
       await AlarmScheduler.stopRingingAlarm(id.hashCode);
-    } catch (_) {}
+    } catch (error, stack) {
+      // Не смогли снять системный будильник: он может продолжать звонить,
+      // поэтому причина обязана остаться в логе.
+      swallow('alarm: cancel "$id"', error, stack);
+    }
     _alarms.removeWhere((a) => a.id == id);
     notifyListeners();
     await _save();

@@ -279,6 +279,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// и вечерний разбор (21:00) прямо в ЧАТ — уведомления не нужны.
   Future<void> _toggleAiTracking(bool v) async {
     await SettingsService.saveAiTracking(v);
+    // Настройки могут закрыть, пока идёт запись: без проверки setState
+    // падал бы на размонтированном State.
+    if (!mounted) return;
     setState(() => _aiTracking = v);
     debugPrint('[ada-tracking] toggle=$v');
     if (v) {

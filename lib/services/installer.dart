@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/services.dart';
+import '../utils/swallow.dart';
 
 /// Информация о собственной сборке — версия из Android-манифеста.
 class InstalledAppInfo {
@@ -108,7 +109,10 @@ class Installer {
         'consumeInstallResult',
       );
       if (map != null) _emit(_parse(map));
-    } catch (_) {}
+    } catch (error, stack) {
+      // Итог установки неизвестен — не выдумываем «успех».
+      swallow('installer: consume install result', error, stack);
+    }
   }
 
   static InstallOutcome? _parse(dynamic raw) {

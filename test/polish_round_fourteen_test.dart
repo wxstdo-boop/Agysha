@@ -360,19 +360,8 @@ void main() {
     expect(body.contains('AnimatedBunny'), isFalse);
   });
 
-  test('кольцо музыки не «замерзает» на паузе', () {
-    final src = read('lib/widgets/music_pulse_ring.dart');
-    expect(
-      RegExp(r'_stopAfterFade = Timer\(_fade').hasMatch(src),
-      isTrue,
-      reason: 'пульс доживает фейд гаснущего кольца, а не обрывается кадром',
-    );
-    expect(
-      src.contains('Curves.easeInOut'),
-      isTrue,
-      reason: 'появление и угасание идут с нулевой скоростью на концах',
-    );
-  });
+  // «Кольцо не замерзает на паузе» проверяется поведением:
+  // test/widget_polish_behaviour_test.dart — тикер обязан встать после фейда.
 
   test('обводка окна обновления — полупрозрачно-красная, как у клавиатуры', () {
     final src = read('lib/widgets/update_pill.dart');
