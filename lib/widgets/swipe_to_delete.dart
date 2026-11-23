@@ -33,11 +33,15 @@ class SwipeToDeleteScope extends InheritedWidget {
   });
 
   static bool of(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<SwipeToDeleteScope>()?.isSwiping ?? false;
+    return context
+            .dependOnInheritedWidgetOfExactType<SwipeToDeleteScope>()
+            ?.isSwiping ??
+        false;
   }
 
   @override
-  bool updateShouldNotify(SwipeToDeleteScope oldWidget) => isSwiping != oldWidget.isSwiping;
+  bool updateShouldNotify(SwipeToDeleteScope oldWidget) =>
+      isSwiping != oldWidget.isSwiping;
 }
 
 class SwipeToDelete extends StatefulWidget {
@@ -81,7 +85,8 @@ class SwipeToDelete extends StatefulWidget {
   State<SwipeToDelete> createState() => _SwipeToDeleteState();
 }
 
-class _SwipeToDeleteState extends State<SwipeToDelete> with TickerProviderStateMixin {
+class _SwipeToDeleteState extends State<SwipeToDelete>
+    with TickerProviderStateMixin {
   /// Прогресс свайпа 0..1 = и позиция карточки, и альфа плашки.
   late final AnimationController _move;
   late final AnimationController _resize;
@@ -104,15 +109,22 @@ class _SwipeToDeleteState extends State<SwipeToDelete> with TickerProviderStateM
   bool _notified = false;
 
   /// Базовые 450 мс — множитель 1; короткий movementDuration ускоряет.
-  double get _speed => (widget.movementDuration ?? const Duration(milliseconds: 450)).inMilliseconds / 450;
+  double get _speed =>
+      (widget.movementDuration ?? const Duration(milliseconds: 450))
+          .inMilliseconds /
+      450;
 
   @override
   void initState() {
     super.initState();
-    _move = AnimationController(vsync: this, duration: const Duration(milliseconds: 450))
-      ..addStatusListener(_onMoveStatus);
-    _resize = AnimationController(vsync: this, duration: widget.resizeDuration ?? Duration.zero)
-      ..addStatusListener(_onResizeStatus);
+    _move = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    )..addStatusListener(_onMoveStatus);
+    _resize = AnimationController(
+      vsync: this,
+      duration: widget.resizeDuration ?? Duration.zero,
+    )..addStatusListener(_onResizeStatus);
   }
 
   @override
@@ -212,7 +224,8 @@ class _SwipeToDeleteState extends State<SwipeToDelete> with TickerProviderStateM
     _animateBack(_move.value);
   }
 
-  Duration _scaled(double ms) => Duration(microseconds: (ms * _speed * 1000).round());
+  Duration _scaled(double ms) =>
+      Duration(microseconds: (ms * _speed * 1000).round());
 
   /// Возврат домой: длительность растёт с пройденным путём, иначе короткий
   /// свайп схлопывался бы за один кадр.
@@ -266,7 +279,14 @@ class _SwipeToDeleteState extends State<SwipeToDelete> with TickerProviderStateM
                   fit: StackFit.passthrough,
                   children: [
                     // Плашка удаления лежит ПОД карточкой и открывается справа.
-                    Positioned.fill(child: _buildBackground(context, p)),
+                    // После подтверждения карточка уже уехала, и пока строка
+                    // схлопывается, плашку не рисуем: иначе на её месте ещё
+                    // 320 мс висел красный прямоугольник — «мигающий квадрат».
+                    Positioned.fill(
+                      child: _dismissed
+                          ? const SizedBox.shrink()
+                          : _buildBackground(context, p),
+                    ),
                     Transform.translate(
                       offset: Offset(-p * _width, 0),
                       child: widget.child,

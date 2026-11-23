@@ -247,7 +247,12 @@ class TimerService extends ChangeNotifier {
       if (completed.isNotEmpty || _tickCount % 10 == 0) _saveRuntime();
       if (completed.isNotEmpty) _save();
       _checkTicker();
-      notifyListeners();
+      // Секундный тик НЕ будит интерфейс: живой текст и полоска прогресса
+      // сами читают остаток по стенным часам (текст — на границе секунды,
+      // полоска — 60/120 мс), а состав карточек меняется только на старте,
+      // паузе, сбросе и завершении — они уведомляют отдельно. Раньше каждую
+      // секунду перестраивалась вся секция таймеров со всеми карточками.
+      if (completed.isNotEmpty) notifyListeners();
     });
   }
 
