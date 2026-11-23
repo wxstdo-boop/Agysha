@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../utils/design_tokens.dart' show Weights;
 
 /// Один вид «выполненной записи» для привычек, задач и проверок реальности.
 ///
@@ -11,12 +10,12 @@ import '../utils/design_tokens.dart' show Weights;
 /// трогать три файла, и они уже успели разъехаться. Теперь вид задаётся
 /// здесь, а экран сообщает только размер шрифта.
 ///
-/// Почему ALPHA 0.26 для текста и непрозрачная линия:
+/// Почему ALPHA 0.26 для текста и 0.62 для линии:
 ///  * текст заметно гаснет, но остаётся читаемым — «сделано», а не «стёрто»;
 ///    при 0.44 неотмеченные и отмеченные строки почти не отличались;
-///  * линия НЕПРОЗРАЧНАЯ: полупрозрачное перо поверх букв давало разную
-///    плотность в промежутках и над глифами, и ровная по толщине линия
-///    читалась «то тонкой, то толстой».
+///  * линия полупрозрачная: сплошной алый читался маркером поверх букв.
+///    Плотность при этом ровная по всей длине — её даёт `PaintingStyle.stroke`
+///    с постоянной толщиной, а не непрозрачность цвета.
 class StrikeStyle {
   const StrikeStyle._();
 
@@ -26,23 +25,38 @@ class StrikeStyle {
   /// Красный бренда для линии — тот же алый, что у «крови» на плюсе.
   static const Color _line = Color(0xFFEF5350);
 
+  /// Прозрачность самой линии. Владелец просил «полупрозрачнее»: сплошной
+  /// алый перекрывал буквы и выглядел как маркер. На 0.62 линия читается
+  /// лёгкой, «меловой» — видна на обеих темах, но текст под ней просвечивает.
+  static const double lineAlpha = 0.62;
+
   /// Цвет текста отмеченной записи.
   static Color textColor(ThemeData theme) =>
       theme.colorScheme.onSurfaceVariant.withValues(alpha: textAlpha);
 
-  /// Цвет линии зачёркивания: ровный алый, без «серости» `outline`.
-  static Color lineColor(ThemeData theme) => _line;
+  /// Цвет линии зачёркивания: алый с мягкой прозрачностью, без «серости»
+  /// `outline`.
+  static Color lineColor(ThemeData theme) =>
+      _line.withValues(alpha: lineAlpha);
 
   /// Готовый стиль строки. Экран передаёт кегль и, при желании, высоту
   /// строки — всё остальное (цвет, насыщенность) общее.
+  ///
+  /// ВАЖНО: `fontWeight` здесь НЕ задаётся. `titleMedium` в теме
+  /// (`app_theme.dart`) полужирный — именно он и делает названия привычек
+  /// и задач такими, какими их видит владелец. Однажды здесь стоял
+  /// `fontWeight: Weights.regular`, и все три экрана разом стали тонкими:
+  /// глаз читает это как «поменяли шрифт», хотя менялся только вес.
+  /// Начертание берём из темы, кегль — от экрана.
   static TextStyle textStyle(
     ThemeData theme, {
     required double fontSize,
     double? height,
+    FontWeight? fontWeight,
   }) => (theme.textTheme.titleMedium ?? const TextStyle()).copyWith(
     fontSize: fontSize,
     height: height,
     color: theme.colorScheme.onSurface,
-    fontWeight: Weights.regular,
+    fontWeight: fontWeight,
   );
 }

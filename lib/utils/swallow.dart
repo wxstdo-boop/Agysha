@@ -19,8 +19,25 @@ void swallow(String where, Object error, [StackTrace? stack]) {
 
   // Стек печатаем только в debug: в release он занимает экран лога
   // целиком, а пользы без символов почти не несёт.
+  //
+  // ВАЖНО: `debugPrintStack` внутри вызывает `FlutterError.defaultStackFilter`,
+  // который ПАДАЕТ НА АССЕРТЕ, если в стеке есть разделители
+  // `===== asynchronous gap =====` от `package:stack_trace`. Такие стеки
+  // приходят из `Future` с обработчиком ошибки — то есть ровно из тех мест,
+  // где `swallow` и нужен. Логирование необработанной ошибки само роняло
+  // приложение (в тестах это и вылезло). Поэтому стек чистим от разделителей
+  // и оборачиваем печать в try/catch: диагностика не важнее работы.
   if (kDebugMode && stack != null) {
-    debugPrintStack(stackTrace: stack, maxFrames: 6);
+    final lines = stack
+        .toString()
+        .split('\n')
+        .where((line) => !line.trim().startsWith('===== asynchronous gap'))
+        .join('\n');
+    try {
+      debugPrintStack(stackTrace: StackTrace.fromString(lines), maxFrames: 6);
+    } catch (_) {
+      // Стек не напечатался — текст ошибки выше уже есть, этого достаточно.
+    }
   }
 }
 

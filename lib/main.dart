@@ -28,6 +28,10 @@ import 'services/sounds.dart';
 import 'theme/app_theme.dart';
 import 'utils/motion_prefs.dart';
 import 'utils/perf_prefs.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    show NotificationAppLaunchDetails;
+
+import 'utils/bounded_wait.dart';
 import 'utils/swallow.dart';
 import 'models/alarm.dart';
 import 'models/wake_task.dart';
@@ -797,10 +801,27 @@ Future<_StartupState> _loadStartupState() async {
   PerfPrefs.install();
 
   final migration = migrateFromPrefs();
-  final notifications = notificationService.init().then((_) {
-    notificationService.onNotificationTap = _handleNotificationTap;
-    return notificationService.getLaunchDetails();
-  });
+  // ВЕЧНЫЙ БЕЛЫЙ ЭКРАН. Этот шаг — самый опасный из всего старта: внутри
+  // `init()` идут platform-вызовы (`getTimeZone`, `initialize`, каналы
+  // уведомлений). Если канал завис (известная болячка MIUI/HyperOS: плагин
+  // не отвечает, пока система показывает свой диалог), `await` ниже не
+  // завершался НИКОГДА — приложение навсегда оставалось на первом кадре,
+  // то есть на сплошном фоне. Пользователь видел «повис на белом экране»,
+  // а иногда система потом всё же отвечала — отсюда «само очнулось».
+  //
+  // Теперь уведомления НЕ держат первый экран: ждём их не дольше 1.2 с и
+  // идём дальше. Сама инициализация продолжается в фоне и доинициализует
+  // каналы к моменту, когда её понадобится планировать (будильники
+  // создаются уже после сплэша и ждут `_initialized` внутри сервиса).
+  final notifications = withinBudget<Object?>(
+    notificationService.init().then((_) {
+      notificationService.onNotificationTap = _handleNotificationTap;
+      return notificationService.getLaunchDetails();
+    }),
+    const Duration(milliseconds: 1200),
+    fallback: null,
+    label: 'notifications init',
+  );
   final hasPin = PinService.hasPin();
   final theme = SettingsService.loadThemeMode();
   final lang = SettingsService.loadLanguageCode();
@@ -818,16 +839,33 @@ Future<_StartupState> _loadStartupState() async {
     SettingsService.loadOptimize().then((v) => PerfPrefs.enabled.value = v),
   ]);
 
-  await Future.wait<void>([
-    migration,
-    notifications,
-    hasPin,
-    theme,
-    lang,
-    fontFamily,
-    modes,
-  ]);
-  final details = await notifications;
+  // СТРАХОВКА НА ВЕСЬ СТАРТ. Любой шаг выше может зависнуть (диск, ключ,
+  // плагин). Раньше это навсегда оставляло приложение на первом кадре —
+  // ровно жалоба «висит на белом экране». Теперь через 3 с старт идёт
+  // дальше с настройками по умолчанию: лучше открыться с системной темой,
+  // чем не открыться вовсе. Сами шаги продолжают догружаться в фоне и
+  // досылают значение в свои сервисы.
+  await withinBudgetVoid(
+    Future.wait<void>([
+      migration,
+      notifications,
+      hasPin,
+      theme,
+      lang,
+      fontFamily,
+      modes,
+    ]),
+    const Duration(seconds: 3),
+    label: 'startup state',
+  );
+  // Тип деталей — из плагина уведомлений; связывать сам старт с этим типом
+  // незачем, поэтому приводим на месте.
+  final details = await withinBudget<NotificationAppLaunchDetails?>(
+    notifications.then((value) => value as NotificationAppLaunchDetails?),
+    const Duration(milliseconds: 300),
+    fallback: null,
+    label: 'notification launch details',
+  );
   return _StartupState(
     hasPin: await hasPin,
     theme: await theme,

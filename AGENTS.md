@@ -1080,9 +1080,9 @@ Play Protect, file an appeal», support.google.com/googleplay/answer/2812853).
   `strokeWidth`/`strokeCap` игнорируются, и `drawPath` закрывает волну в тонкую
   замкнутую фигуру — на экране вместо толстой змейки рваная нитка в 1–3 px.
   Именно эта строка однажды выпала, и пользователь увидел «кривое зачёркивание».
-- Переменные: толщина `max(8.5, fontSize * 0.42)`, амплитуда
-  `max(2.0, fontSize * 0.115)`, период `max(56.0, fontSize * 4.2)`, шаг
-  `max(1.2, period / 26)`. Рисуется непрерывной полилинией (`lineTo` по мелкому
+- Переменные: толщина `max(4.4, fontSize * 0.20)`, амплитуда
+  `max(1.6, fontSize * 0.085)`, период `max(72.0, fontSize * 5.4)`, шаг
+  `max(1.0, period / 34)`. Рисуется непрерывной полилинией (`lineTo` по мелкому
   шагу), не кубическими сегментами: у `cubicTo` на стыках перо ложилось дважды.
 - Цвета и прозрачность текста — только через `lib/widgets/strike_style.dart`
   (`StrikeStyle.textStyle/textColor/lineColor`). Это общий вид для привычек,
@@ -1094,7 +1094,12 @@ Play Protect, file an appeal», support.google.com/googleplay/answer/2812853).
   Для «посмотреть глазами» есть `tool/render_strike_preview.dart` (рендер в
   PNG настоящими шрифтами, `/tmp/strike_preview.png`) и
   `tool/measure_strike.py` (толщина min/med/max, размах волны, рывки).
-  Ожидание на 3× рендере: толщина ~29–30 px, волна ~15 px.
+  Ожидание на 3× рендере: толщина ~13–15 px (≈4.5 px на экране), волна
+  ~10–11 px. Линия НАМЕРЕННО тонкая и полупрозрачная (`StrikeStyle.lineAlpha`
+  = 0.62): сплошной толстый алый владелец назвал маркером поверх букв.
+- Начертание берётся из темы: `titleMedium` полужирный. НЕ задавать
+  `fontWeight` в `StrikeStyle.textStyle` — однажды там стоял `regular`, и
+  все три экрана разом «сменили шрифт» (так это и выглядело для владельца).
 
 ## Публикация в F-Droid / IzzyOnDroid
 
