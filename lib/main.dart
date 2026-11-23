@@ -50,6 +50,7 @@ import 'overlay/ada_overlay.dart'
         initOverlayChannel,
         syncOverlayAvatarFromHost,
         syncOverlayModelFromHost,
+        fadeOutOverlayFromHost,
         resetOverlayFromHost,
         kOpenAdaChatCmd,
         AdaOverlayApp;
@@ -691,6 +692,12 @@ void overlayMain() {
         if (v is int) syncOverlayAvatarFromHost(v);
         return;
       }
+      if (cmd == 'fade_out') {
+        // Главное приложение уходит в чат: пузырь должен раствориться, а не
+        // пропасть вместе с окном.
+        fadeOutOverlayFromHost();
+        return;
+      }
       if (cmd == 'sync_model') {
         final l = msg['label'];
         if (l is String) {
@@ -1017,7 +1024,18 @@ void _openAdaFromBubble() {
     }
   }
 
-  Future.delayed(const Duration(milliseconds: 150), attempt);
+  // Пузырь сначала плавно растворяется, и только потом закрывается окно:
+  // резкое исчезновение в момент подъёма приложения читалось как мигание.
+  unawaited(() async {
+    try {
+      await syncOverlayState({'cmd': 'fade_out'});
+    } catch (_) {}
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    try {
+      await closeAdaOverlay();
+    } catch (_) {}
+    Future.delayed(const Duration(milliseconds: 120), attempt);
+  }());
 }
 
 /// Запуск приложения. Вынесено из [main], чтобы экран диагностики сбоя

@@ -48,16 +48,21 @@ void main() {
     );
   });
 
-  test('вход в пузырь проявляется альфой, а не вспышкой', () {
+  test('вход и выход пузыря одинаково плавные', () {
     final src = read(overlay);
     expect(
-      src.contains('milliseconds: 240'),
+      src.contains('milliseconds: 260'),
       isTrue,
-      reason: 'долгий зум читался рывком поверх уже проявленного окна',
+      reason: 'вход идёт выдохом альфы, а не вспышкой',
     );
-    expect(src.contains('0.90 + 0.10 * eased'), isTrue);
     expect(
-      src.contains('if (e >= 1.0) return drift;'),
+      src.contains('reverseDuration: const Duration(milliseconds: 200)'),
+      isTrue,
+      reason: 'выход короче входа: приложение ждёт его перед чатом',
+    );
+    expect(src.contains('0.86 + 0.14 * eased'), isTrue);
+    expect(
+      src.contains('if (e >= 0.999) return pressed;'),
       isTrue,
       reason: 'после входа не должно оставаться лишних слоёв альфы',
     );
@@ -75,19 +80,46 @@ void main() {
     );
   });
 
-  test('пузырь качается сам и замирает под пальцем', () {
+  test('зажатие — плавная отдача без мигания', () {
+    final src = read(overlay);
+    expect(
+      src.contains('late final AnimationController _press'),
+      isTrue,
+      reason: 'отдача на нажатие живёт в своём контроллере',
+    );
+    expect(
+      src.contains('1 - 0.07 * Curves.easeOutCubic.transform(squeeze)'),
+      isTrue,
+      reason: 'круг продавливается мягко и так же мягко отпускает',
+    );
+    expect(src.contains('_press.forward()'), isTrue);
+    expect(src.contains('_press.reverse()'), isTrue);
+    expect(
+      src.contains('AnimatedScale'),
+      isFalse,
+      reason:
+          'AnimatedScale на каждом касании перестраивал дерево — это и мигало',
+    );
+  });
+
+  test('качание идёт вечно и гаснет множителем, а не остановкой', () {
     final src = read(overlay);
     expect(src.contains('_drift.repeat()'), isTrue);
     expect(
-      src.contains('milliseconds: 9000'),
+      src.contains('milliseconds: 12000'),
       isTrue,
       reason: 'медленное качание читается спокойным, а не рваным',
     );
-    expect(src.contains('math.sin(t) * 2.4'), isTrue);
+    expect(src.contains('math.sin(t) * 3.4 * free'), isTrue);
     expect(
       src.contains('_drift.stop()'),
+      isFalse,
+      reason: 'остановка давала прыжок в другую точку синуса — «мигание»',
+    );
+    expect(
+      src.contains('late final AnimationController _hold'),
       isTrue,
-      reason: 'под пальцем и сразу после окно стоит ровно',
+      reason: 'под пальцем качание гаснет плавно',
     );
     expect(
       src.contains('RepaintBoundary'),
@@ -99,6 +131,31 @@ void main() {
     final java = read(service);
     expect(java.contains('FLOAT_INTERVAL_MS'), isFalse);
     expect(java.contains('floatRunnable'), isFalse);
+  });
+
+  test('перетаскивание двигает окно сразу, без кадра задержки', () {
+    final java = read(service);
+    expect(
+      java.contains('applyMoveNow()'),
+      isTrue,
+      reason: 'позиция пишется в том же событии касания',
+    );
+    expect(
+      java.contains('Choreographer.getInstance().postFrameCallback'),
+      isFalse,
+      reason: 'кадровая очередь добавляла отставание на каждом движении',
+    );
+    expect(
+      java.contains('dx * dx + dy * dy < 9'),
+      isTrue,
+      reason: 'окно стартует с 3 px, а не отлипает от пальца',
+    );
+    final src = read(overlay);
+    expect(
+      src.contains('_hold.forward()'),
+      isTrue,
+      reason: 'под пальцем качание плавно гаснет',
+    );
   });
 
   test('тап по пузырю возвращает чат и на холодном старте', () {

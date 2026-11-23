@@ -276,16 +276,16 @@ public class OverlayService extends Service implements View.OnTouchListener {
             return START_NOT_STICKY;
         }
         moveOverlay(dx, dy, null);
-        // Окно прозрачное: до первого кадра Flutter в нём всё равно ничего
-        // не нарисовано, поэтому показывать его можно сразу. Одна установка
-        // альфы через 120 мс вместо слушателя кадров движка (его API
-        // меняется между версиями Flutter) и вместо анимации по кадрам.
+        // Окно прозрачное: до первого кадра Flutter в нём ничего не
+        // нарисовано, а сам пузырь проявляет Dart (выдох альфы и масштаба).
+        // Поэтому альфу окна ставим сразу: любая задержка здесь и была тем
+        // «пузырь появился не сразу».
         mAnimationHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 revealOverlay(opacityCeiling);
             }
-        }, 120);
+        }, 0);
         return START_NOT_STICKY;
     }
 
@@ -642,7 +642,9 @@ public class OverlayService extends Service implements View.OnTouchListener {
             case MotionEvent.ACTION_MOVE:
                 final float dx = event.getRawX() - lastX;
                 final float dy = event.getRawY() - lastY;
-                if (!dragging && dx * dx + dy * dy < 25) return false;
+                // Порог 3 px, а не 5: на медленном движении окно стартовало
+                // с заметной задержкой и «отлипало» от пальца.
+                if (!dragging && dx * dx + dy * dy < 9) return false;
                 lastX = event.getRawX();
                 lastY = event.getRawY();
                 final boolean invertX = WindowSetup.gravity == (Gravity.TOP | Gravity.RIGHT)
@@ -656,7 +658,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 pendingMoveX = Math.round(dragPositionX);
                 pendingMoveY = Math.round(dragPositionY);
                 dragging = true;
-                postMoveFrame();
+                applyMoveNow();
                 break;
             case MotionEvent.ACTION_UP:
                 lastYPosition = Math.round(dragPositionY);
@@ -735,30 +737,34 @@ public class OverlayService extends Service implements View.OnTouchListener {
         }
     }
 
+    /**
+     * Двигаем окно сразу, не откладывая до следующего кадра. Раньше позиция
+     * ждала Choreographer: к задержке касания добавлялся целый кадр, и на
+     * каждом движении пузырь отставал от пальца — это и читалось как
+     * «перемещается тормозно». Записываем только когда позиция реально
+     * изменилась, чтобы не гонять лишний layout.
+     */
+    private void applyMoveNow() {
+        final WindowManager manager = windowManager;
+        final FlutterView view = flutterView;
+        if (manager == null || view == null || !viewAttached) return;
+        try {
+            final WindowManager.LayoutParams params =
+                    (WindowManager.LayoutParams) view.getLayoutParams();
+            if (params == null) return;
+            final int targetX = clampToScreenX(pendingMoveX, view.getWidth());
+            final int targetY = clampToScreenY(pendingMoveY, view.getHeight());
+            if (params.x == targetX && params.y == targetY) return;
+            params.x = targetX;
+            params.y = targetY;
+            manager.updateViewLayout(view, params);
+        } catch (RuntimeException error) {
+            Log.w("OverlayService", "Ignoring stale overlay move", error);
+        }
+    }
+
     private void postMoveFrame() {
-        if (moveFramePosted) return;
-        moveFramePosted = true;
-        final int generation = moveFrameGeneration;
-        Choreographer.getInstance().postFrameCallback(frameTimeNanos -> {
-            moveFramePosted = false;
-            if (generation != moveFrameGeneration) return;
-            final WindowManager manager = windowManager;
-            final FlutterView view = flutterView;
-            if (manager == null || view == null || !viewAttached) return;
-            try {
-                final WindowManager.LayoutParams params =
-                        (WindowManager.LayoutParams) view.getLayoutParams();
-                if (params == null) return;
-                final int targetX = clampToScreenX(pendingMoveX, view.getWidth());
-                final int targetY = clampToScreenY(pendingMoveY, view.getHeight());
-                if (params.x == targetX && params.y == targetY) return;
-                params.x = targetX;
-                params.y = targetY;
-                manager.updateViewLayout(view, params);
-            } catch (RuntimeException error) {
-                Log.w("OverlayService", "Ignoring stale overlay move", error);
-            }
-        });
+        applyMoveNow();
     }
 
     private class TrayAnimationTimerTask extends TimerTask {

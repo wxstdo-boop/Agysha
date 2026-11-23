@@ -37,6 +37,9 @@ void resetOverlayFromHost() => _AdaBubbleState.onHostReset();
 void syncOverlayAvatarFromHost(int variant) =>
     _AdaBubbleState.onAvatarSynced(variant);
 
+/// Просьба плавно погасить пузырь (перед закрытием окна или уходом в чат).
+void fadeOutOverlayFromHost() => _AdaBubbleState.onHostFadeOut();
+
 /// Модель, которой ответила Ада, в пузыре не показывается: подписи там нет.
 /// Функция остаётся, чтобы главный движок мог слать команду без ветвлений.
 void syncOverlayModelFromHost(String label) {}
@@ -107,24 +110,45 @@ class _AdaBubbleState extends State<_AdaBubble>
   static const Duration _tapTime = Duration(milliseconds: 1200);
 
   int _variant = -1;
-  bool _pressed = false;
+
+  /// Тап уже взят в работу: пока пузырь гаснет и приложение открывает чат,
+  /// второй тап игнорируем.
   bool _opening = false;
   Offset? _downAt;
   DateTime? _downTime;
 
+  /// Вход и выход. Выход короче входа: пузырь уходит перед открытием чата,
+  /// и задерживать приложение на нём нельзя.
   late final AnimationController _appear = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 240),
+    duration: const Duration(milliseconds: 260),
+    reverseDuration: const Duration(milliseconds: 200),
     value: 1,
   );
 
-  /// Пузырь катается сам: медленный синус внутри окна, рисуется Flutter'ом.
-  /// Раньше это делал нативный таймер через `updateViewLayout` каждые 33 мс —
-  /// перекладывание окна через WindowManager стоит кадров, и «самокатание»
-  /// выходило рваным. Сдвиг на пару dp внутри окна стоит одного transform.
+  /// Вечное самокатание: контроллер не останавливается НИКОГДА. Раньше он
+  /// вставал под пальцем и стартовал заново на отпускании — синус начинался
+  /// с другой точки, пузырь прыгал, и это читалось как «мигает при нажатии».
+  /// Теперь фаза живёт, а качание гасится множителем [_hold].
   late final AnimationController _drift = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 9000),
+    duration: const Duration(milliseconds: 12000),
+  );
+
+  /// 1 — пузырь держат (качание плавно сходит на нет), 0 — свободен.
+  late final AnimationController _hold = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 160),
+    reverseDuration: const Duration(milliseconds: 520),
+  );
+
+  /// Отдача на нажатие: круг мягко продавливается и так же мягко отпускает.
+  /// Считается в общем AnimatedBuilder без setState — перестройка дерева на
+  /// каждом касании тоже добавляла мигание.
+  late final AnimationController _press = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 90),
+    reverseDuration: const Duration(milliseconds: 240),
   );
 
   @override
@@ -133,9 +157,11 @@ class _AdaBubbleState extends State<_AdaBubble>
     _live = this;
     WidgetsBinding.instance.addObserver(this);
     unawaited(_restoreAvatar());
-    // Окно появляется в тот же кадр, в котором его показал сервис: короткий
-    // «выдох» альфы 0 → 1 и масштаб 0.90 → 1 читаются плавным выездом.
+    // Окно прозрачное: до первого кадра в нём ничего не нарисовано, поэтому
+    // «выезд» целиком рисует Dart — короткий выдох альфы 0 → 1 и масштаб
+    // 0.86 → 1.
     _appear.forward(from: 0);
+    // Качание идёт всегда: любая остановка — прыжок в другую точку синуса.
     _drift.repeat();
   }
 
@@ -145,6 +171,8 @@ class _AdaBubbleState extends State<_AdaBubble>
     WidgetsBinding.instance.removeObserver(this);
     _appear.dispose();
     _drift.dispose();
+    _hold.dispose();
+    _press.dispose();
     super.dispose();
   }
 
@@ -158,13 +186,26 @@ class _AdaBubbleState extends State<_AdaBubble>
     }
   }
 
+  /// Главное приложение показывает окно заново: пузырь плавно проявляется.
   static void onHostReset() {
     final live = _live;
     if (live == null) return;
     live._opening = false;
-    live._pressed = false;
+    live._hold.value = 0;
+    live._press.value = 0;
+    if (!live._drift.isAnimating) live._drift.repeat();
     live._appear.forward(from: 0);
     unawaited(live._restoreAvatar());
+  }
+
+  /// Главное приложение просит плавно погасить пузырь перед закрытием окна:
+  /// тап, уход в чат и выгрузка окна должны одинаково «растворяться».
+  static void onHostFadeOut() {
+    final live = _live;
+    if (live == null) return;
+    live._hold.reverse();
+    live._press.reverse();
+    live._appear.reverse();
   }
 
   static void onAvatarSynced(int variant) {
@@ -194,16 +235,11 @@ class _AdaBubbleState extends State<_AdaBubble>
   Future<void> _openChat() async {
     if (_opening) return;
     _opening = true;
-    // Флаг снимаем по таймеру, а не по ответу канала: сервис окна может не
-    // ответить вовсе, и тогда пузырь навсегда оставался «занятым» — второй
-    // тап уже ничего не делал. Это и был баг «нажимаю — ничего».
-    Timer(const Duration(milliseconds: 700), () {
-      if (mounted) _opening = false;
-    });
     unawaited(Haptics.select());
     unawaited(_rememberPosition());
-    // Команда уходит первой и без ожидания: сервис сам поднимет Agysha и
-    // передаст метку. Ждать ответа здесь нельзя — он не обязателен.
+    // Гаснет пузырь по команде главного приложения (fade_out): оно знает,
+    // когда окно вот-вот закроется, и само выдерживает паузу. Здесь только
+    // просим открыть чат, не задерживая подъём приложения своей анимацией.
     try {
       await FlutterOverlayWindow.shareData({
         'cmd': kOpenAdaChatCmd,
@@ -212,14 +248,22 @@ class _AdaBubbleState extends State<_AdaBubble>
       // Таймаут или отцепленный канал: метку в prefs сервис уже записал,
       // приложение заберёт её на следующем resume.
     }
+    // Если приложение по какой-то причине не поднялось, пузырь возвращается:
+    // иначе он остался бы невидимым и «мёртвым».
+    Timer(const Duration(milliseconds: 1400), () {
+      if (!mounted) return;
+      _opening = false;
+      if (_appear.value < 0.5) _appear.forward();
+    });
   }
 
   void _onDown(PointerDownEvent event) {
     _downAt = event.position;
     _downTime = DateTime.now();
-    // Под пальцем пузырь замирает: целиться в качающуюся кнопку нельзя.
-    _drift.stop();
-    setState(() => _pressed = true);
+    // Под пальцем качание гаснет, но не обрывается: контроллер продолжает
+    // идти, множитель плавно уводит смещение в ноль.
+    _hold.forward();
+    _press.forward();
   }
 
   void _onUp(PointerUpEvent event) {
@@ -227,22 +271,19 @@ class _AdaBubbleState extends State<_AdaBubble>
     final downTime = _downTime;
     _downAt = null;
     _downTime = null;
-    if (mounted && _pressed) setState(() => _pressed = false);
-    if (downAt == null || downTime == null) {
-      _drift.repeat();
-      return;
-    }
+    _hold.reverse();
+    _press.reverse();
+    if (downAt == null || downTime == null) return;
     final moved = (event.position - downAt).distance;
     final held = DateTime.now().difference(downTime);
     if (moved <= _tapSlop && held <= _tapTime) unawaited(_openChat());
-    _drift.repeat();
   }
 
   void _onCancel(PointerCancelEvent event) {
     _downAt = null;
     _downTime = null;
-    _drift.repeat();
-    if (mounted && _pressed) setState(() => _pressed = false);
+    _hold.reverse();
+    _press.reverse();
   }
 
   @override
@@ -254,40 +295,42 @@ class _AdaBubbleState extends State<_AdaBubble>
       onPointerUp: _onUp,
       onPointerCancel: _onCancel,
       child: AnimatedBuilder(
-        animation: Listenable.merge([_appear, _drift]),
+        animation: Listenable.merge([_appear, _drift, _hold, _press]),
         builder: (context, child) {
           final t = _drift.value * 2 * math.pi;
-          // Качание — 2.4 × 1.8 dp внутри окна: одна трансформация, ребёнок
-          // не перерисовывается (он под RepaintBoundary), поэтому «само-
-          // катание» стоит композитору, а не растеризатору.
+          // Качание 3.4 × 2.8 dp: заметное, но круг остаётся внутри окна
+          // (запас — 4 dp с каждой стороны). Одна трансформация, ребёнок под
+          // RepaintBoundary — «самокатание» стоит композитору, не растеризатору.
+          final free = 1.0 - Curves.easeOutCubic.transform(_hold.value);
           final drift = Transform.translate(
-            offset: Offset(math.sin(t) * 2.4, math.cos(t) * 1.8),
+            offset: Offset(math.sin(t) * 3.4 * free, math.cos(t) * 2.8 * free),
             child: child,
           );
+          final squeeze = _press.value;
+          final pressed = squeeze <= 0.001
+              ? drift
+              : Transform.scale(
+                  scale: 1 - 0.07 * Curves.easeOutCubic.transform(squeeze),
+                  alignment: Alignment.center,
+                  child: drift,
+                );
           final e = _appear.value;
-          // Альфа и масштаб нужны только на входе: после него остаётся
-          // голая трансформация без лишних слоёв.
-          if (e >= 1.0) return drift;
-          final eased = Curves.easeOutCubic.transform(e);
-          return Opacity(
-            opacity: eased,
-            child: Transform.scale(
-              scale: 0.90 + 0.10 * eased,
-              alignment: Alignment.center,
-              child: drift,
+          // Слой альфы живёт только пока идёт вход или выход: в покое его нет.
+          if (e >= 0.999) return pressed;
+          final eased = Curves.easeOutCubic.transform(e.clamp(0.0, 1.0));
+          return IgnorePointer(
+            ignoring: eased < 0.5,
+            child: Opacity(
+              opacity: eased,
+              child: Transform.scale(
+                scale: 0.86 + 0.14 * eased,
+                alignment: Alignment.center,
+                child: pressed,
+              ),
             ),
           );
         },
-        child: RepaintBoundary(
-          child: Center(
-            child: AnimatedScale(
-              scale: _pressed ? 0.92 : 1.0,
-              duration: Duration(milliseconds: _pressed ? 80 : 200),
-              curve: _pressed ? Curves.easeOut : Curves.easeOutBack,
-              child: _bubbleBody(),
-            ),
-          ),
-        ),
+        child: RepaintBoundary(child: Center(child: _bubbleBody())),
       ),
     );
   }
