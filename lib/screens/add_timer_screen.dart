@@ -316,6 +316,11 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
             pressedScale: 0.96,
             duration: const Duration(milliseconds: 200),
             releaseDuration: const Duration(milliseconds: 340),
+            pressOverlay: pressGloss(
+              BorderRadius.circular(999),
+              strength: 0.12,
+            ),
+            maxTiltAngle: 0.22,
             child: TextButton(
               onPressed: _save,
               child: Text(Translations.saveOf(context)),
@@ -482,6 +487,11 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
               pressedScale: 0.97,
               duration: const Duration(milliseconds: 260),
               releaseDuration: const Duration(milliseconds: 380),
+              pressOverlay: pressGloss(
+                BorderRadius.circular(999),
+                strength: 0.22,
+              ),
+              maxTiltAngle: 0.22,
               child: FilledButton(
                 onPressed: _totalSeconds > 0 ? _save : null,
                 child: Padding(

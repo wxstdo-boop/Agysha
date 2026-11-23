@@ -1809,22 +1809,30 @@ class _TaskNoteSheetState extends State<_TaskNoteSheet> {
                     style: TextButton.styleFrom(foregroundColor: cs.error),
                   ),
                 const Spacer(),
-                FilledButton(
-                  onPressed: _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: lavender,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                PressScale(
+                  pressedScale: 0.95,
+                  maxTiltAngle: 0.22,
+                  pressOverlay: pressGloss(
+                    BorderRadius.circular(14),
+                    strength: 0.22,
                   ),
-                  child: Text(
-                    Translations.saveOf(context),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  child: FilledButton(
+                    onPressed: _save,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: lavender,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      Translations.saveOf(context),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
               ],

@@ -35,6 +35,7 @@ class AddAlarmScreen extends StatefulWidget {
 
 class _AddAlarmScreenState extends State<AddAlarmScreen> {
   late TimeOfDay _time;
+
   /// Время на момент открытия формы: по нему видно, трогал ли человек что-то.
   late TimeOfDay _initialTime;
   late List<int> _repeatDays;
@@ -406,6 +407,11 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
           ),
           PressScale(
             pressedScale: 0.94,
+            pressOverlay: pressGloss(
+              BorderRadius.circular(999),
+              strength: 0.12,
+            ),
+            maxTiltAngle: 0.22,
             child: TextButton(
               onPressed: () async {
                 final raw = ctrl.text.trim();
@@ -557,6 +563,11 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
               pressedScale: 0.92,
               duration: const Duration(milliseconds: 180),
               releaseDuration: const Duration(milliseconds: 240),
+              pressOverlay: pressGloss(
+                BorderRadius.circular(999),
+                strength: 0.12,
+              ),
+              maxTiltAngle: 0.22,
               child: TextButton(
                 onPressed: _save,
                 child: Text(Translations.saveOf(context)),

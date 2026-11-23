@@ -27,7 +27,8 @@ class NormSheet extends StatefulWidget {
   State<NormSheet> createState() => _NormSheetState();
 }
 
-class _NormSheetState extends State<NormSheet> {
+class _NormSheetState extends State<NormSheet>
+    with SingleTickerProviderStateMixin {
   late double _draft = widget.service.norm.toDouble();
 
   /// Идёт ли протяжка ползунка пальцем. Пока идёт — число докручивается
@@ -41,9 +42,36 @@ class _NormSheetState extends State<NormSheet> {
   /// Шаг ползунка и кнопок: одно деление = 50 ккал.
   static const int _step = 50;
 
+  /// Докрутка к делению после отпускания пальца: 240 мс — достаточно, чтобы
+  /// глаз поймал «доезд», и коротко, чтобы не ждать ответа листа.
+  late final AnimationController _snap = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+  )..addListener(_onSnapTick);
+  late final Animation<double> _snapCurve = CurvedAnimation(
+    parent: _snap,
+    curve: Curves.easeOutCubic,
+  );
+  double _snapFrom = 0;
+  double _snapTo = 0;
+
+  void _onSnapTick() {
+    if (!mounted) return;
+    setState(
+      () => _draft = _snapFrom + (_snapTo - _snapFrom) * _snapCurve.value,
+    );
+  }
+
+  @override
+  void dispose() {
+    _snap.dispose();
+    super.dispose();
+  }
+
   int get _rounded => _draft.round().clamp(kMinCalorieNorm, kMaxCalorieNorm);
 
   void _set(double value) {
+    if (_snap.isAnimating) _snap.stop();
     final next = value.clamp(
       kMinCalorieNorm.toDouble(),
       kMaxCalorieNorm.toDouble(),
@@ -57,6 +85,8 @@ class _NormSheetState extends State<NormSheet> {
   }
 
   void _onSlider(double value) {
+    // Палец снова на ползунке — прежняя докрутка больше не нужна.
+    if (_snap.isAnimating) _snap.stop();
     setState(() {
       _draft = value.clamp(
         kMinCalorieNorm.toDouble(),
@@ -64,6 +94,25 @@ class _NormSheetState extends State<NormSheet> {
       );
       _dragging = true;
     });
+  }
+
+  /// Докрутка к ближайшему делению 50 после отпускания пальца.
+  ///
+  /// Штатные `divisions` округляли значение на каждом движении (и доводили
+  /// кружок 75-мс анимацией), из-за чего ползунок «тянулся туго». Теперь
+  /// протяжка идёт 1:1, а красивое круглое число получается одной короткой
+  /// волной уже после пальца.
+  void _snapToStep() {
+    final target = ((_draft / _step).round() * _step)
+        .clamp(kMinCalorieNorm, kMaxCalorieNorm)
+        .toDouble();
+    if ((target - _draft).abs() < 0.5) {
+      if (_draft != target) setState(() => _draft = target);
+      return;
+    }
+    _snapFrom = _draft;
+    _snapTo = target;
+    _snap.forward(from: 0);
   }
 
   void _stepBy(int delta) => _set((_draft + delta).roundToDouble());
@@ -211,8 +260,11 @@ class _NormSheetState extends State<NormSheet> {
                       elevation: 0,
                       pressedElevation: 0,
                     ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 18,
+                    // Своя подложка кружка: штатная вспыхивала кадром и так
+                    // же кадром гасла. Здесь круг растёт и тает по кривой, а
+                    // прозрачность идёт мягче радиуса — фон не мигает.
+                    overlayShape: const _SoftSliderOverlayShape(
+                      overlayRadius: 20,
                     ),
                     trackShape: const RoundedRectSliderTrackShape(),
                     showValueIndicator: ShowValueIndicator.never,
@@ -221,15 +273,20 @@ class _NormSheetState extends State<NormSheet> {
                     value: _draft,
                     min: kMinCalorieNorm.toDouble(),
                     max: kMaxCalorieNorm.toDouble(),
-                    divisions: (kMaxCalorieNorm - kMinCalorieNorm) ~/ _step,
+                    // Деления убраны: со 190 делениями штатный Slider
+                    // округлял каждое движение и доводил кружок анимацией
+                    // 75 мс — ползунок «заедал» и отставал от пальца.
+                    // Теперь он идёт 1:1, а к делению 50 значение мягко
+                    // доезжает на отпускании ([_snapToStep]).
                     label: '$_rounded',
                     semanticFormatterCallback: (v) => '${v.round()} $kcal',
                     onChanged: _onSlider,
                     onChangeEnd: (_) {
-                      // Палец отпущен: дальше значение «доезжает» длинной
-                      // волной, а не короткой волной протяжки.
+                      // Палец отпущен: значение доезжает до деления 50
+                      // одной волной, а цифры докручиваются длинной волной.
                       setState(() => _dragging = false);
                       Haptics.select();
+                      _snapToStep();
                     },
                   ),
                 ),
@@ -286,6 +343,11 @@ class _NormSheetState extends State<NormSheet> {
                 pressedScale: 0.965,
                 duration: const Duration(milliseconds: 300),
                 releaseDuration: const Duration(milliseconds: 380),
+                pressOverlay: pressGloss(
+                  BorderRadius.circular(14),
+                  strength: 0.22,
+                ),
+                maxTiltAngle: 0.22,
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(0, 48),
@@ -445,5 +507,48 @@ class _PresetChip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Мягкая подложка кружка ползунка.
+///
+/// Штатная [RoundSliderOverlayShape] проявляется и гаснет за 100 мс и с
+/// линейной кривой — на зажатии это читалось как вспышка и мигание. Здесь
+/// круг растёт по easeOutCubic, а прозрачность идёт квадратом прогресса:
+/// глаз видит ровное «дыхание» вместо щелчка.
+class _SoftSliderOverlayShape extends SliderComponentShape {
+  const _SoftSliderOverlayShape({this.overlayRadius = 20});
+
+  final double overlayRadius;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      Size.fromRadius(overlayRadius);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final t = Curves.easeOutCubic.transform(
+      activationAnimation.value.clamp(0.0, 1.0),
+    );
+    if (t <= 0.001) return;
+    final base = sliderTheme.overlayColor ?? Colors.transparent;
+    if (base.a <= 0) return;
+    // Радиус догоняет быстрее, чем плотность: круг не «выскакивает».
+    final radius = overlayRadius * (0.62 + 0.38 * t);
+    final paint = Paint()..color = base.withValues(alpha: base.a * t * t);
+    context.canvas.drawCircle(center, radius, paint);
   }
 }
