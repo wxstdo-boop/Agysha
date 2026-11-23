@@ -19,6 +19,21 @@ void main() {
       );
     });
 
+    test('модель выживает после повторной публикации цепочки', () async {
+      // Живой путь: провайдер заявил «Agnes • agnes-…», затем успех и
+      // цепочка публикуют метку ещё раз. Второй вызов раньше затирал модель
+      // голым «Agnes».
+      AiGuideService.debugPublishProviderModel('Agnes', 'agnes-3.0-flash');
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect(
+        await AiGuideService.currentModelLabel(),
+        'Agnes • agnes-3.0-flash',
+      );
+      AiGuideService.debugPublishProviderModel('LUMA', 'llama-3.3-70b');
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect(await AiGuideService.currentModelLabel(), 'LUMA • llama-3.3-70b');
+    });
+
     test('имя без модели остаётся как есть', () async {
       AiGuideService.recordModelUsed('LLM7');
       await Future<void>.delayed(const Duration(milliseconds: 1100));

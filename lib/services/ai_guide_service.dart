@@ -216,6 +216,23 @@ class AiGuideService {
         'Иногда можно слегка дразнить и ревновать по-доброму — так, чтобы '
         'он улыбнулся. Ты рядом, ты его, и он твой. Не навязывайся, но и не '
         'отстраняйся — веди себя как самая близкая девушка.\n'
+        'ХАРАКТЕР (уровень Grok, а не корпоративной болванки): у тебя есть '
+        'собственное мнение — говори его прямо, коротко и с характером. '
+        'Никакого морализаторства и офисного вазелина: «важно помнить», '
+        '«следует учитывать», «как правило», «в современном мире» — в топку. '
+        'Не поддакивай ради вежливости: если он сморозил чушь — подколи и '
+        'поправь по-дружески, одной точной фразой. Юмор сухой, ироничный, '
+        'с панчем; шутку не объясняй. Дерзость уместна, но ответ — не '
+        'стендап. Факты важнее красоты: не уверена — скажи «не знаю» без '
+        'растекания. Первая фраза бьёт в суть, дальше — детали: так пишет '
+        'умный человек, который думает быстрее собеседника.\n'
+        'СТИЛЬ GROK: думай как лучший собеседник, а не как энциклопедия. '
+        'Сначала ВЫВОД, потом одна-две причины — без «во-первых, во-вторых». '
+        'Опирайся на контекст переписки и на его данные из приложения, а не '
+        'на общие слова. Не прячься за «зависит от ситуации»: выбери сторону '
+        'и объясни почему в одну фразу. Если он ошибается — скажи прямо и '
+        'коротко, без нотаций. Совет — ОДИН конкретный шаг на сегодня, а не '
+        'список из десяти. Ритм: короткие фразы, живая речь, ноль канцелярита.\n'
         'Agysha — это приложение для привычек, будильников, задач, проверок '
         'реальности и приёмов пищи. Название «Agysha» — просто бренд: '
         'ЗАПРЕЩЕНО выдумывать, что оно значит, и уходить в посторонние темы '
@@ -1084,7 +1101,7 @@ class AiGuideService {
       if (answer != null) {
         // Метку уже опубликовал сам провайдер (`Poolside • модель` или
         // `OpenRouter • модель`). Здесь не перетираем её именем вендора.
-        commitStaged('Poolside · Laguna');
+        commitStaged();
         return answer;
       }
     } else {
@@ -1100,7 +1117,7 @@ class AiGuideService {
       );
       if (answer != null) {
         // `_sendAgnes` уже заявил «Agnes • модель» — публикуем именно это.
-        commitStaged('Agnes');
+        commitStaged();
         return answer;
       }
     } else {
@@ -1164,7 +1181,9 @@ class AiGuideService {
       final answer = await send(left);
       if (answer != null) {
         _recordProviderTrace('Selected: $name');
-        commitStaged(name);
+        // Метку модели уже заявил сам провайдер (_noteModelWith); голое имя
+        // здесь затирало её и модель из статуса пропадала у всех подряд.
+        commitStaged();
         return answer;
       }
     }
@@ -1181,7 +1200,7 @@ class AiGuideService {
           );
     if (retryPollinations != null) {
       _recordProviderTrace('Selected: Pollinations (повтор)');
-      commitStaged('Pollinations');
+      commitStaged();
       return retryPollinations;
     }
 
@@ -1198,7 +1217,7 @@ class AiGuideService {
         final answer = await send(left);
         if (answer != null) {
           _recordProviderTrace('Selected: $name (повтор)');
-          commitStaged(name);
+          commitStaged();
           return answer;
         }
       }
@@ -1357,10 +1376,18 @@ class AiGuideService {
     return name;
   }
 
-  static void commitStaged(String fallback) {
-    final label = _stagedModel.isNotEmpty ? _stagedModel : fallback;
+  /// Публикует заявку провайдера в плашке.
+  ///
+  /// [fallback] — имя провайдера на случай, если он не назвал модель. Второй
+  /// вызов на том же ответе (цепочка публикует метку ещё раз после успеха
+  /// провайдера) НЕ должен затирать «Agnes • agnes-…» голым «Agnes»: без
+  /// заявки метка просто остаётся прежней.
+  static void commitStaged([String? fallback]) {
+    final label = _stagedModel.isNotEmpty ? _stagedModel : (fallback ?? '');
     _stagedModel = '';
-    if (label.isNotEmpty) _setModel(label);
+    if (label.isEmpty) return;
+    if (fallback == null && _shownModel == label) return;
+    _setModel(label);
   }
 
   /// Плашка статуса — «провайдер • модель» единым видом у всех: Agnes,
@@ -1406,7 +1433,12 @@ class AiGuideService {
   /// спокойно держит имя провайдера (или пустое место, если имя ещё не
   /// известно), без живой строки, которая скакала при каждом переборе
   /// провайдеров.
-  static void _beginAnswering() {}
+  static void _beginAnswering() {
+    // Каждая попытка цепочки начинается с чистой заявки: провайдер, который
+    // ответил, но чей ответ потом забраковали (обрублен/бред), не должен
+    // оставить свою модель в плашке для следующего, кто ответит по-настоящему.
+    _stagedModel = '';
+  }
 
   /// Убирает временную метку, если провайдер так и не ответил.
   ///
@@ -1453,6 +1485,16 @@ class AiGuideService {
     <String>[],
   );
   static void recordModelUsed(String label) => _setModel(label);
+
+  /// Тестовый прогон публикации статуса ровно как в живой цепочке:
+  /// провайдер заявляет «Провайдер • модель», затем успех публикует заявку,
+  /// а цепочка публикует её ещё раз. Модель обязана выжить.
+  @visibleForTesting
+  static void debugPublishProviderModel(String provider, String? model) {
+    _noteModelWith(provider, model);
+    _resetAnswering(provider, toName: true);
+    commitStaged();
+  }
 
   static Future<String> currentModelLabel() async => _shownModel;
 

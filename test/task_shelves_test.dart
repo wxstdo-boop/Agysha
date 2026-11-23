@@ -127,21 +127,17 @@ void main() {
   Future<void> tapAndSettle(WidgetTester tester, Finder finder) async {
     await tester.tap(finder);
     await tester.pump();
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 50)),
-    );
-    // Переезд карточки в архив идёт в два шага (схлопывание 320 мс, затем
-    // «приезд» 420 мс), поэтому нужны кадры на всём протяжении, а не один
-    // большой прыжок: иначе мутация ещё не успевает отрисоваться.
-    for (var i = 0; i < 12; i++) {
-      await tester.pump(const Duration(milliseconds: 100));
+    // Переключение задачи пишет файл (настоящий I/O, вне fake-async), а
+    // переезд карточки — две анимации подряд. Поэтому: сначала даём записи
+    // завершиться реальным ожиданием, затем прокручиваем кадры на всю
+    // длину анимаций (иначе тикер не успевает доехать до конца и карточка
+    // остаётся сплющенной).
+    for (var i = 0; i < 60; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
     }
-    // Запись списка на диск идёт настоящим I/O: без реального ожидания
-    // setState от сервиса приходит уже после последнего кадра.
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 40)),
-    );
-    await tester.pump(const Duration(milliseconds: 100));
   }
 
   testWidgets('без выполненных задач полок нет — один список', (tester) async {
@@ -246,40 +242,122 @@ void main() {
 
     final before = tester.getTopLeft(card('a2')).dy;
     await tester.tap(find.byKey(const ValueKey('task_toggle_a1')));
+    // Высота рамки возврата — это и есть SizeTransition вокруг карточки
+    // (ближайший к ней): сама карточка внутри всегда полной высоты, её
+    // подрезает Align. Пока карточка ещё в архиве, ближайшая рамка — рамка
+    // полки, она всегда полной высоты; рамка возврата отличается тем, что
+    // РАСТЁТ от нуля.
+    final returnFrame = find.ancestor(
+      of: card('a1'),
+      matching: find.byType(SizeTransition),
+    );
+    final full = tester.getSize(card('a1')).height;
+    final heights = <double>[];
     // Запись задачи на диск — настоящий I/O: ветка возврата запускается уже
-    // ПОСЛЕ неё, поэтому ждём реально, а не кадрами.
-    for (var i = 0; i < 40; i++) {
+    // ПОСЛЕ неё, поэтому чередуем реальное ожидание и кадры и снимаем
+    // высоту рамки на каждом шаге, пока она не дорастёт до полной.
+    for (var i = 0; i < 90; i++) {
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        () => Future<void>.delayed(const Duration(milliseconds: 25)),
       );
       await tester.pump(const Duration(milliseconds: 20));
-    }
-    // Высота рамки возврата — это и есть SizeTransition вокруг карточки:
-    // сама карточка внутри всегда полной высоты (её подрезает Align).
-    final heights = <double>[];
-    for (var i = 0; i < 8; i++) {
-      await tester.pump(const Duration(milliseconds: 40));
-      heights.add(
-        tester
-            .getSize(
-              find
-                  .ancestor(
-                    of: card('a1'),
-                    matching: find.byType(SizeTransition),
-                  )
-                  .first,
-            )
-            .height,
-      );
+      final frame = returnFrame.evaluate().isEmpty
+          ? null
+          : tester.getSize(returnFrame.first);
+      if (frame != null && frame.height < full - 0.5) {
+        heights.add(frame.height);
+      }
     }
     // Карточка не «щёлкает» на полную высоту: за время возврата рамка
     // проходит несколько промежуточных высот (SizeTransition).
+    expect(
+      heights,
+      isNotEmpty,
+      reason: 'рамка возврата так и не выросла (соседняя была на $before)',
+    );
     expect(
       heights.toSet().length,
       greaterThan(2),
       reason: 'высоты рамки по кадрам: $heights (соседняя была на $before)',
     );
     expect(heights.last, greaterThan(heights.first));
+    expect(heights.last, greaterThan(full * 0.9));
+    expect(card('a1'), findsOneWidget);
+  });
+
+  testWidgets('переезд В архив: карточка вырастает, а не щёлкает кадром', (
+    tester,
+  ) async {
+    await seedAndPump(tester, [
+      Task(id: 'a1', title: 'Купить молоко'),
+      Task(id: 'z0', title: 'Старое дело', done: true),
+    ]);
+
+    /// Высота рамки SizeTransition у копии карточки в АРХИВНОЙ полке (она
+    /// ниже активной). Пока идёт схлопывание, на экране две копии.
+    double? archiveFrameHeight() {
+      final matches = card('a1');
+      final count = matches.evaluate().length;
+      double maxDy = double.negativeInfinity;
+      double? height;
+      for (var i = 0; i < count; i++) {
+        final one = matches.at(i);
+        final box = tester.renderObject<RenderBox>(one);
+        final dy = box.localToGlobal(Offset.zero).dy;
+        final frame = find.ancestor(
+          of: one,
+          matching: find.byType(SizeTransition),
+        );
+        if (frame.evaluate().isEmpty) continue;
+        // Уезжающая копия в активной полке обёрнута в IgnorePointer прямо
+        // под своей рамкой — её схлопывание не меряем.
+        final leaving = find
+            .descendant(of: frame.first, matching: find.byType(IgnorePointer))
+            .evaluate()
+            .isNotEmpty;
+        if (leaving) continue;
+        if (dy > maxDy) {
+          maxDy = dy;
+          height = tester.getSize(frame.first).height;
+        }
+      }
+      return height;
+    }
+
+    await tester.tap(find.byKey(const ValueKey('task_toggle_a1')));
+    final heights = <double>[];
+    for (var i = 0; i < 60; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 30)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      final h = archiveFrameHeight();
+      if (h != null) heights.add(h);
+    }
+
+    expect(heights, isNotEmpty, reason: 'карточка так и не появилась в архиве');
+    final full = heights.reduce(math.max);
+    // Главное: карточка РАСТЁТ от почти нуля до полной высоты и ни разу не
+    // проседает. Раньше она появлялась сразу полной и на следующем кадре
+    // схлопывалась — переезд читался как прыжок.
+    expect(
+      heights.first,
+      lessThan(full * 0.6),
+      reason: 'первый кадр новой карточки уже почти полный: $heights',
+    );
+    for (var i = 1; i < heights.length; i++) {
+      expect(
+        heights[i],
+        greaterThanOrEqualTo(heights[i - 1] - 0.5),
+        reason: 'высота проседает на кадре $i: $heights',
+      );
+    }
+    expect(
+      heights.first,
+      lessThan(full * 0.7),
+      reason: 'первый кадр в архиве уже почти полный: $heights',
+    );
+    expect(heights.last, closeTo(full, 1.0), reason: 'недоросла: $heights');
     expect(card('a1'), findsOneWidget);
   });
 

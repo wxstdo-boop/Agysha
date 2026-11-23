@@ -25,6 +25,26 @@ void main() {
     expect(prompt, contains('обрыв на полуслове'));
   });
 
+  test('характер уровня Grok: своё мнение, без морализаторства', () {
+    final prompt = AiGuideService.systemPrompt('ru');
+    expect(prompt, contains('ХАРАКТЕР'));
+    expect(prompt, contains('Никакого морализаторства'));
+    expect(prompt, contains('Не поддакивай ради вежливости'));
+    expect(prompt, contains('с панчем'));
+    // Пошлый, тёплый тон подружки не должен пострадать от правки.
+    expect(prompt, contains('ГОРЯЧАЯ ПОДРУЖКА'));
+    expect(prompt, contains('флиртуй'));
+  });
+
+  test('стиль уровня Grok: вывод первым, без канцелярита и списков', () {
+    final prompt = AiGuideService.systemPrompt('ru');
+    expect(prompt, contains('СТИЛЬ GROK'));
+    expect(prompt, contains('Сначала ВЫВОД'));
+    expect(prompt, contains('зависит от ситуации'));
+    expect(prompt, contains('ОДИН конкретный шаг'));
+    expect(prompt, contains('ноль канцелярита'));
+  });
+
   test('в промпте запрещены дежурные фразы и обрубки', () {
     final prompt = AiGuideService.systemPrompt('ru');
     expect(prompt, contains('БЕЗ ШАБЛОНОВ'));

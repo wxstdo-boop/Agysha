@@ -36,14 +36,23 @@ class TaskService extends ChangeNotifier {
       NewYearEventService().prizeGranted ? kMaxPrizeCategories : kMaxCategories;
 
   Future<void> load() async {
+    // Если файл с момента последнего известного состояния не менялся, то
+    // прочитанное НЕ новее того, что уже в памяти: перетирать список нельзя.
+    // Без этой проверки фоновый load() (он идёт при открытии экрана и из
+    // «потянуть вниз») приезжал после быстрой отметки задачи и возвращал
+    // галку назад — задача «сама» снималась.
+    final knownTasks = _tasksSnapshot;
     final raw = await JsonFile.read(_key);
+    final tasksChangedOnDisk = raw != knownTasks;
     _tasksSnapshot = raw;
-    if (raw != null && raw.isNotEmpty) {
+    if (tasksChangedOnDisk && raw != null && raw.isNotEmpty) {
       _tasks = tasksFromJson(raw);
     }
+    final knownCategories = _categoriesSnapshot;
     final catRaw = await JsonFile.read(_catKey);
+    final categoriesChangedOnDisk = catRaw != knownCategories;
     _categoriesSnapshot = catRaw;
-    if (catRaw != null && catRaw.isNotEmpty) {
+    if (categoriesChangedOnDisk && catRaw != null && catRaw.isNotEmpty) {
       final list = jsonDecode(catRaw) as List;
       _categories = list.map((e) => e as String).toList();
     }

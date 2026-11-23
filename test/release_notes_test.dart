@@ -23,26 +23,40 @@ void main() {
   /// Путь в POSIX-виде: `C:\a\b` -> `C:/a/b`, что Git Bash понимает.
   String posix(String p) => p.replaceAll('\\', '/');
 
+  var tmpCounter = 0;
+
   /// Прогоняет настоящий скрипт (не мок) и возвращает его stdout.
   ///
   /// Вызывается только когда bash доступен (см. [skipWithoutBash]).
   String filter(String input) {
     final script = File('tool/release_notes.sh');
-    expect(script.existsSync(), isTrue,
-        reason: 'tool/release_notes.sh не найден — тест не из корня');
+    expect(
+      script.existsSync(),
+      isTrue,
+      reason: 'tool/release_notes.sh не найден — тест не из корня',
+    );
 
     // Скрипт читает stdin; Process.runSync не умеет его заполнять, поэтому
     // подаём вход через временный файл. Пути переводим в POSIX-вид: под
     // Git Bash на Windows бэкслеши в `bash -c` съедаются как escape-символы.
-    final tmp = File('${Directory.systemTemp.path}/release_notes_in.txt')
-      ..writeAsStringSync(input);
+    // Уникальное имя на каждый вызов: при параллельном прогоне два
+    // процесса успевали прочитать/удалить один и тот же файл, и тест
+    // падал на PathNotFoundException, хотя скрипт в порядке.
+    final tmp = File(
+      '${Directory.systemTemp.path}/release_notes_in_'
+      '${DateTime.now().microsecondsSinceEpoch}_'
+      '${pid}_${tmpCounter++}.txt',
+    )..writeAsStringSync(input);
     final res = Process.runSync('bash', [
       '-c',
       'bash ${posix(script.path)} < ${posix(tmp.path)}',
     ], stdoutEncoding: utf8);
     tmp.deleteSync();
-    expect(res.exitCode, 0,
-        reason: 'фильтр заметок обязан завершаться успешно');
+    expect(
+      res.exitCode,
+      0,
+      reason: 'фильтр заметок обязан завершаться успешно',
+    );
     return res.stdout as String;
   }
 
@@ -100,9 +114,11 @@ void main() {
         // Путь под Windows приходит с обратными слэшами: без нормализации
         // список файлов оказывался пустым и тест падал на «не нашли ни
         // одного changelog» вместо проверки содержимого.
-        .where((f) =>
-            f.path.replaceAll('\\', '/').contains('/changelogs/') &&
-            f.path.endsWith('.txt'))
+        .where(
+          (f) =>
+              f.path.replaceAll('\\', '/').contains('/changelogs/') &&
+              f.path.endsWith('.txt'),
+        )
         .toList();
     expect(files, isNotEmpty, reason: 'не нашли ни одного changelog');
 

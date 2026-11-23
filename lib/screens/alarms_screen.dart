@@ -999,7 +999,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             // ВЫШЕ статуса и секции), поэтому здесь только обычный отступ.
             // Сверху — чуть больше воздуха: зазор между последней карточкой
             // будильника и заголовком «Таймеры» читался слипшимся.
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 26, 16, 0),
             child: Row(
               children: [
                 Text(

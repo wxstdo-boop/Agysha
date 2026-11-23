@@ -136,6 +136,22 @@ class _TasksScreenState extends State<TasksScreen>
     return box.localToGlobal(Offset.zero) & box.size;
   }
 
+  /// Верх того места, куда встанет карточка в архивной полке. Меряем ДО
+  /// мутации по низу последней архивной карточки: тогда карточка едет ровно
+  /// на своё место, а не «проявляется» сдвигом на долю высоты. Если полка
+  /// пуста или её карточки ещё не построены — null, и карточка просто
+  /// вырастает на месте.
+  double? _doneInsertTop(String excludingId) {
+    final done = _service.tasks
+        .where((t) => t.done && t.id != excludingId)
+        .toList();
+    if (done.isEmpty) return null;
+    final last = _cardRect('done', done.last.id);
+    if (last == null) return null;
+    // Тот же вертикальный зазор, что у карточек в полке (margin 5 × 2).
+    return last.bottom + 10;
+  }
+
   /// id только что переключённой задачи — её карточка «приезжает» в новую
   /// полку анимированно; остальные рисуются сразу.
   String? _justCompletedId;
@@ -384,6 +400,10 @@ class _TasksScreenState extends State<TasksScreen>
     // копия уходит вместе со своей полкой.
     final splitVisible = _filter == '' && _archiveVisible;
     final archiveMove = splitVisible && !wasDone;
+    // Где карточка стоит сейчас и куда она приедет — меряем ДО мутации:
+    // после неё старой карточки уже нет.
+    final fromRect = archiveMove ? _cardRect('active', task.id) : null;
+    final doneTop = archiveMove ? _doneInsertTop(task.id) : null;
     if (archiveMove) {
       final source = _service.tasks
           .where((t) => wasDone ? t.done : !t.done)
@@ -393,6 +413,15 @@ class _TasksScreenState extends State<TasksScreen>
         _leavingTask = task;
         _leavingWasDone = wasDone;
         _leavingIndex = idx < 0 ? 0 : idx;
+        // Карточка в архивной полке рождается уже сплющенной (t = 0).
+        // Раньше метка ставилась ПОСЛЕ первого кадра: карточка появлялась
+        // в полную высоту и на следующем кадре схлопывалась — переезд
+        // читался как прыжок. Теперь она просто вырастает на новом месте.
+        _cardDrop.value = 0;
+        _cardDropFromPx = (fromRect != null && doneTop != null)
+            ? (fromRect.top - doneTop).clamp(-1200.0, 1200.0).toDouble()
+            : 0;
+        _justCompletedId = task.id;
       });
       // Схлопывание идёт ПАРАЛЛЕЛЬНО с мутацией, а не перед ней: две копии
       // (исчезающая в старой полке и приезжающая в новой) в течение 320 мс
@@ -403,9 +432,6 @@ class _TasksScreenState extends State<TasksScreen>
         }
       });
     }
-    // Где карточка стояла до переезда — замеряем ДО мутации: после неё этой
-    // карточки в активных уже нет.
-    final fromRect = archiveMove ? _cardRect('active', task.id) : null;
     await _service.toggle(task.id);
     if (!mounted) return;
     // «Приезд» сверху — только для отметки (активная полка → архив).
@@ -413,21 +439,8 @@ class _TasksScreenState extends State<TasksScreen>
     // её тем же спуском сверху, она прыгает над списком и «скачет туда-сюда».
     // Возврат ведёт своя анимация роста на новом месте — см. [_cardReturn].
     if (!wasDone) {
-      // Карточка уже в архивной полке: её новое место известно, и приезд
-      // пойдёт ровно на это расстояние, а не на «16 % высоты».
-      if (fromRect != null) {
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) return;
-        final toRect = _cardRect('done', task.id);
-        if (toRect != null) {
-          final dy = fromRect.top - toRect.top;
-          _cardDropFromPx = dy.clamp(-1200.0, 1200.0);
-        }
-      } else {
-        _cardDropFromPx = 0;
-      }
-      if (!mounted) return;
-      setState(() => _justCompletedId = task.id);
+      // Данные уже записаны: с этого момента карточка вырастает в архивной
+      // полке от нуля до полной высоты, проезжая замеренное расстояние.
       _cardDrop.forward(from: 0).whenComplete(() {
         // Снимаем «анимируемую» метку: карточка больше не оборачивается
         // переходом (иначе один лишний набор слоёв висел бы на ней всегда).
