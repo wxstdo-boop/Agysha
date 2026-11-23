@@ -73,3 +73,6 @@ android/.kotlin/
 /agysha_shot*.png
 /screen_*.png
 tools/_*/
+
+# Python-кэш инструментов (tool/measure_strike.py)
+__pycache__/

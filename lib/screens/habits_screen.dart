@@ -19,6 +19,7 @@ import '../utils/snackbar.dart';
 import '../widgets/smooth_hover.dart';
 import '../widgets/drag_proxy.dart';
 import '../widgets/animated_strike_text.dart';
+import '../widgets/strike_style.dart';
 import '../widgets/animated_fab_row.dart';
 import '../widgets/premium_empty_state.dart';
 import '../utils/section_tints.dart';
@@ -1357,10 +1358,10 @@ class _HabitsScreenState extends State<HabitsScreen>
                               // (см. AnimatedStrikeText).
                               child: AnimatedStrikeText(
                                 text: habit.name,
-                                style: theme.textTheme.titleMedium!.copyWith(
+                                style: StrikeStyle.textStyle(
+                                  theme,
                                   fontSize: 22.5,
                                   height: 1.3,
-                                  color: theme.colorScheme.onSurface,
                                 ),
                                 // Тот же масштаб шрифта, что рендерит текст:
                                 // иначе линии зачёркивания при системном
@@ -1370,11 +1371,8 @@ class _HabitsScreenState extends State<HabitsScreen>
                                 // Текст в отмеченном состоянии — заметно
                                 // полупрозрачный (а не просто другой оттенок):
                                 // прозрачность едет вместе с линией.
-                                struckColor: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.26),
-                                strikeColor: Colors.red.shade500.withValues(
-                                  alpha: 0.55,
-                                ),
+                                struckColor: StrikeStyle.textColor(theme),
+                                strikeColor: StrikeStyle.lineColor(theme),
                                 // Полный текст без троеточия: имя привычки
                                 // всегда видно целиком (как в задачах), а не
                                 // «скукожено» до двух строк. Действия справа

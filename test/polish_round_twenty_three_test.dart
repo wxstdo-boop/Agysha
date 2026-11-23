@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Регресс батча «ПИН-экран / зачёркивание / будильники»:
 /// обводка замка монотонная под тему, у «Выйти», «Отмена», цифр и крестика
 /// есть 3D-наклон, установка ПИНа не запирает приложение заново,
-/// а зачёркивание — одна толстая синусоида без «пупырков».
+/// а зачёркивание проверяется по пикселям в strike_line_pixels_test.dart.
 void main() {
   String read(String path) => File(path).readAsStringSync();
 
@@ -45,28 +45,5 @@ void main() {
       isFalse,
     );
     expect(block.contains('Navigator.of(context).pop()'), isTrue);
-  });
-
-  test('зачёркивание — одна толстая змейка с ровным пером', () {
-    final src = read('lib/widgets/animated_strike_text.dart');
-    expect(
-      src.contains('strokeWidth = math.max(7.0, fontSize * 0.42)'),
-      isTrue,
-    );
-    // Сплошная линия: цвет пера на полной непрозрачности, иначе над
-    // глифами она плотнее, чем в промежутках, и читается «то тонкой,
-    // то толстой».
-    expect(src.contains('.withValues('), isTrue);
-    expect(src.contains('alpha: 1.0'), isTrue);
-    expect(src.contains('fontSize * 0.070'), isTrue);
-    expect(src.contains('fontSize * 4.6'), isTrue);
-    // Линия поверх текста: под глифами она выглядела рваной.
-    expect(src.contains('foregroundPainter: _StrikePainter('), isTrue);
-    // Толщина одна на всю линию: непрерывная полилиния с постоянным
-    // strokeWidth, без кубических стыков, где перо ложилось дважды.
-    expect(src.contains('path.lineTo('), isTrue);
-    expect(src.contains('path.cubicTo('), isFalse);
-    expect(src.contains('slopeAt('), isFalse);
-    expect(src.contains('amp * 0.28'), isFalse);
   });
 }

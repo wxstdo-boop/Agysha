@@ -19,6 +19,7 @@ import '../utils/wide_dash_formatter.dart';
 import '../utils/wide_dash_controller.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/animated_strike_text.dart';
+import '../widgets/strike_style.dart';
 import '../widgets/animated_fab_row.dart';
 import '../widgets/sliding_picker.dart';
 import '../widgets/smooth_char_counter.dart';
@@ -1177,10 +1178,10 @@ class _TasksScreenState extends State<TasksScreen>
                               // TextDecoration.lineThrough.
                               child: AnimatedStrikeText(
                                 text: task.title,
-                                style: theme.textTheme.titleMedium!.copyWith(
+                                style: StrikeStyle.textStyle(
+                                  theme,
                                   fontSize: 22.5,
                                   height: 1.25,
-                                  color: theme.colorScheme.onSurface,
                                 ),
                                 // Тот же масштаб шрифта, что рендерит текст:
                                 // иначе линии зачёркивания при системном
@@ -1190,11 +1191,8 @@ class _TasksScreenState extends State<TasksScreen>
                                 // Текст в отмеченном состоянии — заметно
                                 // полупрозрачный (а не просто другой оттенок):
                                 // прозрачность едет вместе с линией.
-                                struckColor: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.26),
-                                strikeColor: Colors.red.shade500.withValues(
-                                  alpha: 0.55,
-                                ),
+                                struckColor: StrikeStyle.textColor(theme),
+                                strikeColor: StrikeStyle.lineColor(theme),
                                 // Полный текст без троеточия: заголовок
                                 // задачи всегда виден целиком, а не обрезан.
                                 maxLines: null,

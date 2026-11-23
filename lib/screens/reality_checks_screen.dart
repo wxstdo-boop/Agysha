@@ -10,6 +10,7 @@ import '../services/task_service.dart';
 import '../l10n/translations.dart';
 import '../widgets/smooth_hover.dart';
 import '../widgets/animated_strike_text.dart';
+import '../widgets/strike_style.dart';
 import '../widgets/section_pill.dart';
 import '../widgets/swipe_to_delete.dart';
 import '../widgets/rolling_number.dart';
@@ -538,26 +539,21 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                               // же яркой — отсюда «зачёркивания не видно».
                               child: AnimatedStrikeText(
                                 text: sanitizeTextForWrap(check.question),
-                                style:
-                                    theme.textTheme.titleMedium?.copyWith(
-                                      fontSize: 19.5,
-                                      height: 1.35,
-                                      color: theme.colorScheme.onSurface,
-                                    ) ??
-                                    const TextStyle(fontSize: 19.5),
+                                style: StrikeStyle.textStyle(
+                                  theme,
+                                  fontSize: 19.5,
+                                  height: 1.35,
+                                ),
                                 textScaler: MediaQuery.textScalerOf(context),
                                 struck: check.isDoneToday,
                                 // Полупрозрачный приглушённый текст: раньше
                                 // цвет был непрозрачным, и «выполненная» фраза
                                 // оставалась такой же яркой.
-                                struckColor: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.26),
+                                struckColor: StrikeStyle.textColor(theme),
                                 // Линия берётся НЕ `outline`: он светлее
                                 // текста примерно на 15 уровней серого, и на
                                 // телефоне зачёркивание не читалось совсем.
-                                strikeColor: Colors.red.shade500.withValues(
-                                  alpha: 0.55,
-                                ),
+                                strikeColor: StrikeStyle.lineColor(theme),
                                 maxLines: null,
                               ),
                             ),

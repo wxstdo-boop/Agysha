@@ -1073,6 +1073,29 @@ Play Protect, file an appeal», support.google.com/googleplay/answer/2812853).
   `pumpAndSettle()` на бесконечных анимациях висят. Крутить время дискретными
   `pump(Duration)`.
 
+## Зачёркивание: одна змейка на всё приложение
+
+- Рисует `lib/widgets/animated_strike_text.dart`. ГЛАВНОЕ: у `Paint` обязателен
+  `..style = PaintingStyle.stroke`. Без него работает `PaintingStyle.fill`,
+  `strokeWidth`/`strokeCap` игнорируются, и `drawPath` закрывает волну в тонкую
+  замкнутую фигуру — на экране вместо толстой змейки рваная нитка в 1–3 px.
+  Именно эта строка однажды выпала, и пользователь увидел «кривое зачёркивание».
+- Переменные: толщина `max(8.5, fontSize * 0.42)`, амплитуда
+  `max(2.0, fontSize * 0.115)`, период `max(56.0, fontSize * 4.2)`, шаг
+  `max(1.2, period / 26)`. Рисуется непрерывной полилинией (`lineTo` по мелкому
+  шагу), не кубическими сегментами: у `cubicTo` на стыках перо ложилось дважды.
+- Цвета и прозрачность текста — только через `lib/widgets/strike_style.dart`
+  (`StrikeStyle.textStyle/textColor/lineColor`). Это общий вид для привычек,
+  задач и проверок реальности; тест `test/strike_line_pixels_test.dart` падает,
+  если экран снова задаёт цвет на месте.
+- Проверять вид нужно ПО ПИКСЕЛЯМ, а не словами в исходнике (иначе пропустишь
+  случай «свойство есть, но не действует», как с `PaintingStyle`). В
+  `flutter test` шрифт Ahem рисует буквы квадратами — для линии это нормально.
+  Для «посмотреть глазами» есть `tool/render_strike_preview.dart` (рендер в
+  PNG настоящими шрифтами, `/tmp/strike_preview.png`) и
+  `tool/measure_strike.py` (толщина min/med/max, размах волны, рывки).
+  Ожидание на 3× рендере: толщина ~29–30 px, волна ~15 px.
+
 ## Публикация в F-Droid / IzzyOnDroid
 
 Полная инструкция — `docs/publishing-fdroid.md`. Ключевое, чтобы не наступать
