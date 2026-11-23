@@ -288,12 +288,17 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     // Держим наклон заметным и в центре элемента (см. [_minTilt]).
     final len = target.distance;
     final Offset floored;
-    if (len > 0.02) {
-      floored = len < _minTilt ? target * (_minTilt / len) : target;
+    if (len >= _minTilt) {
+      floored = target;
     } else {
-      // Палец ровно по центру: направления нет, а наклон нужен — иначе
-      // «Сохранить» под серединой пальца остаётся плоской.
-      floored = _centerTilt * _minTilt;
+      // У самого центра направления от пальца нет: подмешиваем «вдавливание»
+      // тем сильнее, чем ближе касание к середине, — иначе случайные 1–2 px
+      // раздувались бы до полной амплитуды в случайную сторону.
+      final t = (len / _minTilt).clamp(0.0, 1.0);
+      final dir =
+          (target / math.max(len, 1e-6)) * t + _centerTilt * (1.0 - t);
+      final dl = dir.distance;
+      floored = dl > 1e-6 ? dir * (_minTilt / dl) : _centerTilt * _minTilt;
     }
     if (smooth) {
       _tilt = Offset.lerp(_tilt, floored, 0.55) ?? floored;
