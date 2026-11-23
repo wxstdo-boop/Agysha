@@ -244,11 +244,15 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
   }
 
   /// Доезд за край: та же мягкая кривая, длительность — по остатку пути.
+  ///
+  /// Коротко: после «Удалить» палец уже не ведёт карточку, и долгий доезд
+  /// читался как зависание — «свайпнул, ждёт, потом исчезло». Остаток пути
+  /// и так невелик (порог 0.24), поэтому 160–360 мс хватает с запасом.
   void _animateOut(double p) {
     _dismissPending = true;
     _move.animateTo(
       1,
-      duration: _scaled(240 + 300 * (1 - p)),
+      duration: _scaled(160 + 200 * (1 - p)),
       curve: Curves.easeOutQuint,
     );
   }

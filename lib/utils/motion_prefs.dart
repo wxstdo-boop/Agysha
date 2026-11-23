@@ -38,8 +38,9 @@ abstract final class MotionPrefs {
   /// Итог для мест без контекста.
   static bool get shouldReduceMotion => systemReduceMotion || enabled.value;
 
-  /// Vsync для вечного декоративного цикла: в режиме «Оптимизация» тикает
-  /// реже (см. [PerfPrefs.ambientEveryFrames]), но цикл продолжается.
+  /// Vsync для вечного декоративного цикла: тик раз в
+  /// [PerfPrefs.ambientEveryFrames] кадров (см. там же, почему в
+  /// «Оптимизации» частота та же).
   static TickerProvider ambient(TickerProvider inner) =>
       AmbientVsync(inner, everyFramesOf: () => PerfPrefs.ambientEveryFrames);
 

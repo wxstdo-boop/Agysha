@@ -24,8 +24,9 @@ class AmbientVsync implements TickerProvider {
   final int everyFrames;
 
   /// Живой источник частоты: читается на каждом тике, поэтому режим
-  /// «Оптимизация» (см. [PerfPrefs.ambientEveryFrames]) действует сразу,
-  /// без пересоздания контроллера. Имеет приоритет над [everyFrames].
+  /// Живой источник частоты (см. [PerfPrefs.ambientEveryFrames]) читается на
+  /// каждом тике, поэтому смена режима действует сразу, без пересоздания
+  /// контроллера. Имеет приоритет над [everyFrames].
   final int Function()? everyFramesOf;
 
   @override
