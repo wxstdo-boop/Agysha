@@ -94,7 +94,10 @@ Widget buildDragProxy(
         elevation: 8,
         shadowColor: theme.colorScheme.primary.withValues(alpha: 0.20),
         borderRadius: BorderRadius.circular(borderRadius),
-        color: theme.colorScheme.surface,
+        // Цвет КАРТОЧКИ, а не фона страницы: с `surface` поднятая
+        // карточка теряла свой тон и сливалась с фоном — при зажатии
+        // казалось, что фон «проглотил» карточку.
+        color: theme.cardTheme.color ?? theme.colorScheme.surfaceContainerLow,
         clipBehavior: Clip.none,
         child: child,
       ),

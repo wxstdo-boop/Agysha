@@ -64,7 +64,15 @@ void main() {
       isTrue,
       reason: 'выход короче входа: приложение ждёт его перед чатом',
     );
-    expect(src.contains('0.86 + 0.14 * eased'), isTrue);
+    expect(
+      src.contains('0.86 + 0.14 * eased'),
+      isFalse,
+      reason: 'вход только альфой: масштаб пересэмплировал край и мигал',
+    );
+    expect(
+      src.contains('return Opacity(opacity: eased, child: drift);'),
+      isTrue,
+    );
     expect(
       src.contains('if (e >= 0.999) return drift;'),
       isTrue,
@@ -169,9 +177,9 @@ void main() {
     );
     final src = read(overlay);
     expect(
-      src.contains('_hold.forward()'),
+      src.contains('_hold.value = 1'),
       isTrue,
-      reason: 'под пальцем качание плавно гаснет',
+      reason: 'под пальцем качание гаснет сразу, без проскальзывания',
     );
   });
 

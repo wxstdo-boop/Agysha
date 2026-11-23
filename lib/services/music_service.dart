@@ -204,6 +204,12 @@ class MusicService extends ChangeNotifier {
           await _player.removeAudioSourceAt(i);
         }
       }
+      // Новые треки в ЖИВОЙ плейлист не вставляем, пока музыка играет:
+      // ExoPlayer на вставке пересобирает очередь и на мгновение замолкает —
+      // это и читалось как «при поиске трека играющий заедает». Удаления
+      // выше уже применены (звук они не трогают), а новый трек встанет в
+      // очередь на следующем запуске или после паузы.
+      if (_playing) return;
       final present = <String>{
         for (final child in source.children) ?_sourcePath(child),
       };

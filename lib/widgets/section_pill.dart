@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 
@@ -525,16 +523,16 @@ class _SectionPillState extends State<SectionPill>
     // и плавно скользящая яркая красная плашка-индикатор выбранного раздела.
     return Padding(
       // Таблетка в Home чуть выше (под AppBar), компактный отступ.
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
+      // Отступ 16 — тот же, что у карточек разделов: таблетка стоит ровно
+      // по краям контента, а не уже него.
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
       child: Center(
-        // Ширина подстраивается под число разделов: при включённых проверках
-        // реальности их четыре, и на прежних 336 px ячейка сужалась настолько,
-        // что подписи ужимались мельче, чем в трёх-раздельной таблетке —
-        // четыре таба читались «неровнее» и теснее остальных состояний.
+        // Ширина — вся доступная, без «магических» 336/372 px: при трёх и
+        // четырёх разделах ячейки получаются одинаковыми, подписи не жмутся
+        // вразнобой, а таблетка совпадает по краям с карточками.
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final target = count >= 4 ? 372.0 : 336.0;
-            final width = math.min(target, constraints.maxWidth);
+            final width = constraints.maxWidth;
             return SizedBox(
               width: width,
               height: 54,

@@ -372,16 +372,13 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                               duration: const Duration(milliseconds: 320),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeInCubic,
+                              // Только альфа: масштаб 0.98 → 1 двигал и
+                              // перерисовывал весь экран на каждом кадре —
+                              // пустое состояние читалось как «растягивается».
                               transitionBuilder: (child, animation) =>
                                   FadeTransition(
                                     opacity: animation,
-                                    child: ScaleTransition(
-                                      scale: Tween<double>(
-                                        begin: 0.98,
-                                        end: 1.0,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
+                                    child: child,
                                   ),
                               // Таймеры живут в том же прокручиваемом
                               // списке (в его header), поэтому пустое

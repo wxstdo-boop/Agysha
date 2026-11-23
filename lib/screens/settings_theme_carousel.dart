@@ -127,11 +127,22 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
 
   int get _index => _norm(_pos.round());
 
+  /// Камора, чей значок и подпись сейчас показаны в центре. Меняется не на
+  /// каждом кадре прокрутки, а когда камора уже почти встала под указатель:
+  /// иначе при быстром вращении десяток перекрёстных затуханий накладывались
+  /// друг на друга, и центр «мигал» (mutilated → светлая и обратно).
+  /// Меняется ТОЛЬКО когда барабан встал. Пока крутится, центр держит
+  /// прежнюю тему: иначе каждый пройденный сектор запускал своё затухание,
+  /// десяток перекрёстных фейдов накладывался друг на друга — и значки
+  /// «мигали» ровно на переходах mutilated ↔ светлая.
+  int _hubIndex = 0;
+
   @override
   void initState() {
     super.initState();
     _pos = _indexOfKey(widget.selectedKey).toDouble();
     _hapticIndex = _norm(_pos.round());
+    _hubIndex = _hapticIndex;
     _spin.addListener(_onSpinTick);
   }
 
@@ -159,7 +170,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     final dist = (goal - _pos).abs();
     _spin.stop();
     if (dist < 0.02) {
-      setState(() => _pos = goal);
+      setState(() {
+        _pos = goal;
+        _hubIndex = _norm(goal.round());
+      });
       return;
     }
     _spinAnim = Tween<double>(
@@ -171,7 +185,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     );
     _spin.forward(from: 0).whenComplete(() {
       if (!mounted || token != _spinToken) return;
-      setState(() => _pos = goal);
+      setState(() {
+        _pos = goal;
+        _hubIndex = _norm(goal.round());
+      });
     });
   }
 
@@ -209,7 +226,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     if (dist < 0.02) {
       // Барабан уже стоит на каморе: не крутим пустую анимацию, которая
       // потом 200 мс «висит» у цели и читается как «не доводится».
-      _pos = target;
+      setState(() {
+        _pos = target;
+        _hubIndex = _norm(target.round());
+      });
       widget.onCommit(widget.entries[_index]);
       return;
     }
@@ -224,7 +244,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     );
     _spin.forward(from: 0).whenComplete(() {
       if (!mounted || token != _spinToken) return;
-      _pos = target;
+      setState(() {
+        _pos = target;
+        _hubIndex = _norm(target.round());
+      });
       widget.onCommit(widget.entries[_index]);
     });
   }
@@ -327,7 +350,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final entry = widget.entries[_index];
+    final entry = widget.entries[_hubIndex];
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -376,8 +399,9 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                             // Указатель — единственный цветной акцент барабана:
                             // приглушённо-красный, чтобы сразу читался как
                             // стрелка, но не спорил с монохромными каморами.
-                            color: const Color(0xFFFF3B30)
-                                .withValues(alpha: 0.55),
+                            color: const Color(
+                              0xFFFF3B30,
+                            ).withValues(alpha: 0.55),
                           ),
                         ),
                       ],
@@ -510,10 +534,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
             ),
             child: Center(
               child: AnimatedSwitcher(
-                // Короткое чистое затухание: масштаб и 300 мс держали старый
-                // и новый значок видимыми одновременно, и они «перекрывали»
-                // друг друга при каждой смене каморы.
-                duration: const Duration(milliseconds: 150),
+                // Чистое перекрёстное затухание без масштаба: значок в центре
+                // не «выпрыгивает», а спокойно растворяется в новый. 240 мс —
+                // столько же, сколько у остальных плавных смен в приложении.
+                duration: const Duration(milliseconds: 240),
                 switchInCurve: Curves.easeOut,
                 switchOutCurve: Curves.easeIn,
                 transitionBuilder: (child, anim) =>
@@ -544,21 +568,27 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
         ),
       ),
     );
-    if (!entry.specialMutilated) return hubBody;
-    // Пасхалка MUTILATED: долгое нажатие по центру.
+    // Пасхалка MUTILATED: долгое нажатие по центру. Обёртка стоит здесь
+    // ВСЕГДА, а не только на MUTILATED: при вставке/удалении виджета над
+    // хабом Flutter не может сопоставить элементы, пересобирает поддерево с
+    // нуля — и значок в центре менялся одним кадром вместо плавного
+    // затухания. Именно это читалось как «с MUTILATED на светлую значки
+    // неплавно сменяются».
     return _LongPressChip(
       duration: const Duration(seconds: 10),
-      onLongPress: () {
-        if (!mounted) return;
-        showBeautifulSnackBar(
-          context,
-          message:
-              'Вы элегантны? 🥀 — Are you elegant? — Êtes-vous élégant·e ?',
-          icon: Icons.diamond_outlined,
-          iconColor: const Color(0xFFFFD166),
-          duration: const Duration(seconds: 3),
-        );
-      },
+      onLongPress: entry.specialMutilated
+          ? () {
+              if (!mounted) return;
+              showBeautifulSnackBar(
+                context,
+                message:
+                    'Вы элегантны? 🥀 — Are you elegant? — Êtes-vous élégant·e ?',
+                icon: Icons.diamond_outlined,
+                iconColor: const Color(0xFFFFD166),
+                duration: const Duration(seconds: 3),
+              );
+            }
+          : null,
       child: hubBody,
     );
   }

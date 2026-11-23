@@ -273,6 +273,8 @@ const Map<String, String> _fr = {
       'Chaque barre représente un jour. Sa hauteur indique le travail accompli : habitudes en bas, tâches en haut. La colonne d’aujourd’hui est mise en évidence ; l’étoile marque le meilleur jour.',
   'monthChartDays': 'jours faits',
   'rcReset': 'Réinitialiser les stats',
+  'rcAddTimeHint': 'Heure exacte du contrôle',
+  'rcTimeHint': 'Touche pour changer l’heure',
   'rcResetBody': 'Réinitialiser tous les compteurs de vérifications à zéro ?',
   'rcExit': 'Quitter',
   'disableRcTitle': 'Désactiver les vérifications de réalité ?',

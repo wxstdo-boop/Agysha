@@ -190,8 +190,9 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
       );
       return;
     }
-    final result = await Navigator.of(context)
-        .push<RealityCheck>(slideUpRoute(const AddRealityCheckScreen()));
+    final result = await Navigator.of(
+      context,
+    ).push<RealityCheck>(slideUpRoute(const AddRealityCheckScreen()));
     if (result != null) {
       _service.add(result);
       _scheduleReminders();
@@ -343,68 +344,75 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                 duration: const Duration(milliseconds: 320),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(
-                      begin: 0.985,
-                      end: 1.0,
-                    ).animate(animation),
-                    child: child,
-                  ),
-                ),
-                child: RefreshIndicator(
-                  // Кружок выезжает из-под таблетки разделов, а не за неё.
-                  edgeOffset: kSectionRefreshEdgeOffset,
-                  onRefresh: _onRefresh,
-                  child: CustomScrollView(
-                    key: ValueKey(hasChecks ? 'rc_list' : 'rc_empty'),
-                    controller: _pillCtrl,
-                    // Потянуть вниз для обновления работает всегда — даже
-                    // когда контента мало (раньше жест «не ловился»).
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: [
-                      // Отступ под стекло таблетки разделов: контент в покое
-                      // начинается под капсулой и при прокрутке уходит под неё.
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: kSectionPillSlotHeight),
-                      ),
-                      if (!hasChecks) ...[
-                        // Пустой экран целиком находится в общем scroll-контенте:
-                        // совет больше не делит ограниченное место с футером и не
-                        // залезает под него на маленьких экранах.
-                        SliverToBoxAdapter(
-                          child: _buildSettingsCard(context, theme),
+                // Только прозрачность, без масштаба: масштабирование
+                // целого скролла читалось как «пустой экран растягивается»,
+                // а ещё заставляло телефон перерисовывать весь экран
+                // каждый кадр перехода.
+                transitionBuilder: (child, animation) =>
+                    FadeTransition(opacity: animation, child: child),
+                child: KeyedSubtree(
+                  // Ключ обязан стоять на ПРЯМОМ ребёнке AnimatedSwitcher.
+                  // Раньше он висел на CustomScrollView внутри
+                  // RefreshIndicator: типы детей совпадали, и переключение
+                  // «пусто ↔ список» вообще не анимировалось — экран
+                  // появлялся и исчезал рывком.
+                  key: ValueKey(hasChecks ? 'rc_list_root' : 'rc_empty_root'),
+                  child: RefreshIndicator(
+                    // Кружок выезжает из-под таблетки разделов, а не за неё.
+                    edgeOffset: kSectionRefreshEdgeOffset,
+                    onRefresh: _onRefresh,
+                    child: CustomScrollView(
+                      key: ValueKey(hasChecks ? 'rc_list' : 'rc_empty'),
+                      controller: _pillCtrl,
+                      // Потянуть вниз для обновления работает всегда — даже
+                      // когда контента мало (раньше жест «не ловился»).
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        // Отступ под стекло таблетки разделов: контент в покое
+                        // начинается под капсулой и при прокрутке уходит под неё.
+                        const SliverToBoxAdapter(
+                          child: SizedBox(height: kSectionPillSlotHeight),
                         ),
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 12, bottom: 8),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: _buildEmptyChildren(context, theme),
+                        if (!hasChecks) ...[
+                          // Пустой экран целиком находится в общем scroll-контенте:
+                          // совет больше не делит ограниченное место с футером и не
+                          // залезает под него на маленьких экранах.
+                          SliverToBoxAdapter(
+                            child: _buildSettingsCard(context, theme),
+                          ),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                top: 12,
+                                bottom: 8,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: _buildEmptyChildren(context, theme),
+                              ),
                             ),
                           ),
-                        ),
-                        SliverToBoxAdapter(child: _footer(context, theme)),
-                      ] else ...[
-                        SliverToBoxAdapter(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildSettingsCard(context, theme),
-                              ..._buildListChildren(context, theme, checks),
-                            ],
+                          SliverToBoxAdapter(child: _footer(context, theme)),
+                        ] else ...[
+                          SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildSettingsCard(context, theme),
+                                ..._buildListChildren(context, theme, checks),
+                              ],
+                            ),
                           ),
-                        ),
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Align(
-                            alignment: Alignment.bottomCenter,
-                            child: _footer(context, theme),
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: _footer(context, theme),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -452,9 +460,14 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
               // только вдавливается, но и живо наклоняется в сторону пальца.
               // Раньше здесь был SmoothHover — уменьшение без 3D, и проверки
               // заметно выбивались из остального приложения.
-              pressedScale: 0.98,
+              pressedScale: 0.965,
               enableTilt: true,
-              pressedOpacity: 0.96,
+              maxTiltAngle: 0.26,
+              pressedOpacity: 0.94,
+              pressOverlay: pressGloss(
+                BorderRadius.circular(20),
+                strength: 0.10,
+              ),
               child: Card(
                 key: ValueKey(check.id),
                 clipBehavior: Clip.antiAlias,
@@ -761,10 +774,26 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                             ),
                           ),
                           const SizedBox(height: 6),
-                          ActionChip(
-                            avatar: const Icon(Icons.add, size: 16),
-                            label: Text(Translations.t('addTime', context)),
-                            onPressed: _addExactTime,
+                          SmoothTooltip(
+                            message: Translations.t(
+                              'rcAddTimeHint',
+                              context,
+                              'Добавить точное время проверки',
+                            ),
+                            preferredAbove: false,
+                            child: PressScale(
+                              pressedScale: 0.94,
+                              enableTilt: true,
+                              maxTiltAngle: 0.14,
+                              pressTint: theme.colorScheme.primary,
+                              pressTintStrength: 0.08,
+                              pressTintRadius: BorderRadius.circular(20),
+                              child: ActionChip(
+                                avatar: const Icon(Icons.add, size: 16),
+                                label: Text(Translations.t('addTime', context)),
+                                onPressed: _addExactTime,
+                              ),
+                            ),
                           ),
                         ],
                       )
@@ -948,56 +977,64 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
     required TimeOfDay time,
     required VoidCallback onTap,
   }) {
-    return PressScale(
-      pressedScale: 0.94,
-      enableTilt: true,
-      maxTiltAngle: 0.14,
-      pressTint: theme.colorScheme.primary,
-      pressTintStrength: 0.08,
-      pressTintRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: 6),
-              // Время меняется плавно (fade + лёгкий сдвиг), а не прыгает.
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 260),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.25),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
+    return SmoothTooltip(
+      message: Translations.t(
+        'rcTimeHint',
+        context,
+        'Нажми, чтобы поменять время',
+      ),
+      preferredAbove: true,
+      child: PressScale(
+        pressedScale: 0.94,
+        enableTilt: true,
+        maxTiltAngle: 0.14,
+        pressTint: theme.colorScheme.primary,
+        pressTintStrength: 0.08,
+        pressTintRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                child: Text(
-                  _fmtTimeOfDay(time),
-                  key: ValueKey('${time.hour}:${time.minute}'),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                const SizedBox(width: 6),
+                // Время меняется плавно (fade + лёгкий сдвиг), а не прыгает.
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 260),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.25),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: Text(
+                    _fmtTimeOfDay(time),
+                    key: ValueKey('${time.hour}:${time.minute}'),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1033,7 +1070,17 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
 class _AnimatedCount extends StatefulWidget {
   final int value;
   final TextStyle style;
-  const _AnimatedCount({required this.value, required this.style});
+
+  /// Пока палец на ползунке, цифра меняется без «ролика»: анимация на
+  /// каждый шаг перетаскивания съедала кадры, и ползунок отзывался
+  /// с задержкой. Ролик включается на отпускании.
+  final bool animate;
+
+  const _AnimatedCount({
+    required this.value,
+    required this.style,
+    this.animate = true,
+  });
 
   @override
   State<_AnimatedCount> createState() => _AnimatedCountState();
@@ -1056,6 +1103,9 @@ class _AnimatedCountState extends State<_AnimatedCount> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.animate) {
+      return Text('${widget.value}', style: widget.style);
+    }
     return RollingNumber(
       value: '${widget.value}',
       delta: (widget.value - _prev).sign,
@@ -1115,6 +1165,7 @@ class _PerDayControlState extends State<_PerDayControl> {
         // Цифра меняется плавным роликом, а не «щёлкает».
         _AnimatedCount(
           value: _drag.round().clamp(5, 15),
+          animate: !_dragging,
           style:
               theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.primary,
@@ -1123,22 +1174,26 @@ class _PerDayControlState extends State<_PerDayControl> {
               const TextStyle(),
         ),
         Expanded(
-          child: Slider(
-            value: _drag.clamp(_min, _max),
-            min: _min,
-            max: _max,
-            onChanged: (v) {
-              _dragging = true;
-              setState(() => _drag = v);
-              widget.onPreview(v.round());
-            },
-            // Сохраняем и перепланируем уведомления только по окончании
-            // жеста — иначе слабый телефон «спотыкался».
-            onChangeEnd: (v) {
-              _dragging = false;
-              setState(() => _drag = v.roundToDouble());
-              widget.onCommit(v.round());
-            },
+          // Слайдер в своём слое: иначе на каждом его кадре заново
+          // размывалась тень карточки — отсюда «лаганый» ползунок.
+          child: RepaintBoundary(
+            child: Slider(
+              value: _drag.clamp(_min, _max),
+              min: _min,
+              max: _max,
+              onChanged: (v) {
+                _dragging = true;
+                setState(() => _drag = v);
+                widget.onPreview(v.round());
+              },
+              // Сохраняем и перепланируем уведомления только по окончании
+              // жеста — иначе слабый телефон «спотыкался».
+              onChangeEnd: (v) {
+                _dragging = false;
+                setState(() => _drag = v.roundToDouble());
+                widget.onCommit(v.round());
+              },
+            ),
           ),
         ),
         Text(

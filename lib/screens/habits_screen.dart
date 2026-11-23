@@ -214,6 +214,10 @@ class _HabitsScreenState extends State<HabitsScreen>
   final ValueNotifier<bool> _fabVisible = ValueNotifier<bool>(true);
   final Map<String, bool> _expandedNotes = {};
   Timer? _dayTimer;
+
+  /// Сутки, для которых сейчас нарисован экран. Нужны, чтобы точки серии
+  /// гасли в полночь, даже если ни одна привычка при этом не изменилась.
+  DateTime _dayStamp = DateTime(2000);
   bool _perfectionismMode = false;
   bool _perfScreenOpened = false;
 
@@ -291,6 +295,7 @@ class _HabitsScreenState extends State<HabitsScreen>
     // показывала ВЧЕРАШНЮЮ галочку как сегодняшнюю. Иначе первый тап сегодня
     // «съедается» как отмена вчерашней отметки, и стрик выглядит сбитым
     // (пользователь видит «считает как два»).
+    _dayStamp = HabitService.mskToday();
     _dayTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
       final before = _service.habits
@@ -300,7 +305,17 @@ class _HabitsScreenState extends State<HabitsScreen>
       final after = _service.habits
           .map((h) => '${h.id}:${h.doneToday}:${h.streak}')
           .join('|');
-      if (before != after) setState(() {});
+      // Смена суток сама по себе может не изменить ни doneToday, ни streak
+      // (привычка сегодня ещё не отмечена) — а точки серии всё равно
+      // обязаны погаснуть, если вчерашний день пропущен. Раньше экран в
+      // этом случае не пересобирался, и стрик «не исчезал» после пропуска.
+      final today = HabitService.mskToday();
+      final dayChanged =
+          today.year != _dayStamp.year ||
+          today.month != _dayStamp.month ||
+          today.day != _dayStamp.day;
+      if (dayChanged) _dayStamp = today;
+      if (before != after || dayChanged) setState(() {});
     });
   }
 
@@ -815,16 +830,13 @@ class _HabitsScreenState extends State<HabitsScreen>
                               duration: const Duration(milliseconds: 320),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeInCubic,
+                              // Только альфа: масштаб 0.98 → 1 двигал и
+                              // перерисовывал весь экран на каждом кадре —
+                              // пустое состояние читалось как «растягивается».
                               transitionBuilder: (child, animation) =>
                                   FadeTransition(
                                     opacity: animation,
-                                    child: ScaleTransition(
-                                      scale: Tween<double>(
-                                        begin: 0.98,
-                                        end: 1.0,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
+                                    child: child,
                                   ),
                               child: habits.isNotEmpty
                                   ? SizedBox.expand(
@@ -1531,10 +1543,12 @@ class _HabitsScreenState extends State<HabitsScreen>
                                       // 6, при стрике 1 не показывалось ничего,
                                       // хотя стрик не отменялся. Счётчик и точки
                                       // теперь всегда совпадают.
-                                      final effectiveStreak =
-                                          habit.lastDoneDate == null
-                                          ? 0
-                                          : habit.streak;
+                                      // Серия читается через сервис: если
+                                      // после последней отметки пропущен день,
+                                      // точки гаснут сразу, не дожидаясь
+                                      // таймера смены суток.
+                                      final effectiveStreak = _service
+                                          .displayStreak(habit);
                                       final isDone =
                                           effectiveStreak > (6 - index);
                                       return AnimatedContainer(

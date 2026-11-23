@@ -192,7 +192,10 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     if (size == null) return 0.0;
     final longest = math.max(size.width, size.height);
     if (longest <= 0) return 0.0;
-    return math.min(0.0012, 0.072 / longest);
+    // 0.11 вместо 0.072: у широких карточек (~360 px) перспектива выходила
+    // 0.0002, и наклон на них читался как «ничего не происходит» — на
+    // проверках это и заметил владелец. Край при таком значении ещё цел.
+    return math.min(0.0012, 0.11 / longest);
   }
 
   @override

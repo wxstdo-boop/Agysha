@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
@@ -501,7 +502,51 @@ class _ProfileScreenState extends State<ProfileScreen>
     'brazilian phonk AND mediatype:audio AND format:(MP3)',
     'memphis phonk AND mediatype:audio AND format:(MP3)',
     'phonk bass AND mediatype:audio AND format:(MP3)',
+    'hardtekk AND mediatype:audio AND format:(MP3)',
+    'night drive phonk AND mediatype:audio AND format:(MP3)',
+    'phonk instrumental AND mediatype:audio AND format:(MP3)',
   ];
+
+  /// Слова, по которым видно сборник, часовой микс или подкаст. Такие
+  /// записи формально «audio», но это не трек: раньше фильтр их пропускал,
+  /// и в подборку попадал случайный кусок чужого микса.
+  static const List<String> _junkWords = [
+    'mix',
+    'compilation',
+    'playlist',
+    'podcast',
+    'radio show',
+    'full album',
+    'best of',
+    'collection',
+    'live set',
+  ];
+
+  /// Годится ли запись archive.org как отдельный трек: есть человеческое
+  /// название из нескольких слов и это не сборник/микс.
+  bool _isPlayableTrackTitle(String title, String id) {
+    final t = '${title.toLowerCase()} ${id.toLowerCase()}';
+    if (t.trim().isEmpty) return false;
+    // «1 hour», «3 hrs» — это микс, а не трек. Отдельно от слов ниже:
+    // «Golden Hour» — нормальное название песни.
+    if (RegExp(r'\b\d+\s*(hour|hours|hrs?)\b').hasMatch(t)) return false;
+    for (final w in _junkWords) {
+      // По границе слова: «remix» — настоящий трек, «mix» в конце
+      // названия — уже сборник.
+      final re = RegExp(
+        r'(^|[^\p{L}])' + RegExp.escape(w) + r'([^\p{L}]|$)',
+        unicode: true,
+      );
+      if (re.hasMatch(t)) return false;
+    }
+    // Название из одного слова-идентификатора («audio_2024_05_11») — это
+    // запись с диктофона, а не песня: требуем минимум два слова с буквами.
+    final words = title
+        .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+        .where((w) => w.length > 1)
+        .length;
+    return words >= 2;
+  }
 
   bool _looksLikePhonk(String text) {
     final t = text.toLowerCase();
@@ -524,7 +569,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         'q': q,
         'fl[]': ['identifier', 'title'],
         'sort[]': 'downloads desc',
-        'rows': '30',
+        'rows': '50',
         'output': 'json',
       });
       final searchRes = await http
@@ -537,10 +582,21 @@ class _ProfileScreenState extends State<ProfileScreen>
         final id = d['identifier']?.toString() ?? '';
         if (id.isEmpty) return false;
         final title = d['title']?.toString() ?? '';
-        return _looksLikePhonk('$title $id');
-      }).toList()..shuffle();
+        return _isPlayableTrackTitle(title, id);
+      }).toList();
+      // Сначала те, где жанр прямо в названии или идентификаторе: они
+      // точнее попадают в фонк. Остальные — запасной вариант, но тоже
+      // настоящие треки с человеческими названиями.
+      final onGenre = <dynamic>[];
+      final rest = <dynamic>[];
+      for (final d in candidates) {
+        final t = '${d['title']} ${d['identifier']}';
+        (_looksLikePhonk(t) ? onGenre : rest).add(d);
+      }
+      onGenre.shuffle();
+      rest.shuffle();
 
-      for (final doc in candidates.take(8)) {
+      for (final doc in [...onGenre, ...rest].take(12)) {
         if (DateTime.now().isAfter(deadline)) break;
         final id = doc['identifier'].toString();
         final metaUri = Uri.parse('https://archive.org/metadata/$id/files');
@@ -576,7 +632,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         if (dlRes.statusCode != 200 || dlRes.bodyBytes.length < 200000) {
           continue;
         }
-        final fp = _fingerprintOf(dlRes.bodyBytes);
+        final fp = await _fingerprintAsync(dlRes.bodyBytes);
         if (existingFingerprints.contains(fp) ||
             _service.hasTrackWithFingerprint(fp)) {
           continue;
@@ -648,13 +704,13 @@ class _ProfileScreenState extends State<ProfileScreen>
 
       if (downloadedBytes != null) {
         finalAudioBytes = downloadedBytes;
-        fingerprint = _fingerprintOf(finalAudioBytes);
+        fingerprint = await _fingerprintAsync(finalAudioBytes);
       } else {
         if (!mounted) return;
         _PhonkItem? catalogCandidate;
         for (final item in _PhonkCatalog.items) {
-          final itemWav = _synthesizePhonkWav(bpm: item.bpm, seed: item.seed);
-          final itemFp = _fingerprintOf(itemWav);
+          final itemWav = await _synthWavAsync(bpm: item.bpm, seed: item.seed);
+          final itemFp = await _fingerprintAsync(itemWav);
           if (!existingTitles.contains(item.title.toLowerCase().trim()) &&
               !existingFingerprints.contains(itemFp) &&
               !_service.hasTrackWithFingerprint(itemFp)) {
@@ -674,20 +730,24 @@ class _ProfileScreenState extends State<ProfileScreen>
               uniqueCounter * 73 +
               mode * 137 +
               DateTime.now().millisecond;
-          finalAudioBytes = _synthesizePhonkWav(bpm: chosenBpm, seed: altSeed);
-          fingerprint = _fingerprintOf(finalAudioBytes);
+          finalAudioBytes = await _synthWavAsync(bpm: chosenBpm, seed: altSeed);
+          fingerprint = await _fingerprintAsync(finalAudioBytes);
           int retry = 0;
           while ((existingFingerprints.contains(fingerprint) ||
                   _service.hasTrackWithFingerprint(fingerprint)) &&
-              retry < 60) {
+              // 6 попыток, а не 60: каждый заход — полный синтез WAV в
+              // отдельном изоляте, и десятки подряд грели телефон так, что
+              // играющая музыка «заедала». Шести хватает, чтобы отпечаток
+              // разошёлся с уже сохранёнными.
+              retry < 6) {
             retry++;
             final rerollSeed =
                 altSeed + retry * 397 + DateTime.now().millisecond;
-            finalAudioBytes = _synthesizePhonkWav(
+            finalAudioBytes = await _synthWavAsync(
               bpm: chosenBpm,
               seed: rerollSeed,
             );
-            fingerprint = _fingerprintOf(finalAudioBytes);
+            fingerprint = await _fingerprintAsync(finalAudioBytes);
           }
         }
       }
@@ -1038,6 +1098,13 @@ class _ProfileScreenState extends State<ProfileScreen>
     final factor = math.pow(2.0, pitchShift / 12.0).toDouble();
     return base.map((f) => f > 0 ? f * factor : 0.0).toList();
   }
+
+  /// Синтез в отдельном изоляте. WAV на десятки секунд — это сотни тысяч
+  /// сэмплов и десятки миллисекунд счёта на главном изоляте; во время
+  /// поиска это «съедало» кадры, и играющий трек с полосой прогресса
+  /// заедали ровно в момент нажатия «найти».
+  Future<List<int>> _synthWavAsync({required double bpm, required int seed}) =>
+      compute(_synthWavTask, (bpm: bpm, seed: seed));
 
   /// Синтезирует мощный, сатурированный 16-битный 44.1 кГц PCM WAV Drift Phonk луп (32 шага / 2 такта)
   /// в одном из 4 уникальных поджанров:
@@ -1594,6 +1661,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   /// SHA-256 содержимого файла — «отпечаток» трека для защиты от дублей.
+  /// Отпечаток в изоляте: SHA-256 по 5–14 МБ файла на главном изоляте
+  /// подвешивал кадры на время поиска.
+  static Future<String> _fingerprintAsync(List<int> bytes) =>
+      compute(_fingerprintTask, bytes);
+
   static String _fingerprintOf(List<int> bytes) {
     final hash = sha256.convert(bytes);
     return hash.toString();
@@ -1804,5 +1876,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
     );
   }
-
 }
+
+/// Изолят-обёртка над синтезом: [compute] требует функцию верхнего уровня,
+/// а сам синтезатор — статический метод состояния экрана.
+List<int> _synthWavTask(({double bpm, int seed}) args) =>
+    _ProfileScreenState._synthesizePhonkWav(bpm: args.bpm, seed: args.seed);
+
+String _fingerprintTask(List<int> bytes) =>
+    _ProfileScreenState._fingerprintOf(bytes);

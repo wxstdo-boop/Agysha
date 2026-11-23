@@ -265,6 +265,8 @@ const Map<String, String> _en = {
       'Each bar is one day. Its height is how much got done — habits at the bottom, tasks on top. Today’s column is highlighted; the star marks the best day.',
   'monthChartDays': 'days done',
   'rcReset': 'Reset stats',
+  'rcAddTimeHint': 'Exact check time',
+  'rcTimeHint': 'Tap to change the time',
   'rcResetBody': 'Reset all check counts to zero?',
   'rcExit': 'Exit',
   'disableRcTitle': 'Disable reality checks?',

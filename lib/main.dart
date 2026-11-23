@@ -702,6 +702,15 @@ void overlayMain() {
         fadeOutOverlayFromHost();
         return;
       }
+      if (cmd == 'reset_overlay') {
+        resetOverlayFromHost();
+        return;
+      }
+      // Команда главному движку («покажи нормальный чат Ады»): пузырю она
+      // не адресована. Без явного выхода она проваливалась в общий сброс
+      // ниже, пузырь заново начинал появление — со стороны это и было
+      // мигание при каждом тапе.
+      if (cmd == kOpenAdaChatCmd) return;
       if (cmd == 'sync_model') {
         final l = msg['label'];
         if (l is String) {

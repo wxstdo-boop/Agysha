@@ -158,8 +158,9 @@ class _AdaBubbleState extends State<_AdaBubble>
     WidgetsBinding.instance.addObserver(this);
     unawaited(_restoreAvatar());
     // Окно прозрачное: до первого кадра в нём ничего не нарисовано, поэтому
-    // «выезд» целиком рисует Dart — короткий выдох альфы 0 → 1 и масштаб
-    // 0.86 → 1.
+    // «выезд» целиком рисует Dart — мягкий выдох альфы 0 → 1. Масштаба здесь
+    // нет намеренно: растяжение полупрозрачной текстуры по чужым обоям
+    // пересэмплирует край и читается как мигание.
     _appear.forward(from: 0);
     // Качание идёт всегда: любая остановка — прыжок в другую точку синуса.
     _drift.repeat();
@@ -194,7 +195,17 @@ class _AdaBubbleState extends State<_AdaBubble>
     live._hold.value = 0;
     live._press.value = 0;
     if (!live._drift.isAnimating) live._drift.repeat();
-    live._appear.forward(from: 0);
+    // Старт проявления — не в тот же кадр, а через короткую паузу: команда
+    // «покажись» приходит ДО того, как окно оверлея реально добавлено в
+    // оконный менеджер. Если запустить затухание сразу, анимация успевает
+    // закончиться на невидимом окне и пузырь выезжает уже полностью
+    // непрозрачным — это и читалось как «появляется неплавно». Теперь окно
+    // успевает показаться на прозрачном кадре, и дальше идёт честный фейд.
+    live._appear.value = 0;
+    Timer(const Duration(milliseconds: 80), () {
+      if (!identical(_live, live) || !live.mounted) return;
+      if (live._appear.value <= 0.001) live._appear.forward();
+    });
     unawaited(live._restoreAvatar());
   }
 
@@ -260,9 +271,10 @@ class _AdaBubbleState extends State<_AdaBubble>
   void _onDown(PointerDownEvent event) {
     _downAt = event.position;
     _downTime = DateTime.now();
-    // Под пальцем качание гаснет, но не обрывается: контроллер продолжает
-    // идти, множитель плавно уводит смещение в ноль.
-    _hold.forward();
+    // Качание гасим МГНОВЕННО, а не за 160 мс: пока пузырь «догонял» палец,
+    // круг уезжал из-под касания — это и читалось как «дёргается/мигает».
+    // Контроллер фазы продолжает идти, поэтому отпускание не даёт прыжка.
+    _hold.value = 1;
     _press.forward();
   }
 
@@ -274,6 +286,10 @@ class _AdaBubbleState extends State<_AdaBubble>
     _hold.reverse();
     _press.reverse();
     if (downAt == null || downTime == null) return;
+    // Тап по пузырю, который ещё не дорисовался, раньше молча терялся
+    // (IgnorePointer до половины анимации) — со стороны это выглядело как
+    // «нажал, мигнуло и ничего». Ждём только полного появления.
+    if (_appear.value < 0.999) return;
     final moved = (event.position - downAt).distance;
     final held = DateTime.now().difference(downTime);
     if (moved <= _tapSlop && held <= _tapTime) unawaited(_openChat());
@@ -315,17 +331,11 @@ class _AdaBubbleState extends State<_AdaBubble>
           // Слой альфы живёт только пока идёт вход или выход: в покое его нет.
           if (e >= 0.999) return drift;
           final eased = Curves.easeOutCubic.transform(e.clamp(0.0, 1.0));
-          return IgnorePointer(
-            ignoring: eased < 0.5,
-            child: Opacity(
-              opacity: eased,
-              child: Transform.scale(
-                scale: 0.86 + 0.14 * eased,
-                alignment: Alignment.center,
-                child: drift,
-              ),
-            ),
-          );
+          // Только альфа. Масштаб 0.86 → 1 заставлял каждый кадр
+          // пересэмплировать полупрозрачную текстуру круга поверх чужих
+          // обоев — край «дышал» и это читалось как мигание. Плавность
+          // здесь даёт кривая, а не зум.
+          return Opacity(opacity: eased, child: drift);
         },
         child: Center(child: _bubbleBody()),
       ),

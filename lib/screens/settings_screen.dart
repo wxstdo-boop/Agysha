@@ -72,7 +72,12 @@ part 'settings_section_diagnostics.dart';
 class _LongPressChip extends StatefulWidget {
   final Widget child;
   final Duration duration;
-  final VoidCallback onLongPress;
+
+  /// null — пасхалка выключена. Обёртка всё равно остаётся в дереве: она
+  /// должна быть в одном и том же месте при любой теме, иначе при переходе
+  /// на MUTILATED и обратно поддерево пересобирается с нуля и значок в
+  /// центре барабана подменяется одним кадром вместо плавного затухания.
+  final VoidCallback? onLongPress;
 
   const _LongPressChip({
     required this.child,
@@ -89,8 +94,10 @@ class _LongPressChipState extends State<_LongPressChip> {
 
   void _start() {
     _timer?.cancel();
+    final callback = widget.onLongPress;
+    if (callback == null) return;
     _timer = Timer(widget.duration, () {
-      widget.onLongPress();
+      callback();
       _timer = null;
     });
   }

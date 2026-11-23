@@ -182,29 +182,22 @@ class PremiumEmptyState extends StatelessWidget {
     );
 
     final header = this.header;
-    // С таблеткой: таблетка сверху (как в списке), карточка-совет по центру
-    // оставшегося места. Без таблетки — весь блок по центру, как было.
+    // Карточка стоит в общем скролле экрана и прижата к верху, как и список:
+    // раньше она центрировалась в собственном SingleChildScrollView, и при
+    // смене «список ↔ пусто» контент уезжал вниз-вверх — это и читалось как
+    // «пустой экран растягивается». Вложенный скролл убран заодно: жест
+    // теперь всегда забирает внешний список.
     if (header == null) {
-      return Center(
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-          child: card,
-        ),
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+        child: card,
       );
     }
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         header,
-        Expanded(
-          child: Center(
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-              child: card,
-            ),
-          ),
-        ),
+        Padding(padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), child: card),
       ],
     );
   }

@@ -69,6 +69,12 @@ public class OverlayService extends Service implements View.OnTouchListener {
     private Handler mAnimationHandler = new Handler();
     private float lastX, lastY;
     private float dragPositionX, dragPositionY;
+    // Пока палец ведёт пузырь, окно НЕ перекладываем: сдвигаем уже готовую
+    // поверхность транслейтом. updateViewLayout на каждом MOVE заставлял
+    // WindowManager заново раскладывать окно с Flutter-поверхностью, и круг
+    // догонял палец рывками — со стороны это читалось как «торможенно».
+    private int dragBaseX, dragBaseY;
+    private float dragTranslationX, dragTranslationY;
     private int lastYPosition;
     private boolean dragging;
     /** Время касания: тап без движения открывает чат. */
@@ -637,6 +643,10 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 lastY = event.getRawY();
                 dragPositionX = params.x;
                 dragPositionY = params.y;
+                dragBaseX = params.x;
+                dragBaseY = params.y;
+                dragTranslationX = 0f;
+                dragTranslationY = 0f;
                 tapDownAtMs = System.currentTimeMillis();
                 break;
             case MotionEvent.ACTION_MOVE:
@@ -658,9 +668,11 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 pendingMoveX = Math.round(dragPositionX);
                 pendingMoveY = Math.round(dragPositionY);
                 dragging = true;
-                applyMoveNow();
+                applyDragTranslation();
                 break;
             case MotionEvent.ACTION_UP:
+                if (dragging) commitDragTranslation();
+                dragging = false;
                 lastYPosition = Math.round(dragPositionY);
                 // Тап по пузырю открываем и отсюда: Dart-оверлей мог не
                 // получить событие (окно только что показалось, движок
@@ -675,6 +687,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 break;
             case MotionEvent.ACTION_CANCEL:
                 tapDownAtMs = 0;
+                if (dragging) commitDragTranslation();
+                dragging = false;
                 lastYPosition = Math.round(dragPositionY);
                 if (!WindowSetup.positionGravity.equals("none")) {
                     mTrayTimerTask = new TrayAnimationTimerTask();
@@ -744,6 +758,44 @@ public class OverlayService extends Service implements View.OnTouchListener {
      * «перемещается тормозно». Записываем только когда позиция реально
      * изменилась, чтобы не гонять лишний layout.
      */
+    /**
+     * Сдвиг во время жеста: транслейт готовой поверхности, без пересборки окна.
+     * Края экрана держим здесь же, чтобы пузырь не «выпал» за границу до
+     * отпускания пальца.
+     */
+    private void applyDragTranslation() {
+        final FlutterView view = flutterView;
+        if (view == null || !viewAttached) return;
+        final int w = Math.max(1, view.getWidth());
+        final int h = Math.max(1, view.getHeight());
+        final int screenW = mResources.getDisplayMetrics().widthPixels;
+        final int screenH = mResources.getDisplayMetrics().heightPixels;
+        float tx = pendingMoveX - dragBaseX;
+        float ty = pendingMoveY - dragBaseY;
+        tx = Math.max(-dragBaseX, Math.min(tx, screenW - w - dragBaseX));
+        ty = Math.max(-dragBaseY, Math.min(ty, screenH - h - dragBaseY));
+        dragTranslationX = tx;
+        dragTranslationY = ty;
+        view.setTranslationX(tx);
+        view.setTranslationY(ty);
+    }
+
+    /**
+     * Отпустили: окно встаёт в конечную точку, а сдвиг снимается в том же
+     * кадре — визуально пузырь не прыгает.
+     */
+    private void commitDragTranslation() {
+        final FlutterView view = flutterView;
+        if (view == null) return;
+        pendingMoveX = dragBaseX + Math.round(dragTranslationX);
+        pendingMoveY = dragBaseY + Math.round(dragTranslationY);
+        applyMoveNow();
+        view.setTranslationX(0f);
+        view.setTranslationY(0f);
+        dragTranslationX = 0f;
+        dragTranslationY = 0f;
+    }
+
     private void applyMoveNow() {
         final WindowManager manager = windowManager;
         final FlutterView view = flutterView;

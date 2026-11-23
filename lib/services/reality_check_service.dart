@@ -201,8 +201,10 @@ class RealityCheckService extends ChangeNotifier {
   /// Мгновенное обновление во время драга ползунка: без записи в JSON
   /// на каждый пиксель (это и было причиной «прыжков» на слабых телефонах).
   void setChecksPerDayPreview(int count) {
+    // Только запоминаем: во время перетаскивания ползунка НЕ уведомляем
+    // слушателей. Раньше каждый пиксель движения пересобирал весь экран
+    // проверок вместе со списком карточек — ползунок «залипал».
     _checksPerDay = count.clamp(5, 15);
-    notifyListeners();
   }
 
   void setChecksPerDay(int count) {

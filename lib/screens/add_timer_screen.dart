@@ -2,7 +2,7 @@ import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/rolling_text.dart';
-import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
+import '../widgets/smooth_tooltip.dart' show BackButtonTooltip, SmoothTooltip;
 import 'package:uuid/uuid.dart';
 import '../models/app_timer.dart';
 import '../services/haptics.dart';
@@ -199,15 +199,19 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          HoldStepper(
-            icon: Icons.keyboard_arrow_up,
-            iconSize: 20,
-            color: value < max
-                ? theme.colorScheme.onSurfaceVariant
-                : theme.colorScheme.outlineVariant,
-            onStep: () {
-              if (value < max) onChanged(value + 1);
-            },
+          SmoothTooltip(
+            message: Translations.t('timeStepUp', ctx, 'Прибавить'),
+            preferredAbove: true,
+            child: HoldStepper(
+              icon: Icons.keyboard_arrow_up,
+              iconSize: 20,
+              color: value < max
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.colorScheme.outlineVariant,
+              onStep: () {
+                if (value < max) onChanged(value + 1);
+              },
+            ),
           ),
           RollingNumber(
             value: '${value.toString().padLeft(2, '0')}$suffix',
@@ -220,15 +224,19 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
               borderRadius: BorderRadius.circular(8),
             ),
           ),
-          HoldStepper(
-            icon: Icons.keyboard_arrow_down,
-            iconSize: 20,
-            color: value > min
-                ? theme.colorScheme.onSurfaceVariant
-                : theme.colorScheme.outlineVariant,
-            onStep: () {
-              if (value > min) onChanged(value - 1);
-            },
+          SmoothTooltip(
+            message: Translations.t('timeStepDown', ctx, 'Убавить'),
+            preferredAbove: false,
+            child: HoldStepper(
+              icon: Icons.keyboard_arrow_down,
+              iconSize: 20,
+              color: value > min
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.colorScheme.outlineVariant,
+              onStep: () {
+                if (value > min) onChanged(value - 1);
+              },
+            ),
           ),
         ],
       ),
@@ -254,7 +262,24 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
       },
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     );
-    if (s == 'Default') return tile;
+    // Строка звука отзывается нажатием и наклоном, как остальные карточки:
+    // раньше это был единственный плоский список в таймере.
+    final pressable = PressScale(
+      // 0.985 было почти незаметно: строка звука на 56 px сжималась на
+      // полтора пикселя, и владелец справедливо не видел отдачи. Теперь
+      // вдавливание и наклон читаются так же, как у карточек настроек.
+      pressedScale: 0.955,
+      pressedOpacity: 0.94,
+      duration: const Duration(milliseconds: 170),
+      releaseDuration: const Duration(milliseconds: 300),
+      maxTiltAngle: 0.17,
+      pressTint: Theme.of(context).colorScheme.primary,
+      pressTintStrength: 0.07,
+      pressTintRadius: BorderRadius.circular(20),
+      pressOverlay: pressGloss(BorderRadius.circular(20), strength: 0.12),
+      child: tile,
+    );
+    if (s == 'Default') return pressable;
     return Dismissible(
       key: ValueKey('sound_dismiss_$s'),
       // Как в SwipeToDelete: смещение считается от касания, а не от конца
@@ -291,7 +316,7 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
           }
         }
       },
-      child: tile,
+      child: pressable,
     );
   }
 
@@ -303,206 +328,213 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
     return AutoSaveOnExit(
       onExit: _exitWithAutoSave,
       child: Scaffold(
-      appBar: AppBar(
-        title: Text(
-          editing
-              ? Translations.t('editTimer', context)
-              : Translations.t('newTimer', context),
-        ),
-        leading: const BackButtonTooltip(),
-        centerTitle: true,
-        actions: [
-          PressScale(
-            pressedScale: 0.96,
-            duration: const Duration(milliseconds: 200),
-            releaseDuration: const Duration(milliseconds: 340),
-            pressOverlay: pressGloss(
-              BorderRadius.circular(999),
-              strength: 0.12,
-            ),
-            maxTiltAngle: 0.22,
-            child: TextButton(
-              onPressed: _save,
-              child: Text(Translations.saveOf(context)),
-            ),
+        appBar: AppBar(
+          title: Text(
+            editing
+                ? Translations.t('editTimer', context)
+                : Translations.t('newTimer', context),
           ),
-        ],
-      ),
-      resizeToAvoidBottomInset: false,
-      body: SmoothKeyboardBody(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    // Время в шапке перекатывается по разрядам: раньше
-                    // строка подменялась целиком и значение «прыгало».
-                    RollingText(
-                      value: AppTimer.formatDuration(_totalSeconds),
-                      duration: const Duration(milliseconds: 300),
-                      style: theme.textTheme.displaySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    PressScale(
-                      pressedScale: 0.96,
-                      child: FilledButton.tonal(
-                        onPressed: _pickDuration,
-                        child: Text(Translations.t('timerDuration', context)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      Translations.t('timerLabel', context),
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SmoothTyping(
-                      controller: _labelCtrl,
-                      builder: (style) => TextField(
-                        style: style,
-                        cursorOpacityAnimates: true,
-                        magnifierConfiguration:
-                            TextMagnifierConfiguration.disabled,
-                        controller: _labelCtrl,
-                        contextMenuBuilder: minimalContextMenuBuilder,
-                        maxLength: 20,
-                        inputFormatters: [WideDashFormatter()],
-                        enableSuggestions: false,
-                        autocorrect: false,
-                        buildCounter: smoothCharCounterBuilder,
-                        decoration: InputDecoration(
-                          hintText: AppTimer.formatDuration(_totalSeconds),
-                          border: const OutlineInputBorder(),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        left: 4,
-                        top: 4,
-                        bottom: 4,
-                      ),
-                      child: Text(
-                        Translations.soundOf(context),
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                    for (final s in _availableSounds)
-                      _buildSoundRow(context, s),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            // Плитка вибрации наклоняется к пальцу и «вдавливается», как
-            // остальные карточки настроек: раньше это была единственная
-            // плоская строка в экране таймера.
+          leading: const BackButtonTooltip(),
+          centerTitle: true,
+          actions: [
             PressScale(
-              pressedScale: 0.985,
-              enableTilt: true,
-              maxTiltAngle: 0.05,
-              duration: const Duration(milliseconds: 180),
-              releaseDuration: const Duration(milliseconds: 300),
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  title: Text(Translations.vibrateOf(context)),
-                  leading: Icon(
-                    _vibrate ? Icons.vibration : Icons.music_note,
-                    color: theme.colorScheme.primary,
-                  ),
-                  onTap: () {
-                    Haptics.medium();
-                    setState(() => _vibrate = !_vibrate);
-                  },
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  trailing: VolumetricSwitch(
-                    value: _vibrate,
-                    onChanged: (v) {
-                      Haptics.medium();
-                      setState(() => _vibrate = v);
-                    },
-                    activeColor: theme.colorScheme.primary,
-                    semanticLabel: Translations.vibrateOf(context),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            PressScale(
-              pressedScale: 0.97,
-              duration: const Duration(milliseconds: 260),
-              releaseDuration: const Duration(milliseconds: 380),
+              pressedScale: 0.96,
+              duration: const Duration(milliseconds: 200),
+              releaseDuration: const Duration(milliseconds: 340),
               pressOverlay: pressGloss(
                 BorderRadius.circular(999),
-                strength: 0.22,
+                strength: 0.12,
               ),
               maxTiltAngle: 0.22,
-              child: FilledButton(
-                onPressed: _totalSeconds > 0 ? _save : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(Translations.saveOf(context)),
-                ),
+              child: TextButton(
+                onPressed: _save,
+                child: Text(Translations.saveOf(context)),
               ),
             ),
           ],
         ),
-      ),
+        resizeToAvoidBottomInset: false,
+        body: SmoothKeyboardBody(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      // Время в шапке перекатывается по разрядам: раньше
+                      // строка подменялась целиком и значение «прыгало».
+                      RollingText(
+                        value: AppTimer.formatDuration(_totalSeconds),
+                        duration: const Duration(milliseconds: 300),
+                        style: theme.textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      PressScale(
+                        pressedScale: 0.96,
+                        child: FilledButton.tonal(
+                          onPressed: _pickDuration,
+                          child: Text(Translations.t('timerDuration', context)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        Translations.t('timerLabel', context),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SmoothTyping(
+                        controller: _labelCtrl,
+                        builder: (style) => TextField(
+                          style: style,
+                          cursorOpacityAnimates: true,
+                          magnifierConfiguration:
+                              TextMagnifierConfiguration.disabled,
+                          controller: _labelCtrl,
+                          contextMenuBuilder: minimalContextMenuBuilder,
+                          maxLength: 20,
+                          inputFormatters: [WideDashFormatter()],
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          buildCounter: smoothCharCounterBuilder,
+                          decoration: InputDecoration(
+                            hintText: AppTimer.formatDuration(_totalSeconds),
+                            border: const OutlineInputBorder(),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          left: 4,
+                          top: 4,
+                          bottom: 4,
+                        ),
+                        child: Text(
+                          Translations.soundOf(context),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      for (final s in _availableSounds)
+                        _buildSoundRow(context, s),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Плитка вибрации наклоняется к пальцу и «вдавливается», как
+              // остальные карточки настроек: раньше это была единственная
+              // плоская строка в экране таймера.
+              PressScale(
+                pressedScale: 0.955,
+                pressedOpacity: 0.94,
+                enableTilt: true,
+                maxTiltAngle: 0.12,
+                duration: const Duration(milliseconds: 180),
+                releaseDuration: const Duration(milliseconds: 300),
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    title: Text(Translations.vibrateOf(context)),
+                    leading: Icon(
+                      _vibrate ? Icons.vibration : Icons.music_note,
+                      color: theme.colorScheme.primary,
+                    ),
+                    onTap: () {
+                      Haptics.medium();
+                      setState(() => _vibrate = !_vibrate);
+                    },
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    trailing: VolumetricSwitch(
+                      value: _vibrate,
+                      onChanged: (v) {
+                        Haptics.medium();
+                        setState(() => _vibrate = v);
+                      },
+                      activeColor: theme.colorScheme.primary,
+                      semanticLabel: Translations.vibrateOf(context),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              PressScale(
+                pressedScale: 0.97,
+                duration: const Duration(milliseconds: 260),
+                releaseDuration: const Duration(milliseconds: 380),
+                pressOverlay: pressGloss(
+                  BorderRadius.circular(999),
+                  strength: 0.22,
+                ),
+                maxTiltAngle: 0.22,
+                // Кнопка во всю ширину и ростом 52: «укороченная» кнопка
+                // читалась как обрезанная — текст жался к краям.
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: _totalSeconds > 0 ? _save : null,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      textStyle: theme.textTheme.titleMedium,
+                    ),
+                    child: Text(Translations.saveOf(context)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

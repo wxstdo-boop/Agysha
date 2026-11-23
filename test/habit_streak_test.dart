@@ -351,4 +351,25 @@ void main() {
     // серия честно живёт. Это и есть правильное (не одинаковое!) поведение.
     expect(svc.habits.firstWhere((h) => h.id == 'h-today').streak, 5);
   });
+
+  test('карточка не рисует мёртвую серию: один пропущенный день → 0', () {
+    final svc = HabitService();
+    // Сервис не нормализован (как экран, собранный из устаревшего состояния):
+    // в модели streak 5, но последняя отметка — позавчера.
+    final stale = makeHabit(streak: 5, lastDone: day(2));
+    expect(
+      svc.displayStreak(stale),
+      0,
+      reason: 'пропущен вчерашний (положенный) день — цепочка оборвана',
+    );
+    // Серия, отмеченная сегодня, показывается как есть.
+    expect(
+      svc.displayStreak(
+        makeHabit(streak: 5, lastDone: HabitService.mskToday()),
+      ),
+      5,
+    );
+    // Осиротевший счётчик без даты — тоже 0.
+    expect(svc.displayStreak(makeHabit(streak: 5)), 0);
+  });
 }

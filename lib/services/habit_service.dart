@@ -62,6 +62,21 @@ class HabitService extends ChangeNotifier {
     _save();
   }
 
+  /// Серия, которую честно показывать СЕЙЧАС. Нормализация обычно успевает
+  /// раньше, но карточка не должна показывать мёртвый стрик ни одного кадра:
+  /// если после последней отметки пропущен хотя бы один «положенный» день,
+  /// цепочка оборвана и счётчик читается как 0 — даже если таймер смены дня
+  /// ещё не сработал или экран собран из устаревшего состояния.
+  int displayStreak(Habit h) {
+    if (h.lastDoneDate == null || h.streak <= 0) return 0;
+    final today = mskToday();
+    final last = h.lastDoneDate!;
+    final todayUtc = DateTime.utc(today.year, today.month, today.day);
+    final lastUtc = DateTime.utc(last.year, last.month, last.day);
+    if (!todayUtc.isAfter(lastUtc)) return h.streak;
+    return _missedDueDays(lastUtc, todayUtc, h.activeDays) > 0 ? 0 : h.streak;
+  }
+
   /// Сбрасывает doneToday, если привычка НЕ была отмечена по Москве
   /// сегодня. Streak НЕ трогает — им управляет toggle().
   Habit _normalizeForToday(Habit h) {
