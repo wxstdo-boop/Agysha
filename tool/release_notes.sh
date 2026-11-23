@@ -101,7 +101,11 @@ for raw in sys.stdin:
     if not line.startswith("- "):
         print(line)
         continue
-    text = re.sub(r"^(fix|feat|perf|improve|polish)(\([^)]*\))?:\s*", "",
+    # Срезаем Conventional Commits во всех видах, включая breaking-варианты:
+    # `fix(strike)!:`, `feat!:`, `feat(scope)!:`. Раньше шаблон ждал двоеточие
+    # сразу после скобки, а `!` его сдвигал — префикс не снимался, и в «Что
+    # нового» попадала техническая строка «Fix(strike)! — …».
+    text = re.sub(r"^(fix|feat|perf|improve|polish)(\([^)]*\))?!?:\s*", "",
                   line[2:], flags=re.I).strip()
     # Свой эмодзи-маркер ставим сами: если пункт пришёл с готовым значком
     # (старый changelog, повторный прогон), второй значок в начале читался
