@@ -184,6 +184,13 @@ public class OverlayService extends Service implements View.OnTouchListener {
             }
         });
         overlayMessageChannel.setMessageHandler((message, reply) -> {
+            // Тап по пузырю: сначала поднимаем Agysha на передний план,
+            // потом отдаём команду главному движку — он откроет чат Ады.
+            // Так пузырь не превращается в мини-окно, а возвращает обычную Аду.
+            if (message instanceof java.util.Map
+                    && "open_ada_chat".equals(((java.util.Map<?, ?>) message).get("cmd"))) {
+                bringAppToFront();
+            }
             WindowSetup.messenger.send(message);
         });
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -420,8 +427,10 @@ public class OverlayService extends Service implements View.OnTouchListener {
         try {
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) service.flutterView.getLayoutParams();
             if (params == null) return false;
-            params.x = (x == -1999 || x == -1) ? -1 : service.dpToPx(x);
-            params.y = service.dpToPx(y);
+            final int targetX = (x == -1999 || x == -1) ? -1 : service.dpToPx(x);
+            final int targetY = service.dpToPx(y);
+            params.x = targetX == -1 ? -1 : service.clampToScreenX(targetX, service.flutterView.getWidth());
+            params.y = service.clampToScreenY(targetY, service.flutterView.getHeight());
             service.windowManager.updateViewLayout(service.flutterView, params);
             return true;
         } catch (RuntimeException error) {
@@ -493,6 +502,24 @@ public class OverlayService extends Service implements View.OnTouchListener {
             if (nm != null) nm.cancel(OverlayConstants.NOTIFICATION_ID);
         } catch (Exception ignored) {}
         instance = this;
+    }
+
+    /**
+     * Поднять приложение из фона. REORDER_TO_FRONT возвращает уже
+     * существующую задачу наверх (без второй копии экрана), SINGLE_TOP —
+     * чтобы не пересоздавать Activity и не терять состояние чата.
+     */
+    private void bringAppToFront() {
+        try {
+            Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
+            if (launch == null) return;
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(launch);
+        } catch (Exception error) {
+            Log.w("OverlayService", "Could not bring app to front", error);
+        }
     }
 
     private void createNotificationChannel() {
@@ -579,6 +606,17 @@ public class OverlayService extends Service implements View.OnTouchListener {
         return false;
     }
 
+    /** Пузырь не должен уезжать за край: его всегда можно поймать пальцем. */
+    private int clampToScreenX(int x, int viewWidth) {
+        final int screen = mResources.getDisplayMetrics().widthPixels;
+        return Math.max(0, Math.min(x, Math.max(0, screen - viewWidth)));
+    }
+
+    private int clampToScreenY(int y, int viewHeight) {
+        final int screen = mResources.getDisplayMetrics().heightPixels;
+        return Math.max(0, Math.min(y, Math.max(0, screen - viewHeight)));
+    }
+
     private void postMoveFrame() {
         if (moveFramePosted) return;
         moveFramePosted = true;
@@ -592,9 +630,12 @@ public class OverlayService extends Service implements View.OnTouchListener {
             try {
                 final WindowManager.LayoutParams params =
                         (WindowManager.LayoutParams) view.getLayoutParams();
-                if (params == null || params.x == pendingMoveX && params.y == pendingMoveY) return;
-                params.x = pendingMoveX;
-                params.y = pendingMoveY;
+                if (params == null) return;
+                final int targetX = clampToScreenX(pendingMoveX, view.getWidth());
+                final int targetY = clampToScreenY(pendingMoveY, view.getHeight());
+                if (params.x == targetX && params.y == targetY) return;
+                params.x = targetX;
+                params.y = targetY;
                 manager.updateViewLayout(view, params);
             } catch (RuntimeException error) {
                 Log.w("OverlayService", "Ignoring stale overlay move", error);

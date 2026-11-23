@@ -50,6 +50,7 @@ import 'overlay/ada_overlay.dart'
         syncOverlayAvatarFromHost,
         syncOverlayModelFromHost,
         resetOverlayFromHost,
+        kOpenAdaChatCmd,
         AdaOverlayApp;
 import 'overlay/overlay_bridge.dart';
 import 'widgets/ada_avatars.dart';
@@ -957,6 +958,25 @@ Locale _startupDiagnosticLocale() {
   return const Locale('en');
 }
 
+/// Открыть обычный чат Ады по тапу на пузырь. Приложение только что
+/// вернулось из фона: навигатор может быть ещё не готов, поэтому ждём
+/// контекст несколько кадров вместо одного «слепого» вызова.
+void _openAdaFromBubble() {
+  var attempts = 0;
+  void attempt() {
+    final ctx = navigatorKey.currentContext;
+    if (ctx != null) {
+      unawaited(showAiGuideChat(ctx));
+      return;
+    }
+    if (++attempts < 24) {
+      Future.delayed(const Duration(milliseconds: 120), attempt);
+    }
+  }
+
+  Future.delayed(const Duration(milliseconds: 120), attempt);
+}
+
 /// Запуск приложения. Вынесено из [main], чтобы экран диагностики сбоя
 /// старта мог повторить попытку: `onRetry` вызывает эту же функцию, и
 /// успешный запуск просто заменяет диагностический корень рабочим.
@@ -1073,6 +1093,12 @@ Future<void> _startApp() async {
   // чата обновляются мгновенно.
   if (!kIsWeb) {
     FlutterOverlayWindow.overlayListener.listen((msg) {
+      // Тап по пузырю: мини-окошко больше не открывается — пузырь просит
+      // показать ОБЫЧНЫЙ чат Ады (OverlayService уже поднял приложение).
+      if (msg is Map && msg['cmd'] == kOpenAdaChatCmd) {
+        _openAdaFromBubble();
+        return;
+      }
       if (msg is Map && msg['cmd'] == 'sync_avatar') {
         final v = msg['variant'];
         if (v is int) {

@@ -465,11 +465,44 @@ class _AiChatBodyState extends State<_AiChatBody>
   // Плавная передача эстафеты «печатает…» → ответ: индикатор сначала
   // гаснет, и только потом ответ всплывает — без резкого щелчка.
   bool _typingFade = false;
-  // Сколько сообщений было в чате на момент открытия. Анимация входа
-  // пузыря — ТОЛЬКО у новых (добавленных ПОСЛЕ открытия): иначе при
-  // открытии последние 3 сообщения истории «всплывали» прямо во время
-  // выезда листа, и появление чата казалось дёрганым.
-  int _openedCount = 0;
+
+  /// Метки «только что добавлено»: пузырь въезжает плавно ровно один раз.
+  /// Раньше анимацию включал индекс («последние три сообщения»), и когда
+  /// награды или стрик приходили пачкой, часть появлялась без анимации —
+  /// рывком. Теперь признак ставится тому сообщению, которое реально
+  /// добавили, и снимается сам при перестройке.
+  final Set<int> _freshTs = <int>{};
+
+  /// Последняя выданная метка. Награды и стрик добавляются в одном кадре,
+  /// и DateTime.now() отдавал им ОДИН ts — ключ пузыря совпадал, элементы
+  /// переиспользовались, и появление читалось как дёрганье.
+  int _lastTs = 0;
+
+  /// Уникальная монотонная метка времени для нового сообщения.
+  int _nextTs() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _lastTs = now > _lastTs ? now : _lastTs + 1;
+    return _lastTs;
+  }
+
+  /// Подтянуть счётчик к уже загруженной истории, чтобы новые метки не
+  /// совпали со старыми.
+  void _seedLastTs() {
+    for (final m in _messages) {
+      final ts = m.ts;
+      if (ts != null && ts > _lastTs) _lastTs = ts;
+    }
+  }
+
+  /// Добавить сообщение и пометить его как новое (плавный вход).
+  void _pushMessage(AiMessage m, {bool animate = true}) {
+    _messages.add(m);
+    if (!animate) return;
+    final ts = m.ts;
+    if (ts == null) return;
+    if (_freshTs.length > 240) _freshTs.clear();
+    _freshTs.add(ts);
+  }
 
   /// История прочитана: до этого пустую подсказку не показываем, иначе
   /// при открытии на кадр мелькал «пустой Ада».
@@ -532,7 +565,7 @@ class _AiChatBodyState extends State<_AiChatBody>
       _messages
         ..clear()
         ..addAll(cached);
-      _openedCount = _messages.length;
+      _seedLastTs();
       _historyLoaded = true;
     } else {
       _loadHistory();
@@ -591,29 +624,38 @@ class _AiChatBodyState extends State<_AiChatBody>
     if (_deferredInitStarted || !mounted) return;
     _deferredInitStarted = true;
     if (!_historyLoaded) _loadHistory();
-    _loadPins();
-    _ensureReports();
-    unawaited(AiGuideService.maybeDeliverAdaNudge('system'));
-    unawaited(AiGuideService.loadAdaStreak());
     _refreshScreenPerm();
-    SettingsService.loadLanguageCode()
-        .then((language) {
-          if (!mounted) return;
-          setState(() => _lang = language);
-          _claimRewards();
-        })
-        .catchError((_) {});
-    AiGuideService.hfRemainingToday()
-        .then((remaining) {
-          if (mounted) setState(() => _quotaLeft = remaining);
-        })
-        .catchError((_) {});
-    AiGuideService.currentModelLabel()
-        .then((label) {
-          if (mounted && label.isNotEmpty) setState(() => _modelLabel = label);
-        })
-        .catchError((_) {});
-    _startSyncPolling();
+    // Остальное — на спокойном кадре. Раньше десяток setState (награды,
+    // стрик, квота, модель, нудж) прилетал ровно в момент, когда лист
+    // доехал, и вход в чат читался дёрганым: содержимое перестраивалось
+    // поверх только что отрисованного окна.
+    Future.delayed(const Duration(milliseconds: 180), () {
+      if (!mounted) return;
+      _loadPins();
+      _ensureReports();
+      unawaited(AiGuideService.maybeDeliverAdaNudge('system'));
+      unawaited(AiGuideService.loadAdaStreak());
+      SettingsService.loadLanguageCode()
+          .then((language) {
+            if (!mounted) return;
+            setState(() => _lang = language);
+            _claimRewards();
+          })
+          .catchError((_) {});
+      AiGuideService.hfRemainingToday()
+          .then((remaining) {
+            if (mounted) setState(() => _quotaLeft = remaining);
+          })
+          .catchError((_) {});
+      AiGuideService.currentModelLabel()
+          .then((label) {
+            if (mounted && label.isNotEmpty) {
+              setState(() => _modelLabel = label);
+            }
+          })
+          .catchError((_) {});
+      _startSyncPolling();
+    });
   }
 
   void _startSyncPolling() {
@@ -775,7 +817,6 @@ class _AiChatBodyState extends State<_AiChatBody>
               .where((m) => AiGuideService.visibleInChat(m, clearedAt))
               .toList();
           final merged = AiChatStore.union(loaded, local);
-          final wasLoaded = _historyLoaded;
           setState(() {
             // Чат исчерпал 1000 сообщений — стираем и начинаем заново.
             if (loaded.length >= 1000) {
@@ -787,7 +828,10 @@ class _AiChatBodyState extends State<_AiChatBody>
             }
             // Всё, что было загружено при открытии, НЕ анимирует вход —
             // только сообщения, добавленные после (см. animate ниже).
-            if (!wasLoaded) _openedCount = _messages.length;
+            // Подтягиваем счётчик меток к объединённой ленте: иначе
+            // новое сообщение получит ts, уже занятый сообщением из
+            // другого движка, ключ пузыря совпадёт и вход не анимируется.
+            _seedLastTs();
           });
           // История не менялась: не пересериализуем и не шифруем весь файл
           // при каждом открытии. Сохраняем только если применили лимит.
@@ -840,7 +884,7 @@ class _AiChatBodyState extends State<_AiChatBody>
       _messages
         ..clear()
         ..addAll(AiChatStore.adopt(_messages, visible));
-      _openedCount = _messages.length;
+      _seedLastTs();
     });
     _scrollToBottom(animate: false);
   }
@@ -1348,22 +1392,10 @@ class _AiChatBodyState extends State<_AiChatBody>
       // Лимит чата: 1000 сообщений, дальше — стереть и начать новый диалог.
       if (_messages.length >= 1000) _messages.clear();
       if (!keepUserBubble) {
-        _messages.add(
-          AiMessage(
-            isUser: true,
-            text: message,
-            ts: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
+        _pushMessage(AiMessage(isUser: true, text: message, ts: _nextTs()));
       }
       if (hotLine != null) {
-        _messages.add(
-          AiMessage(
-            isUser: false,
-            text: hotLine,
-            ts: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
+        _pushMessage(AiMessage(isUser: false, text: hotLine, ts: _nextTs()));
       }
       _busy = true;
       // При повторе с плашки плашку НЕ убираем: её исчезновение сдвигало
@@ -1418,13 +1450,7 @@ class _AiChatBodyState extends State<_AiChatBody>
                 'Хм, я не смогла собрать ответ. Попробуй ещё раз!',
               )
             : answer;
-        _messages.add(
-          AiMessage(
-            isUser: false,
-            text: finalText,
-            ts: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
+        _pushMessage(AiMessage(isUser: false, text: finalText, ts: _nextTs()));
         if (_messages.length > 1000) {
           _messages.removeRange(0, _messages.length - 1000);
         }
@@ -1499,13 +1525,7 @@ class _AiChatBodyState extends State<_AiChatBody>
     final result = await AiGuideService.undoLastAction();
     if (!mounted) return;
     setState(() {
-      _messages.add(
-        AiMessage(
-          isUser: false,
-          text: result,
-          ts: DateTime.now().millisecondsSinceEpoch,
-        ),
-      );
+      _pushMessage(AiMessage(isUser: false, text: result, ts: _nextTs()));
     });
     _saveHistory();
     _scrollToBottom();
@@ -1529,7 +1549,7 @@ class _AiChatBodyState extends State<_AiChatBody>
         _error = false;
       });
       _historyCache = <AiMessage>[];
-      _openedCount = 0;
+      _freshTs.clear();
       _dotsCtrl.stop();
       _clearHistory();
       _clearCtrl.reset();
@@ -1640,13 +1660,7 @@ class _AiChatBodyState extends State<_AiChatBody>
       if (!mounted || rewards.isEmpty) return;
       setState(() {
         for (final r in rewards) {
-          _messages.add(
-            AiMessage(
-              isUser: false,
-              text: r,
-              ts: DateTime.now().millisecondsSinceEpoch,
-            ),
-          );
+          _pushMessage(AiMessage(isUser: false, text: r, ts: _nextTs()));
         }
       });
       _saveHistory();
@@ -1909,180 +1923,193 @@ class _AiChatBodyState extends State<_AiChatBody>
                 // AnimatedOpacity. БЕЗ AnimatedSwitcher — при стирании чата
                 // и при первом сообщении не мигает (не было двойного fade
                 // «лента гаснет + подсказка вспыхивает»).
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ListView.builder(
-                      controller: _scrollCtrl,
-                      // reverse:true — индекс 0 это НИЗ чата: открытие сразу
-                      // показывает последние сообщения, никаких прыжков.
-                      reverse: true,
-                      // bottom: 112 — статичный запас под полем ввода:
-                      // последнее сообщение не ложится вровень с полем.
-                      // Паддинг не зависит от клавиатуры — лента не
-                      // пересчитывается при её анимации.
-                      padding: const EdgeInsets.only(
-                        left: 14,
-                        right: 14,
-                        top: 12,
-                        bottom: 116,
-                      ),
-                      itemCount: _messages.length + (_busy ? 1 : 0),
-                      // Ключ пузыря — метка времени, а не индекс. В
-                      // reverse-ленте новая реплика вставляется в 0 и
-                      // сдвигает все индексы: без этого колбэка лента
-                      // пересоздавала пузыри и мигала при отправке,
-                      // появлении ответа и повторе.
-                      findChildIndexCallback: (key) {
-                        if (key is! ValueKey<String>) return null;
-                        final m = RegExp(
-                          r'^msg_(\d+)_(true|false)$',
-                        ).firstMatch(key.value);
-                        if (m == null) return null;
-                        final ts = int.tryParse(m.group(1)!);
-                        if (ts == null) return null;
-                        final isUser = m.group(2) == 'true';
-                        final mi = _messages.indexWhere(
-                          (msg) => msg.ts == ts && msg.isUser == isUser,
-                        );
-                        if (mi < 0) return null;
-                        return _busy
-                            ? _messages.length - mi
-                            : _messages.length - 1 - mi;
-                      },
-                      // Элементы уже обёрнуты в RepaintBoundary ниже;
-                      // не добавляем вторую границу для каждого пузыря.
-                      addRepaintBoundaries: false,
-                      itemBuilder: (context, i) {
-                        if (_busy && i == 0) {
-                          // «Печатает…» — самый нижний элемент, прямо у поля.
-                          // При ответе слот не пропадает кадром: он гасит
-                          // ПРОЗРАЧНОСТЬ и ВЫСОТУ (heightFactor). Раньше
-                          // индикатор исчезал мгновенно вместе с появлением
-                          // пузыря, и лента прыгала вверх на его высоту —
-                          // переход «Сочиняю…» → полный ответ читался рывком.
-                          return TweenAnimationBuilder<double>(
-                            // Ключ ПОСТОЯННЫЙ: при смене ключа элемент
-                            // пересоздавался и индикатор на миг вспыхивал
-                            // во весь рост заново — это и читалось как
-                            // мигание чата при ответе.
-                            key: const ValueKey('typing_slot'),
-                            tween: Tween(
-                              begin: 1.0,
-                              end: _typingFade ? 0.0 : 1.0,
-                            ),
-                            duration: const Duration(milliseconds: 320),
-                            curve: Curves.easeInOutCubic,
-                            builder: (context, fade, child) => ClipRect(
-                              child: Align(
-                                alignment: Alignment.bottomCenter,
-                                heightFactor: fade,
-                                child: Opacity(opacity: fade, child: child),
+                child: AnimatedOpacity(
+                  // История читается из файла уже после выезда листа. Без
+                  // фейда сообщения «выскакивали» одним кадром поверх пустой
+                  // ленты — вход читался дёрганым.
+                  opacity: _historyLoaded ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOut,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ListView.builder(
+                        controller: _scrollCtrl,
+                        // reverse:true — индекс 0 это НИЗ чата: открытие сразу
+                        // показывает последние сообщения, никаких прыжков.
+                        reverse: true,
+                        // bottom: 112 — статичный запас под полем ввода:
+                        // последнее сообщение не ложится вровень с полем.
+                        // Паддинг не зависит от клавиатуры — лента не
+                        // пересчитывается при её анимации.
+                        padding: const EdgeInsets.only(
+                          left: 14,
+                          right: 14,
+                          top: 12,
+                          bottom: 116,
+                        ),
+                        itemCount: _messages.length + (_busy ? 1 : 0),
+                        // Ключ пузыря — метка времени, а не индекс. В
+                        // reverse-ленте новая реплика вставляется в 0 и
+                        // сдвигает все индексы: без этого колбэка лента
+                        // пересоздавала пузыри и мигала при отправке,
+                        // появлении ответа и повторе.
+                        findChildIndexCallback: (key) {
+                          if (key is! ValueKey<String>) return null;
+                          final m = RegExp(
+                            r'^msg_(\d+)_(true|false)$',
+                          ).firstMatch(key.value);
+                          if (m == null) return null;
+                          final ts = int.tryParse(m.group(1)!);
+                          if (ts == null) return null;
+                          final isUser = m.group(2) == 'true';
+                          final mi = _messages.indexWhere(
+                            (msg) => msg.ts == ts && msg.isUser == isUser,
+                          );
+                          if (mi < 0) return null;
+                          return _busy
+                              ? _messages.length - mi
+                              : _messages.length - 1 - mi;
+                        },
+                        // Элементы уже обёрнуты в RepaintBoundary ниже;
+                        // не добавляем вторую границу для каждого пузыря.
+                        addRepaintBoundaries: false,
+                        itemBuilder: (context, i) {
+                          if (_busy && i == 0) {
+                            // «Печатает…» — самый нижний элемент, прямо у поля.
+                            // При ответе слот не пропадает кадром: он гасит
+                            // ПРОЗРАЧНОСТЬ и ВЫСОТУ (heightFactor). Раньше
+                            // индикатор исчезал мгновенно вместе с появлением
+                            // пузыря, и лента прыгала вверх на его высоту —
+                            // переход «Сочиняю…» → полный ответ читался рывком.
+                            return TweenAnimationBuilder<double>(
+                              // Ключ ПОСТОЯННЫЙ: при смене ключа элемент
+                              // пересоздавался и индикатор на миг вспыхивал
+                              // во весь рост заново — это и читалось как
+                              // мигание чата при ответе.
+                              key: const ValueKey('typing_slot'),
+                              tween: Tween(
+                                begin: 1.0,
+                                end: _typingFade ? 0.0 : 1.0,
                               ),
-                            ),
-                            // Вход мягкий и длинный: раньше индикатор
-                            // «щёлкал» из 70% с ростом за 280 мс — при
-                            // ответе на полное сообщение это читалось как
-                            // рывок. Теперь почти без масштаба, с подъёмом
-                            // снизу за 440 мс.
-                            child: TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 0, end: 1),
-                              duration: const Duration(milliseconds: 440),
-                              curve: Curves.easeOutQuart,
-                              // Высота растёт ВМЕСТЕ с прозрачностью
-                              // (heightFactor): раньше пузырёк «Сочиняю…»
-                              // возникал сразу во весь рост и одним кадром
-                              // сдвигал ленту вверх — на длинном сообщении
-                              // это и читалось как рывок.
-                              builder: (context, t, child) => ClipRect(
+                              duration: const Duration(milliseconds: 320),
+                              curve: Curves.easeInOutCubic,
+                              builder: (context, fade, child) => ClipRect(
                                 child: Align(
                                   alignment: Alignment.bottomCenter,
-                                  heightFactor: t,
-                                  child: Opacity(
-                                    opacity: t,
-                                    child: Transform.translate(
-                                      offset: Offset(0, 14 * (1 - t)),
-                                      child: Transform.scale(
-                                        scale: 0.94 + 0.06 * t,
-                                        child: child,
+                                  heightFactor: fade,
+                                  child: Opacity(opacity: fade, child: child),
+                                ),
+                              ),
+                              // Вход мягкий и длинный: раньше индикатор
+                              // «щёлкал» из 70% с ростом за 280 мс — при
+                              // ответе на полное сообщение это читалось как
+                              // рывок. Теперь почти без масштаба, с подъёмом
+                              // снизу за 440 мс.
+                              child: TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0, end: 1),
+                                duration: const Duration(milliseconds: 440),
+                                curve: Curves.easeOutQuart,
+                                // Высота растёт ВМЕСТЕ с прозрачностью
+                                // (heightFactor): раньше пузырёк «Сочиняю…»
+                                // возникал сразу во весь рост и одним кадром
+                                // сдвигал ленту вверх — на длинном сообщении
+                                // это и читалось как рывок.
+                                builder: (context, t, child) => ClipRect(
+                                  child: Align(
+                                    alignment: Alignment.bottomCenter,
+                                    heightFactor: t,
+                                    child: Opacity(
+                                      opacity: t,
+                                      child: Transform.translate(
+                                        offset: Offset(0, 14 * (1 - t)),
+                                        child: Transform.scale(
+                                          scale: 0.94 + 0.06 * t,
+                                          child: child,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
+                                child: _TypingIndicator(animation: _dotsCtrl),
                               ),
-                              child: _TypingIndicator(animation: _dotsCtrl),
+                            );
+                          }
+                          // Индекс в исходном массиве (0 = последнее сообщение).
+                          final mi = _busy
+                              ? _messages.length - i
+                              : _messages.length - 1 - i;
+                          final m = _messages[mi];
+                          // Сосед ВЫШЕ в ленте (следующий по истории).
+                          final above = mi + 1 < _messages.length
+                              ? _messages[mi + 1]
+                              : null;
+                          // Анимация входа — ТОЛЬКО у сообщений, добавленных
+                          // ПОСЛЕ открытия чата (последние 3 из них). Сообщения
+                          // истории при открытии НЕ анимируются: лист уже выезжает,
+                          // и пузыри не «прыгают» поверх. Также не анимируются
+                          // старые пузыри при скролле большого чата.
+                          final msgTs = m.ts;
+                          final animate =
+                              msgTs != null && _freshTs.contains(msgTs);
+                          // Моё сообщение «прочитано», когда сразу за ним в
+                          // истории идёт ответ Ады (она обработала сообщение).
+                          // Время прочтения — метка ответа Ады.
+                          final read =
+                              m.isUser &&
+                              mi + 1 < _messages.length &&
+                              !_messages[mi + 1].isUser;
+                          final readAt = read ? _messages[mi + 1].ts : null;
+                          // Ключ по самому сообщению: индексы сдвигаются при
+                          // каждой вставке, и раньше все пузыри
+                          // пересоздавались — вход нового читался рывком.
+                          // Ключ — только по метке и автору: текст сообщения
+                          // при потоковой дорисовке меняется, и хеш текста в
+                          // ключе пересоздавал пузырь на каждом куске ответа —
+                          // сообщение «приходило грубо», рывками.
+                          final bubbleKey = ValueKey('msg_${m.ts}_${m.isUser}');
+                          return RepaintBoundary(
+                            key: bubbleKey,
+                            child: _MessageBubble(
+                              key: bubbleKey,
+                              message: m,
+                              firstInGroup:
+                                  above == null || above.isUser != m.isUser,
+                              animate: animate,
+                              read: read,
+                              readAt: readAt,
+                              liked: _liked.contains(_msgKey(m)),
+                              pinned: _isPinned(m),
+                              onToggleLike: () => _toggleLike(m),
+                              onCopy: () => _copyMessage(m),
+                              // Зажать аватарку Ады — закрепить/открепить (до 10).
+                              onLongPress: m.isUser
+                                  ? null
+                                  : () => _togglePin(m),
+                              onTogglePin: m.isUser
+                                  ? null
+                                  : () => _togglePin(m),
+                              onCycleAvatar: _cycleAvatar,
                             ),
                           );
-                        }
-                        // Индекс в исходном массиве (0 = последнее сообщение).
-                        final mi = _busy
-                            ? _messages.length - i
-                            : _messages.length - 1 - i;
-                        final m = _messages[mi];
-                        // Сосед ВЫШЕ в ленте (следующий по истории).
-                        final above = mi + 1 < _messages.length
-                            ? _messages[mi + 1]
-                            : null;
-                        // Анимация входа — ТОЛЬКО у сообщений, добавленных
-                        // ПОСЛЕ открытия чата (последние 3 из них). Сообщения
-                        // истории при открытии НЕ анимируются: лист уже выезжает,
-                        // и пузыри не «прыгают» поверх. Также не анимируются
-                        // старые пузыри при скролле большого чата.
-                        final isNew = mi >= _openedCount;
-                        final animate = isNew && mi >= _messages.length - 3;
-                        // Моё сообщение «прочитано», когда сразу за ним в
-                        // истории идёт ответ Ады (она обработала сообщение).
-                        // Время прочтения — метка ответа Ады.
-                        final read =
-                            m.isUser &&
-                            mi + 1 < _messages.length &&
-                            !_messages[mi + 1].isUser;
-                        final readAt = read ? _messages[mi + 1].ts : null;
-                        // Ключ по самому сообщению: индексы сдвигаются при
-                        // каждой вставке, и раньше все пузыри
-                        // пересоздавались — вход нового читался рывком.
-                        // Ключ — только по метке и автору: текст сообщения
-                        // при потоковой дорисовке меняется, и хеш текста в
-                        // ключе пересоздавал пузырь на каждом куске ответа —
-                        // сообщение «приходило грубо», рывками.
-                        final bubbleKey = ValueKey('msg_${m.ts}_${m.isUser}');
-                        return RepaintBoundary(
-                          key: bubbleKey,
-                          child: _MessageBubble(
-                            key: bubbleKey,
-                            message: m,
-                            firstInGroup:
-                                above == null || above.isUser != m.isUser,
-                            animate: animate,
-                            read: read,
-                            readAt: readAt,
-                            liked: _liked.contains(_msgKey(m)),
-                            pinned: _isPinned(m),
-                            onToggleLike: () => _toggleLike(m),
-                            onCopy: () => _copyMessage(m),
-                            // Зажать аватарку Ады — закрепить/открепить (до 10).
-                            onLongPress: m.isUser ? null : () => _togglePin(m),
-                            onTogglePin: m.isUser ? null : () => _togglePin(m),
-                            onCycleAvatar: _cycleAvatar,
-                          ),
-                        );
-                      },
-                    ),
-                    // Подсказка пустого чата: плавно появляется, когда
-                    // сообщений нет, и гаснет при первом сообщении.
-                    AnimatedOpacity(
-                      opacity: _historyLoaded && _messages.isEmpty && !_busy
-                          ? 1.0
-                          : 0.0,
-                      duration: const Duration(milliseconds: 320),
-                      curve: Curves.easeOutCubic,
-                      child: IgnorePointer(
-                        ignoring:
-                            !(_historyLoaded && _messages.isEmpty && !_busy),
-                        child: const _EmptyChatPlaceholder(),
+                        },
                       ),
-                    ),
-                  ],
+                      // Подсказка пустого чата: плавно появляется, когда
+                      // сообщений нет, и гаснет при первом сообщении.
+                      AnimatedOpacity(
+                        opacity: _historyLoaded && _messages.isEmpty && !_busy
+                            ? 1.0
+                            : 0.0,
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        child: IgnorePointer(
+                          ignoring:
+                              !(_historyLoaded && _messages.isEmpty && !_busy),
+                          child: const _EmptyChatPlaceholder(),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -186,10 +186,18 @@ jobs:
           else
             RANGE="HEAD"
           fi
+          # --sections: тело релиза читают люди, поэтому у него есть короткий
+          # ввод, блоки «Новое / Плавнее / Починили» и подпись. Flat-режим
+          # (без флага) остаётся для fastlane, где F-Droid режет текст по 500
+          # символам и любой заголовок съедает пункт.
+          NOTES="$(git log --no-merges --pretty=format:'- %s' "$RANGE" \
+            | bash tool/release_notes.sh --sections || true)"
+          if [ -z "${NOTES//[[:space:]]/}" ]; then
+            NOTES="- ✨ Обновление и мелкие улучшения"
+          fi
           {
             echo "notes<<EOF"
-            git log --no-merges --pretty=format:'- %s' "$RANGE" \
-              | bash tool/release_notes.sh
+            printf '%s\n' "$NOTES"
             echo ""
             echo "EOF"
           } >> "$GITHUB_OUTPUT"

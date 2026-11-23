@@ -256,23 +256,27 @@ class _MessageBubble extends StatelessWidget {
       // сообщений анимация отключена (animate: false) — скролл большого
       // чата не дёргается.
       tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: isUserMsg ? 360 : 520),
-      curve: Curves.easeOutQuart,
+      duration: Duration(milliseconds: isUserMsg ? 300 : 380),
+      curve: Curves.easeOutCubic,
       builder: (context, t, child) {
-        final e = Curves.easeOutQuart.transform(t);
+        final e = Curves.easeOutCubic.transform(t);
+        // Высота набирается только в первой половине анимации: раскладка
+        // пересчитывается ~10 кадров вместо всех 24. Крупные плашки наград
+        // и стрика «ползли» рывками именно из-за покадрового изменения
+        // высоты; дальше пузырь только проявляется.
+        final grow = Curves.easeOutCubic.transform((t / 0.45).clamp(0.0, 1.0));
         return Opacity(
           opacity: e,
-          // Высота растёт вместе с прозрачностью: лента не «прыгает» на
-          // полную высоту пузыря в первом кадре (из-за этого сообщения
-          // дёргались и толкали соседние). Растём от нижнего края.
+          // Растём от нижнего края: лента не «прыгает» на полную высоту
+          // пузыря в первом кадре.
           child: ClipRect(
             child: Align(
               alignment: Alignment.bottomCenter,
-              heightFactor: e,
+              heightFactor: grow,
               child: Transform.translate(
-                offset: Offset(0, 6.0 * (1.0 - e)),
+                offset: Offset(0, 8.0 * (1.0 - e)),
                 child: Transform.scale(
-                  scale: isUserMsg ? (0.995 + 0.005 * e) : (0.99 + 0.01 * e),
+                  scale: isUserMsg ? (0.995 + 0.005 * e) : (0.985 + 0.015 * e),
                   alignment: isUserMsg
                       ? Alignment.bottomRight
                       : Alignment.bottomLeft,

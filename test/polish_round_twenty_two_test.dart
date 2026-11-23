@@ -83,21 +83,28 @@ void main() {
   });
 
   test('пустой Ада не показывается до чтения истории', () {
-    for (final path in [
-      'lib/widgets/ai_guide.dart',
-      'lib/overlay/ada_overlay.dart',
-    ]) {
-      expect(
-        read(path).contains('_historyLoaded'),
-        isTrue,
-        reason: '$path: без флага пустое состояние мелькает на открытии',
-      );
-    }
+    // История живёт только в чате: пузырь — одна кнопка, ему читать нечего.
     expect(
-      read(
-        'lib/overlay/ada_overlay.dart',
-      ).contains('setState(() => _historyLoaded = true)'),
+      read('lib/widgets/ai_guide.dart').contains('_historyLoaded'),
       isTrue,
+      reason: 'ai_guide: без флага пустое состояние мелькает на открытии',
+    );
+    final overlay = read('lib/overlay/ada_overlay.dart');
+    expect(overlay.contains('ListView'), isFalse);
+    expect(overlay.contains('_historyLoaded'), isFalse);
+  });
+
+  test('пузырь не рисует кольцо вокруг аватарки', () {
+    // Кольцо аватарки (тёмное в светлой теме) на чужих обоях читалось
+    // жёлтой полосой под кружком. В пузыре его выключаем: тень уже
+    // отделяет пузырь от фона.
+    final overlay = read('lib/overlay/ada_overlay.dart');
+    expect(overlay.contains('showRing: false'), isTrue,
+        reason: 'пузырь обязан рисовать аватарку без обводки');
+    expect(
+      read('lib/widgets/ada_avatars.dart').contains('final bool showRing;'),
+      isTrue,
+      reason: 'без флага кольцо не отключить',
     );
   });
 

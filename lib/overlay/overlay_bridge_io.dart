@@ -53,11 +53,24 @@ Future<bool> showAdaOverlay({
     }
     final sw = screenWidth ?? 400;
     final sh = screenHeight ?? 850;
-    // Стартуем СРАЗУ пузырём: кнопка «режим в пузыре» больше не открывает
-    // мини-окно с чатом — Ада сразу живёт маленьким пузырём в правом нижнем
-    // углу, а чат открывается тапом по нему (окно само растягивается).
+    // Стартуем СРАЗУ пузырём: кнопка «режим в пузыре» не открывает окно с
+    // чатом — Ада живёт маленьким пузырём, а тап по нему поднимает
+    // приложение и открывает нормальный чат.
     const bubble = 36.0;
-    final startPos = OverlayPosition(sw - bubble - 16, sh - bubble - 96);
+    // Позицию помнит движок оверлея (тап по пузырю и сворачивание
+    // приложения): пузырь появляется там, где его оставили, и никогда —
+    // за краем экрана.
+    double sx = sw - bubble - 16;
+    double sy = sh - bubble - 96;
+    try {
+      final savedX = globalPrefs.getDouble('ada_overlay_x');
+      final savedY = globalPrefs.getDouble('ada_overlay_y');
+      if (savedX != null && savedY != null) {
+        sx = savedX.clamp(0.0, sw - bubble).toDouble();
+        sy = savedY.clamp(0.0, sh - bubble).toDouble();
+      }
+    } catch (_) {}
+    final startPos = OverlayPosition(sx, sy);
     // 1. Команда «сбросься и покажись» прямо в живой движок оверлея.
     //    Движок КЭШИРУЕТСЯ между открытиями: его Dart-состояние живёт
     //    даже когда окна нет, и lifecycle-событие при переоткрытии
@@ -82,10 +95,11 @@ Future<bool> showAdaOverlay({
       // приложении. Фокус включается при тапе на поле ввода через
       // MethodChannel (updateFlag('focusPointer')).
       flag: OverlayFlag.defaultFlag,
-      // Жест остаётся у Flutter: native только сливает координаты и
-      // применяет последнюю позицию на vsync. Два touch-владельца дают
-      // двойное перемещение и рывки.
-      enableDrag: false,
+      // Тянет окно сам Android, на своём кадре: палец двигает готовое
+      // окно без моста Dart → канал → Java на каждый кадр. Мост давал
+      // рывки («дёргано»), потому что окно догоняло палец на кадр позже.
+      // Жест не съедается: тап по пузырю Flutter всё равно получает.
+      enableDrag: true,
       positionGravity: PositionGravity.none,
       overlayTitle: 'Agysha — Ада',
       overlayContent: 'Ада в пузыре',

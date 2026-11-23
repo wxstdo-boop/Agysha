@@ -398,6 +398,14 @@ class AdaAvatar extends StatelessWidget {
   /// нейтральные роли темы — кнопка сливается с семьёй таблетки.
   final bool monochrome;
 
+  /// Тонкое кольцо по краю медальона.
+  ///
+  /// Нужно почти везде: без него светлая аватарка на светлой подложке
+  /// расплывается. Выключается только там, где круг лежит прямо на чужих
+  /// обоях (пузырь поверх других приложений): тёмное кольцо на тёплых
+  /// обоях читалось как жёлтые подчёркивания по краю аватарки.
+  final bool showRing;
+
   const AdaAvatar({
     super.key,
     this.size = 34,
@@ -405,6 +413,7 @@ class AdaAvatar extends StatelessWidget {
     // Внутри Ады аватарки — эмодзи. Монохром включается точечно: кнопка-Ада
     // на плите и пузырь мини-окна (monochrome: true).
     this.monochrome = false,
+    this.showRing = true,
   });
 
   @override
@@ -497,14 +506,16 @@ class AdaAvatar extends StatelessWidget {
         // в любую тему, не торча цветным кружком.
         // На тёмной теме почти чёрное кольцо сливалось с фоном: аватарка
         // «расплывалась». Там кольцо светлое, поэтому круг читается чётко.
-        border: Border.all(
-          color: monochrome
-              ? cs.outlineVariant.withValues(alpha: dark ? 0.55 : 0.70)
-              : (dark
-                    ? Colors.white.withValues(alpha: 0.52)
-                    : Colors.black.withValues(alpha: 0.32)),
-          width: dark ? 1.3 : 1.1,
-        ),
+        border: showRing
+            ? Border.all(
+                color: monochrome
+                    ? cs.outlineVariant.withValues(alpha: dark ? 0.55 : 0.70)
+                    : (dark
+                          ? Colors.white.withValues(alpha: 0.52)
+                          : Colors.black.withValues(alpha: 0.32)),
+                width: dark ? 1.3 : 1.1,
+              )
+            : null,
         // Без тени: в мини-окошке blur-тень обрезается прямоугольной
         // границей окна и выглядит как «квадрат» за круглой аватаркой.
       ),
@@ -636,11 +647,7 @@ class AdaAvatar extends StatelessWidget {
     if (emoji != null && !monochrome) {
       return Text(
         emoji,
-        style: TextStyle(
-          fontSize: size * 0.58,
-          height: 1.0,
-          shadows: [glow],
-        ),
+        style: TextStyle(fontSize: size * 0.58, height: 1.0, shadows: [glow]),
       );
     }
     final icon = ShaderMask(

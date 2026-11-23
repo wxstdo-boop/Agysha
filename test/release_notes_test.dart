@@ -60,6 +60,28 @@ void main() {
     return res.stdout as String;
   }
 
+  /// То же, но с аргументами режима (`--sections` для тела GitHub-релиза).
+  String filterArgs(String input, String args) {
+    final script = File('tool/release_notes.sh');
+    // Уникальное имя на каждый вызов: параллельный прогон не должен
+    // прочитать/удалить чужой временный файл.
+    final tmp = File(
+      '${Directory.systemTemp.path}/release_notes_args_'
+      '${DateTime.now().microsecondsSinceEpoch}_${pid}_${tmpCounter++}.txt',
+    )..writeAsStringSync(input);
+    final res = Process.runSync('bash', [
+      '-c',
+      'bash ${posix(script.path)} $args < ${posix(tmp.path)}',
+    ], stdoutEncoding: utf8);
+    tmp.deleteSync();
+    expect(
+      res.exitCode,
+      0,
+      reason: 'фильтр заметок обязан завершаться успешно',
+    );
+    return res.stdout as String;
+  }
+
   test('служебные коммиты отсеиваются, пользовательские остаются', () {
     // Ниже — реальные заголовки из истории Agysha, включая те, что уже
     // протекали в changelog 45243.
@@ -96,6 +118,58 @@ void main() {
       '- 🍽️ Питание: строка БЖУ без переполнения',
       '- ✨ Полировка 12-го круга: канты и свечение',
     ]);
+  }, skip: skipWithoutBash);
+
+  test('тело релиза идёт блоками: новое, плавнее, починили', () {
+    // Тело GitHub-релиза читают люди, поэтому у него есть ввод, блоки по
+    // темам и подпись — раньше это был плоский список заголовков коммитов.
+    const input = '''
+- feat: экспорт привычек в CSV
+- Полировка профиля: плавный вход
+- Баг: кнопка заедала
+''';
+    final out = filterArgs(input, '--sections');
+    expect(out, contains('**✨ Новое**'));
+    expect(out, contains('**🫧 Плавнее и приятнее**'));
+    expect(out, contains('**🛠️ Починили**'));
+    expect(
+      out,
+      contains('ставится поверх'),
+      reason: 'без ввода тело релиза начинается сразу со списка',
+    );
+    expect(out, contains('Спасибо, что ты с нами'));
+
+    final newAt = out.indexOf('**✨ Новое**');
+    final polishAt = out.indexOf('**🫧 Плавнее и приятнее**');
+    final fixAt = out.indexOf('**🛠️ Починили**');
+    expect(newAt, lessThan(polishAt));
+    expect(polishAt, lessThan(fixAt));
+    expect(out.substring(newAt, polishAt), contains('Экспорт привычек'));
+    expect(out.substring(polishAt, fixAt), contains('Полировка профиля'));
+    expect(out.substring(fixAt), contains('кнопка заедала'));
+  }, skip: skipWithoutBash);
+
+  test('fastlane-заметки без заголовков и в порядке истории', () {
+    // F-Droid режет changelog по 500 символам: блоки и подпись съели бы
+    // пункты, поэтому flat-режим остаётся плоским. Порядок — как в истории,
+    // а не пересобранный по блокам.
+    const input = '''
+- Питание: строка БЖУ
+- feat: экспорт привычек
+''';
+    final out = filter(input).trim().split('\n');
+    expect(out, hasLength(2));
+    expect(out.first, contains('Питание'));
+    expect(out.last, contains('Экспорт привычек'));
+    expect(out.any((l) => l.startsWith('**')), isFalse);
+  }, skip: skipWithoutBash);
+
+  test('готовый эмодзи из старого changelog не удваивается', () {
+    // Повторный прогон старого changelog приносил строку с уже стоящим
+    // значком, и в заметках появлялось «🫧 🫧 текст». Маркер ставим сами.
+    final out = filter('- ✨ Питание: строка БЖУ\n').trim();
+    expect(out, contains('Питание'));
+    expect(out.startsWith('- ✨'), isFalse);
   }, skip: skipWithoutBash);
 
   test('пустой вход — пустой выход и нулевой код возврата', () {

@@ -1,61 +1,49 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
-import '../l10n/locale_provider.dart';
-import '../l10n/translations.dart';
-import '../utils/markdown_text.dart';
-import '../utils/snackbar.dart';
-import '../services/ai_chat_store.dart';
-import '../services/ai_guide_service.dart';
-import '../services/json_file.dart';
+import '../services/haptics.dart';
 import '../services/prefs.dart';
-import '../services/screen_reader_service.dart';
-import '../services/settings_service.dart';
-import '../utils/wide_dash_formatter.dart';
-import '../utils/wide_dash_controller.dart';
 import '../widgets/ada_avatars.dart';
-import '../widgets/smooth_typing.dart';
-
-/// Канал системного оверлея.
-late final MethodChannel _overlayChannel;
 
 /// Инициализация канала: на web не используется (оверлей невозможен).
+/// Канал нужен главному движку — пузырь общается с ним только через
+/// `shareData`, поэтому здесь достаточно прогрева платформенных каналов.
 void initOverlayChannel() {
-  if (!kIsWeb) {
-    _overlayChannel = const MethodChannel('x-slayer/overlay');
-  }
+  if (kIsWeb) return;
+  const MethodChannel('x-slayer/overlay');
 }
 
-/// Размеры окна оверлея (dp). Окно почти квадратное — «не вдлину»:
-/// 320×360 (было 340×380, раньше 280×440 — вытянутое).
-// Пузырь компактный (36): не перекрывает контент под ним.
+/// Размер окна пузыря (dp). Окно ровно по пузырю: всё, что за ним, —
+/// настоящий экран приложения под Адой.
 const double _bubbleSize = 36;
 
-/// Верхний пояс, в который окошко не заезжает (dp), если основное приложение
-/// не успело передать реальный.
-const double _kAdaTopKeepoutFallback = 120;
+/// Команда главному приложению: «верни Agysha на экран и открой чат Ады».
+const String kOpenAdaChatCmd = 'open_ada_chat';
 
 /// Точка входа для главного приложения: движок оверлея переживает закрытие
 /// окна, поэтому при каждом показе окна мы посылаем команду «сбросься и
 /// покажись» — только так повторное открытие гарантированно видимо.
 /// (lifecycle-события могут не долететь до вторичного движка.)
-void resetOverlayFromHost() => _OverlayChatState.onHostReset();
+void resetOverlayFromHost() => _AdaBubbleState.onHostReset();
 
 /// Живая синхронизация аватарки из ГЛАВНОГО чата (отдельный движок).
 void syncOverlayAvatarFromHost(int variant) =>
-    _OverlayChatState.onAvatarSynced(variant);
+    _AdaBubbleState.onAvatarSynced(variant);
 
-/// Живая синхронизация модели из ГЛАВНОГО чата (отдельный движок).
-void syncOverlayModelFromHost(String label) =>
-    _OverlayChatState.onModelSynced(label);
+/// Модель, которой ответила Ада, в пузыре не показывается: подписи там нет.
+/// Функция остаётся, чтобы главный движок мог слать команду без ветвлений.
+void syncOverlayModelFromHost(String label) {}
 
+/// Приложение системного пузыря Ады.
+///
+/// В пузыре живёт ТОЛЬКО кнопка: чат остался в основном приложении. Тап по
+/// пузырю поднимает Agysha и открывает нормальный чат Ады — раньше оверлей
+/// разворачивался в собственное мини-окно со своей историей, и это читалось
+/// как «вернулось окошко вместо Ады».
 class AdaOverlayApp extends StatefulWidget {
   const AdaOverlayApp({super.key});
 
@@ -64,40 +52,28 @@ class AdaOverlayApp extends StatefulWidget {
 }
 
 class _AdaOverlayAppState extends State<AdaOverlayApp> {
-  String _lang = 'en';
   bool _ready = false;
 
   @override
   void initState() {
     super.initState();
-    _init();
+    unawaited(_init());
   }
 
   Future<void> _init() async {
-    await initPrefs();
-    // То же восстановление в движке мини-окошка — иначе первые кадры
-    // показывают пустую метку и она скачет.
-    AiGuideService.restoreModelLabel();
-    await JsonFile.initialize();
-    final lang = await SettingsService.resolveLanguageCode();
+    try {
+      await initPrefs();
+    } catch (_) {}
     if (!mounted) return;
-    setState(() {
-      _lang = lang;
-      _ready = true;
-    });
+    setState(() => _ready = true);
   }
 
   @override
   Widget build(BuildContext context) {
     if (!_ready) return const SizedBox.shrink();
-    // Окошко ВСЕГДА тёмное: фон чёрный с прямыми углами, поэтому даже при
-    // светлой теме приложения контраст текста внутри не ломается.
+    // Окно всегда тёмное и прозрачное: под пузырём настоящий экран.
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      // Прозрачный фон под всей аппкой: именно canvasColor/backgroundColor
-      // Material рисовал непрозрачным прямоугольником ЗА нашим скруглённым
-      // шеллом — отсюда «квадратные углы» на фоне. Теперь за скруглением
-      // виден настоящий экран.
       color: Colors.transparent,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: Colors.transparent,
@@ -106,1606 +82,199 @@ class _AdaOverlayAppState extends State<AdaOverlayApp> {
           surface: Colors.transparent,
         ),
       ),
-      home: LocaleProvider(locale: Locale(_lang), child: const _OverlayChat()),
+      home: const _AdaBubble(),
     );
   }
 }
 
-class _OverlayChat extends StatefulWidget {
-  const _OverlayChat();
+class _AdaBubble extends StatefulWidget {
+  const _AdaBubble();
+
   @override
-  State<_OverlayChat> createState() => _OverlayChatState();
+  State<_AdaBubble> createState() => _AdaBubbleState();
 }
 
-class _OverlayChatState extends State<_OverlayChat>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
-  /// Живой экземпляр состояния (в движке оверлея он один и переживает
-  /// закрытие окна). [onHostReset] вызывается из ГЛАВНОГО приложения по
-  /// каналу сообщений — переоткрытие окна не зависит от lifecycle.
-  static _OverlayChatState? _live;
+class _AdaBubbleState extends State<_AdaBubble>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  static _AdaBubbleState? _live;
 
-  /// Первое появление (initState) НЕ должно повторять сброс: lifecycle
-  /// «resumed» приходит на старте движка ДО первого кадра, и повторный
-  /// сброс съедал плавный вход (fade успевал закончиться до показа).
-  bool _initialized = false;
+  /// Тап по пузырю — не «нажатие на кнопку в окне»: палец ведёт окно по
+  /// экрану. Поэтому тап считаем сами: короткое касание почти без сдвига.
+  static const double _tapSlop = 8;
+  static const Duration _tapTime = Duration(milliseconds: 420);
 
-  /// Живая синхронизация из ГЛАВНОГО чата: аватарка сменилась там —
-  /// меняем здесь МГНОВЕННО, без переоткрытия окна (отдельный движок,
-  /// поэтому прямой вызов невозможен, только сообщение по мосту).
-  static void onAvatarSynced(int variant) {
-    final s = _live;
-    if (s == null || !s.mounted) return;
-    final v = variant.clamp(0, adaVariants.length - 1);
-    if (v == s._avatarVariant) return;
-    s.setState(() => s._avatarVariant = v);
-    setAdaAvatarVariant(v);
-  }
+  int _variant = -1;
+  bool _pressed = false;
+  bool _opening = false;
+  Offset? _downAt;
+  DateTime? _downTime;
 
-  /// Живая синхронизация модели из ГЛАВНОГО чата: какой провайдер ответил
-  /// там — такой же лейбл показываем и в мини-окошке.
-  static void onModelSynced(String label) {
-    final s = _live;
-    if (s == null || !s.mounted || label.isEmpty) return;
-    if (s._modelLabel == label) return;
-    s.setState(() => s._modelLabel = label);
-  }
-
-  /// Сброс из основного окна: окно пересоздано — привести к состоянию
-  /// «только что открылся» и НАЧАТЬ появление заново. Важно: команда
-  /// приходит ДО того, как новое окно реально появилось (движок живёт
-  /// отдельно), поэтому мгновенный forward закончится ещё до открытия —
-  /// окно выскочило бы без фейда. Ставим прозрачность в 0 и запускаем
-  /// появление с задержкой, когда окно уже на экране.
-  static void onHostReset() {
-    final s = _live;
-    if (s == null || !s.mounted) return;
-    s._inputFocus.unfocus();
-    s._stopDrift();
-    s.setState(() {
-      s._closing = false;
-      s._inputFocused = false;
-      s._collapsed = true;
-    });
-    s._placeBubbleCorner();
-    // Приглушаем ДО нуля: даже если окно мгновенно появится, оно не
-    // «вспыхнет» — fade стартует через момент.
-    s._appearCtrl.value = 0;
-    s._contentCtrl.value = 0;
-    // НЕ ставим позицию в центр: синхронизацию делает _load() с нативным
-    // getOverlayPosition (иначе окно «жило» в центре, хотя было вверху,
-    // и первый сдвиг прыгал в центр — это и казалось «следом»).
-    s._load();
-    // Окно снова на экране — возвращаем опрос синхронизации (его тик заодно
-    // подхватывает аватарку/модель, изменённые, пока окно было закрыто).
-    s._startSync();
-    // Окно появляется через ~300-400 мс после команды (пересоздание
-    // сервиса). Запускаем анимацию именно тогда.
-    s._appearTimer?.cancel();
-    s._appearTimer = Timer(const Duration(milliseconds: 350), () {
-      if (!s.mounted) return;
-      s._appearCtrl.forward(from: 0);
-      s._contentCtrl.forward(from: 0);
-      s._clampToScreen();
-      if (s._collapsed) s._startDrift();
-    });
-  }
-
-  static const _historyKey = 'ai_chat_history';
-
-  final _inputCtrl = WideDashController();
-  final _inputFocus = FocusNode();
-  final _scrollCtrl = ScrollController();
-  final List<AiMessage> _messages = [];
-  String? _historySnapshot;
-  bool _busy = false;
-  bool _typingFade = false;
-  // Стартуем ПУЗЫРЁМ: кнопка «режим в пузыре» больше не открывает
-  // мини-окно с чатом — Ада сразу появляется пузырём, а чат
-  // разворачивается тапом по нему.
-  bool _collapsed = true;
-
-  /// Размеры экрана в dp (пишет основное приложение при показе оверлея).
-  double get _screenW =>
-      (globalPrefs.getDouble('ada_overlay_sw') ?? 400).clamp(280.0, 1200.0);
-  double get _screenH =>
-      (globalPrefs.getDouble('ada_overlay_sh') ?? 850).clamp(480.0, 2400.0);
-
-  /// Ширина панели — по ширине экрана с полями, но уже прежней «почти во
-  /// весь экран»: владелец просил окошко заметно мельче. Высота — ~30%
-  /// экрана (210…300 dp): при открытой клавиатуре остаётся место и панели,
-  /// и полю ввода, а само окно не превращается в отдельный экран.
-  double get _chatW => (_screenW - 40).clamp(248.0, 380.0);
-  double get _chatH => (_screenH * 0.30).clamp(210.0, 300.0);
-
-  /// Текущий подъём над клавиатурой (dp): 0 — клавиатуры нет.
-  double _kbInset = 0;
-  Timer? _kbTimer;
-  double _lastKbInset = 0;
-  bool _closing = false;
-  bool _resizing = false;
-  bool _inputFocused = false;
-  bool _storageErrorShown = false;
-  String _modelLabel = '';
-
-  /// В шапке окна модель показывается только после первого сообщения:
-  /// при открытии «пустого» окна статус не должен мелькать и меняться.
-  int _avatarVariant = 0;
-  // Сколько сообщений было при открытии: только новые анимируют вход,
-  // иначе при появлении окошка вся история «вспыхивала» поверх.
-  int _openedCount = 0;
-
-  /// История прочитана с диска. До этого момента НЕ показываем пустое
-  /// состояние: иначе при открытии на кадр мелькал «пустой Ада», а следом
-  /// появлялась история — читалось как мигание.
-  bool _historyLoaded = false;
-
-  late final AnimationController _appearCtrl = AnimationController(
+  late final AnimationController _appear = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 350),
-  );
-  late final AnimationController _contentCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 200),
+    duration: const Duration(milliseconds: 260),
+    value: 1,
   );
 
-  Timer? _appearTimer;
-  Timer? _syncTimer;
-
-  // ── Позиция окна ──────────────────────────────────────────────────
-  // Пузырь ЛЕТАЕТ САМ по экрану (пользователь просил вернуть).
-  // Движение плавное: тики синхронизированы с vsync (Ticker), без
-  // таймерных гонок; при касании дрейф мгновенно встаёт (не спорит
-  // с пальцем) и плавно возобновляется после отпускания.
-  Ticker? _driftTicker;
-  double _vx = 0.8;
-  double _vy = 0.6;
-  Offset _pos = Offset.zero;
-  // Автопрокрутка к последнему сообщению только если пользователь и так
-  // внизу: иначе новый ответ выдёргивал ленту из-под пальца.
-  bool _stickToBottom = true;
-
-  // Лента изолирована от viewInsets, а при получении фокуса сохраняет
-  // позицию чтения, чтобы не добавлять скачок к анимации клавиатуры.
   @override
   void initState() {
     super.initState();
     _live = this;
-    _initialized = true;
     WidgetsBinding.instance.addObserver(this);
-    _inputFocus.addListener(_onFocusChange);
-    _scrollCtrl.addListener(() {
-      if (!_scrollCtrl.hasClients) return;
-      final pos = _scrollCtrl.position;
-      _stickToBottom = pos.maxScrollExtent - pos.pixels < 72;
-    });
-    // Стартовый fade: onHostReset (command от main при первом open) или
-    // lifecycle resumed. Страховка — свой таймер: если ни та, ни другая
-    // команда не пришла, окно ВСЁ РАВНО плавно появится через ~300мс
-    // (иначе навсегда висел «полупрозрачный след чата» при прозрачности 0).
-    _appearCtrl.value = 0;
-    _contentCtrl.value = 0;
-    _appearTimer?.cancel();
-    _appearTimer = Timer(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      _appearCtrl.forward(from: 0);
-      _contentCtrl.forward(from: 0);
-    });
-    // Опрос файла синхронизации с ГЛАВНЫМ чатом: аватарка/модель меняются
-    // в мини-окошке при ближайшем тике (~0.7с). Праксис надёжнее канала
-    // сообщений между двумя движками (prefs кэшируется отдельно).
-    _startSync();
-  }
-
-  /// Запуск опроса синхронизации — ТОЛЬКО пока окно живое.
-  ///
-  /// Движок оверлея после закрытия не умирает (его кэширует сервис), а
-  /// `dispose()` при закрытии не вызывается. Раньше `Timer.periodic`
-  /// переживал закрытие и продолжал дёргать файл каждые 0.7 с до конца
-  /// жизни процесса — фоновая нагрузка на слабый телефон и батарею при
-  /// полностью невидимом окне.
-  void _startSync() {
-    _syncTimer?.cancel();
-    _syncTick();
-    _syncTimer = Timer.periodic(
-      const Duration(milliseconds: 700),
-      (_) => _syncTick(),
-    );
-  }
-
-  void _stopSync() {
-    _syncTimer?.cancel();
-    _syncTimer = null;
-  }
-
-  Future<void> _syncTick() async {
-    try {
-      final s = await readAdaSyncState();
-      if (s.isEmpty) return;
-      final av = s['avatar'];
-      if (av is int && av >= 0 && av != _avatarVariant) {
-        final v = av.clamp(0, adaVariants.length - 1);
-        if (mounted) setState(() => _avatarVariant = v);
-        setAdaAvatarVariant(v);
-      }
-      final m = s['model'];
-      if (m is String && m.isNotEmpty && m != _modelLabel) {
-        if (mounted) setState(() => _modelLabel = m);
-      }
-    } catch (_) {}
-  }
-
-  // Оверлей рендерится в КЭШИРОВАННОМ движке: после закрытия окна Dart-
-  // состояние чата остаётся живым, и второе открытие подхватывает
-  // «хвосты» сессии (_closing=true и т.п.). При каждом перезапуске окна
-  // (сервис зовёт appIsResumed → resumed) — сбрасываем всё и плавно
-  // проигрываем появление заново.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    // Окно пересоздано/возвращено — то же самое, что и команда сброса
-    // с главного экрана: приводим состояние и плавно показываемся.
-    if (state == AppLifecycleState.resumed) {
-      if (_initialized) {
-        _initialized = false;
-        return; // первый resumed при старте — не трогаем
-      }
-      onHostReset();
-    }
-  }
-
-  // Сгладить первое поднятие клавиатуры: лента изолирована от viewInsets
-  // (MediaQuery.removeViewInsets), поэтому пересборки нет. При фокусе
-  // досматриваем вниз БЕЗ анимации (jumpTo) — но только если последнее
-  // сообщение реально ушло из виду (иначе каждый фокус дёргал ленту).
-  void _onFocusChange() {
-    if (!mounted) return;
-    final f = _inputFocus.hasFocus;
-    if (f != _inputFocused) {
-      _inputFocused = f;
-      // Окно при фокусе не трогаем: фокусируемость включает onTap поля
-      // (с ожиданием ответа натива), а при ПОТЕРЕ фокуса возвращаем окну
-      // NOT_FOCUSABLE — жест «назад» снова работает в основном приложении,
-      // и следующий тап по полю снова включает IME с первого раза.
-      if (!f) _setFocusable(false);
-      // Не прыгаем к последнему сообщению при фокусе: скачок прокрутки
-      // совпадал с появлением IME и дёргал мини-окно.
-    }
-  }
-
-  /// Меняет флаг фокусируемости окна. Дождаться ответа натива ВАЖНО:
-  /// requestFocus сразу после смены флага «съедался», и клавиатура
-  /// появлялась только со второго тапа.
-  Future<void> _setFocusable(bool focus) async {
-    if (kIsWeb) return; // Оверлей невозможен на web
-    try {
-      await _overlayChannel.invokeMethod<void>('updateFlag', {
-        'flag': focus ? 'focusPointer' : 'defaultFlag',
-      });
-      // Натив обновляет LayoutParams асинхронно (updateViewLayout): даём
-      // ему кадр-другой, иначе первый requestFocus может «съесть» флаг.
-      await Future<void>.delayed(const Duration(milliseconds: 80));
-    } catch (_) {}
-  }
-
-  // ── Drag оверлея ──────────────────────────────────────────────────
-  // Драг работает по всей зоне (пузырь и чат). Дельты копятся в _pos,
-  // а на нативную сторону позиция уходит РОВНО РАЗ В КАДР (синхронно с
-  // vsync через addPostFrameCallback) — телефон успевает отрисовать
-  // каждое положение без гонки между таймером (16мс) и кадрами, которая
-  // давала «дёрганье» (то двойная отправка, то пропуск).
-  bool _dragging = false;
-  bool _sendScheduled = false;
-  bool _nativeMoveInFlight = false;
-  Offset? _pendingNativePosition;
-
-  void _scheduleSend() {
-    if (_sendScheduled) return;
-    _sendScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _sendScheduled = false;
-      if (mounted) _sendPos();
-    });
-  }
-
-  void _startDrag() {
-    if (_dragging) return;
-    _dragging = true;
-    _stopDrift();
-  }
-
-  void _endDrag() {
-    _dragging = false;
-    if (mounted) {
-      _sendPos();
-      _persistPosition();
-    }
-    if (_collapsed) _startDrift();
-  }
-
-  void _onDrag(DragUpdateDetails d) {
-    if (_closing) return; // закрытие — драг не двигает окно
-    _pos = Offset(_pos.dx + d.delta.dx, _pos.dy + d.delta.dy);
-    _startDrag();
-    // Координаты жеста приходят чаще, чем кадры. Сливаем их до ближайшего
-    // кадра Flutter; native затем применяет одну последнюю позицию на vsync.
-    // Прямой вызов на каждый onPanUpdate накапливал MethodChannel-запросы.
-    _scheduleSend();
-  }
-
-  /// Верхний запретный пояс в dp: статус-бар + шапка + таблетка разделов
-  /// основного экрана. Окно лежит НАД приложением, и без пояса при
-  /// перетаскивании вверх оно забиралось на категории «Полезные/Вредные».
-  /// Пишет основное приложение (`showAdaOverlay`); окно ставится нативом с
-  /// FLAG_LAYOUT_NO_LIMITS, поэтому y=0 — физический верх экрана.
-  double get _topKeepout =>
-      (globalPrefs.getDouble('ada_overlay_top') ?? _kAdaTopKeepoutFallback)
-          .clamp(0.0, 400.0);
-
-  /// Позиция, зажатая в границах экрана для окна [w]×[h]: сверху — запретный
-  /// пояс, снизу — запас 36dp под системную навигацию (иначе окно ложилось на
-  /// навбар), по бокам — поля экрана. Если доступной высоты не хватает даже
-  /// на пояс, держим верхнюю границу: clamp с lowerLimit > upperLimit бросает
-  /// исключение.
-  Offset _clamped(Offset pos, double w, double h) {
-    final sw = globalPrefs.getDouble('ada_overlay_sw') ?? 400;
-    final sh = globalPrefs.getDouble('ada_overlay_sh') ?? 850;
-    final top = _topKeepout;
-    final bottom = sh - h - 12;
-    return Offset(
-      pos.dx.clamp(0.0, sw - w < 0 ? 0.0 : sw - w),
-      pos.dy.clamp(top, bottom < top ? top : bottom),
-    );
-  }
-
-  /// Шлёт текущую позицию на нативную сторону, удерживая окошко в границах
-  /// экрана. Координаты передаются дробными (dp) — нативная сторона сама
-  /// переводит их в пиксели, поэтому движение получается плавным, а не
-  /// «ступеньками» по 1dp.
-  void _sendPos() {
-    // При открытой клавиатуре панель уже поднята и её фактическая высота
-    // меньше базовой — clamp считаем по ней, иначе _clamped вернул бы
-    // окно вниз, под клавиатуру.
-    final effectiveH = _collapsed
-        ? _bubbleSize
-        : (_kbInset > 0
-              ? (_screenH - _kbInset - _topKeepout - 16).clamp(200.0, _chatH)
-              : _chatH);
-    _pos = _clamped(_pos, _collapsed ? _bubbleSize : _chatW, effectiveH);
-    // Не складываем MethodChannel-вызовы в очередь: если native ещё
-    // применяет предыдущую позицию, оставляем только самую свежую.
-    _pendingNativePosition = _pos;
-    _flushNativePosition();
-  }
-
-  void _flushNativePosition() async {
-    if (kIsWeb) return; // Оверлей невозможен на web
-    if (_nativeMoveInFlight || _pendingNativePosition == null || !mounted) {
-      return;
-    }
-    final position = _pendingNativePosition!;
-    _pendingNativePosition = null;
-    _nativeMoveInFlight = true;
-    try {
-      await _overlayChannel.invokeMethod<void>('updateOverlayPosition', {
-        'x': position.dx,
-        'y': position.dy,
-      });
-    } catch (_) {
-      // Окно могло закрыться между кадрами — это не должно ломать чат.
-    } finally {
-      _nativeMoveInFlight = false;
-      if (mounted && _pendingNativePosition != null) {
-        _flushNativePosition();
-      }
-    }
-  }
-
-  void _persistPosition() {
-    try {
-      globalPrefs.setDouble('ada_overlay_x', _pos.dx);
-      globalPrefs.setDouble('ada_overlay_y', _pos.dy);
-      // Запоминаем, в каком виде окно закрыли: координаты панели чата
-      // пузырю не годятся, а координаты пузыря — годятся.
-      globalPrefs.setBool('ada_overlay_bubble', _collapsed);
-    } catch (_) {}
-  }
-
-  Future<void> _load() async {
-    _avatarVariant = savedAdaAvatarIndex();
-    // Лейбл модели не перезатираем при каждом входе из пузыря (прыгал из
-    // «ada-0.0.3» в «Kilo..» и обратно): берём только если ещё пуст,
-    // дальше живёт через синхронизацию/ответы.
-    if (_modelLabel.isEmpty) {
-      _modelLabel = await AiGuideService.currentModelLabel();
-    }
-    // ВОССТАНАВЛИВАЕМ позицию из prefs: showOverlay всегда создаёт окно
-    // по центру, а мы переставляем его туда, где оно было (иначе каждое
-    // открытие «прыгало» в центр).
-    final sx = globalPrefs.getDouble('ada_overlay_x');
-    final sy = globalPrefs.getDouble('ada_overlay_y');
-    final wasBubble = globalPrefs.getBool('ada_overlay_bubble') ?? false;
-    if (wasBubble && sx != null && sy != null) {
-      // Пузырь вернулся туда, куда его утащили пальцем.
-      _pos = Offset(sx, sy);
-      _sendPos();
-    } else {
-      // Координаты старого мини-окна с чатом пузырю не подходят — угол.
-      _placeBubbleCorner();
-      _sendPos();
-    }
-    try {
-      final raw = await JsonFile.read(_historyKey);
-      _historySnapshot = raw;
-      if (raw != null && raw.isNotEmpty) {
-        final list = jsonDecode(raw) as List;
-        final loaded = list
-            .map((e) => AiMessage.fromJson(e as Map<String, dynamic>))
-            .toList();
-        if (mounted) {
-          setState(() {
-            _messages
-              ..clear()
-              ..addAll(loaded);
-            // Сообщения истории при открытии НЕ анимируют вход.
-            _openedCount = _messages.length;
-          });
-          _scrollToBottom(animate: false);
-        }
-      }
-    } catch (error, stackTrace) {
-      _reportStorageFailure(error, stackTrace);
-    }
-    if (mounted) setState(() => _historyLoaded = true);
-    // Чат всегда открывается нижней панелью, а не там, где его в прошлый
-    // раз бросили: это больше не свободно плавающее окно.
-    if (!_collapsed && mounted) {
-      _placeChatBottom();
-      _sendPos();
-    }
-  }
-
-  void _reportStorageFailure(Object error, StackTrace stackTrace) {
-    debugPrint('Ada overlay history operation failed: $error\n$stackTrace');
-    if (!mounted || _storageErrorShown) return;
-    _storageErrorShown = true;
-    showBeautifulSnackBar(
-      context,
-      message: Translations.t(
-        'dataStorageError',
-        context,
-        'Local data could not be read or saved. Existing files were not changed.',
-      ),
-      icon: Icons.warning_amber_rounded,
-      iconColor: Colors.redAccent,
-      duration: const Duration(seconds: 6),
-      groupKey: 'ada-history-storage',
-    );
-  }
-
-  Future<void> _toggleSize() async {
-    if (_closing || _resizing) return;
-    _resizing = true;
-    final wasCollapsed = _collapsed;
-    final previousPosition = _pos;
-    try {
-      if (_collapsed) {
-        // Пузырь → чат: гасим пузырь, ставим панель ПО НИЗУ ЭКРАНА
-        // (как нижний лист чата), проявляем. Ширина — почти вся.
-        _stopDrift();
-        await _contentCtrl.reverse();
-        if (!mounted) return;
-        setState(() => _collapsed = false);
-        _placeChatBottom();
-        final resized =
-            await FlutterOverlayWindow.resizeOverlay(
-              _chatW.round(),
-              _chatH.round(),
-              false,
-            ) ??
-            false;
-        if (!resized) {
-          _pos = previousPosition;
-          if (mounted) {
-            setState(() => _collapsed = wasCollapsed);
-            _contentCtrl.forward(from: 0);
-          }
-          return;
-        }
-        _sendPos();
-        _persistPosition();
-        if (!mounted) return;
-        // Ждём, пока новый размер попадёт в кадр, и только затем проявляем
-        // чат. Иначе последний кадр fade рисовался уже с новым layout и давал
-        // заметный толчок.
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) return;
-        _contentCtrl.forward(from: 0);
-      } else {
-        // Чат → пузырь: гасим чат, мгновенно уменьшаем окно в центр,
-        // проявляем пузырь.
-        await _contentCtrl.reverse();
-        if (!mounted) return;
-        setState(() => _collapsed = true);
-        // Пузырь ставим в правый нижний угол — на месте, где был низ
-        // панели: окно не «улетает» в центр экрана.
-        _placeBubbleCorner();
-        final resized =
-            await FlutterOverlayWindow.resizeOverlay(
-              _bubbleSize.round(),
-              _bubbleSize.round(),
-              false,
-            ) ??
-            false;
-        if (!resized) {
-          _pos = previousPosition;
-          if (mounted) {
-            setState(() => _collapsed = wasCollapsed);
-            _contentCtrl.forward(from: 0);
-          }
-          return;
-        }
-        _sendPos();
-        _persistPosition();
-        if (!mounted) return;
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) return;
-        _contentCtrl.forward(from: 0);
-        _startDrift();
-      }
-    } catch (_) {
-      // Сервис мог закрыться между тапом и resize. Не оставляем Dart-состояние
-      // в промежуточном режиме и не даём исключению завершить overlay engine.
-      _pos = previousPosition;
-      if (mounted) {
-        if (_collapsed != wasCollapsed) {
-          setState(() => _collapsed = wasCollapsed);
-        }
-        _contentCtrl.forward(from: 0);
-      }
-    } finally {
-      _resizing = false;
-    }
-  }
-
-  /// Ставит чат-панель по низу экрана: слева/справа по 8 dp, снизу —
-  /// отступ под навбар. Никакого «центра» и свободного полёта.
-  void _placeChatBottom() {
-    _kbInset = 0;
-    _lastKbInset = 0;
-    _pos = Offset((_screenW - _chatW) / 2, _screenH - _chatH - 16);
-  }
-
-  /// Пузырь в правом нижнем углу — там же, где низ панели чата, чтобы
-  /// окно не «улетало» в центр экрана при сворачивании.
-  void _placeBubbleCorner() {
-    _kbInset = 0;
-    _lastKbInset = 0;
-    _pos = Offset(_screenW - _bubbleSize - 16, _screenH - _bubbleSize - 96);
-  }
-
-  /// Плавно переставляет окно: резкий MethodChannel-прыжок на подъёме
-  /// клавиатуры читался как рывок. Тик на каждый кадр, ~180 мс.
-  void _animatePosTo(Offset target) {
-    final start = _pos;
-    final from = DateTime.now();
-    _kbTicker?.dispose();
-    _kbTicker = createTicker((_) {
-      if (!mounted) return;
-      final t = (DateTime.now().difference(from).inMilliseconds / 180.0).clamp(
-        0.0,
-        1.0,
-      );
-      final e = Curves.easeOutCubic.transform(t);
-      _pos = Offset.lerp(start, target, e) ?? target;
-      _sendPos();
-      if (t >= 1.0) {
-        _kbTicker?.dispose();
-        _kbTicker = null;
-      }
-    });
-    _kbTicker!.start();
-  }
-
-  Ticker? _kbTicker;
-
-  /// Клавиатура: панель ПОДНИМАЕТСЯ над ней, сохраняя высоту (пока хватает
-  /// места). Окно оверлея с ADJUST_NOTHING само не сжимается, поэтому
-  /// двигаем его вручную по фактическому IME-инсету.
-  void _applyKeyboardInset(double inset) {
-    if (_collapsed || _resizing || !mounted) return;
-    _kbInset = inset;
-    final maxH = (_screenH - inset - _topKeepout - 16).clamp(200.0, _chatH);
-    final h = maxH;
-    final y = (_screenH - inset - h - 8).clamp(
-      _topKeepout,
-      (_screenH - h - 8) < _topKeepout ? _topKeepout : _screenH - h - 8,
-    );
-    // Размер меняем только при реальной нехватке места; иначе просто
-    // поднимаем окно — меньше native-ресайзов, меньше дёрганья.
-    if ((h - _chatH).abs() > 2) {
-      FlutterOverlayWindow.resizeOverlay(
-        _chatW.round(),
-        h.round(),
-        false,
-      ).catchError((_) => false);
-    }
-    _animatePosTo(Offset((_screenW - _chatW) / 2, y));
-    _persistPosition();
-  }
-
-  @override
-  void didChangeMetrics() {
-    super.didChangeMetrics();
-    if (!mounted || _collapsed || _resizing) return;
-    // MediaQuery у состояния ещё не «обрезана» (removeViewInsets стоит
-    // только на детях), поэтому инсет клавиатуры здесь настоящий.
-    final inset = MediaQuery.viewInsetsOf(context).bottom;
-    if ((inset - _lastKbInset).abs() < 1) return;
-    _lastKbInset = inset;
-    _kbTimer?.cancel();
-    // Ждём финальные метрики: IME приходит покадрово, ресайз на каждом
-    // кадре — это дёрганье и очередь MethodChannel.
-    _kbTimer = Timer(const Duration(milliseconds: 90), () {
-      if (mounted) _applyKeyboardInset(inset);
-    });
-  }
-
-  void _startDrift() {
-    _driftTicker?.stop();
-    _driftTicker?.dispose();
-    _driftTicker = null;
-    _ensurePos();
-    _vx = Random().nextBool() ? 0.2133 : -0.2133;
-    _vy = Random().nextBool() ? 0.16 : -0.16;
-    _driftTicker = createTicker((_) => _driftTick());
-    _driftTicker!.start();
-  }
-
-  void _stopDrift() {
-    _driftTicker?.stop();
-    _driftTicker?.dispose();
-    _driftTicker = null;
-  }
-
-  void _ensurePos() {
-    if (_pos.dx != 0 || _pos.dy != 0) return;
-    final sw = globalPrefs.getDouble('ada_overlay_sw') ?? 400;
-    final sh = globalPrefs.getDouble('ada_overlay_sh') ?? 850;
-    _pos = Offset((sw - _bubbleSize) / 2, (sh - _bubbleSize) / 2);
-  }
-
-  void _driftTick() {
-    if (!_collapsed || !mounted || _dragging) return;
-    _ensurePos();
-    final sw = globalPrefs.getDouble('ada_overlay_sw') ?? 400;
-    final sh = globalPrefs.getDouble('ada_overlay_sh') ?? 850;
-    final top = _topKeepout;
-    var x = _pos.dx + _vx;
-    var y = _pos.dy + _vy;
-    if (x <= 4 || x >= sw - _bubbleSize - 4) _vx = -_vx;
-    // Дрейф отрабатывает и от верхнего пояса: иначе «самокатаясь» по экрану,
-    // пузырь периодически наползал на категории разделов.
-    if (y <= top || y >= sh - _bubbleSize - 4) _vy = -_vy;
-    x = x.clamp(4.0, sw - _bubbleSize - 4);
-    y = y.clamp(top, (sh - _bubbleSize - 4) < top ? top : sh - _bubbleSize - 4);
-    if ((x - _pos.dx).abs() < 0.01 && (y - _pos.dy).abs() < 0.01) return;
-    _pos = Offset(x, y);
-    _scheduleSend();
-  }
-
-  Future<void> _clampToScreen() async {
-    if (kIsWeb) return; // Оверлей невозможен на web
-    final clamped = _clamped(_pos, _chatW, _chatH);
-    _pos = clamped;
-    try {
-      await _overlayChannel.invokeMethod<void>('updateOverlayPosition', {
-        'x': clamped.dx,
-        'y': clamped.dy,
-      });
-    } catch (_) {}
-  }
-
-  void _scrollToBottom({bool animate = true, bool force = false}) {
-    // Новые сообщения — ПЛАВНЫЙ скролл к концу (список уже построен).
-    if (animate) {
-      if (!force && !_stickToBottom) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_scrollCtrl.hasClients) return;
-        final pos = _scrollCtrl.position;
-        if (pos.pixels < pos.maxScrollExtent - 4) {
-          _scrollCtrl.animateTo(
-            pos.maxScrollExtent,
-            duration: const Duration(milliseconds: 360),
-            curve: Curves.easeOutCubic,
-          );
-        }
-      });
-      return;
-    }
-    // Открытие чата: ListView.builder строит лениво — первый maxScrollExtent
-    // только оценка («середина»). Прыгаем к концу итеративно, пока оценка
-    // не сойдётся к настоящему концу.
-    Future<void> converge() async {
-      for (var i = 0; i < 14; i++) {
-        if (!_scrollCtrl.hasClients) {
-          await Future<void>.delayed(const Duration(milliseconds: 40));
-          continue;
-        }
-        final pos = _scrollCtrl.position;
-        if (pos.pixels >= pos.maxScrollExtent - 2 && i > 2) break;
-        pos.jumpTo(pos.maxScrollExtent);
-        await Future<void>.delayed(const Duration(milliseconds: 40));
-      }
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => converge());
-  }
-
-  Future<void> _send() async {
-    final message = _inputCtrl.text.trim();
-    if (message.isEmpty || _busy) return;
-    _inputCtrl.clear();
-    // Горячий стрик: строку вставляем сразу в ленту, без перечитывания
-    // истории из файла.
-    final hotLine = await AiGuideService.bumpAdaStreak();
-    if (!mounted) return;
-    setState(() {
-      _messages.add(
-        AiMessage(
-          isUser: true,
-          text: message,
-          ts: DateTime.now().millisecondsSinceEpoch,
-        ),
-      );
-      if (hotLine != null) {
-        _messages.add(
-          AiMessage(
-            isUser: false,
-            text: hotLine,
-            ts: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
-      }
-      _busy = true;
-      _typingFade = false;
-    });
-    await _saveHistory();
-    _scrollToBottom(force: true);
-
-    try {
-      final lang = await SettingsService.resolveLanguageCode();
-      final reply = await AiGuideService.send(
-        userText: message,
-        history: _messages.take(_messages.length - 1).toList(),
-        languageCode: lang,
-        // Мини-окошеко уважает веб-поиск из основного чата: настройка
-        // живёт в prefs ('ai_web_search') и переживает перезапуск.
-        useWebSearch: globalPrefs.getBool('ai_web_search') ?? false,
-        // «Ада видит экран»: раньше мини-окно НЕ передавало снимок вовсе —
-        // переключатель в настройках включался, а в промпт контекст не
-        // попадал, поэтому Ада «не видела экран». Здесь тот же снимок,
-        // что и в остальных окнах чата ('' — если выключено/нет прав).
-        screenContext: await ScreenReaderService.snapshot(),
-      );
-      if (!mounted) {
-        await AiGuideService.appendBackgroundAnswer(reply);
-        return;
-      }
-      // Эстафета «печатает…» → ответ: точки плавно гаснут, потом ответ
-      // всплывает — как в полном чате, без резкого щелчка.
-      setState(() => _typingFade = true);
-      await Future.delayed(const Duration(milliseconds: 180));
-      if (!mounted) return;
-      setState(() {
-        _messages.add(
-          AiMessage(
-            isUser: false,
-            text: reply,
-            ts: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
-        _busy = false;
-        _typingFade = false;
-      });
-      _saveHistory();
-      // Обновляем лейбл модели (какой провайдер реально ответил) и
-      // сообщаем ГЛАВНОМУ чату (отдельный движок) — там тоже сменится.
-      AiGuideService.currentModelLabel().then((m) {
-        if (mounted && m != _modelLabel) setState(() => _modelLabel = m);
-      });
-      final used = AiGuideService.lastUsedModel;
-      if (used.isNotEmpty) {
-        writeAdaSyncState(model: used);
-      }
-      _scrollToBottom(force: false);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _typingFade = true;
-      });
-      await Future.delayed(const Duration(milliseconds: 180));
-      if (!mounted) return;
-      setState(() {
-        _messages.add(
-          AiMessage(
-            isUser: false,
-            text: Translations.t(
-              'aiResort',
-              context,
-              'ИИ на курорте, подожди немного',
-            ),
-            ts: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
-        _busy = false;
-        _typingFade = false;
-      });
-      _saveHistory();
-      _scrollToBottom(force: false);
-    }
-  }
-
-  Future<void> _saveHistory() async {
-    try {
-      final saved = await AiChatStore.persist(_messages, _historySnapshot);
-      _historySnapshot = saved.snapshot;
-      _storageErrorShown = false;
-      _adoptSavedHistory(saved.messages);
-    } catch (error, stackTrace) {
-      _reportStorageFailure(error, stackTrace);
-    }
-  }
-
-  /// Принять слияние с диском: оверлей и чат приложения пишут одну
-  /// историю, и непринятое слияние стиралось следующей записью.
-  void _adoptSavedHistory(List<AiMessage> saved) {
-    if (saved.isEmpty || !mounted) return;
-    final known = {for (final m in _messages) AiChatStore.identity(m)};
-    if (saved.every((m) => known.contains(AiChatStore.identity(m)))) return;
-    final clearedAt = AiGuideService.chatClearedAt();
-    final visible = saved
-        .where((m) => AiGuideService.visibleInChat(m, clearedAt))
-        .toList();
-    setState(() {
-      _messages
-        ..clear()
-        ..addAll(AiChatStore.adopt(_messages, visible));
-    });
-  }
-
-  /// Тап по аватарке мини-окошка — тот же живой цикл, что в главном чате:
-  /// переключаем на УНИКАЛЬНЫЙ значок (другую иконку), сохраняем в prefs
-  /// и сообщаем главному приложению (там все аватарки обновятся мгновенно).
-  void _cycleAvatar() {
-    final cur = adaVariants[_avatarVariant];
-    var next = _avatarVariant;
-    var guard = 0;
-    while (guard < adaVariants.length * 3) {
-      next = Random().nextInt(adaVariants.length);
-      if (adaVariants[next].icon != cur.icon) break;
-      guard++;
-    }
-    if (next == _avatarVariant) {
-      next = (_avatarVariant + 1) % adaVariants.length;
-    }
-    setState(() => _avatarVariant = next);
-    setAdaAvatarVariant(next);
-    // Синхронизация с главным чатом: файл состояния подхватится опросом.
-    writeAdaSyncState(avatar: next);
-  }
-
-  /// Аватар с плавной сменой: медленный ровный кросс-фейд (900 мс).
-  ///
-  /// Раньше здесь стоял 320-мс fade со ScaleTransition ом 0→1: медальон
-  /// буквально «вырастал» из точки, и смена читалась как перерисовка.
-  /// Теперь один рисунок просто растворяется в другом — и в том же темпе,
-  /// что и аватарки в основном чате.
-  Widget _animatedAvatar(double size, int variant) {
-    // Как в «Сообществе»: 340 мс ровного кросс-фейда.
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 340),
-      switchInCurve: Curves.easeInOut,
-      switchOutCurve: Curves.easeInOut,
-      transitionBuilder: (child, anim) => FadeTransition(
-        opacity: CurvedAnimation(parent: anim, curve: Curves.easeInOut),
-        child: child,
-      ),
-      child: AdaAvatar(
-        key: ValueKey('av_$variant'),
-        size: size,
-        variantIndex: variant,
-      ),
-    );
-  }
-
-  Future<void> _close() async {
-    if (_closing) return;
-    _closing = true;
-    _stopDrift();
-    // Движок после закрытия живёт — фоновый опрос диска ему не нужен.
-    _stopSync();
-    _persistPosition();
-    // Замораживаем движение: отменяем отложенную отправку позиции
-    // (иначе окно могло «уехать» в момент закрытия) и фиксируем её.
-    _sendScheduled = false;
-    _pendingNativePosition = null;
-    _setFocusable(false);
-    await _contentCtrl.reverse();
-    if (!mounted) return;
-    globalPrefs.setBool('ai_floating', false);
-    // Пишем маркер чтобы main app знал что оверлей закрыт.
-    // SharedPreferences кэширует в памяти отдельно для каждого engine.
-    try {
-      await JsonFile.write('overlay_closed', '1');
-    } catch (_) {}
-    await FlutterOverlayWindow.closeOverlay();
-    // Снимаем «закрытость» и позицию: движок живёт дальше, окно может
-    // быть открыто снова — состояние не должно оставаться мёртвым.
-    _closing = false;
-    _inputFocused = false;
+    unawaited(_restoreAvatar());
+    // Окно появляется в тот же кадр, в котором его показал сервис: короткий
+    // «выдох» из 0.72 → 1 читается как плавный выезд, а не как вспышка.
+    _appear.forward(from: 0);
   }
 
   @override
   void dispose() {
-    if (_live == this) _live = null;
+    if (identical(_live, this)) _live = null;
     WidgetsBinding.instance.removeObserver(this);
-    _appearTimer?.cancel();
-    _syncTimer?.cancel();
-    _kbTimer?.cancel();
-    _stopDrift();
-    _appearCtrl.dispose();
-    _contentCtrl.dispose();
-    _inputCtrl.dispose();
-    _inputFocus.removeListener(_onFocusChange);
-    _inputFocus.dispose();
-    _kbTicker?.dispose();
-    _scrollCtrl.dispose();
+    _appear.dispose();
     super.dispose();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Пузырь переживает сворачивание приложения: запоминаем, куда его
+    // перетащили, чтобы в следующий раз он появился там же.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      unawaited(_rememberPosition());
+    }
+  }
+
+  static void onHostReset() {
+    final live = _live;
+    if (live == null) return;
+    live._opening = false;
+    live._pressed = false;
+    live._appear.forward(from: 0);
+    unawaited(live._restoreAvatar());
+  }
+
+  static void onAvatarSynced(int variant) {
+    final live = _live;
+    if (live == null || live._variant == variant) return;
+    live.setState(() => live._variant = variant);
+  }
+
+  Future<void> _restoreAvatar() async {
+    try {
+      final saved = globalPrefs.getInt('ada_avatar_variant');
+      if (saved == null || !mounted) return;
+      setState(() => _variant = saved);
+    } catch (_) {}
+  }
+
+  /// Запоминает текущую позицию окна (dp) — её же использует главное
+  /// приложение, когда показывает пузырь снова.
+  Future<void> _rememberPosition() async {
+    try {
+      final pos = await FlutterOverlayWindow.getOverlayPosition();
+      await globalPrefs.setDouble('ada_overlay_x', pos.x);
+      await globalPrefs.setDouble('ada_overlay_y', pos.y);
+    } catch (_) {}
+  }
+
+  Future<void> _openChat() async {
+    if (_opening) return;
+    _opening = true;
+    Haptics.select();
+    await _rememberPosition();
+    try {
+      await FlutterOverlayWindow.shareData({'cmd': kOpenAdaChatCmd});
+    } catch (_) {
+      _opening = false;
+      return;
+    }
+    // Пузырь остаётся на месте: короткий дебаунс вместо вечной блокировки —
+    // иначе после первого тапа пузырь «замирал» до перезапуска оверлея.
+    Timer(const Duration(milliseconds: 900), () {
+      if (mounted) _opening = false;
+    });
+  }
+
+  void _onDown(PointerDownEvent event) {
+    _downAt = event.position;
+    _downTime = DateTime.now();
+    setState(() => _pressed = true);
+  }
+
+  void _onUp(PointerUpEvent event) {
+    final downAt = _downAt;
+    final downTime = _downTime;
+    _downAt = null;
+    _downTime = null;
+    if (mounted && _pressed) setState(() => _pressed = false);
+    if (downAt == null || downTime == null) return;
+    final moved = (event.position - downAt).distance;
+    final held = DateTime.now().difference(downTime);
+    if (moved <= _tapSlop && held <= _tapTime) unawaited(_openChat());
+  }
+
+  void _onCancel(PointerCancelEvent event) {
+    _downAt = null;
+    _downTime = null;
+    if (mounted && _pressed) setState(() => _pressed = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // removeViewInsets: у системного окошка НЕТ места для клавиатуры,
-    // окно поверх неё не сдвигается — а вот MediaQuery с viewInsets могла
-    // заставлять чат пересчитываться при каждом подъёме/опускании IME
-    // (отсюда «подтормаживания»). Изолируем инсеты полностью.
-    return MediaQuery.removeViewInsets(
-      context: context,
-      removeLeft: true,
-      removeTop: true,
-      removeRight: true,
-      removeBottom: true,
+    // Прозрачный фон окна: всё, кроме круга, должно пропускать экран.
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: _onDown,
+      onPointerUp: _onUp,
+      onPointerCancel: _onCancel,
       child: AnimatedBuilder(
-        animation: Listenable.merge([_appearCtrl, _contentCtrl]),
-        builder: (context, _) {
-          final appearT = Curves.easeOutCubic.transform(_appearCtrl.value);
-          final contentT = Curves.easeOutCubic.transform(_contentCtrl.value);
-          // Морф пузырь↔чат: системное окно меняет размер скачком (натив
-          // не умеет анимировать его само), поэтому содержимое въезжает
-          // слегка уменьшенным и дорастает до 100% — переход читается
-          // превращением, а не подменой одного прямоугольника другим.
-          final morph = 0.90 + 0.10 * contentT;
+        animation: _appear,
+        builder: (context, child) {
+          final e = Curves.easeOutCubic.transform(_appear.value);
           return Opacity(
-            // Появление гарантировано (авто-таймер в initState + команда
-            // сброса от main + lifecycle), поэтому минимум НЕ нужен —
-            // иначе висел «полупрозрачный след чата» вместо плавного фейда.
-            opacity: (appearT * contentT).clamp(0.0, 1.0),
+            opacity: e,
             child: Transform.scale(
-              scale: morph,
-              alignment: _collapsed ? Alignment.center : Alignment.bottomCenter,
-              child: _collapsed ? _buildBubble() : _buildChatShell(),
+              scale: 0.72 + 0.28 * e,
+              alignment: Alignment.center,
+              child: child,
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildBubble() {
-    final sz = _bubbleSize - 2;
-    final cs = Theme.of(context).colorScheme;
-    // Пузырь — монотонный, в цветах темы: раньше переливался сиреневым и
-    // выбивался из интерфейса.
-    final colors = [cs.surfaceContainerHighest, cs.surfaceContainerLow];
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _toggleSize,
-      onTapDown: (_) => _stopDrift(),
-      onPanStart: (_) => _startDrag(),
-      onPanEnd: (_) => _endDrag(),
-      onPanCancel: _endDrag,
-      onPanUpdate: _onDrag,
-      child: Center(
-        child: RepaintBoundary(
-          child: ClipOval(
-            child: Container(
-              width: sz,
-              height: sz,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: colors,
-                ),
-                border: Border.all(
-                  color: cs.outlineVariant.withValues(alpha: 0.55),
-                  width: 1.2,
-                ),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Center(child: _animatedAvatar(sz * 0.66, _avatarVariant)),
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.white.withValues(alpha: 0.32),
-                              Colors.white.withValues(alpha: 0.0),
-                            ],
-                            stops: const [0.0, 0.45],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        child: Center(
+          child: AnimatedScale(
+            scale: _pressed ? 0.90 : 1.0,
+            duration: Duration(milliseconds: _pressed ? 90 : 220),
+            curve: _pressed ? Curves.easeOut : Curves.easeOutBack,
+            child: _bubbleBody(),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildChatShell() {
-    final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      // Панель больше не таскается по экрану: она стоит снизу. Свайп вниз
-      // по пустой области/шапке сворачивает её в пузырь — привычный жест
-      // нижнего листа.
-      onVerticalDragEnd: (d) {
-        if ((d.primaryVelocity ?? 0) > 260) _toggleSize();
-      },
-      child: ClipRRect(
-        // Гарантированно скруглённые углы: ClipRRect клипает и фон, и
-        // детей — никакого «прямоугольника» за панелью (некоторые
-        // устройства рисовали подложку окна квадратной).
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          margin: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0A0A0C),
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(
-              // Та же обводка, что у маркера перемещения (пузыря Ады):
-              // тот же outlineVariant, но тоньше — 0.9 против 1.2 и чуть
-              // мягче по плотности, чтобы окно читалось «своим» элементом
-              // оверлея, а не белой рамкой.
-              color: cs.outlineVariant.withValues(alpha: 0.50),
-              width: 0.9,
-            ),
-            // Тени НЕ кладём: оверлей рисуется на поверхности, обрезанной
-            // ПРЯМОУГОЛЬНОЙ границей окна — размытая тень обрезалась
-            // углами окна и выглядела как тёмный «квадратный фон».
+  Widget _bubbleBody() {
+    // Пузырь — это сама Ада во весь круг, без цветной подложки. Градиентная
+    // кайма вокруг аватарки давала по краю тёплые жёлто-розовые полосы на
+    // светлых обоях — читалось как «подчёркивания» у аватарки.
+    final size = _bubbleSize - 2;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          // Только тень: она отделяет пузырь от обоев, но не рисует кольцо.
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.34),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              _buildHeader(cs),
-              const Divider(height: 1),
-              Expanded(
-                // Пустое состояние показываем ТОЛЬКО после чтения истории
-                // (иначе на кадр мелькал «пустой Ада»), и появляемся мягко.
-                child: !_historyLoaded
-                    ? const SizedBox.expand()
-                    : AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        child: _messages.isEmpty
-                            ? KeyedSubtree(
-                                key: const ValueKey('empty'),
-                                child: _buildEmpty(cs),
-                              )
-                            : KeyedSubtree(
-                                key: const ValueKey('list'),
-                                child: _buildMessages(cs),
-                              ),
-                      ),
-              ),
-              _buildInput(cs),
-            ],
-          ),
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildHeader(ColorScheme cs) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Ручка-таб сверху по центру — как у главного чата.
-        Container(
-          margin: const EdgeInsets.only(top: 4),
-          width: 32,
-          height: 3,
-          decoration: BoxDecoration(
-            color: cs.outlineVariant.withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: _cycleAvatar,
-                child: _animatedAvatar(28, _avatarVariant),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _toggleSize,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Ада',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      // Строки провайдера/модели в шапке НЕТ: статус
-                      // мелькал при открытии и менялся на каждом переборе
-                      // провайдера. Здесь только имя.
-                    ],
-                  ),
-                ),
-              ),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _toggleSize,
-                child: Padding(
-                  padding: const EdgeInsets.all(5),
-                  child: Icon(
-                    Icons.minimize_rounded,
-                    color: cs.onSurfaceVariant,
-                    size: 20,
-                  ),
-                ),
-              ),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _close,
-                child: Padding(
-                  padding: const EdgeInsets.all(5),
-                  child: Icon(
-                    Icons.close_rounded,
-                    color: cs.onSurfaceVariant,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmpty(ColorScheme cs) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.chat_bubble_outline_rounded,
-              size: 36,
-              color: cs.primary,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              Translations.t('aiOverlayEmpty', context, 'Chat with Ada'),
-              textAlign: TextAlign.center,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMessages(ColorScheme cs) {
-    return ListView.builder(
-      controller: _scrollCtrl,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      itemCount: _messages.length + (_busy ? 1 : 0),
-      itemBuilder: (context, i) {
-        if (_busy && i == _messages.length) {
-          // «Печатает…»: гаснет плавно перед ответом (эстафета _typingFade).
-          return AnimatedOpacity(
-            opacity: _typingFade ? 0.0 : 1.0,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            child: _TypingBubble(avatar: _avatarVariant),
-          );
-        }
-        final m = _messages[i];
-        // Плавное появление: fade + мягкий scale (как у пузырей главного
-        // чата) — без сдвига, чтобы не двоилось движение при скролле.
-        // Только у новых (добавленных ПОСЛЕ открытия) сообщений.
-        final isNew = i >= _openedCount;
-        final last3 = i >= _messages.length - 3;
-        final animate = isNew && last3;
-        // Ключ по САМОМУ сообщению, а не по индексу: иначе каждое
-        // добавление сдвигало индексы, все пузыри пересоздавались и вход
-        // нового читался рывком.
-        return TweenAnimationBuilder<double>(
-          key: ValueKey('mini_${m.ts}_${m.text.hashCode}_${m.isUser}'),
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: Duration(milliseconds: animate ? 420 : 1),
-          curve: Curves.easeOutQuart,
-          builder: (context, t, child) {
-            final e = Curves.easeOutQuart.transform(t);
-            return Opacity(
-              opacity: e,
-              child: Transform.translate(
-                offset: Offset(0, 10 * (1 - e)),
-                child: Transform.scale(scale: 0.97 + 0.03 * e, child: child),
-              ),
-            );
-          },
-          child: _MiniBubble(
-            message: m,
-            avatar: _avatarVariant,
-            colorScheme: cs,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildInput(ColorScheme cs) {
-    return RepaintBoundary(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
-        decoration: BoxDecoration(
-          // Полностью непрозрачный фон: полупрозрачный давал «белую полосу»
-          // под клавиатурой/внизу чата.
-          color: cs.surfaceContainerLowest,
-          border: Border(top: BorderSide(color: cs.outlineVariant, width: 0.4)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  SmoothTyping(
-                    controller: _inputCtrl,
-                    cursorColor: cs.primary,
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.3,
-                      // Окошко ВСЕГДА тёмное (ThemeData.dark): буквы светлые,
-                      // а не чёрные — фон поля тёмный.
-                      color: cs.onSurface,
-                    ),
-                    builder: (style) => TextField(
-                      style: style,
-                      // Никаких жёлтых «спеллчек»-подчёркиваний от IME:
-                      // в мини-окне они выглядели как артефакт вёрстки.
-                      // enableSuggestions гасит подсказки, а
-                      // spellCheckConfiguration — сам спеллчекер Android.
-                      spellCheckConfiguration:
-                          SpellCheckConfiguration.disabled(),
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      smartDashesType: SmartDashesType.disabled,
-                      smartQuotesType: SmartQuotesType.disabled,
-                      magnifierConfiguration:
-                          TextMagnifierConfiguration.disabled,
-                      // Поле мини-окна не должно открывать выделение/тулбар:
-                      // long-press оставляем для обычного ввода, без полупрозрачного
-                      // selection overlay поверх оверлея.
-                      contextMenuBuilder: (_, _) => const SizedBox.shrink(),
-                      selectionControls: null,
-                      enableInteractiveSelection: false,
-                      controller: _inputCtrl,
-                      focusNode: _inputFocus,
-                      minLines: 1,
-                      maxLines: 3,
-                      inputFormatters: [WideDashFormatter()],
-                      scrollPadding: EdgeInsets.zero,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      onTap: () async {
-                        // Первый тап: окно становится фокусирующим, поле — фокусом.
-                        // Некоторые прошивки «съедают» первый requestFocus, пока
-                        // натив применяет флаг — пробуем до 6 раз, плюс прямой
-                        // показ IME, плюс страховка на следующий кадр.
-                        for (var i = 0; i < 6 && mounted; i++) {
-                          await _setFocusable(true);
-                          if (!mounted) return;
-                          _inputFocus.requestFocus();
-                          try {
-                            await SystemChannels.textInput.invokeMethod<void>(
-                              'TextInput.show',
-                            );
-                          } catch (_) {}
-                          if (!mounted) return;
-                          if (_inputFocus.hasFocus) break;
-                          await Future<void>.delayed(
-                            const Duration(milliseconds: 110),
-                          );
-                        }
-                        if (mounted && !_inputFocus.hasFocus) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) {
-                              _inputFocus.requestFocus();
-                              try {
-                                SystemChannels.textInput.invokeMethod<void>(
-                                  'TextInput.show',
-                                );
-                              } catch (_) {}
-                            }
-                          });
-                        }
-                      },
-                      // Каретка мигает плавно (fade), а не резко вкл/выкл.
-                      cursorOpacityAnimates: true,
-                      decoration: InputDecoration(
-                        counterText: '',
-                        isDense: true,
-                        filled: true,
-                        fillColor: cs.surfaceContainerHigh,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Плавная подсказка: гаснет при вводе, мягко возвращается
-                  // при очистке поля.
-                  IgnorePointer(
-                    child: ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: _inputCtrl,
-                      builder: (context, v, _) => AnimatedOpacity(
-                        opacity: v.text.isEmpty ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 9,
-                          ),
-                          child: Text(
-                            Translations.t('aiInputHint', context, 'Message…'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 5),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              transitionBuilder: (child, anim) => ScaleTransition(
-                scale: anim,
-                child: FadeTransition(opacity: anim, child: child),
-              ),
-              child: _busy
-                  ? const SizedBox(
-                      key: ValueKey('busy'),
-                      width: 34,
-                      height: 34,
-                      child: Padding(
-                        padding: EdgeInsets.all(8),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    )
-                  : IconButton.filled(
-                      key: const ValueKey('send'),
-                      onPressed: _send,
-                      icon: const Icon(Icons.arrow_upward_rounded, size: 17),
-                      style: IconButton.styleFrom(
-                        backgroundColor: cs.primary,
-                        foregroundColor: cs.onPrimary,
-                        minimumSize: const Size(34, 34),
-                        padding: EdgeInsets.zero,
-                      ),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-
-class _MiniBubble extends StatelessWidget {
-  final AiMessage message;
-  final int avatar;
-  final ColorScheme colorScheme;
-  const _MiniBubble({
-    required this.message,
-    required this.avatar,
-    required this.colorScheme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isUser = message.isUser;
-    final cs = colorScheme;
-    final bubbleColor = isUser ? cs.primary : cs.surfaceContainerHigh;
-    final textColor = isUser ? cs.onPrimary : cs.onSurface;
-
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!isUser) ...[
-              // Плавная смена аватарки и в пузырях сообщений окошка.
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, anim) => FadeTransition(
-                  opacity: anim,
-                  child: ScaleTransition(scale: anim, child: child),
-                ),
-                child: AdaAvatar(
-                  key: ValueKey('mini_av_$avatar'),
-                  size: 18,
-                  variantIndex: avatar,
-                ),
-              ),
-              const SizedBox(width: 5),
-            ],
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: bubbleColor,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(isUser ? 14 : 4),
-                    topRight: Radius.circular(isUser ? 4 : 14),
-                    bottomLeft: const Radius.circular(14),
-                    bottomRight: const Radius.circular(14),
-                  ),
-                ),
-                child: buildMarkdownText(
-                  message.text,
-                  TextStyle(fontSize: 12, color: textColor, height: 1.28),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TypingBubble extends StatefulWidget {
-  final int avatar;
-  const _TypingBubble({required this.avatar});
-  @override
-  State<_TypingBubble> createState() => _TypingBubbleState();
-}
-
-class _TypingBubbleState extends State<_TypingBubble>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 3),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Ава меняется плавно (fade+scale), даже пока Ада печатает:
-            // смена значка в любом месте мгновенно анимируется и здесь.
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 320),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, anim) => FadeTransition(
-                opacity: anim,
-                child: ScaleTransition(scale: anim, child: child),
-              ),
-              child: AdaAvatar(
-                key: ValueKey('typing_av_${widget.avatar}'),
-                size: 16,
-                variantIndex: widget.avatar,
-              ),
-            ),
-            const SizedBox(width: 5),
-            AnimatedBuilder(
-              animation: _ctrl,
-              builder: (context, _) {
-                final t = _ctrl.value;
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var i = 0; i < 3; i++)
-                      Container(
-                        width: 5,
-                        height: 5,
-                        margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: cs.primary,
-                        ),
-                        // Без вертикального прыжка: только альфа пульсирует
-                        // (плавный «печатает…» на слабых устройствах —
-                        // transform каждой точки каждый кадр дёргал UI).
-                        color: cs.primary.withValues(
-                          alpha:
-                              0.4 +
-                              0.6 * (.5 - .5 * cos((t * 2 * pi) - i * 0.9)),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
+      child: ClipOval(
+        // Без кольца: круг лежит на чужих обоях, и тёмная обводка по краю
+        // читалась тёплой полосой под аватаркой. Тень уже отделяет пузырь.
+        child: AdaAvatar(size: size, variantIndex: _variant, showRing: false),
       ),
     );
   }
