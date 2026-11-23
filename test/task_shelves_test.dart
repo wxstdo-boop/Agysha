@@ -236,6 +236,53 @@ void main() {
     expect(card('a1'), findsOneWidget);
   });
 
+  testWidgets('возврат из архива растёт по высоте, а не вставляется кадром', (
+    tester,
+  ) async {
+    await seedAndPump(tester, [
+      Task(id: 'a1', title: 'Купить молоко', done: true),
+      Task(id: 'a2', title: 'Позвонить маме'),
+    ]);
+
+    final before = tester.getTopLeft(card('a2')).dy;
+    await tester.tap(find.byKey(const ValueKey('task_toggle_a1')));
+    // Запись задачи на диск — настоящий I/O: ветка возврата запускается уже
+    // ПОСЛЕ неё, поэтому ждём реально, а не кадрами.
+    for (var i = 0; i < 40; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    // Высота рамки возврата — это и есть SizeTransition вокруг карточки:
+    // сама карточка внутри всегда полной высоты (её подрезает Align).
+    final heights = <double>[];
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+      heights.add(
+        tester
+            .getSize(
+              find
+                  .ancestor(
+                    of: card('a1'),
+                    matching: find.byType(SizeTransition),
+                  )
+                  .first,
+            )
+            .height,
+      );
+    }
+    // Карточка не «щёлкает» на полную высоту: за время возврата рамка
+    // проходит несколько промежуточных высот (SizeTransition).
+    expect(
+      heights.toSet().length,
+      greaterThan(2),
+      reason: 'высоты рамки по кадрам: $heights (соседняя была на $before)',
+    );
+    expect(heights.last, greaterThan(heights.first));
+    expect(card('a1'), findsOneWidget);
+  });
+
   /// «Всё читается»: заголовки полок должны быть контрастны фону в обеих
   /// темах — приглушённый цвет «Выполненных» на тёмном фоне сливался бы.
   for (final dark in [false, true]) {

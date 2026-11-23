@@ -767,6 +767,15 @@ class _AiChatBodyState extends State<_AiChatBody>
             .where((m) => AiGuideService.visibleInChat(m, clearedAt))
             .toList();
         if (mounted && epoch == _historyEpoch) {
+          // НЕ заменяем ленту копией с диска: файл может отставать от
+          // экрана (запись ещё в очереди, второй движок писал позже).
+          // Замена выкидывала только что отправленные сообщения — человек
+          // видел, как они «сами стираются». Объединяем.
+          final local = _messages
+              .where((m) => AiGuideService.visibleInChat(m, clearedAt))
+              .toList();
+          final merged = AiChatStore.union(loaded, local);
+          final wasLoaded = _historyLoaded;
           setState(() {
             // Чат исчерпал 1000 сообщений — стираем и начинаем заново.
             if (loaded.length >= 1000) {
@@ -774,11 +783,11 @@ class _AiChatBodyState extends State<_AiChatBody>
             } else {
               _messages
                 ..clear()
-                ..addAll(loaded);
+                ..addAll(merged);
             }
             // Всё, что было загружено при открытии, НЕ анимирует вход —
             // только сообщения, добавленные после (см. animate ниже).
-            _openedCount = _messages.length;
+            if (!wasLoaded) _openedCount = _messages.length;
           });
           // История не менялась: не пересериализуем и не шифруем весь файл
           // при каждом открытии. Сохраняем только если применили лимит.
@@ -1522,9 +1531,25 @@ class _AiChatBodyState extends State<_AiChatBody>
       _historyCache = <AiMessage>[];
       _openedCount = 0;
       _dotsCtrl.stop();
-      _saveHistory();
+      _clearHistory();
       _clearCtrl.reset();
     });
+  }
+
+  /// Очистка чата пишется В ОЧЕРЕДЬ записей (иначе старая запись,
+  /// завершившись позже, вернула бы стёртое) и мимо союза с диском — см.
+  /// [AiChatStore.clear].
+  Future<void> _clearHistory() {
+    final next = _historyWriteChain.then((_) async {
+      try {
+        await AiChatStore.clear();
+        _historySnapshot = '[]';
+      } catch (error, stackTrace) {
+        _reportStorageFailure(error, stackTrace);
+      }
+    });
+    _historyWriteChain = next;
+    return next;
   }
 
   /// Свернуть чат в плавающее окошко / выключить окошко (обратное нажатие).

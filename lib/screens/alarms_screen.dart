@@ -958,7 +958,9 @@ class _AlarmsScreenState extends State<AlarmsScreen>
         Padding(
           // Слот под таблетку разделов резервирует header списка (он стоит
           // ВЫШЕ статуса и секции), поэтому здесь только обычный отступ.
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          // Сверху — чуть больше воздуха: зазор между последней карточкой
+          // будильника и заголовком «Таймеры» читался слипшимся.
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
           child: Row(
             children: [
               Text(
@@ -1022,16 +1024,25 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             ),
           ),
           child: timers.isEmpty
-              ? Padding(
-                  key: const ValueKey('timers_empty'),
-                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
-                  child: Text(
-                    Translations.t('noTimers', context),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
+              // Пока секция «прощается» после удаления последнего таймера
+              // (флаг [_timersHiding]), плейсхолдер не показываем: иначе
+              // строка «таймеров пока нет» успевала проявиться и тут же
+              // свернуться вместе с секцией — это и было то самое дёрганье.
+              ? (_timersHiding
+                    ? const SizedBox(
+                        key: ValueKey('timers_hiding'),
+                        width: double.infinity,
+                      )
+                    : Padding(
+                        key: const ValueKey('timers_empty'),
+                        padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
+                        child: Text(
+                          Translations.t('noTimers', context),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ))
               : Column(
                   key: const ValueKey('timers_list'),
                   mainAxisSize: MainAxisSize.min,
@@ -1125,23 +1136,29 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           });
         }
       },
-      child: Card(
-        key: ValueKey('card_${timer.id}'),
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: PressScale(
-                      pressedScale: 0.985,
-                      enableTilt: true,
-                      maxTiltAngle: 0.05,
+      child: PressScale(
+        // «Вдавливание» и 3D-наклон — как у карточек будильников, привычек
+        // и задач. Раньше наклон жил только на блоке текста внутри карточки:
+        // нажимаешь на правый край таймера — карточка не отзывается вовсе.
+        pressedScale: 0.975,
+        enableTilt: true,
+        duration: const Duration(milliseconds: 200),
+        releaseDuration: const Duration(milliseconds: 320),
+        child: Card(
+          key: ValueKey('card_${timer.id}'),
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => _editTimer(timer),
@@ -1170,70 +1187,70 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                         ),
                       ),
                     ),
-                  ),
-                  // Счётчик идёт сам, по стенным часам: цифры перекатываются
-                  // в своих ячейках, а цвет и мягкий отсвет плавно
-                  // разгораются при запуске и так же плавно гаснут на паузе.
-                  _TimerLiveText(
-                    timerId: timer.id,
-                    running: running,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(width: 4),
-                  action(
-                    icon: running
-                        ? Icons.pause_circle_filled
-                        : Icons.play_circle_fill,
-                    color: running
-                        ? theme.colorScheme.primary
-                        : const Color(0xFFFFAB91),
-                    onTap: () => running
-                        ? _timerSvc.pauseTimer(timer.id)
-                        : _timerSvc.startTimer(timer.id),
-                  ),
-                  // Рефреш не вынимаем из раскладки: он просто гаснет на
-                  // месте, поэтому соседние кнопки не прыгают.
-                  IgnorePointer(
-                    ignoring: running,
-                    child: AnimatedOpacity(
-                      opacity: running ? 0 : 1,
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                      child: action(
-                        icon: Icons.replay,
-                        color: theme.colorScheme.onSurfaceVariant,
-                        size: 22,
-                        onTap: () => _timerSvc.resetTimer(timer.id),
+                    // Счётчик идёт сам, по стенным часам: цифры перекатываются
+                    // в своих ячейках, а цвет и мягкий отсвет плавно
+                    // разгораются при запуске и так же плавно гаснут на паузе.
+                    _TimerLiveText(
+                      timerId: timer.id,
+                      running: running,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(width: 4),
+                    action(
+                      icon: running
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_fill,
+                      color: running
+                          ? theme.colorScheme.primary
+                          : const Color(0xFFFFAB91),
+                      onTap: () => running
+                          ? _timerSvc.pauseTimer(timer.id)
+                          : _timerSvc.startTimer(timer.id),
+                    ),
+                    // Рефреш не вынимаем из раскладки: он просто гаснет на
+                    // месте, поэтому соседние кнопки не прыгают.
+                    IgnorePointer(
+                      ignoring: running,
+                      child: AnimatedOpacity(
+                        opacity: running ? 0 : 1,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        child: action(
+                          icon: Icons.replay,
+                          color: theme.colorScheme.onSurfaceVariant,
+                          size: 22,
+                          onTap: () => _timerSvc.resetTimer(timer.id),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            // Прогресс — тонкая полоска на нижнем краю; высота и прозрачность
-            // тоже плавные.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: AnimatedOpacity(
-                opacity: showProgress ? 1 : 0,
-                duration: const Duration(milliseconds: 240),
+              // Прогресс — тонкая полоска на нижнем краю; высота и прозрачность
+              // тоже плавные.
+              AnimatedSize(
+                duration: const Duration(milliseconds: 260),
                 curve: Curves.easeOutCubic,
-                child: showProgress
-                    ? _TimerProgressBar(
-                        timerId: timer.id,
-                        running: running,
-                        theme: theme,
-                      )
-                    : const SizedBox(
-                        key: ValueKey('timer_progress_hidden'),
-                        width: double.infinity,
-                        height: 0,
-                      ),
+                alignment: Alignment.topCenter,
+                child: AnimatedOpacity(
+                  opacity: showProgress ? 1 : 0,
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  child: showProgress
+                      ? _TimerProgressBar(
+                          timerId: timer.id,
+                          running: running,
+                          theme: theme,
+                        )
+                      : const SizedBox(
+                          key: ValueKey('timer_progress_hidden'),
+                          width: double.infinity,
+                          height: 0,
+                        ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

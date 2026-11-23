@@ -76,15 +76,77 @@ class AiChatStore {
     final toSave = messages.length > 1000
         ? messages.sublist(messages.length - 1000)
         : messages;
-    final value = jsonEncode(
-      toSave.map((message) => message.toJson()).toList(),
+    try {
+      // Историю пишут два движка. Перед записью забираем то, что уже лежит
+      // на диске: список, который пришёл из устаревшей копии, не должен
+      // считаться удалением чужих сообщений (механика слияния в
+      // [JsonFile] трактует отсутствие элемента как delete).
+      final raw = await JsonFile.read(key);
+      final clearedAt = AiGuideService.chatClearedAt();
+      final toSaveVisible = toSave
+          .where((m) => AiGuideService.visibleInChat(m, clearedAt))
+          .toList();
+      final merged = union(
+        parse(raw).where((m) => AiGuideService.visibleInChat(m, clearedAt)).toList(),
+        toSaveVisible,
+      );
+      final mergedValue = jsonEncode(
+        merged.map((message) => message.toJson()).toList(),
+      );
+      final resolved = await JsonFile.writeWithSnapshotRetrying(
+        key,
+        mergedValue,
+        raw,
+      );
+      return (messages: parse(resolved), snapshot: resolved);
+    } on JsonFileConflictException {
+      return _persistUnion(toSave);
+    }
+  }
+
+  /// Стирает историю целиком (кнопка «Очистить чат»). Идёт мимо союза в
+  /// [persist]: там пустой локальный список объединился бы с диском и
+  /// вернул удалённое.
+  static Future<void> clear() async {
+    final raw = await JsonFile.read(key);
+    await JsonFile.writeWithSnapshotRetrying(key, '[]', raw);
+    final next = DateTime.now().millisecondsSinceEpoch;
+    tick.value = next;
+    await writeAdaSyncState(historyRev: next);
+  }
+
+  /// Перечитать и объединить ещё раз — на случай, когда файл переписали
+  /// прямо между чтением и записью.
+  static Future<({List<AiMessage> messages, String? snapshot})> _persistUnion(
+    List<AiMessage> local,
+  ) async {
+    final raw = await JsonFile.read(key);
+    final clearedAt = AiGuideService.chatClearedAt();
+    final merged = union(
+      parse(
+        raw,
+      ).where((m) => AiGuideService.visibleInChat(m, clearedAt)).toList(),
+      local.where((m) => AiGuideService.visibleInChat(m, clearedAt)).toList(),
     );
-    final resolved = await JsonFile.writeWithSnapshotRetrying(
+    final resolved = await JsonFile.writeWithSnapshot(
       key,
-      value,
-      snapshot,
+      jsonEncode(merged.map((message) => message.toJson()).toList()),
+      raw,
     );
     return (messages: parse(resolved), snapshot: resolved);
+  }
+
+  /// Союз двух копий истории: порядок с диска сохраняется, сообщения,
+  /// которых на диске ещё нет, дописываются в конце.
+  static List<AiMessage> union(List<AiMessage> onDisk, List<AiMessage> local) {
+    final seen = <String>{};
+    final out = <AiMessage>[];
+    for (final message in [...onDisk, ...local]) {
+      if (seen.add(identity(message))) out.add(message);
+    }
+    // Тот же предел, что и в UI: иначе объединение с более длинным файлом
+    // отменяло бы обрезку и история росла бесконечно.
+    return out.length > 1000 ? out.sublist(out.length - 1000) : out;
   }
 
   static String identity(AiMessage message) =>

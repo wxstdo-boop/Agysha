@@ -48,6 +48,26 @@ void main() {
     expect(service.contains('clearedAt == 0 ||'), isTrue);
   });
 
+  test('веб-поиск не оправдывается «нет доступа к интернету»', () {
+    final src = File('lib/services/ai_guide_service.dart').readAsStringSync();
+    // Промпт прямо запрещает фразу: поиск делает приложение, а не модель.
+    expect(
+      src.contains('НИКОГДА не говори «у меня нет доступа к интернету»'),
+      isTrue,
+    );
+    // Пустая выдача поиска — не повод отказываться: ответ из своих знаний.
+    expect(
+      src.contains('ВЕБ-ПОИСК включён, но сейчас ничего не нашлось'),
+      isTrue,
+    );
+    // Строка в исходнике разбита на литералы, поэтому ищем по кускам.
+    expect(
+      src.contains('НЕ пиши, что') &&
+          src.contains('нет доступа к интернету или что ты не умеешь искать'),
+      isTrue,
+    );
+  });
+
   test('веб-поиск режет по границе слова и ищет свежие материалы', () {
     final src = File(
       'lib/services/ai_guide_service_web.dart',

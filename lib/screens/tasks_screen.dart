@@ -140,6 +140,24 @@ class _TasksScreenState extends State<TasksScreen>
   /// полку анимированно; остальные рисуются сразу.
   String? _justCompletedId;
 
+  /// id задачи, вернувшейся из архива: карточка ВЫРАСТАЕТ в активной полке
+  /// ровно пока её копия схлопывается в архивной — переезд обратно читается
+  /// как одно движение, а не как «пропала внизу и появилась сверху кадром».
+  String? _returningId;
+  late final AnimationController _cardReturn = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+    value: 1,
+  );
+  late final Animation<double> _cardReturnT = CurvedAnimation(
+    parent: _cardReturn,
+    curve: Curves.easeInOutCubic,
+  );
+  late final Animation<Offset> _cardReturnSlide = Tween<Offset>(
+    begin: const Offset(0, 0.06),
+    end: Offset.zero,
+  ).animate(_cardReturnT);
+
   /// Карточка, которая прямо сейчас «уезжает» из СВОЕЙ полки в соседнюю.
   /// Пока идёт [_cardExit], она остаётся отрисованной в исходном списке и
   /// схлопывается по высоте. Без этого карточка исчезала из активных кадром,
@@ -275,6 +293,7 @@ class _TasksScreenState extends State<TasksScreen>
     _reveal.dispose();
     _splitReveal.dispose();
     _cardDrop.dispose();
+    _cardReturn.dispose();
     _cardExit.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -358,10 +377,13 @@ class _TasksScreenState extends State<TasksScreen>
     // рывок). Когда архивная полка включена (категория «Все»), карточка
     // сначала схлопывается на СВОЁМ месте — тогда переезд читается как
     // движение из полки в полку, а не как «пропала и появилась».
-    // Снятие галки в архиве — это ВОЗВРАТ в активные, а не переезд в
-    // архив: схлопывание на месте плюс волна списка давали «скачет туда-
-    // сюда». Возврат ведёт только волна списка.
-    final archiveMove = _filter == '' && _archiveVisible && !wasDone;
+    // Снятие галки в архиве — это ВОЗВРАТ в активные. Держать при этом
+    // вторую копию в архивной полке нельзя: две карточки на экране читаются
+    // как «скачет туда-сюда» (уже откатывали). Поэтому возврат ведёт одна
+    // растущая карточка на новом месте — см. [_cardReturn], а архивная
+    // копия уходит вместе со своей полкой.
+    final splitVisible = _filter == '' && _archiveVisible;
+    final archiveMove = splitVisible && !wasDone;
     if (archiveMove) {
       final source = _service.tasks
           .where((t) => wasDone ? t.done : !t.done)
@@ -389,8 +411,7 @@ class _TasksScreenState extends State<TasksScreen>
     // «Приезд» сверху — только для отметки (активная полка → архив).
     // При снятии галки карточка возвращается из архива ВВЕРХ: если гнать
     // её тем же спуском сверху, она прыгает над списком и «скачет туда-сюда».
-    // Возврат идёт обычной волной списка ([_revealSlide]) — плавно и вниз-
-    // вверх, без перелёта.
+    // Возврат ведёт своя анимация роста на новом месте — см. [_cardReturn].
     if (!wasDone) {
       // Карточка уже в архивной полке: её новое место известно, и приезд
       // пойдёт ровно на это расстояние, а не на «16 % высоты».
@@ -412,6 +433,17 @@ class _TasksScreenState extends State<TasksScreen>
         // переходом (иначе один лишний набор слоёв висел бы на ней всегда).
         if (mounted && _justCompletedId == task.id) {
           setState(() => _justCompletedId = null);
+        }
+      });
+    } else if (splitVisible) {
+      // Возврат из архива: карточка вырастает в активной полке на своём
+      // новом месте (высота 0 → 1, мягкий подъём) — вместо мгновенной
+      // вставки кадром.
+      _cardReturn.value = 0;
+      setState(() => _returningId = task.id);
+      _cardReturn.forward().whenComplete(() {
+        if (mounted && _returningId == task.id) {
+          setState(() => _returningId = null);
         }
       });
     }
@@ -793,7 +825,10 @@ class _TasksScreenState extends State<TasksScreen>
           // Уезжающая карточка схлопывается на своём месте: высота вниз,
           // лёгкий уход и фейд. Вместе с «приездом» в соседней полке это
           // читается как один переезд, а не как исчезновение.
-          if (task.id == _leavingTask?.id) {
+          // Полку проверяем явно: при возврате из архива та же задача живёт
+          // и в архивной полке (схлопывается), и в активной (вырастает).
+          if (task.id == _leavingTask?.id &&
+              shelf == (_leavingWasDone ? 'done' : 'active')) {
             return KeyedSubtree(
               key: ValueKey('item_task_${task.id}'),
               child: KeyedSubtree(
@@ -849,6 +884,28 @@ class _TasksScreenState extends State<TasksScreen>
               ),
             );
           }
+          // Вернувшаяся из архива карточка растёт на новом месте снизу:
+          // высота 0 → 1, мягкий фейд и подъём. Отдельная ветка, потому что
+          // в этот момент она уже не «уезжающая» в активной полке.
+          if (task.id == _returningId) {
+            return KeyedSubtree(
+              key: ValueKey('item_task_${task.id}'),
+              child: KeyedSubtree(
+                key: _cardGeoKey(shelf, task.id),
+                child: SizeTransition(
+                  sizeFactor: _cardReturnT,
+                  alignment: Alignment.topCenter,
+                  child: FadeTransition(
+                    opacity: _cardReturnT,
+                    child: SlideTransition(
+                      position: _cardReturnSlide,
+                      child: _buildTaskCard(context, theme, task, i),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
           // Плавная смена содержимого при переключении категории: только
           // лёгкий подъём (SlideTransition — чистая трансформация, без
           // saveLayer). FadeTransition на КАЖДОЙ карточке создавал по
@@ -872,10 +929,7 @@ class _TasksScreenState extends State<TasksScreen>
           // элемента, и обёртка SizeTransition его не должна «съедать».
           return KeyedSubtree(
             key: ValueKey('item_task_${task.id}'),
-            child: KeyedSubtree(
-              key: _cardGeoKey(shelf, task.id),
-              child: card,
-            ),
+            child: KeyedSubtree(key: _cardGeoKey(shelf, task.id), child: card),
           );
         },
       ),

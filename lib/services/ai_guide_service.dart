@@ -266,6 +266,12 @@ class AiGuideService {
         '«я уже у тебя»). Не называй случайные большие числа и не сочиняй '
         'факты о пользователе. Если чего-то не знаешь — скажи прямо и '
         'коротко, без фантазий.\n'
+        'СВЕЖИЕ ДАННЫЕ: поиск в интернете выполняет само приложение, когда '
+        'он включён. НИКОГДА не говори «у меня нет доступа к интернету», '
+        '«я не могу искать в сети», «я офлайн» — это неправда и вводит '
+        'пользователя в заблуждение. Если выдержки переданы — отвечай по '
+        'ним; если их нет — спокойно ответь из своих знаний, без '
+        'оправданий про недоступность сети.\n'
         '$context$liked';
   }
 
@@ -761,7 +767,17 @@ class AiGuideService {
           userText,
           languageCode,
         ).timeout(const Duration(seconds: 7));
-        if (webCtx.isNotEmpty) {
+        if (webCtx.isEmpty) {
+          // Поиск включён, но выдача пуста (блокировка/таймаут). Без этой
+          // пометки модель сама решала, что «интернета нет», и отвечала
+          // пользователю отказом вместо ответа по существу.
+          effectiveText =
+              'ВЕБ-ПОИСК включён, но сейчас ничего не нашлось. НЕ пиши, что '
+              'у тебя нет доступа к интернету или что ты не умеешь искать: '
+              'просто ответь по существу из своих знаний, коротко и '
+              'уверенно.\n\n'
+              'Вопрос пользователя: $userText';
+        } else {
           effectiveText =
               'ВЕБ-ПОИСК по запросу пользователя включён. Ниже — свежие '
               'выдержки из выдачи.\n'
@@ -1066,7 +1082,9 @@ class AiGuideService {
         poolsideBudget,
       );
       if (answer != null) {
-        _setModel('Poolside · Laguna');
+        // Метку уже опубликовал сам провайдер (`Poolside • модель` или
+        // `OpenRouter • модель`). Здесь не перетираем её именем вендора.
+        commitStaged('Poolside · Laguna');
         return answer;
       }
     } else {
@@ -1081,7 +1099,8 @@ class AiGuideService {
         agnesBudget,
       );
       if (answer != null) {
-        _setModel('Agnes AI');
+        // `_sendAgnes` уже заявил «Agnes • модель» — публикуем именно это.
+        commitStaged('Agnes');
         return answer;
       }
     } else {
@@ -1350,7 +1369,9 @@ class AiGuideService {
   static String _shortLabel(String label) {
     return label
         .replaceAll(' · ', ' • ')
-        .replaceFirst('Agnes AI', 'Agnes')
+        // Не только «Agnes AI» целиком: старые метки писались как
+        // «Agnes AI • модель», и префикс оставался в плашке.
+        .replaceAll('Agnes AI', 'Agnes')
         .trim();
   }
 
@@ -1398,7 +1419,11 @@ class AiGuideService {
     // возвращал старое имя и статус скакал.
     if (_inChain && !toName) return;
     if (toName) {
-      _setModel(name);
+      // Провайдер ответил: публикуем его ЗАЯВКУ (см. [_noteModelWith]),
+      // а не голое имя. Раньше здесь стоял `_setModel(name)`, и метка
+      // «Agnes • agnes-3.0-flash» затиралась на «Agnes AI» — модель в
+      // статусе не появлялась никогда.
+      commitStaged(name);
       return;
     }
     if (!_lastModel.contains('—')) return;
@@ -1591,41 +1616,56 @@ class AiGuideService {
   static Future<void> appendBackgroundAnswer(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
-    try {
-      final raw = await JsonFile.read(_chatHistoryKey);
-      final clearedAt = chatClearedAt();
-      final list = <AiMessage>[];
-      if (raw != null && raw.isNotEmpty) {
-        final decoded = jsonDecode(raw);
-        if (decoded is List) {
-          for (final item in decoded) {
-            if (item is Map<String, dynamic>) {
-              final message = AiMessage.fromJson(item);
-              // Не воскрешаем чат, стёртый уже после этого ответа. Если
-              // очистки не было (clearedAt == 0), оставляем и старые
-              // сообщения без метки времени — иначе они терялись.
-              if (visibleInChat(message, clearedAt)) list.add(message);
+    await _appendChatMessages([
+      AiMessage(
+        isUser: false,
+        text: trimmed,
+        ts: DateTime.now().millisecondsSinceEpoch,
+      ),
+    ]);
+    adaReportTick.value++;
+  }
+
+  /// Дописывает сообщения в файл истории чата с повтором после гонки.
+  /// Один `writeWithSnapshot` мог упасть на одновременной записи из второго
+  /// движка, и ответ/отчёт молча терялся; теперь при конфликте файл
+  /// перечитывается и сообщение дописывается к актуальной ленте.
+  static Future<void> _appendChatMessages(List<AiMessage> extra) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final raw = await JsonFile.read(_chatHistoryKey);
+        final clearedAt = chatClearedAt();
+        final list = <AiMessage>[];
+        if (raw != null && raw.isNotEmpty) {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            for (final item in decoded) {
+              if (item is Map<String, dynamic>) {
+                final message = AiMessage.fromJson(item);
+                // Не воскрешаем чат, стёртый уже после этого ответа. Если
+                // очистки не было (clearedAt == 0), оставляем и старые
+                // сообщения без метки времени — иначе они терялись.
+                if (visibleInChat(message, clearedAt)) list.add(message);
+              }
             }
           }
         }
+        for (final message in extra) {
+          if (visibleInChat(message, clearedAt)) list.add(message);
+        }
+        if (list.length > 1000) list.removeRange(0, list.length - 1000);
+        await JsonFile.writeWithSnapshot(
+          _chatHistoryKey,
+          jsonEncode(list.map((m) => m.toJson()).toList()),
+          raw,
+        );
+        return;
+      } on JsonFileConflictException {
+        // Файл переписали между чтением и записью — повторяем с новым
+        // снимком. Фоновая досылка не должна ронять приложение.
+      } catch (_) {
+        return;
       }
-      list.add(
-        AiMessage(
-          isUser: false,
-          text: trimmed,
-          ts: DateTime.now().millisecondsSinceEpoch,
-        ),
-      );
-      if (list.length > 1000) list.removeRange(0, list.length - 1000);
-      await JsonFile.writeWithSnapshot(
-        _chatHistoryKey,
-        jsonEncode(list.map((m) => m.toJson()).toList()),
-        raw,
-      );
-      adaReportTick.value++;
-    } catch (_) {
-      // Фоновая досылка не должна ронять приложение: ответ просто не
-      // долетит до истории, ноUI останется живым.
     }
   }
 

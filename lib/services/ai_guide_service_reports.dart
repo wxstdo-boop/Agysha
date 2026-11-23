@@ -94,25 +94,9 @@ part of 'ai_guide_service.dart';
   }
 
   /// Дописывает сообщения в файл истории чата (до 1000, как в UI).
-  Future<void> _appendToChatHistory(List<AiMessage> msgs) async {
-    var list = <AiMessage>[];
-    final raw = await JsonFile.read(AiGuideService._chatHistoryKey);
-    if (raw != null && raw.isNotEmpty) {
-      final decoded = jsonDecode(raw);
-      if (decoded is List) {
-        list = decoded
-            .map((e) => AiMessage.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
-    }
-    list.addAll(msgs);
-    if (list.length > 1000) list = list.sublist(list.length - 1000);
-    await JsonFile.writeWithSnapshot(
-      AiGuideService._chatHistoryKey,
-      jsonEncode(list.map((m) => m.toJson()).toList()),
-      raw,
-    );
-  }
+  /// Сама запись с повтором после гонки — в [AiGuideService._appendChatMessages].
+  Future<void> _appendToChatHistory(List<AiMessage> msgs) =>
+      AiGuideService._appendChatMessages(msgs);
 
   /// Текст утреннего отчёта: сначала живой тёплый текст от встроенного ИИ
   /// (с учётом реальных задач/привычек/будильников), при недоступности —
