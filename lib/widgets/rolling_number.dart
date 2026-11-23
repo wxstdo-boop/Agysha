@@ -2,6 +2,8 @@ import 'dart:async';
 import '../services/haptics.dart';
 import 'package:flutter/material.dart';
 
+import 'press_scale.dart';
+
 /// Стрелочный степпер с автоповтором — единый для всех пикеров времени.
 ///
 /// Тап: один шаг с лёгким хаптиком. Зажатие: первый шаг сразу, затем через
@@ -60,12 +62,22 @@ class _HoldStepperState extends State<HoldStepper> {
       onTapDown: (_) => _begin(),
       onTapUp: (_) => _end(),
       onTapCancel: _end,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Icon(
-          widget.icon,
-          size: widget.iconSize,
-          color: widget.color ?? theme.colorScheme.onSurfaceVariant,
+      // Стрелки времени отзывались только цифрой — теперь у них такая же
+      // отдача, как у прочих кнопок: вдавливание и лёгкий 3D-наклон.
+      child: PressScale(
+        pressedScale: 0.86,
+        enableTilt: true,
+        maxTiltAngle: 0.18,
+        pressTint: theme.colorScheme.primary,
+        pressTintStrength: 0.08,
+        pressTintRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Icon(
+            widget.icon,
+            size: widget.iconSize,
+            color: widget.color ?? theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

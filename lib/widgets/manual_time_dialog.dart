@@ -3,6 +3,7 @@ import '../services/haptics.dart';
 import '../l10n/translations.dart';
 import 'press_scale.dart';
 import 'rolling_number.dart';
+import 'smooth_tooltip.dart';
 
 /// Открывает плавный диалог выбора времени (ЧЧ:ММ) — полностью БЕЗ
 /// клавиатуры.
@@ -67,9 +68,15 @@ class _ManualTimeDialogState extends State<_ManualTimeDialog> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        HoldStepper(
-          icon: Icons.keyboard_arrow_up,
-          onStep: () => _step(isHour, 1),
+        // Зажатие на стрелке больше не молчит: подсказка в стиле приложения
+        // и та же отдача вдавливания, что у остальных кнопок.
+        SmoothTooltip(
+          message: Translations.t('timeStepUp', context, 'Прибавить'),
+          preferredAbove: true,
+          child: HoldStepper(
+            icon: Icons.keyboard_arrow_up,
+            onStep: () => _step(isHour, 1),
+          ),
         ),
         const SizedBox(height: 2),
         RollingNumber(
@@ -89,9 +96,13 @@ class _ManualTimeDialogState extends State<_ManualTimeDialog> {
           ),
         ),
         const SizedBox(height: 2),
-        HoldStepper(
-          icon: Icons.keyboard_arrow_down,
-          onStep: () => _step(isHour, -1),
+        SmoothTooltip(
+          message: Translations.t('timeStepDown', context, 'Убавить'),
+          preferredAbove: false,
+          child: HoldStepper(
+            icon: Icons.keyboard_arrow_down,
+            onStep: () => _step(isHour, -1),
+          ),
         ),
       ],
     );

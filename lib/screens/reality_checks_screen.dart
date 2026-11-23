@@ -8,11 +8,11 @@ import '../services/reality_check_service.dart';
 import '../services/habit_service.dart';
 import '../services/task_service.dart';
 import '../l10n/translations.dart';
-import '../widgets/smooth_hover.dart';
 import '../widgets/animated_strike_text.dart';
 import '../widgets/strike_style.dart';
 import '../widgets/section_pill.dart';
 import '../widgets/swipe_to_delete.dart';
+import '../widgets/press_scale.dart';
 import '../widgets/rolling_number.dart';
 import '../widgets/volumetric_switch.dart';
 import '../widgets/manual_time_dialog.dart';
@@ -190,9 +190,8 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
       );
       return;
     }
-    final result = await Navigator.of(
-      context,
-    ).push<RealityCheck>(slideUpRoute(const AddRealityCheckScreen()));
+    final result = await Navigator.of(context)
+        .push<RealityCheck>(slideUpRoute(const AddRealityCheckScreen()));
     if (result != null) {
       _service.add(result);
       _scheduleReminders();
@@ -448,10 +447,14 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
               await _service.remove(check.id);
               _scheduleReminders();
             },
-            child: SmoothHover(
-              // «Вдавливание» при зажатии — карточка мягко уменьшается.
-              hoverScale: 0.98,
-              duration: const Duration(milliseconds: 160),
+            child: PressScale(
+              // Та же отдача, что у карточек привычек и задач: карточка не
+              // только вдавливается, но и живо наклоняется в сторону пальца.
+              // Раньше здесь был SmoothHover — уменьшение без 3D, и проверки
+              // заметно выбивались из остального приложения.
+              pressedScale: 0.98,
+              enableTilt: true,
+              pressedOpacity: 0.96,
               child: Card(
                 key: ValueKey(check.id),
                 clipBehavior: Clip.antiAlias,
@@ -669,46 +672,14 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                   ),
                 ],
               ),
-              Row(
-                children: [
-                  // Цифра меняется плавным роликом, а не «щёлкает».
-                  _AnimatedCount(
-                    value: _service.checksPerDay,
-                    style:
-                        theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w800,
-                        ) ??
-                        const TextStyle(),
-                  ),
-                  Expanded(
-                    child: Slider(
-                      // БЕЗ divisions: ползунок едет непрерывно и очень
-                      // плавно (с делениями он «прыгал» по ступенькам).
-                      value: _service.checksPerDay.toDouble(),
-                      min: 5,
-                      max: 15,
-                      label: '${_service.checksPerDay}',
-                      onChanged: (v) {
-                        // Во время драга — только перерисовка (дёшево),
-                        // без записи в JSON на каждый пиксель.
-                        _service.setChecksPerDayPreview(v.round());
-                      },
-                      // Сохраняем и перепланируем уведомления только по
-                      // окончании жеста — иначе слабый телефон «спотыкался».
-                      onChangeEnd: (_) {
-                        _service.setChecksPerDay(_service.checksPerDay);
-                        _scheduleReminders();
-                      },
-                    ),
-                  ),
-                  Text(
-                    '5–15',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+              _PerDayControl(
+                value: _service.checksPerDay,
+                onPreview: _service.setChecksPerDayPreview,
+                onCommit: (v) {
+                  _service.setChecksPerDay(v);
+                  _scheduleReminders();
+                },
+                theme: theme,
               ),
               const Divider(height: 16),
               // Режим: рандом или точное время.
@@ -977,49 +948,57 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
     required TimeOfDay time,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: theme.colorScheme.outlineVariant),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(width: 6),
-            // Время меняется плавно (fade + лёгкий сдвиг), а не прыгает.
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 260),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.25),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
+    return PressScale(
+      pressedScale: 0.94,
+      enableTilt: true,
+      maxTiltAngle: 0.14,
+      pressTint: theme.colorScheme.primary,
+      pressTintStrength: 0.08,
+      pressTintRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              child: Text(
-                _fmtTimeOfDay(time),
-                key: ValueKey('${time.hour}:${time.minute}'),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+              const SizedBox(width: 6),
+              // Время меняется плавно (fade + лёгкий сдвиг), а не прыгает.
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.25),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: Text(
+                  _fmtTimeOfDay(time),
+                  key: ValueKey('${time.hour}:${time.minute}'),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1083,6 +1062,92 @@ class _AnimatedCountState extends State<_AnimatedCount> {
       style: widget.style,
       padding: EdgeInsets.zero,
       duration: const Duration(milliseconds: 180),
+    );
+  }
+}
+
+/// «Проверок в день»: цифра-ролик + непрерывный ползунок.
+///
+/// Две правки против рывков. Первая: дробная позиция бегунка живёт ЗДЕСЬ.
+/// Раньше в `Slider` уходило округлённое значение, и бегунок прыгал по
+/// целым ступенькам (5 → 6 → 7 через каждые ~25 px) — это и читалось как
+/// «дёргано». Вторая: перерисовывается только эта строка, а не весь экран
+/// со списком проверок, как было при уведомлении сервиса на каждый пиксель.
+class _PerDayControl extends StatefulWidget {
+  final int value;
+  final ValueChanged<int> onPreview;
+  final ValueChanged<int> onCommit;
+  final ThemeData theme;
+
+  const _PerDayControl({
+    required this.value,
+    required this.onPreview,
+    required this.onCommit,
+    required this.theme,
+  });
+
+  @override
+  State<_PerDayControl> createState() => _PerDayControlState();
+}
+
+class _PerDayControlState extends State<_PerDayControl> {
+  static const double _min = 5;
+  static const double _max = 15;
+
+  late double _drag = widget.value.toDouble();
+  bool _dragging = false;
+
+  @override
+  void didUpdateWidget(covariant _PerDayControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Пока палец на ползунке, дробную позицию не перебиваем: наружу уходит
+    // только округлённое число, и оно же возвращается сюда как value.
+    if (!_dragging && oldWidget.value != widget.value) {
+      _drag = widget.value.toDouble();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    return Row(
+      children: [
+        // Цифра меняется плавным роликом, а не «щёлкает».
+        _AnimatedCount(
+          value: _drag.round().clamp(5, 15),
+          style:
+              theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w800,
+              ) ??
+              const TextStyle(),
+        ),
+        Expanded(
+          child: Slider(
+            value: _drag.clamp(_min, _max),
+            min: _min,
+            max: _max,
+            onChanged: (v) {
+              _dragging = true;
+              setState(() => _drag = v);
+              widget.onPreview(v.round());
+            },
+            // Сохраняем и перепланируем уведомления только по окончании
+            // жеста — иначе слабый телефон «спотыкался».
+            onChangeEnd: (v) {
+              _dragging = false;
+              setState(() => _drag = v.roundToDouble());
+              widget.onCommit(v.round());
+            },
+          ),
+        ),
+        Text(
+          '5–15',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

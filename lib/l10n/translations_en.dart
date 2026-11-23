@@ -982,6 +982,8 @@ const Map<String, String> _en = {
   'permAlarmsOff': 'Alarms and notifications will not work',
   'permGrant': 'Grant',
   'timeTitle': 'Time',
+  'timeStepUp': 'Increase',
+  'timeStepDown': 'Decrease',
   'updateBadge': 'Update',
   'giftArtifact': 'Artifact #{n}',
   'giftFavOn': 'In favorites (up to 5)',

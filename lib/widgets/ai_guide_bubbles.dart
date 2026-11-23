@@ -422,57 +422,77 @@ class _HotStreakPill extends StatelessWidget {
     return ValueListenableBuilder<int>(
       valueListenable: AiGuideService.adaStreak,
       builder: (context, n, _) {
-        if (n <= 0) return const SizedBox.shrink();
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 420),
-          switchInCurve: Curves.easeOutBack,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, anim) => ScaleTransition(
-            scale: anim,
-            child: FadeTransition(opacity: anim, child: child),
-          ),
-          child: Container(
-            key: ValueKey('hot_streak_$n'),
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  cs.primary,
-                  Color.lerp(cs.primary, cs.tertiary, 0.45)!,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: cs.primary.withValues(alpha: 0.4),
-                  blurRadius: 8,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.local_fire_department,
-                  size: 15,
-                  color: cs.onPrimary,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '$n',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: cs.onPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+        // Таблетка НЕ пересоздаётся при смене числа: раньше каждая новая
+        // цифра подменяла всю капсулу целиком (AnimatedSwitcher снаружи), и
+        // стрик «перещёлкивался». Теперь ширина капсулы едет плавно, а внутри
+        // вертикально прокручивается только число — фон и огонёк неподвижны.
+        return AnimatedSize(
+          duration: const Duration(milliseconds: 380),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.centerRight,
+          clipBehavior: Clip.hardEdge,
+          child: n <= 0
+              ? const SizedBox.shrink()
+              : Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        cs.primary,
+                        Color.lerp(cs.primary, cs.tertiary, 0.45)!,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.primary.withValues(alpha: 0.4),
+                        blurRadius: 8,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.local_fire_department,
+                        size: 15,
+                        color: cs.onPrimary,
+                      ),
+                      const SizedBox(width: 4),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 320),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, anim) => FadeTransition(
+                          opacity: anim,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.45),
+                              end: Offset.zero,
+                            ).animate(anim),
+                            child: child,
+                          ),
+                        ),
+                        child: Text(
+                          '$n',
+                          key: ValueKey('hot_streak_$n'),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: cs.onPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
         );
       },
     );

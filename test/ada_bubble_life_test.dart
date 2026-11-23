@@ -35,7 +35,11 @@ void main() {
       isTrue,
       reason: 'значок остаётся глифом варианта Ады, но без цвета',
     );
-    expect(src.contains('color: cs.onSurface'), isTrue);
+    expect(
+      src.contains('cs.onSurface'),
+      isTrue,
+      reason: 'значок одноцветный, цвет берётся из темы',
+    );
   });
 
   test('окно пузыря шире круга: площадка нажатия и ход качания', () {
@@ -62,7 +66,7 @@ void main() {
     );
     expect(src.contains('0.86 + 0.14 * eased'), isTrue);
     expect(
-      src.contains('if (e >= 0.999) return pressed;'),
+      src.contains('if (e >= 0.999) return drift;'),
       isTrue,
       reason: 'после входа не должно оставаться лишних слоёв альфы',
     );
@@ -87,10 +91,23 @@ void main() {
       isTrue,
       reason: 'отдача на нажатие живёт в своём контроллере',
     );
+    // Масштаб круга в полупрозрачном окне пересэмплировал текстуру и давал
+    // мигание края. Отдача теперь цветом плиты и размером глифа: край не
+    // перерисовывается вовсе.
     expect(
       src.contains('1 - 0.07 * Curves.easeOutCubic.transform(squeeze)'),
+      isFalse,
+      reason: 'масштаб края давал мигание на полупрозрачном окне',
+    );
+    expect(
+      src.contains('Color.lerp(plate, cs.onSurface, 0.10 * p)'),
       isTrue,
-      reason: 'круг продавливается мягко и так же мягко отпускает',
+      reason: 'плита мягко темнеет под пальцем',
+    );
+    expect(
+      src.contains('_bubbleSize * (0.5 - 0.05 * p)'),
+      isTrue,
+      reason: 'глиф чуть продавливается — отдача видна, рамка не мигает',
     );
     expect(src.contains('_press.forward()'), isTrue);
     expect(src.contains('_press.reverse()'), isTrue);
