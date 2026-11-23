@@ -362,10 +362,15 @@ void main() {
       isNot(contains('AnimatedSize(')),
       reason: 'секция не должна анимировать высоту второй раз',
     );
-    // У нескольких таймеров строку ужимает она сама (иначе нижние прыгают),
-    // у последней — внешняя анимация секции: под ней уже ничего нет.
-    expect(src, contains('resizeDuration: _timerSvc.timers.length > 1'));
-    expect(src, contains(': null,'));
+    // Высоту ведёт только схлопывание самой строки — и у последнего таймера
+    // тоже: раньше у него resizeDuration был null, и удаление последнего
+    // выглядело иначе, чем любого другого.
+    expect(src, contains('resizeDuration: const Duration(milliseconds: 300)'));
+    expect(src, isNot(contains('resizeDuration: _timerSvc.timers.length > 1')));
+    // Пустой текст подложен ПОД схлопывающуюся карточку тем же Stack: секция
+    // ужимается одним движением, без провала вниз и отката.
+    expect(section, contains('_lastTimerGoing'));
+    expect(section, contains('timers.isEmpty || _lastTimerGoing'));
     expect(src, isNot(contains('_timersHiding')));
   });
 

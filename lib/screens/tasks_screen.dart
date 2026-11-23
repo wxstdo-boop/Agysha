@@ -897,6 +897,11 @@ class _TasksScreenState extends State<TasksScreen>
                         animation: _cardExitFade,
                         builder: (context, child) {
                           final t = _cardExitFade.value;
+                          // Фейд обгоняет ужатие слота: к середине анимации
+                          // карточки на экране уже нет, и нижние задачи
+                          // поднимаются в освободившееся место, не наползая
+                          // на полупрозрачную карточку. Уменьшение убрано —
+                          // именно оно читалось как «карточка скукожилась».
                           return SizedBox(
                             height: _leavingCardHeight * (1 - t),
                             child: OverflowBox(
@@ -904,12 +909,8 @@ class _TasksScreenState extends State<TasksScreen>
                               minHeight: _leavingCardHeight,
                               maxHeight: _leavingCardHeight,
                               child: Opacity(
-                                opacity: (1 - t).clamp(0.0, 1.0),
-                                child: Transform.scale(
-                                  scale: 1 - 0.06 * t,
-                                  alignment: Alignment.topCenter,
-                                  child: child,
-                                ),
+                                opacity: (1 - t * 1.9).clamp(0.0, 1.0),
+                                child: child,
                               ),
                             ),
                           );

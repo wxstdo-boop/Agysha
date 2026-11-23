@@ -112,6 +112,11 @@ class _AlarmsScreenState extends State<AlarmsScreen>
   bool get _timersVisible =>
       SettingsService.experimentalEnabled.value || _timerSvc.timers.isNotEmpty;
 
+  /// Удаляется ПОСЛЕДНИЙ таймер: пока его карточка схлопывается, пустое
+  /// состояние уже подложено под неё (см. Stack в [_buildTimersSection]),
+  /// чтобы секция ужалась одним движением, без провала вниз и отката.
+  bool _lastTimerGoing = false;
+
   /// Состав и видимость секции таймеров на прошлой сборке: высоту анимируем
   /// только при их изменении, а не на каждом тике идущего таймера.
 
@@ -276,7 +281,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
     final result = await Navigator.of(
       context,
     ).push<AppTimer>(slideUpRoute(const AddTimerScreen()));
-    if (result != null) _timerSvc.add(result);
+    if (result != null) {
+      _timerSvc.add(result);
+      if (_lastTimerGoing) setState(() => _lastTimerGoing = false);
+    }
   }
 
   void _editTimer(AppTimer timer) async {
@@ -658,18 +666,14 @@ class _AlarmsScreenState extends State<AlarmsScreen>
               // и падает («mutated in its own performLayout»). Высоту
               // «дышать» на каждом тике не заставляем — размер секции от
               // тика не меняется, меняется только текст внутри.
-              return AnimatedSize(
-                // easeOutCubic, а не easeInOutCubic: тот стартует медленно,
-                // и после удаления секция секунду «думала» перед тем, как
-                // тронуться. Теперь движение начинается сразу и мягко
-                // приземляется.
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: _timersVisible
-                    ? _buildTimersSection(context, theme, _timerSvc.timers)
-                    : const SizedBox(width: double.infinity),
-              );
+              // Высоту секции теперь ведёт ТОЛЬКО схлопывание самой строки
+              // (SwipeToDelete). Внешняя AnimatedSize тянула ту же высоту
+              // своей кривой и прилетала с задержкой, поэтому удаление
+              // таймера читалось иначе, чем в привычках и задачах: «резина»
+              // из двух спорящих анимаций.
+              return _timersVisible
+                  ? _buildTimersSection(context, theme, _timerSvc.timers)
+                  : const SizedBox(width: double.infinity);
             },
           ),
           if (alarms.isEmpty) _buildAlarmEmpty(context, theme),
@@ -984,31 +988,41 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             ],
           ),
         ),
-        // Пустое состояние проявляется мягко, а высоту секции ведёт внешний
-        // AnimatedSize. Раньше здесь стоял AnimatedSwitcher: он держал старый
-        // список в Stack по высоте НОВОГО ребёнка, и на удалении последнего
-        // таймера уезжающая карточка вжималась в высоту строки «таймеров пока
-        // нет» — это читалось как мигающий квадрат.
-        if (timers.isEmpty)
-          Padding(
-            key: const ValueKey('timers_empty'),
-            padding: const EdgeInsets.fromLTRB(16, 2, 16, 14),
-            child: _FadeInText(
-              Translations.t('noTimers', context),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+        // Пустое состояние и строки живут в одном Stack: при удалении
+        // ПОСЛЕДНЕГО таймера текст уже стоит под схлопывающейся карточкой,
+        // поэтому секция ужимается одним движением до высоты текста — без
+        // провала вниз и отката, который получался, когда текст появлялся
+        // только после схлопывания строки. AnimatedSwitcher тут не годится:
+        // он держал старый список в Stack по высоте НОВОГО ребёнка, и
+        // уезжающая карточка вжималась в высоту строки «таймеров пока нет».
+        Stack(
+          alignment: Alignment.topLeft,
+          children: [
+            if (timers.isEmpty || _lastTimerGoing)
+              Padding(
+                key: const ValueKey('timers_empty'),
+                // Сверху чуть больше отступа: пока последняя карточка
+                // схлопывается, текст лежит ПОД ней и не должен выглядывать
+                // в её верхний зазор.
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                child: _FadeInText(
+                  Translations.t('noTimers', context),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
-            ),
-          )
-        else
-          Column(
-            key: const ValueKey('timers_list'),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final timer in timers)
-                _buildTimerCard(context, theme, timer),
-            ],
-          ),
+            if (timers.isNotEmpty)
+              Column(
+                key: const ValueKey('timers_list'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final timer in timers)
+                    _buildTimerCard(context, theme, timer),
+                ],
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -1062,13 +1076,11 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       dismissKey: ValueKey('dismiss_${timer.id}'),
       borderRadius: 16,
       // Своё схлопывание строки: без него удалённая строка исчезала кадром, и
-      // все таймеры ПОД ней прыгали вверх сразу. Исключение — последняя
-      // строка: под ней ничего нет, и высоту секции (вместе с плашкой
-      // «Таймеров пока нет») ведёт внешняя анимация заголовка списка —
-      // тогда движение одно и без провала.
-      resizeDuration: _timerSvc.timers.length > 1
-          ? const Duration(milliseconds: 300)
-          : null,
+      // все таймеры ПОД ней прыгали вверх сразу. Длительность — как у всех
+      // остальных списков (привычки, задачи, проверки): раньше у последней
+      // строки её не было вовсе, и удаление последнего таймера выглядело
+      // иначе, чем удаление любого другого.
+      resizeDuration: const Duration(milliseconds: 300),
       // Фон удаления = границы карточки (у неё горизонтальный margin 12).
       inset: const EdgeInsets.symmetric(horizontal: 12),
       confirmDismiss: (_) async {
@@ -1080,9 +1092,18 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           confirmLabel: Translations.deleteOf(context),
           destructive: true,
         );
+        // Последний таймер: пустой текст подкладываем ДО начала схлопывания,
+        // иначе секция ужимается до нуля, а потом вырастает до текста —
+        // контент под ней проваливается вниз и возвращается.
+        if (ok == true && _timerSvc.timers.length == 1 && !_lastTimerGoing) {
+          setState(() => _lastTimerGoing = true);
+        }
         return ok;
       },
-      onDismissed: (_) => _timerSvc.remove(timer.id),
+      onDismissed: (_) {
+        _timerSvc.remove(timer.id);
+        if (_lastTimerGoing) setState(() => _lastTimerGoing = false);
+      },
       child: PressScale(
         // «Вдавливание» и 3D-наклон — как у карточек будильников, привычек
         // и задач. Раньше наклон жил только на блоке текста внутри карточки:

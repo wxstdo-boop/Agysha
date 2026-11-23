@@ -397,13 +397,14 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
                 alignment: Alignment.topCenter,
                 minHeight: _collapseFromHeight,
                 maxHeight: _collapseFromHeight,
+                // Фейд обгоняет ужатие слота: к середине анимации карточки
+                // уже нет на экране, и соседи поднимаются в освободившееся
+                // место без «наползания» полупрозрачной карточки на них.
+                // Уменьшение убрано: карточка раньше сжималась в кашу, хотя
+                // речь про уборку строки, а не про уменьшение содержимого.
                 child: Opacity(
-                  opacity: (1 - t).clamp(0.0, 1.0),
-                  child: Transform.scale(
-                    scale: 1 - 0.04 * t,
-                    alignment: Alignment.topCenter,
-                    child: child,
-                  ),
+                  opacity: (1 - t * 1.9).clamp(0.0, 1.0),
+                  child: child,
                 ),
               ),
             );

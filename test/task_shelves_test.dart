@@ -407,6 +407,121 @@ void main() {
     expect(card('a1'), findsOneWidget);
   });
 
+  testWidgets(
+    'отметка галки: нижние задачи поднимаются монотонно, карточка не висит '
+    'полупрозрачной над ними',
+    (tester) async {
+      await seedAndPump(tester, [
+        Task(id: 'a1', title: 'Купить молоко'),
+        Task(id: 'a2', title: 'Позвонить маме'),
+        Task(id: 'a3', title: 'Полить цветы'),
+        Task(id: 'a4', title: 'Прочитать главу'),
+        Task(id: 'z0', title: 'Старое дело', done: true),
+      ]);
+
+      /// Уезжающая копия a2 в активной полке — та, что обёрнута в
+      /// IgnorePointer (приезжающая живёт в архивной полке без него).
+      Finder leavingCard() {
+        final matches = card('a2');
+        for (var i = 0; i < matches.evaluate().length; i++) {
+          final one = matches.at(i);
+          final ignore = find
+              .ancestor(of: one, matching: find.byType(IgnorePointer))
+              .evaluate();
+          if (ignore.isNotEmpty) return one;
+        }
+        return matches.first;
+      }
+
+      double slotHeight() {
+        final box = find.ancestor(
+          of: leavingCard(),
+          matching: find.byType(OverflowBox),
+        );
+        if (box.evaluate().isEmpty) return 0;
+        final sized = find.ancestor(
+          of: box.first,
+          matching: find.byType(SizedBox),
+        );
+        return tester.getSize(sized.first).height;
+      }
+
+      double leavingOpacity() {
+        final op = find.ancestor(
+          of: leavingCard(),
+          matching: find.byType(Opacity),
+        );
+        if (op.evaluate().isEmpty) return 1;
+        return tester.widget<Opacity>(op.first).opacity;
+      }
+
+      final belowBefore = tester.getTopLeft(card('a3')).dy;
+      await tester.tap(find.byKey(const ValueKey('task_toggle_a2')));
+      await tester.pump();
+
+      final belowTops = <double>[];
+      final slots = <double>[];
+      final opacities = <double>[];
+      var midOpacity = 1.0;
+      var midSlot = 0.0;
+      for (var i = 0; i < 45; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 16)),
+        );
+        await tester.pump(const Duration(milliseconds: 16));
+        final s = slotHeight();
+        final op = leavingOpacity();
+        if (s > 0) {
+          slots.add(s);
+          opacities.add(op);
+          if (midSlot == 0 && s < slots.first * 0.6) {
+            midSlot = s;
+            midOpacity = op;
+          }
+        }
+        final below = find.byKey(const ValueKey('item_task_a3'));
+        if (below.evaluate().isNotEmpty) {
+          belowTops.add(tester.getTopLeft(below).dy);
+        }
+      }
+
+      expect(slots.length, greaterThan(8), reason: 'схлопывание не пошло');
+      expect(
+        slots.first,
+        greaterThan(slots.last + 8),
+        reason: 'слот не ужался',
+      );
+      // Карточка должна исчезнуть (по прозрачности) раньше, чем слот
+      // закроется: иначе полупрозрачная карточка висит над поднимающимися
+      // соседями — это и читалось как «наползает и скукоживается».
+      expect(
+        midOpacity,
+        lessThan(0.2),
+        reason:
+            'на середине схлопывания карточка ещё видна '
+            '(слот $midSlot из ${slots.first}, прозрачность $midOpacity)',
+      );
+
+      expect(belowTops.length, greaterThan(8), reason: 'сосед не двигался');
+      final total = belowBefore - belowTops.last;
+      expect(total, greaterThan(20), reason: 'соседи не поднялись: $total');
+      for (var i = 1; i < belowTops.length; i++) {
+        final d = belowTops[i - 1] - belowTops[i];
+        expect(
+          d,
+          greaterThanOrEqualTo(-0.5),
+          reason: 'сосед поехал вниз на кадре $i: $belowTops',
+        );
+        expect(
+          d,
+          lessThan(total * 0.35),
+          reason: 'рывок на кадре $i ($d px при общем $total): $belowTops',
+        );
+      }
+      expect(opacities.last, lessThan(0.05), reason: 'карточка не погасла');
+    },
+  );
+
   /// «Всё читается»: заголовки полок должны быть контрастны фону в обеих
   /// темах — приглушённый цвет «Выполненных» на тёмном фоне сливался бы.
   for (final dark in [false, true]) {
@@ -462,16 +577,14 @@ void main() {
           );
           if (frame.evaluate().isEmpty) continue;
           final leaving = find
-              .descendant(
-                of: frame.first,
-                matching: find.byType(IgnorePointer),
-              )
+              .descendant(of: frame.first, matching: find.byType(IgnorePointer))
               .evaluate()
               .isNotEmpty;
           if (leaving) continue;
-          return tester.renderObject<RenderBox>(one).localToGlobal(
-            Offset.zero,
-          ).dy;
+          return tester
+              .renderObject<RenderBox>(one)
+              .localToGlobal(Offset.zero)
+              .dy;
         }
         return null;
       }
