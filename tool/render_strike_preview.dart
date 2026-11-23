@@ -111,7 +111,7 @@ Widget _line(String text, double size, TextStyle extra) {
       // текст 26 %, линия — красная, а не серый outline.
       struckColor: const Color(0xFF53433F),
       // РОВНО как в приложении: StrikeStyle.lineColor → алый с alpha 0.62.
-      strikeColor: const Color(0xFFEF5350).withValues(alpha: 0.62),
+      strikeColor: const Color(0xFFEF5350).withValues(alpha: 0.45),
       style: TextStyle(
         fontSize: size,
         color: const Color(0xFF231917),
