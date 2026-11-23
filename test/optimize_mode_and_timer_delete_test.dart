@@ -17,6 +17,7 @@ import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/timer_service.dart';
 import 'package:agysha/utils/motion_prefs.dart';
 import 'package:agysha/utils/perf_prefs.dart';
+import 'source_scope.dart';
 import 'package:agysha/widgets/press_scale.dart';
 
 /// Раунд «Оптимизация»:
@@ -122,8 +123,8 @@ void main() {
 
       PerfPrefs.enabled.value = true;
       expect(PerfPrefs.ambientEveryFrames, 5);
-      expect(cache.maximumSizeBytes, 32 << 20);
-      expect(cache.maximumSize, 250);
+      expect(cache.maximumSizeBytes, 64 << 20);
+      expect(cache.maximumSize, 400);
       // Главное: тумблер — не «убрать анимации».
       expect(MotionPrefs.enabled.value, isFalse);
 
@@ -283,5 +284,42 @@ void main() {
     expect(find.text('Отмена'), findsNothing);
     expect(card, findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  test('после удаления плашка не висит на месте карточки', () {
+    final src = File('lib/widgets/swipe_to_delete.dart').readAsStringSync();
+    expect(src, contains('_dismissed'));
+    expect(
+      src,
+      contains(
+        'child: _dismissed\n                          ? const SizedBox.shrink()',
+      ),
+      reason: 'красный прямоугольник удаления не должен переживать карточку',
+    );
+  });
+
+  test('пустое состояние таймеров не вжимает исчезающий список', () {
+    final src = readLibrary('lib/screens/alarms_screen.dart');
+    final section = src.substring(
+      src.indexOf('Widget _buildTimersSection('),
+      src.indexOf('Widget _buildTimerCard('),
+    );
+    expect(section, isNot(contains('AnimatedSwitcher(')));
+    expect(section, contains('_FadeInText'));
+    // Секция гаснет до того, как её высота схлопывается.
+    expect(src, contains('_timersFadingOut'));
+    expect(src, contains('Duration(milliseconds: 220)'));
+  });
+
+  test('счётчик таймера тикает по границе секунды, а не 12 раз в секунду', () {
+    final src = readLibrary('lib/screens/alarms_screen.dart');
+    expect(
+      src,
+      isNot(contains('Timer.periodic(const Duration(milliseconds: 80)')),
+    );
+    expect(src, contains('_scheduleNext'));
+    expect(src, contains('ms % 1000'));
+    // Полоска в оптимизации обновляется вдвое реже.
+    expect(src, contains('PerfPrefs.active ? 120 : 60'));
   });
 }

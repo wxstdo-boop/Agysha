@@ -41,10 +41,12 @@ abstract final class PerfPrefs {
   static void _applyCacheLimits() {
     final cache = PaintingBinding.instance.imageCache;
     if (active) {
-      // 32 МБ хватает на ленты и аватары, а пик памяти и паузы GC в кадре
-      // заметно ниже (значения Flutter по умолчанию — 100 МБ / 1000 картинок).
-      cache.maximumSizeBytes = 32 << 20;
-      cache.maximumSize = 250;
+      // 64 МБ / 400 картинок: потолок памяти ниже штатного (100 МБ / 1000),
+      // но кеша хватает лентам, аватарам и обложкам. Прежние 32 МБ / 250
+      // выбивали только что показанные картинки — при прокрутке они
+      // декодировались заново, и это само по себе давало рывки в кадре.
+      cache.maximumSizeBytes = 64 << 20;
+      cache.maximumSize = 400;
     } else {
       cache.maximumSizeBytes = 100 << 20;
       cache.maximumSize = 1000;
