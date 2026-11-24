@@ -13,16 +13,17 @@ import 'package:flutter/material.dart';
 /// `ScrollPosition.ensureVisible` → снова `animateTo`. Оверрайд на уровне
 /// позиции ловит оба, поэтому за кареткой не остаётся быстрых рывков.
 ///
-/// Анимируются только маленькие перескоки вглубь текста (до [maxAnimated]).
-/// Большие — выделение мышью на несколько экранов, программная установка
-/// курсора в конец — остаются мгновенными: анимировать там нечего, а долгий
-/// проезд читается как тормоз.
+/// Анимируются перескоки вглубь текста до [maxAnimated] (по умолчанию 900 —
+/// это несколько строк переноса, включая «уехал на следующую строку» в
+/// четырёхстрочном поле). Совсем большие — выделение мышью на несколько
+/// экранов, программная установка курсора в конец — остаются мгновенными:
+/// анимировать там нечего, а долгий проезд читается как тормоз.
 class SmoothCaretController extends ScrollController {
-  SmoothCaretController({super.initialScrollOffset, this.maxAnimated = 520});
+  SmoothCaretController({super.initialScrollOffset, this.maxAnimated = 900});
 
   final double maxAnimated;
 
-  static const Duration _duration = Duration(milliseconds: 260);
+  static const Duration _duration = Duration(milliseconds: 320);
 
   @override
   ScrollPosition createScrollPosition(
