@@ -1193,42 +1193,44 @@ extension _ProfileCards on _ProfileScreenState {
       // Строки рейтинга ПЕРЕЕЗЖАЮТ плавно: каждая строка лежит в общем
       // «слое» на своей вертикальной позиции (`AnimatedPositioned` по ключу
       // друга), поэтому смена очков меняет места анимацией, а не мгновенной
-      // перестановкой. AnimatedSize тянет высоту при добавлении/удалении.
-      child: AnimatedSize(
-        // Высота карточки и переезд строк идут ОДНОЙ длительностью и кривой.
-        // Разные значения (320 против 500 мс) оставляли строку, едущую вверх,
-        // за нижним краем схлопывающейся карточки — удаление читалось как
-        // рывок, особенно когда у удалённого друга меньше очков и вверх едут
-        // все строки под ним.
-        duration: glide,
-        curve: leaderCurve,
-        alignment: Alignment.topCenter,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _LeaderboardRows(
-              rows: rows,
-              duration: glide,
-              curve: leaderCurve,
-              rowBuilder: (f, i) =>
-                  _leaderRow(theme, f, rank: i + 1, isMe: f.id == 'me'),
-            ),
-            if (_service.friends.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: Spacing.xs),
-                child: Text(
-                  Translations.t(
-                    'profileNoFriends',
-                    context,
-                    'Добавьте друзей, чтобы сравнивать прогресс',
-                  ),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-          ],
-        ),
+      // перестановкой. Высоту ведёт сам `_LeaderboardRows` — ОДНОЙ кривой.
+      // Раньше поверх стоял ещё `AnimatedSize` той же длительности: он
+      // догонял уже анимированную высоту и смягчал её второй раз, поэтому
+      // текст и карточки под рейтингом подтягивались рывком (быстро — пауза —
+      // доезд). Двойного сглаживания здесь больше нет.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _LeaderboardRows(
+            rows: rows,
+            duration: glide,
+            curve: leaderCurve,
+            rowBuilder: (f, i) =>
+                _leaderRow(theme, f, rank: i + 1, isMe: f.id == 'me'),
+          ),
+          // Подсказка «добавьте друзей» — единственное, что появляется и
+          // исчезает кадром, поэтому высоту ей анимирует свой `AnimatedSize`.
+          AnimatedSize(
+            duration: glide,
+            curve: leaderCurve,
+            alignment: Alignment.topCenter,
+            child: _service.friends.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.only(top: Spacing.xs),
+                    child: Text(
+                      Translations.t(
+                        'profileNoFriends',
+                        context,
+                        'Добавьте друзей, чтобы сравнивать прогресс',
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ],
       ),
     );
   }
