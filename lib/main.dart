@@ -795,6 +795,18 @@ class _StartupState {
   /// ПОСЛЕ runApp (там уже есть дерево виджетов), сюда кладём только факт.
   final bool launchedByNotification;
   final String? notificationPayload;
+
+  /// Значения, с которыми стартуем, если чтение настроек не успело за бюджет.
+  /// Пустой `lang` означает «как решит система»: `LocaleProvider` уже умеет
+  /// подставлять язык устройства, а тема берётся из настроек системы.
+  static const _StartupState fallback = _StartupState(
+    hasPin: false,
+    theme: 'system',
+    lang: '',
+    fontFamily: '',
+    launchedByNotification: false,
+    notificationPayload: null,
+  );
 }
 
 /// Декодируем логотип ДО первого кадра: на слабых телефонах Image.asset
@@ -1003,6 +1015,8 @@ Future<void> _restoreStartupBackup(Map<String, dynamic> backup) async {
   await globalPrefs.setBool('migrated_to_json_file_v1', true);
   await JsonFile.completeBackupRecovery();
 
+  // Восстановление завершает старт самостоятельно: обычный путь [_startApp]
+  // после сбоя хранилища уже не вызовется, поэтому здесь нужен свой runApp.
   final startup = await _loadStartupState();
   _alarmBootPayload = await _readAlarmBootPayload();
   runApp(
@@ -1015,6 +1029,20 @@ Future<void> _restoreStartupBackup(Map<String, dynamic> backup) async {
     ),
   );
 }
+
+/// Запуск ровно так, как его делает `main()`, но без побочных эффектов
+/// окружения — для тестов старта.
+///
+/// Нужен, чтобы проверить ПОВЕДЕНИЕ: запуск обязан дойти до `runApp`, даже
+/// если инициализация (prefs, Keystore, уведомления) не уложилась в бюджет.
+/// Проверка «в исходнике есть `timeout`» этого не доказывает — она зелёная
+/// и тогда, когда таймаут стоит не на том шаге.
+Future<void> startAppForTesting() => _startApp(Stopwatch()..start());
+
+/// Дошёл ли старт до `runApp` — то есть экран появился, а не остался на
+/// фоне заставки. Флаг ставится ровно перед вызовом `runApp(AgyshaApp)`.
+bool startupReachedApp() => _startupReachedApp;
+bool _startupReachedApp = false;
 
 void main() async {
   // Засекаем старт: если инициализация затянется, счёт пойдёт в сплэш
@@ -1231,12 +1259,32 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
   // Декод логотипа не зависит ни от чего; prefs → миграция/настройки/
   // уведомления зависят от prefs, и этот порядок сохранён внутри
   // [_loadStartupState].
-  late final _StartupState startup;
+  // nullable, а не `late final`: если бюджет старта истёк, значение могло
+  // не присвоиться, и обращение к `late` полю уронило бы запуск
+  // (LateInitializationError) — то есть всё тот же неоткрывшийся экран.
+  _StartupState? loaded;
   try {
-    await Future.wait(<Future<void>>[
-      _predecodeSplashLogo(),
-      _loadStartupState().then((value) => startup = value),
-    ]);
+    // ДЕДЛАЙН НА ВСЮ ИНИЦИАЛИЗАЦИЮ.
+    //
+    // Здесь долго ждали без ограничения. Первым шагом идёт `initPrefs()`
+    // (SharedPreferences через platform-канал), потом `JsonFile.initialize()`
+    // — и то и другое обращается к плагинам. Если канал не ответил (MIUI/
+    // HyperOS, Keystore занят, окно системы поверх), ожидание не
+    // завершалось НИКОГДА: `runApp(AgyshaApp)` не вызывался, на экране
+    // оставался `_BootBackdrop` — ровно «вечный белый экран» из жалобы.
+    // Бюджеты внутри `_loadStartupState` покрывали только часть шагов:
+    // до первого из них стояли `initPrefs` и `JsonFile.initialize`.
+    //
+    // Теперь через 4 с старт идёт дальше с настройками по умолчанию, а
+    // инициализация продолжается в фоне и досылает значения в сервисы.
+    await withinBudgetVoid(
+      Future.wait(<Future<void>>[
+        _predecodeSplashLogo(),
+        _loadStartupState().then((value) => loaded = value),
+      ]),
+      const Duration(seconds: 4),
+      label: 'startup init',
+    );
   } catch (error, stackTrace) {
     debugPrint('Application startup failed: $error\n$stackTrace');
     if (JsonFile.canRecoverFromBackup(error)) {
@@ -1265,6 +1313,12 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
     );
     return;
   }
+  // Бюджет выше мог истечь раньше, чем прочитались настройки. Тогда стартуем
+  // с разумными значениями по умолчанию: приложение обязано открыться, а
+  // настройки догрузятся в фоне (сервисы читают их сами и уведомляют).
+  // Иначе обращение к неприсвоенному `late` полю уронило бы запуск.
+  final ready = loaded ?? _StartupState.fallback;
+
   // Payload будильника читаем до первого кадра: от него зависит, что
   // станет домашним экраном (см. [_AlarmBootHost]). Это один вызов
   // platform-канала; на случай зависшего канала ограничиваем его, чтобы
@@ -1274,12 +1328,13 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
     onTimeout: () => null,
   );
 
+  _startupReachedApp = true;
   runApp(
     AgyshaApp(
-      initialLocked: startup.hasPin,
-      initialTheme: startup.theme,
-      initialLanguageCode: startup.lang,
-      initialFontFamily: startup.fontFamily,
+      initialLocked: ready.hasPin,
+      initialTheme: ready.theme,
+      initialLanguageCode: ready.lang,
+      initialFontFamily: ready.fontFamily,
       alarmBootPayload: _alarmBootPayload,
     ),
   );
@@ -1360,8 +1415,8 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
   // WakeTaskScreen дважды (из getLaunchDetails и getAlarmPayload).
   bool alarmHandled = false;
 
-  if (startup.launchedByNotification) {
-    _pendingAlarmPayload = startup.notificationPayload;
+  if (ready.launchedByNotification) {
+    _pendingAlarmPayload = ready.notificationPayload;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleNotificationTap(_pendingAlarmPayload);
       _pendingAlarmPayload = null;
@@ -1664,12 +1719,23 @@ class AgyshaAppState extends State<AgyshaApp>
     // не должен запушить Home дважды.
     if (_homeScheduled) return;
     _homeScheduled = true;
+    // Ждём данные, но НЕ вечно: девять файлов читаются с диска и
+    // расшифровываются. Если чтение зависло (битый Keystore, диск занят
+    // индексацией), `whenComplete` не срабатывал никогда — сплэш гас, а
+    // главный экран не появлялся: человек снова видел пустой экран, хотя
+    // это уже не первый кадр. Теперь через 2.5 с показываем Home с тем, что
+    // успело загрузиться; остальное догружается и уведомляет списки.
     unawaited(
-      ready.whenComplete(() {
-        _homeScheduled = false;
-        if (!mounted) return;
-        _pushHome(nav);
-      }),
+      ready
+          .timeout(const Duration(milliseconds: 2500), onTimeout: () {})
+          .catchError((Object error, StackTrace stack) {
+            swallow('startup data', error, stack);
+          })
+          .whenComplete(() {
+            _homeScheduled = false;
+            if (!mounted) return;
+            _pushHome(nav);
+          }),
     );
   }
 
