@@ -10,69 +10,45 @@ IssueTracker: https://github.com/wxstdo-boop/Agysha/issues
 Changelog: https://github.com/wxstdo-boop/Agysha/releases
 
 AutoName: Agysha
-Summary: Alarm clock that won't let you snooze back to sleep
-Description: |-
-  Agysha is a free and open-source alarm clock that will not let you go back to
-  sleep. Alarms, tasks, habits, nutrition tracking and an optional AI assistant
-  live in one Material You app.
-
-  Alarms
-  * Exact alarms via SCHEDULE_EXACT_ALARM and a foreground service that keeps the process alive
-  * Wake tasks: attach a task you must complete to switch the alarm off
-  * Survives a reboot - alarms are rescheduled automatically
-  * Full-screen intent, so the alarm shows above the lock screen
-  * Five built-in sounds: classic, default, digital, gentle, nature
-
-  Tasks and habits
-  * Tasks with priority, due date and repeat rules
-  * Habits with streaks and daily or total goals
-  * Reality checks - an honest "are you lying to yourself?" prompt
-  * Swipe to delete, drag to reorder, springy animations
-
-  Nutrition
-  * Meals, macro goals and 30-day trends
-  * Ring progress for every goal
-
-  Ada, the assistant
-  Ada understands plain speech ("set an alarm for 7 am on weekdays"), creates,
-  edits and deletes alarms, tasks, habits, checks and meals, and can undo her
-  last action. She runs in a small window above other apps and can use free
-  public model providers with no account of your own. An API key, if you add
-  one, is stored only on the device. This is the only feature that uses the
-  network, and it is optional.
-
-  Privacy and system
-  * PIN lock and an app lock screen
-  * Local encrypted storage, no ads, no trackers, no Google Play Services
-  * Export all your data as a single file
-  * Material You dynamic colours plus a dark theme
-  * Localisation: English, Russian, French
-
-  In-app updates are disabled in the F-Droid build; F-Droid updates the app.
-
-  Requires Android 8.0 (API 26) or newer.
+Summary: Alarm you cannot snooze away, plus tasks, habits and one assistant
 
 RepoType: git
 Repo: https://github.com/wxstdo-boop/Agysha.git
 
 Builds:
-  - versionName: 1.6.236
-    versionCode: 45308
-    commit: e3108f593765604fd332fedcb3354555ccc4d5e0
-    subdir: .
+  - versionName: 1.6.327
+    versionCode: 45403
+    commit: 4ca93b49632a35357a4d5849226b630922573403
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
-      - flutter@3.47.5
+      - flutter@stable
+    rm:
+      - ios
+      - linux
+      - macos
+      - web
+      - windows
     prebuild:
+      - sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+      - flutterVersion=$(sed -n -E "s/.*flutter-version:\s*'(.*)'/\1/p" .github/workflows/release.yml
+        | head -1)
+      - '[[ $flutterVersion ]]'
+      - git -C $$flutter$$ checkout -f $flutterVersion
+      - sed -i -e '/signingConfig = signingConfigs.getByName("release")/d' android/app/build.gradle.kts
+      - sed -i -e '/REQUEST_INSTALL_PACKAGES/d' android/app/src/main/AndroidManifest.xml
+      - export PUB_CACHE=$(pwd)/.pub-cache
       - $$flutter$$/bin/flutter config --no-analytics
       - $$flutter$$/bin/flutter pub get --enforce-lockfile
       - echo "flutter.sdk=$$flutter$$" >> android/local.properties
-      - sed -i -e '/REQUEST_INSTALL_PACKAGES/d' android/app/src/main/AndroidManifest.xml
-    build: $$flutter$$/bin/flutter build apk --release --dart-define=AGYSHA_NO_SELF_UPDATE=true
+    scandelete:
+      - .pub-cache
+    build:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter build apk --release --dart-define=AGYSHA_NO_SELF_UPDATE=true
     ndk: 28.2.13676358
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+\+[0-9]+$
 UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
-CurrentVersion: 1.6.236
-CurrentVersionCode: 45308
+CurrentVersion: 1.6.327
+CurrentVersionCode: 45403

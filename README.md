@@ -121,9 +121,12 @@ https://github.com/wxstdo-boop/Agysha
 
 ### F-Droid
 
-Заявка отправлена и ждёт ревью — как только её примут, Agysha появится в
-каталоге и обновления пойдут через него. Рецепт сборки и детали подачи —
-в [docs/publishing-fdroid.md](docs/publishing-fdroid.md).
+Заявка открыта: [fdroiddata!57343](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57343).
+24 ноября ревьюер закрыл её с вопросом «чем приложение уникально» — мы ответили
+разбором (задачи-будильники, Reality Check, Ада), переписали рецепт по
+`templates/build-flutter.yml` и переоткрыли MR. Пока Agysha нет в каталоге:
+до принятия ставь через Obtainium или APK из Releases. Рецепт сборки и детали
+подачи — в [docs/publishing-fdroid.md](docs/publishing-fdroid.md).
 
 ### Из исходников
 

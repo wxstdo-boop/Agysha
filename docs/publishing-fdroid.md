@@ -235,16 +235,25 @@ PR в `main` по их шаблону.
 
 Всё, что нужно F-Droid, уже лежит в репозитории и проверено.
 
-> **Статус подачи (обновлено):** оба шага сделаны.
+> **Статус подачи (обновлено 24.11).** Ревьюер `seekme-seekyou` закрыл MR
+> `!57343` с формулировкой «does not provide any unique value», удалив из
+> рецепта `Summary`/`Description`. Ответ опубликован в MR, рецепт переписан
+> по `templates/build-flutter.yml` (коммит `d2ad97c`), MR переоткрыт автором
+> и ждёт второго захода. Что именно отвечено ревьюеру: задачи-будильники
+> (звонок не выключается тапом — только решённая задача), Reality Check как
+> отдельный тип записи, Ада как способ ввода голосом/текстом, единое
+> хранилище. При повторном отказе остаёмся на GitHub + Obtainium.
+>
 > * RFP-заявка: **https://gitlab.com/fdroid/rfp/-/issues/4794** (`opened`).
 > * Merge request: **https://gitlab.com/fdroid/fdroiddata/-/merge_requests/57343**
 >   — заголовок `New app: Agysha`, ветка `com.wetcorp.agysha` форка
 >   `wxstdo/fdroiddata`, ровно один файл `metadata/com.wetcorp.agysha.yml`.
->   MR `mergeable`, кросс-ссылка на rfp#4794 подставлена (`Closes rfp#4794`).
->   На момент подачи рецепт в MR был переведён на `v1.6.172+45244`. В
->   репозитории он уже на `v1.6.233+45305`; перед ревью синхронизируй файл
->   `metadata/com.wetcorp.agysha.yml` в MR с `fdroid/metadata/com.wetcorp.agysha.yml`,
->   иначе `fdroid checkupdates` покажет diff.
+>   Текущий рецепт в MR: `v1.6.327+45403` (`4ca93b4`), `srclibs: flutter@stable`
+>   с checkout версии из `.github/workflows/release.yml` (3.50.1),
+>   `sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'`, строка
+>   `signingConfig` вырезается (F-Droid подписывает своим ключом). Локальная
+>   копия — `fdroid/metadata/com.wetcorp.agysha.yml`, она побайтово совпадает
+>   с файлом в MR.
 >
 > **Почему пайплайн в форке красный.** Не ошибка рецепта: GitLab отказывается
 > запускать джобы в форке без верификации личности. Точный ответ API на
