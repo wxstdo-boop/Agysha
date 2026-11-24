@@ -39,8 +39,8 @@ abstract final class MotionPrefs {
   static bool get shouldReduceMotion => systemReduceMotion || enabled.value;
 
   /// Vsync для вечного декоративного цикла: тик раз в
-  /// [PerfPrefs.ambientEveryFrames] кадров (см. там же, почему в
-  /// «Оптимизации» частота та же).
+  /// [PerfPrefs.ambientEveryFrames] кадров (частота считается от частоты
+  /// экрана, под нагрузкой декор тикает ещё реже).
   static TickerProvider ambient(TickerProvider inner) =>
       AmbientVsync(inner, everyFramesOf: () => PerfPrefs.ambientEveryFrames);
 
@@ -89,7 +89,7 @@ mixin MotionAwareRepeat<T extends StatefulWidget> on State<T> {
 
   void _ensureMotionListener() {
     if (_motionListenerAttached) return;
-    MotionPrefs.enabled.addListener(_onMotionChanged);
+    MotionPrefs.enabled.addListener(_applyMotion);
     _motionListenerAttached = true;
   }
 
@@ -102,7 +102,9 @@ mixin MotionAwareRepeat<T extends StatefulWidget> on State<T> {
     _motionCtrls.add(controller);
     _motionReverse.add(reverse);
     _ensureMotionListener();
-    if (!MotionPrefs.shouldReduceMotion) controller.repeat(reverse: reverse);
+    if (!MotionPrefs.shouldReduceMotion) {
+      controller.repeat(reverse: reverse);
+    }
     return controller;
   }
 
@@ -116,11 +118,12 @@ mixin MotionAwareRepeat<T extends StatefulWidget> on State<T> {
   @protected
   void onMotionChanged() {}
 
-  void _onMotionChanged() {
+  void _applyMotion() {
     if (!mounted) return;
+    final frozen = MotionPrefs.shouldReduceMotion;
     for (var i = 0; i < _motionCtrls.length; i++) {
       final c = _motionCtrls[i];
-      if (MotionPrefs.shouldReduceMotion) {
+      if (frozen) {
         c.stop();
       } else if (!c.isAnimating) {
         c.repeat(reverse: _motionReverse[i]);
@@ -132,7 +135,7 @@ mixin MotionAwareRepeat<T extends StatefulWidget> on State<T> {
   @override
   void dispose() {
     if (_motionListenerAttached) {
-      MotionPrefs.enabled.removeListener(_onMotionChanged);
+      MotionPrefs.enabled.removeListener(_applyMotion);
     }
     super.dispose();
   }

@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show ValueListenable, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import '../services/haptics.dart';
 import '../widgets/section_pill.dart';
 import '../widgets/animated_fab_row.dart'
@@ -554,23 +554,48 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final screens = <Widget>[
-      RepaintBoundary(
-        child: AlarmsScreen(scrollOffset: sectionScrollOffset, pillIndex: 0),
+      _PageTickerGate(
+        index: 0,
+        page: _railPage,
+        child: RepaintBoundary(
+          child: AlarmsScreen(
+            scrollOffset: sectionScrollOffset,
+            pillIndex: 0,
+          ),
+        ),
       ),
-      RepaintBoundary(
-        child: HabitsScreen(scrollOffset: sectionScrollOffset, pillIndex: 1),
+      _PageTickerGate(
+        index: 1,
+        page: _railPage,
+        child: RepaintBoundary(
+          child: HabitsScreen(
+            scrollOffset: sectionScrollOffset,
+            pillIndex: 1,
+          ),
+        ),
       ),
-      RepaintBoundary(
-        child: TasksScreen(scrollOffset: sectionScrollOffset, pillIndex: 2),
+      _PageTickerGate(
+        index: 2,
+        page: _railPage,
+        child: RepaintBoundary(
+          child: TasksScreen(
+            scrollOffset: sectionScrollOffset,
+            pillIndex: 2,
+          ),
+        ),
       ),
       if (rcOn)
-        RepaintBoundary(
-          // Появление раздела после включения РП в настройках: мягкое
-          // проявление вместо кадра «пусто → готовый экран».
-          child: _SectionReveal(
-            child: RealityChecksScreen(
-              scrollOffset: sectionScrollOffset,
-              pillIndex: 3,
+        _PageTickerGate(
+          index: 3,
+          page: _railPage,
+          child: RepaintBoundary(
+            // Появление раздела после включения РП в настройках: мягкое
+            // проявление вместо кадра «пусто → готовый экран».
+            child: _SectionReveal(
+              child: RealityChecksScreen(
+                scrollOffset: sectionScrollOffset,
+                pillIndex: 3,
+              ),
             ),
           ),
         ),
@@ -941,6 +966,45 @@ class _SectionRevealState extends State<_SectionReveal>
         ).animate(curved),
         child: widget.child,
       ),
+    );
+  }
+}
+
+/// Глушит тикеры раздела, которого не видно.
+///
+/// В карусели живут одновременно все разделы, и у каждого есть свои вечные
+/// анимации (пульсы, свечения, перекаты цифр) — на RawTicker без
+/// [MotionPrefs]. Пока такой раздел за краем экрана, его кадры всё равно
+/// считаются: Flutter продолжает гонять кадры, даже если пиксели не
+/// рисуются, а телефон из-за вечного потока кадров не уходит в покой и не
+/// сбрасывает герцовку. Именно это читается как «приложение само по себе
+/// подлагивает, хотя ничего не делаю».
+///
+/// Гейт включается только для страницы, которую реально видно: допуск
+/// меньше половины кадра делает соседа по свайпу живым ровно тогда, когда он
+/// выехал на экран, а в покое тикает ровно один раздел. Всё, что завязано на
+/// время (анимации, скролл), не ломается — [TickerMode] не останавливает
+/// контроллеры, а только приостанавливает их тиканье.
+class _PageTickerGate extends StatelessWidget {
+  const _PageTickerGate({
+    required this.index,
+    required this.page,
+    required this.child,
+  });
+
+  final int index;
+  final ValueListenable<double> page;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: page,
+      child: child,
+      builder: (context, value, child) {
+        final visible = (value - index).abs() < 0.98;
+        return TickerMode(enabled: visible, child: child!);
+      },
     );
   }
 }

@@ -280,6 +280,17 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                   final v = !_optimize;
                   await _setOptimize(v);
                 },
+                // Долгое нажатие — панель «Плавность»: цифры кадров с этого
+                // телефона и копирование сводки. Обычный тап остаётся
+                // тумблером, ничего не ломается.
+                onLongPress: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      settings: const RouteSettings(name: 'PerfPanelScreen'),
+                      builder: (_) => const PerfPanelScreen(),
+                    ),
+                  );
+                },
                 trailing: VolumetricSwitch(
                   value: _optimize,
                   onChanged: _setOptimize,
