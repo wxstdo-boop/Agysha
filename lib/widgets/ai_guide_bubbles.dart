@@ -107,117 +107,129 @@ class _MessageBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: _isReward
-                      ? BoxDecoration(
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(18),
-                            topRight: const Radius.circular(18),
-                            bottomLeft: Radius.circular(isUser ? 18 : 6),
-                            bottomRight: Radius.circular(isUser ? 6 : 18),
-                          ),
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFFFFF6D8), Color(0xFFFFE1B2)],
-                          ),
-                          border: Border.all(
-                            color: Colors.amber.withValues(alpha: 0.55),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.amber.withValues(alpha: 0.25),
-                              blurRadius: 14,
-                              offset: const Offset(0, 3),
+                // 3D-наклон пузыря: чат «Соо» раньше был плоским, и
+                // зажатие читалось только по лёгкому уменьшению. Теперь
+                // пузырь, как карточки и кнопки приложения, наклоняется
+                // за пальцем и плавно «выдыхается» обратно.
+                PressScale(
+                  pressedScale: 0.986,
+                  enableTilt: true,
+                  maxTiltAngle: 0.20,
+                  duration: const Duration(milliseconds: 150),
+                  releaseDuration: const Duration(milliseconds: 380),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: _isReward
+                        ? BoxDecoration(
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(18),
+                              topRight: const Radius.circular(18),
+                              bottomLeft: Radius.circular(isUser ? 18 : 6),
+                              bottomRight: Radius.circular(isUser ? 6 : 18),
                             ),
-                          ],
-                        )
-                      : BoxDecoration(
-                          color: isUser
-                              ? cs.primaryContainer.withValues(alpha: 0.88)
-                              : cs.surfaceContainerHigh.withValues(alpha: 0.82),
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(20),
-                            topRight: const Radius.circular(20),
-                            bottomLeft: Radius.circular(isUser ? 20 : 6),
-                            bottomRight: Radius.circular(isUser ? 6 : 20),
-                          ),
-                          // Обводка — еле заметная: раньше белая кромка
-                          // отсвечивала поверх пузыря и читалась как рамка.
-                          border: Border.all(
-                            color: isUser
-                                ? cs.primary.withValues(alpha: 0.10)
-                                : Colors.white.withValues(
-                                    alpha:
-                                        Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? 0.045
-                                        : 0.10,
-                                  ),
-                            width: 1.0,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha:
-                                    Theme.of(context).brightness ==
-                                        Brightness.dark
-                                    ? 0.22
-                                    : 0.06,
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFFFFF6D8), Color(0xFFFFE1B2)],
+                            ),
+                            border: Border.all(
+                              color: Colors.amber.withValues(alpha: 0.55),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.amber.withValues(alpha: 0.25),
+                                blurRadius: 14,
+                                offset: const Offset(0, 3),
                               ),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                            ],
+                          )
+                        : BoxDecoration(
+                            color: isUser
+                                ? cs.primaryContainer.withValues(alpha: 0.88)
+                                : cs.surfaceContainerHigh.withValues(
+                                    alpha: 0.82,
+                                  ),
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(20),
+                              topRight: const Radius.circular(20),
+                              bottomLeft: Radius.circular(isUser ? 20 : 6),
+                              bottomRight: Radius.circular(isUser ? 6 : 20),
                             ),
-                          ],
-                        ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_isReward) ...[
-                        Padding(
-                          padding: const EdgeInsets.only(top: 1, right: 6),
-                          child: Icon(
-                            Icons.card_giftcard,
-                            size: 15,
-                            color: const Color(0xFFB0712A),
+                            // Обводка — еле заметная: раньше белая кромка
+                            // отсвечивала поверх пузыря и читалась как рамка.
+                            border: Border.all(
+                              color: isUser
+                                  ? cs.primary.withValues(alpha: 0.10)
+                                  : Colors.white.withValues(
+                                      alpha:
+                                          Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? 0.045
+                                          : 0.10,
+                                    ),
+                              width: 1.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(
+                                  alpha:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? 0.22
+                                      : 0.06,
+                                ),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_isReward) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 1, right: 6),
+                            child: Icon(
+                              Icons.card_giftcard,
+                              size: 15,
+                              color: const Color(0xFFB0712A),
+                            ),
+                          ),
+                        ],
+                        Flexible(
+                          child: SelectableText.rich(
+                            parseMarkdownSpans(
+                              message.text,
+                              TextStyle(
+                                color: _isReward
+                                    ? const Color(0xFF7A4B00)
+                                    : (isUser
+                                          ? cs.onPrimaryContainer
+                                          : cs.onSurface),
+                                // ВСЕ сообщения (и ответы, и мои) крупные;
+                                // markdown-разметка при этом не растёт — bold/
+                                // italic имеют тот же fontSize, что обычный
+                                // текст (см. parseMarkdownSpans).
+                                fontSize: 19.5,
+                                height: 1.35,
+                              ),
+                            ),
+                            // Красивые ручки выделения и РОВНО один пункт
+                            // меню — «Копировать». «Выделить всё» убрано:
+                            // оно превращало случайный тап в выделение
+                            // целого пузыря. Лупа тоже отключена.
+                            selectionControls: BeautifulSelectionControls(),
+                            contextMenuBuilder: copyOnlyContextMenuBuilder,
+                            magnifierConfiguration:
+                                TextMagnifierConfiguration.disabled,
                           ),
                         ),
                       ],
-                      Flexible(
-                        child: SelectableText.rich(
-                          parseMarkdownSpans(
-                            message.text,
-                            TextStyle(
-                              color: _isReward
-                                  ? const Color(0xFF7A4B00)
-                                  : (isUser
-                                        ? cs.onPrimaryContainer
-                                        : cs.onSurface),
-                              // ВСЕ сообщения (и ответы, и мои) крупные;
-                              // markdown-разметка при этом не растёт — bold/
-                              // italic имеют тот же fontSize, что обычный
-                              // текст (см. parseMarkdownSpans).
-                              fontSize: 19.5,
-                              height: 1.35,
-                            ),
-                          ),
-                          // Красивые ручки выделения + меню Копировать/
-                          // Поделиться, без системной лупы (приближение
-                          // текста — бесит). Долгое нажатие больше НИЧЕМ
-                          // не перехватывается — выделение и тулбар с
-                          // кнопкой «Копировать» работают всегда.
-                          selectionControls: BeautifulSelectionControls(),
-                          contextMenuBuilder: buildChatSelectionMenu,
-                          magnifierConfiguration:
-                              TextMagnifierConfiguration.disabled,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 // Действия под сообщением Ады: сердечко, скопировать, булавка.
@@ -244,44 +256,27 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
     if (!animate) return bubble;
-    // Мои сообщения — чистый fade с мягким подъёмом (без заметного scale:
-    // резкая вставка снизу в reverse-ленту и одновременный scale на слабом
-    // устройстве выглядели «дёргано»). Ответы Ады — fade + едва заметный
-    // scale и чуть дольше, чтобы появление читалось спокойно.
-    final isUserMsg = message.isUser;
+    // У обоих отправителей одна спокойная анимация: проявление и мягкий
+    // выезд снизу, без scale и без пересчёта высоты.
     return TweenAnimationBuilder<double>(
       // Анимируется один раз при первом появлении пузыря; у старых
       // сообщений анимация отключена (animate: false) — скролл большого
       // чата не дёргается.
       tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: isUserMsg ? 300 : 380),
+      // Одинаково спокойное появление у обоих: раньше «моё» сообщение
+      // вспыхивало быстрее ответа и читалось резче.
+      duration: const Duration(milliseconds: 360),
       curve: Curves.easeOutCubic,
       builder: (context, t, child) {
         final e = Curves.easeOutCubic.transform(t);
-        // Высота набирается только в первой половине анимации: раскладка
-        // пересчитывается ~10 кадров вместо всех 24. Крупные плашки наград
-        // и стрика «ползли» рывками именно из-за покадрового изменения
-        // высоты; дальше пузырь только проявляется.
-        final grow = Curves.easeOutCubic.transform((t / 0.45).clamp(0.0, 1.0));
+        // Никакой анимации ВЫСОТЫ: покадровый heightFactor заставлял ленту
+        // пересобираться и «дёргался» на слабых телефонах. Пузырь сразу
+        // занимает своё место и только проявляется, мягко выезжая снизу.
         return Opacity(
           opacity: e,
-          // Растём от нижнего края: лента не «прыгает» на полную высоту
-          // пузыря в первом кадре.
-          child: ClipRect(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              heightFactor: grow,
-              child: Transform.translate(
-                offset: Offset(0, 8.0 * (1.0 - e)),
-                child: Transform.scale(
-                  scale: isUserMsg ? (0.995 + 0.005 * e) : (0.985 + 0.015 * e),
-                  alignment: isUserMsg
-                      ? Alignment.bottomRight
-                      : Alignment.bottomLeft,
-                  child: child,
-                ),
-              ),
-            ),
+          child: Transform.translate(
+            offset: Offset(0, 7.0 * (1.0 - e)),
+            child: child,
           ),
         );
       },
@@ -389,9 +384,13 @@ class _ActionIcon extends StatelessWidget {
       message: tooltip,
       waitDuration: const Duration(milliseconds: 600),
       child: PressScale(
-        // Иконки действий раньше реагировали только на сам тап — ни отдачи
-        // при зажатии, ни хаптика. Теперь кнопка «сядет» под пальцем.
+        // Иконки действий реагируют на зажатие так же, как остальные кнопки
+        // приложения: уменьшение, наклон за пальцем и плавный возврат.
         pressedScale: 0.86,
+        enableTilt: true,
+        maxTiltAngle: 0.14,
+        duration: const Duration(milliseconds: 140),
+        releaseDuration: const Duration(milliseconds: 300),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {

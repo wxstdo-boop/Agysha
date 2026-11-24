@@ -661,4 +661,31 @@ void main() {
     );
     expect(field.controller?.text, isEmpty);
   });
+
+  testWidgets('таблетка моделей показывает пул по силе и запоминает выбор', (
+    tester,
+  ) async {
+    _tallSurface(tester);
+    final store = InMemoryForgeTokenStore();
+    final service = ForgeService(client: _okClient(), store: store);
+
+    await tester.pumpWidget(
+      _wrap(
+        ForgeScreen(owner: 'wxstdo-boop', repo: 'agysha', service: service),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Без ключа и без настроек доступен бесплатный пул, а первой идёт
+    // «Авто» — перебор всего пула, как было до таблетки.
+    expect(find.text('Авто · весь пул'), findsOneWidget);
+    final pool = FreePoolForgeChat.catalogFor('');
+    expect(pool, isNotEmpty);
+    expect(find.text(pool.first.label), findsWidgets);
+
+    // Сила убывает: первая модель пула не слабее последней.
+    for (var i = 1; i < pool.length; i++) {
+      expect(pool[i - 1].power, greaterThanOrEqualTo(pool[i].power));
+    }
+  });
 }

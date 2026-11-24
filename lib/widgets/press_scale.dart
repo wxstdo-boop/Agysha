@@ -118,6 +118,10 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// углы обнуляются уже при нулевой силе — скачка не видно.
   late final AnimationController _tiltFade;
 
+  /// Кривая гашения наклона: вход мягкий, выход — «выдох», без рывка на
+  /// последнем кадре.
+  late final Animation<double> _tiltFadeAnim;
+
   Offset _tilt = Offset.zero;
 
   /// Куда наклон едет прямо сейчас (см. [_updateTilt]) и тикер, который
@@ -230,8 +234,8 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
           // Вход наклона — быстрый (120 мс), выход — мягкий (320 мс).
           // Раньше обе стороны шли 460 мс, и наклон «выползал»: карточка
           // долго оставалась плоской, хотя палец уже на ней.
-          duration: const Duration(milliseconds: 120),
-          reverseDuration: const Duration(milliseconds: 320),
+          duration: const Duration(milliseconds: 150),
+          reverseDuration: const Duration(milliseconds: 420),
         )..addStatusListener((status) {
           if (status != AnimationStatus.dismissed) return;
           // Наклон уже невидим (сила 0) — можно обнулить углы без рывка.
@@ -239,6 +243,11 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
           _releaseTilt = Offset.zero;
           _tiltNotifier.value = Offset.zero;
         });
+    _tiltFadeAnim = CurvedAnimation(
+      parent: _tiltFade,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInOutCubic,
+    );
   }
 
   @override
@@ -336,8 +345,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       0.05,
     );
     _lastTiltTick = elapsed;
-    // 65 мс — время «догона» пальца: заметно отзывчиво, но без щелчка.
-    final k = 1.0 - math.exp(-dt / 0.065);
+    // 85 мс — время «догона» пальца: движение идёт мягко и без щелчка,
+    // но всё ещё заметно отзывчиво.
+    final k = 1.0 - math.exp(-dt / 0.085);
     _tilt = _tilt + (_tiltTarget - _tilt) * k;
     if ((_tiltTarget - _tilt).distance < 0.002) {
       _tilt = _tiltTarget;
@@ -363,7 +373,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     _pointerDown = true;
     // Наклон включается своим каналом — и гаснет он тоже плавно.
     _tiltFade.forward();
-    _updateTilt(e.localPosition, smooth: false);
+    // Наклон ВХОДИТ плавно: раньше угол ставился кадром, и карточка
+    // «щёлкала» из плоскости в наклон. Теперь он догоняет палец кривой.
+    _updateTilt(e.localPosition, smooth: true);
     // Длительность переключаем ДО старта: контроллер живёт один, и без этого
     // после первого же нажатия он запомнил бы длину отпускания.
     _ctrl.duration = widget.duration;
@@ -544,7 +556,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         final currentTilt = _ctrl.status == AnimationStatus.reverse
             ? _releaseTilt
             : _tiltNotifier.value;
-        final tiltFade = _tiltFade.value;
+        final tiltFade = _tiltFadeAnim.value;
         final tiltActive =
             widget.enableTilt &&
             !MotionPrefs.shouldReduceMotion &&

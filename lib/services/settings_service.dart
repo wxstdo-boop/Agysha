@@ -20,6 +20,7 @@ class SettingsService {
   // в нём после переименования пункта в «Оптимизация».
   static const _keyOptimize = 'setting_reduce_motion';
   static const _keyDeveloperPrompt = 'developer_prompt';
+  static const _keyForgeModel = 'forge_model';
   static const _keyAutoExport = 'setting_auto_export';
   static const _keyAiGuide = 'setting_ai_guide';
   static const _keyAiKey = 'setting_ai_key';
@@ -313,6 +314,22 @@ class SettingsService {
   static final ValueNotifier<bool> perfectionismEnabled = ValueNotifier<bool>(
     false,
   );
+
+  /// Выбранная в «Кузнице» модель ИИ. Пустая строка — «пул по умолчанию».
+  static Future<String> loadForgeModel() async {
+    final map = await _loadSettings();
+    final value = map[_keyForgeModel];
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+    return _keyForgeModelEmpty;
+  }
+
+  static const _keyForgeModelEmpty = '';
+
+  static Future<void> saveForgeModel(String id) async {
+    final map = await _loadSettings();
+    map[_keyForgeModel] = id.trim();
+    await _saveSettings(map);
+  }
 
   static Future<bool> loadPerfectionism() async {
     final map = await _loadSettings();

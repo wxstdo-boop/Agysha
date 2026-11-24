@@ -100,6 +100,12 @@ class _ForgeScreenState extends State<ForgeScreen> {
 
   String? _runError;
 
+  /// Выбранная в таблетке модель (id из пула) и сам список реально
+  /// доступных моделей. Пустая строка — «Авто»: пул перебирается целиком.
+  String _modelId = '';
+  bool _modelPrefLoaded = false;
+  List<ForgeModelOption> _models = const <ForgeModelOption>[];
+
   /// Прогон живёт вне экрана: закрыл «Кузницу» — агент продолжает работу,
   /// а готовый ответ ляжет в историю и появится при следующем открытии.
   late final ForgeRunner _runner = widget.runner ?? ForgeRunner.instance;
@@ -123,6 +129,9 @@ class _ForgeScreenState extends State<ForgeScreen> {
         ..clear()
         ..addAll(_runner.steps);
     }
+    // Пул для таблетки строится сразу и без диска: на старте это бесплатные
+    // модели, а после чтения своего ключа список уточняется (см. `_send`).
+    _models = FreePoolForgeChat.catalogFor('');
     unawaited(_restoreToken());
     unawaited(_restoreChat());
   }
@@ -163,6 +172,42 @@ class _ForgeScreenState extends State<ForgeScreen> {
     // Слушателя снимаем, прогон НЕ останавливаем: работа продолжается.
     _runner.removeListener(_onRunnerChanged);
     super.dispose();
+  }
+
+  /// Пересобрать таблетку под текущий ключ ИИ и один раз восстановить
+  /// сохранённый выбор. Чтение настроек идёт здесь, а не в `initState`:
+  /// диск не должен задерживать первый кадр экрана.
+  Future<void> _syncModels(String apiKey) async {
+    final models = FreePoolForgeChat.catalogFor(apiKey);
+    String saved = '';
+    if (!_modelPrefLoaded) {
+      _modelPrefLoaded = true;
+      try {
+        saved = await SettingsService.loadForgeModel();
+      } catch (_) {
+        saved = '';
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _models = models;
+      if (saved.isNotEmpty && models.any((m) => m.id == saved)) {
+        _modelId = saved;
+      } else if (!models.any((m) => m.id == _modelId)) {
+        _modelId = '';
+      }
+    });
+  }
+
+  Future<void> _selectModel(ForgeModelOption? option) async {
+    final id = option?.id ?? '';
+    if (id == _modelId) return;
+    setState(() => _modelId = id);
+    try {
+      await SettingsService.saveForgeModel(id);
+    } catch (_) {
+      // Хранилище настроек недоступно — выбор всё равно живёт до выхода.
+    }
   }
 
   Future<void> _restoreChat() async {
@@ -391,6 +436,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
       apiKey = '';
     }
     if (!mounted) return;
+    await _syncModels(apiKey);
+    if (!mounted) return;
 
     final history = List<ForgeChatMessage>.from(_messages);
     _inputController.clear();
@@ -419,6 +466,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
           widget.chatFactory?.call(apiKey) ??
           FreePoolForgeChat(
             apiKey: apiKey,
+            onlyModel: _modelId.isEmpty ? null : _modelId,
             onProvider: (name) {
               if (!mounted) return;
               _activeProvider = name;
@@ -515,6 +563,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
               // Поле ввода стоит на месте прежней карточки-плашки с
               // описанием «Кузницы»: оно нужнее описания, которое целиком
               // повторяло заголовок экрана. Снизу поле больше не дублируется.
+              _modelPill(theme, cs, accent),
               _composer(theme, cs, accent),
               Expanded(
                 child: ListView(
@@ -585,6 +634,87 @@ class _ForgeScreenState extends State<ForgeScreen> {
     );
   }
 
+  /// Ультраплавная таблетка выбора модели под заголовком «Кузницы».
+  ///
+  /// В списке только те модели, которые правда доступны: пул для текущего
+  /// ключа (или для работы без ключа), отсортированный по силе — сильнейшие
+  /// слева. Слева всегда «Авто»: пул перебирается целиком, как раньше.
+  /// Выбор запоминается между запусками приложения.
+  Widget _modelPill(ThemeData theme, ColorScheme cs, Color accent) {
+    final options = <ForgeModelOption>[
+      const ForgeModelOption(
+        id: '',
+        name: 'Авто · весь пул',
+        vendor: 'Пул',
+        power: 1000,
+      ),
+      ..._models,
+    ];
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: SizedBox(
+        height: 42,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+          itemCount: options.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final option = options[index];
+            final selected = option.id == _modelId;
+            return PressScale(
+              pressedScale: 0.9,
+              enableTilt: true,
+              duration: const Duration(milliseconds: 130),
+              releaseDuration: const Duration(milliseconds: 280),
+              maxTiltAngle: 0.18,
+              pressTint: accent,
+              pressTintStrength: 0.10,
+              pressTintRadius: BorderRadius.circular(999),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () =>
+                    unawaited(_selectModel(option.id.isEmpty ? null : option)),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? accent.withValues(alpha: 0.14)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: selected
+                          ? accent.withValues(alpha: 0.45)
+                          : cs.outlineVariant.withValues(alpha: 0.40),
+                    ),
+                  ),
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? accent : cs.onSurfaceVariant,
+                    ),
+                    child: Text(
+                      option.id.isEmpty ? option.name : option.label,
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   /// Поле ввода «Кузницы»: стоит сверху, на месте прежней карточки-плашки с
   /// описанием, и не уезжает вместе с историей. Скругление — 24 у внешней
   /// «колбы» и 20 у самого поля, кнопка отправки круглая справа.
@@ -610,47 +740,53 @@ class _ForgeScreenState extends State<ForgeScreen> {
                   child: SmoothCaret(
                     builder: (context, caret) => SmoothTyping(
                       controller: _inputController,
-                      builder: (typingStyle) => TextField(
-                        key: const ValueKey('forge_input_field'),
-                        controller: _inputController,
-                        scrollController: caret,
-                        focusNode: _inputFocus,
-                        style: typingStyle,
-                        minLines: 1,
-                        maxLines: 6,
-                        maxLength: 10000,
-                        enabled: !_running,
-                        textCapitalization: TextCapitalization.sentences,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        cursorOpacityAnimates: true,
-                        magnifierConfiguration:
-                            TextMagnifierConfiguration.disabled,
-                        contextMenuBuilder: minimalContextMenuBuilder,
-                        buildCounter: smoothCharCounterBuilder,
-                        inputFormatters: [WideDashFormatter()],
-                        decoration: InputDecoration(
-                          hintText: Translations.t('forgeTaskHint', context),
-                          alignLabelWithHint: true,
-                          isDense: true,
-                          counterText: '',
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 13,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(
-                              color: accent.withValues(alpha: 0.55),
-                              width: 1.2,
+                      builder: (typingStyle) => AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        clipBehavior: Clip.none,
+                        child: TextField(
+                          key: const ValueKey('forge_input_field'),
+                          controller: _inputController,
+                          scrollController: caret,
+                          focusNode: _inputFocus,
+                          style: typingStyle,
+                          minLines: 1,
+                          maxLines: 6,
+                          maxLength: 10000,
+                          enabled: !_running,
+                          textCapitalization: TextCapitalization.sentences,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          cursorOpacityAnimates: true,
+                          magnifierConfiguration:
+                              TextMagnifierConfiguration.disabled,
+                          contextMenuBuilder: minimalContextMenuBuilder,
+                          buildCounter: smoothCharCounterBuilder,
+                          inputFormatters: [WideDashFormatter()],
+                          decoration: InputDecoration(
+                            hintText: Translations.t('forgeTaskHint', context),
+                            alignLabelWithHint: true,
+                            isDense: true,
+                            counterText: '',
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 13,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide(
+                                color: accent.withValues(alpha: 0.55),
+                                width: 1.2,
+                              ),
                             ),
                           ),
                         ),
@@ -1017,7 +1153,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
           enableTilt: true,
           duration: const Duration(milliseconds: 140),
           releaseDuration: const Duration(milliseconds: 280),
-          maxTiltAngle: 0.10,
+          maxTiltAngle: 0.18,
           child: Container(
             constraints: const BoxConstraints(maxWidth: 560),
             margin: const EdgeInsets.symmetric(vertical: 5),

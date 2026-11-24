@@ -159,15 +159,17 @@ class ForgeAgent {
   String? _branch;
 
   /// Потолок шагов: каждая итерация — это сетевой запрос к модели и к
-  /// GitHub. Сорока хватает на «прочитал двадцать файлов, поправил десять,
-  /// посмотрел прогоны Actions и открыл PR». Упор в потолок больше НЕ
-  /// роняет ход: накопленное отдаётся как результат, иначе человек видел
-  /// «агент не уложился в N шагов» вместо уже сделанных правок.
-  static const maxSteps = 40;
+  /// GitHub. Три тысячи — по-настоящему большой запас: агент может читать
+  /// десятки файлов, смотреть прогоны Actions и править проект, пока не
+  /// закончит. Упор в потолок всё равно НЕ роняет ход: накопленное
+  /// отдаётся как результат, иначе человек видел «агент не уложился в
+  /// N шагов» вместо уже сделанных правок.
+  static const maxSteps = 3000;
 
-  /// Сколько символов истории диалога уходит в запрос. Длинный чат (до 1000
-  /// реплик) иначе переполняет окно модели и прогон падает на первом шаге.
-  static const historyBudget = 24000;
+  /// Сколько символов истории диалога уходит в запрос — около 50 тысяч
+  /// токенов. Всё, что не влезло, сжимается до короткого конспекта (см.
+  /// [_historyForPrompt]), а не пропадает молча.
+  static const historyBudget = 200000;
 
   /// Сколько строк файла отдаём за одно чтение: больше — модель тонет.
   static const maxReadLines = 700;
@@ -175,8 +177,9 @@ class ForgeAgent {
   /// Сколько файлов агент может изменить за один прогон. Ограничение ловит
   /// разбушевавшуюся модель до того, как она перепишет весь проект. Упор
   /// возвращается модели как ошибка инструмента — чтобы она успела вызвать
-  /// finish, а не падала всей сессией.
-  static const maxWrites = 16;
+  /// finish, а не падала всей сессией. Шестьдесят — под стать трём тысячам
+  /// шагов: большой рефакторинг больше не упирается в потолок на середине.
+  static const maxWrites = 60;
 
   /// Пути, которые агенту закрыты: секреты подписи и локальные настройки.
   /// Токен GitHub лежит в защищённом хранилище, но подписной ключ и пароли
@@ -711,11 +714,7 @@ class ForgeAgent {
         return 'Записано: $path';
       case 'workflow_runs':
         final branch = _str(call.arguments['branch']);
-        final runs = await service.workflowRuns(
-          owner,
-          repo,
-          branch: branch,
-        );
+        final runs = await service.workflowRuns(owner, repo, branch: branch);
         if (runs.isEmpty) return 'Прогонов Actions не найдено';
         return runs.join('\n');
       case 'run_jobs':
@@ -725,8 +724,7 @@ class ForgeAgent {
         if (jobs.isEmpty) return 'Заданий у прогона $id нет';
         return jobs.join('\n');
       case 'check_annotations':
-        final ref =
-            _str(call.arguments['ref'])?.trim().isNotEmpty == true
+        final ref = _str(call.arguments['ref'])?.trim().isNotEmpty == true
             ? _str(call.arguments['ref'])!.trim()
             : (branch);
         final checks = await service.checkAnnotations(owner, repo, ref);
@@ -739,8 +737,7 @@ class ForgeAgent {
         if (prs.isEmpty) return 'Открытых pull request нет';
         return prs.join('\n');
       case 'recent_commits':
-        final ref =
-            _str(call.arguments['ref'])?.trim().isNotEmpty == true
+        final ref = _str(call.arguments['ref'])?.trim().isNotEmpty == true
             ? _str(call.arguments['ref'])!.trim()
             : branch;
         final commits = await service.recentCommits(owner, repo, ref: ref);
@@ -775,10 +772,12 @@ class ForgeAgent {
     return content.contains('<<<<<<< ') || content.contains('>>>>>>> ');
   }
 
-  /// История для запроса: последние реплики в пределах [historyBudget], плюс
-  /// самая первая просьба пользователя — она задаёт рамку всей работы. Если
-  /// середина выпала, модель получает честную пометку об этом, а не тихую
-  /// дыру в памяти.
+  /// История для запроса: последние реплики в пределах [historyBudget] плюс
+  /// первая просьба человека — она задаёт рамку всей работы.
+  ///
+  /// Середина, которая уже не влезает, не пропадает молча: она СЖИМАЕТСЯ в
+  /// короткий конспект (кто что просил и чем это закончилось). Так модель
+  /// помнит ход работы даже на длинном диалоге, а окно не переполняется.
   List<Map<String, dynamic>> _historyForPrompt(List<ForgeChatMessage> history) {
     final usable = history
         .where((m) => m.text.trim().isNotEmpty)
@@ -798,16 +797,43 @@ class ForgeAgent {
       result.add({'role': 'user', 'content': usable.first.text});
       result.add({
         'role': 'system',
-        'content':
-            'Середина диалога ($start реплик) не поместилась в контекст. '
-            'Опирайся на первую просьбу, последние реплики и на реальное '
-            'содержимое файлов в ветке; не выдумывай пропавшие детали.',
+        'content': _compact(usable.sublist(1, start)),
       });
     }
     for (final m in tail.reversed) {
       result.add({'role': m.isUser ? 'user' : 'assistant', 'content': m.text});
     }
     return result;
+  }
+
+  /// Конспект выпавшей середины диалога: по строке на реплику, просьбы
+  /// людей — подробнее, ответы агента — одной фразой. Ограничен по длине,
+  /// чтобы сам конспект не съел контекст.
+  static String _compact(List<ForgeChatMessage> dropped) {
+    const maxLine = 120;
+    const maxChars = 3000;
+    const maxLines = 40;
+    final lines = <String>[];
+    var chars = 0;
+    // Берём реплики с конца: свежая часть важнее самых старых просьб.
+    for (var i = dropped.length - 1; i >= 0 && lines.length < maxLines; i--) {
+      final m = dropped[i];
+      final flat = m.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (flat.isEmpty) continue;
+      final cut = flat.length <= maxLine
+          ? flat
+          : '${flat.substring(0, maxLine)}…';
+      final line = m.isUser ? '— просьба: $cut' : '— ответ: $cut';
+      if (chars + line.length > maxChars) break;
+      lines.add(line);
+      chars += line.length;
+    }
+    final digest = lines.reversed.join('\n');
+    return 'Середина диалога (${dropped.length} реплик) сжата в конспект, '
+        'чтобы уложиться в контекст. Ниже — суть, в обратном порядке '
+        'свежести:\n$digest\n'
+        'Не выдумывай детали, которых нет в конспекте, в первой просьбе и '
+        'в последних репликах; факты о коде бери из файлов ветки.';
   }
 
   static int? _int(dynamic value) {
@@ -842,14 +868,20 @@ class ForgeAgent {
       '1) Пойми, что просят, с учётом всего диалога и уже сделанного. Если '
       'просьба допускает разные трактовки — задай ОДИН короткий уточняющий '
       'вопрос текстом, не правя файлы наугад.\n'
-      '2) Найди нужное: search_code и list_dir, затем read_file. Большой '
+      '2) Различай вопрос и задачу. Вопрос («как устроено», «почему '
+      'падает», «где лежит», «что думаешь») — это ответ ТЕКСТОМ: найди '
+      'нужное и объясни, ничего не правя и не вызывая finish. Задача '
+      '(«сделай», «поправь», «добавь», «убери») — это правки. Если просьба '
+      'звучит как вопрос, но по смыслу требует изменений, сперва ответь '
+      'коротко и спроси, править ли, — и только по подтверждению правь.\n'
+      '3) Найди нужное: search_code и list_dir, затем read_file. Большой '
       'файл читай диапазонами start/end, а не целиком.\n'
-      '3) Правь минимально и по делу: одна правка — одна причина. Не '
+      '4) Правь минимально и по делу: одна правка — одна причина. Не '
       'переписывай файл ради стиля и не удаляй чужую работу.\n'
-      '4) После правок мысленно пройди по изменённому коду: не сломал ли ты '
+      '5) После правок мысленно пройди по изменённому коду: не сломал ли ты '
       'существующее поведение, имена, тесты и импорты. Если сломал — '
       'исправь тем же ходом.\n'
-      '5) Заканчивай вызовом finish с честным summary: что изменено и что '
+      '6) Заканчивай вызовом finish с честным summary: что изменено и что '
       'осталось непроверенным.\n'
       'Правила:\n'
       '— На вопрос о коде отвечай текстом, опираясь на реальные файлы: '
@@ -907,6 +939,36 @@ class ForgeAgent {
   static String? _str(dynamic value) => value is String ? value : null;
 }
 
+/// Модель, которую можно выбрать в «Кузнице», — ровно из того пула, что
+/// реально пробуется. [power] задаёт порядок в таблетке выбора: сверху
+/// самые сильные, снизу самые скромные.
+class ForgeModelOption {
+  const ForgeModelOption({
+    required this.id,
+    required this.name,
+    required this.vendor,
+    required this.power,
+    this.needsKey = false,
+  });
+
+  /// Стабильный ключ для сохранения выбора между запусками.
+  final String id;
+
+  /// Короткое имя модели для таблетки.
+  final String name;
+
+  /// Площадка, которая её отдаёт.
+  final String vendor;
+
+  /// Условная сила: больше — сильнее. По ней таблетка и сортируется.
+  final int power;
+
+  /// Нужен свой ключ провайдера: без него модель не показываем.
+  final bool needsKey;
+
+  String get label => '$vendor · $name';
+}
+
 /// Пул бесплатных OpenAI-совместимых провайдеров — тот же набор, на котором
 /// работает Ада в приложении. Ключ не нужен, поэтому «Кузница» работает
 /// «из коробки».
@@ -916,8 +978,74 @@ class ForgeAgent {
 /// Провайдеры перебираются по очереди: бесплатные площадки часто отдают 429,
 /// и один упавший не должен останавливать прогон.
 class FreePoolForgeChat implements ForgeChat {
-  FreePoolForgeChat({http.Client? client, this.apiKey = '', this.onProvider})
-    : _client = client ?? http.Client();
+  FreePoolForgeChat({
+    http.Client? client,
+    this.apiKey = '',
+    this.onProvider,
+    this.onlyModel,
+  }) : _client = client ?? http.Client();
+
+  /// Выбранная в таблетке модель: если задана, пул пробует только её, и
+  /// лишь при её недоступности откатывается на весь список. Без выбора
+  /// работает прежний перебор всего пула.
+  final String? onlyModel;
+
+  /// Модели, доступные с таким ключом (или без него), по убыванию силы.
+  static List<ForgeModelOption> catalogFor(String apiKey) {
+    final key = apiKey.trim();
+    final hasKey = key.isNotEmpty;
+    final openRouter = key.startsWith('sk-or-');
+    final all = <ForgeModelOption>[
+      if (hasKey && !openRouter)
+        const ForgeModelOption(
+          id: 'poolside-laguna',
+          name: 'Laguna S 2.1',
+          vendor: 'Poolside',
+          power: 100,
+          needsKey: true,
+        ),
+      if (hasKey && openRouter)
+        const ForgeModelOption(
+          id: 'openrouter-laguna',
+          name: 'Laguna S 2.1 free',
+          vendor: 'OpenRouter',
+          power: 98,
+          needsKey: true,
+        ),
+      const ForgeModelOption(
+        id: 'kilo-auto',
+        name: 'Auto',
+        vendor: 'Kilo',
+        power: 84,
+      ),
+      const ForgeModelOption(
+        id: 'kilo-free',
+        name: 'Free',
+        vendor: 'Kilo',
+        power: 78,
+      ),
+      const ForgeModelOption(
+        id: 'murakumo-free',
+        name: 'Free',
+        vendor: 'Murakumo',
+        power: 62,
+      ),
+      const ForgeModelOption(
+        id: 'ovh-mistral',
+        name: 'Mistral Nemo',
+        vendor: 'OVHcloud',
+        power: 56,
+      ),
+    ];
+    all.sort((a, b) => b.power.compareTo(a.power));
+    return List<ForgeModelOption>.unmodifiable(all);
+  }
+
+  /// Лучшая модель, доступная с этим ключом, — выбор по умолчанию.
+  static String? defaultModelFor(String apiKey) {
+    final list = catalogFor(apiKey);
+    return list.isEmpty ? null : list.first.id;
+  }
 
   /// Необязательный свой ключ ИИ (Poolside/Laguna или OpenRouter). Если он
   /// задан, пробуется первым; при отказе пул всё равно продолжит работу.
@@ -971,51 +1099,65 @@ class FreePoolForgeChat implements ForgeChat {
     );
   }
 
-  List<_FreeProvider> _providers() => [
-    if (apiKey.isNotEmpty)
-      // Свой ключ — первым: он надёжнее бесплатных площадок. Если откажет,
-      // пул молча продолжит на бесплатных.
-      if (apiKey.startsWith('sk-or-'))
-        _FreeProvider(
-          label: 'OpenRouter',
-          url: _openrouterUrl,
-          model: _openrouterModel,
-          apiKey: apiKey,
-        )
-      else
-        _FreeProvider(
-          label: 'Poolside',
-          url: _poolsideUrl,
-          model: _poolsideModel,
-          apiKey: apiKey,
-        ),
-    // Основной: анонимно до 200 запросов/час на IP, отвечает сильной
-    // бесплатной моделью и держит целые файлы (проверено: 300 строк без
-    // обрезки при max_tokens 8000).
-    const _FreeProvider(
-      label: 'Kilo',
-      url: _kiloUrl,
-      model: 'openrouter/free',
-      userAgent: 'AgyshaApp/1.6.0',
-    ),
-    const _FreeProvider(
-      label: 'Kilo',
-      url: _kiloUrl,
-      model: 'kilo-auto/free',
-      userAgent: 'AgyshaApp/1.6.0',
-    ),
-    const _FreeProvider(
-      label: 'Murakumo',
-      url: _murakumoUrl,
-      model: 'murakumo/free',
-    ),
-    const _FreeProvider(
-      label: 'OVHcloud',
-      url: _ovhUrl,
-      model: 'Mistral-Nemo-Instruct-2407',
-      userAgent: 'AgyshaApp/1.6.0',
-    ),
-  ];
+  List<_FreeProvider> _providers() {
+    final all = <_FreeProvider>[
+      if (apiKey.isNotEmpty)
+        // Свой ключ — первым: он надёжнее бесплатных площадок. Если откажет,
+        // пул молча продолжит на бесплатных.
+        if (apiKey.startsWith('sk-or-'))
+          _FreeProvider(
+            id: 'openrouter-laguna',
+            label: 'OpenRouter',
+            url: _openrouterUrl,
+            model: _openrouterModel,
+            apiKey: apiKey,
+          )
+        else
+          _FreeProvider(
+            id: 'poolside-laguna',
+            label: 'Poolside',
+            url: _poolsideUrl,
+            model: _poolsideModel,
+            apiKey: apiKey,
+          ),
+      // Основной: анонимно до 200 запросов/час на IP, отвечает сильной
+      // бесплатной моделью и держит целые файлы (проверено: 300 строк без
+      // обрезки при max_tokens 8000).
+      const _FreeProvider(
+        id: 'kilo-free',
+        label: 'Kilo',
+        url: _kiloUrl,
+        model: 'openrouter/free',
+        userAgent: 'AgyshaApp/1.6.0',
+      ),
+      const _FreeProvider(
+        id: 'kilo-auto',
+        label: 'Kilo',
+        url: _kiloUrl,
+        model: 'kilo-auto/free',
+        userAgent: 'AgyshaApp/1.6.0',
+      ),
+      const _FreeProvider(
+        id: 'murakumo-free',
+        label: 'Murakumo',
+        url: _murakumoUrl,
+        model: 'murakumo/free',
+      ),
+      const _FreeProvider(
+        id: 'ovh-mistral',
+        label: 'OVHcloud',
+        url: _ovhUrl,
+        model: 'Mistral-Nemo-Instruct-2407',
+        userAgent: 'AgyshaApp/1.6.0',
+      ),
+    ];
+    final only = onlyModel;
+    if (only == null) return all;
+    final filtered = all.where((p) => p.id == only).toList(growable: false);
+    // Сохранённый выбор мог устареть (пропал ключ, сменился пул) — тогда
+    // лучше перебрать весь пул, чем остаться без ответа вовсе.
+    return filtered.isEmpty ? all : filtered;
+  }
 
   Future<ForgeChatReply> _ask(
     _FreeProvider provider,
@@ -1104,6 +1246,7 @@ class FreePoolForgeChat implements ForgeChat {
 
 class _FreeProvider {
   const _FreeProvider({
+    required this.id,
     required this.label,
     required this.url,
     required this.model,
@@ -1111,6 +1254,7 @@ class _FreeProvider {
     this.apiKey,
   });
 
+  final String id;
   final String label;
   final String url;
   final String model;
