@@ -69,6 +69,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
   bool _loadingToken = true;
   bool _checking = false;
   bool _running = false;
+  bool _stopping = false;
 
   /// Поле токена гаснет перед очисткой и плавно возвращается пустым:
   /// иначе «Забыть токен» стирал текст кадром.
@@ -124,6 +125,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
     _handledResultSeq = _runner.resultSeq;
     if (_runner.running) {
       _running = true;
+      _stopping = _runner.stopping;
       _activeProvider = _runner.provider;
       _liveSteps
         ..clear()
@@ -141,6 +143,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
     if (!mounted) return;
     setState(() {
       _running = _runner.running;
+      _stopping = _runner.stopping;
       _activeProvider = _runner.provider;
       _runError = _runner.error;
       _liveSteps
@@ -243,6 +246,9 @@ class _ForgeScreenState extends State<ForgeScreen> {
       if (saved != null && _tokenController.text.isEmpty) {
         _tokenController.text = saved;
       }
+      // Пул таблетки сразу соответствует вставленному ключу: со своим
+      // ключом появляются платные сильные модели, без него — бесплатные.
+      _models = FreePoolForgeChat.catalogFor(saved ?? '');
     });
     if (saved != null) unawaited(_checkToken(silent: true));
   }
@@ -502,6 +508,14 @@ class _ForgeScreenState extends State<ForgeScreen> {
     _scrollToEnd();
   }
 
+  /// «Стоп»: агент тут же перестаёт ждать модель, а уже сделанные правки
+  /// уходят в PR — остановка не стирает работу.
+  void _stopRun() {
+    if (!_running || _stopping) return;
+    Haptics.heavy();
+    _runner.stop();
+  }
+
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -532,6 +546,52 @@ class _ForgeScreenState extends State<ForgeScreen> {
           centerTitle: true,
           backgroundColor: Colors.transparent,
           actions: [
+            // «Стоп» стоит рядом с очисткой и появляется/сворачивается
+            // плавно, не сдвигая корзину рывком.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.centerRight,
+              clipBehavior: Clip.hardEdge,
+              child: _running
+                  ? Padding(
+                      padding: const EdgeInsets.only(right: 2),
+                      child: PressScale(
+                        pressedScale: 0.86,
+                        enableTilt: true,
+                        duration: const Duration(milliseconds: 130),
+                        releaseDuration: const Duration(milliseconds: 260),
+                        maxTiltAngle: 0.22,
+                        pressTint: cs.error,
+                        pressTintStrength: 0.12,
+                        pressTintRadius: BorderRadius.circular(999),
+                        child: IconButton(
+                          onPressed: _stopping ? null : _stopRun,
+                          icon: _stopping
+                              ? SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: cs.error,
+                                  ),
+                                )
+                              : Semantics(
+                                  label: Translations.t(
+                                    'forgeStopRun',
+                                    context,
+                                    'Остановить',
+                                  ),
+                                  child: Icon(
+                                    Icons.stop_rounded,
+                                    color: cs.error,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
             if (_messages.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(right: 4),
@@ -609,6 +669,13 @@ class _ForgeScreenState extends State<ForgeScreen> {
                                       cs,
                                       accent,
                                       _messages[i],
+                                      // Ключ обязателен: без него при
+                                      // добавлении реплики Flutter отдаёт ей
+                                      // состояние «уже показанного» пузыря, и
+                                      // сообщение появляется рывком.
+                                      key: ValueKey(
+                                        'forge-msg-$i-${_messages[i].ts}',
+                                      ),
                                       animate: i >= _animateFrom,
                                     ),
                                   if (_running)
@@ -617,6 +684,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                                     const SizedBox(height: 12),
                                     _errorCard(theme, cs),
                                   ],
+                                  if (_messages.isNotEmpty) _modelFootprint(cs),
                                 ],
                               ),
                             ),
@@ -680,31 +748,101 @@ class _ForgeScreenState extends State<ForgeScreen> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 260),
                   curve: Curves.easeOutCubic,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: const EdgeInsets.fromLTRB(11, 0, 14, 0),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: selected
                         ? accent.withValues(alpha: 0.14)
-                        : Colors.transparent,
+                        : cs.surfaceContainerHighest.withValues(alpha: 0.28),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
                       color: selected
-                          ? accent.withValues(alpha: 0.45)
-                          : cs.outlineVariant.withValues(alpha: 0.40),
+                          ? accent.withValues(alpha: 0.55)
+                          : cs.outlineVariant.withValues(alpha: 0.38),
                     ),
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.20),
+                              blurRadius: 12,
+                              spreadRadius: -2,
+                            ),
+                          ]
+                        : const [],
                   ),
-                  child: AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOutCubic,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected ? accent : cs.onSurfaceVariant,
-                    ),
-                    child: Text(
-                      option.id.isEmpty ? option.name : option.label,
-                      maxLines: 1,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Значок в цветном медальоне: у каждой семьи свой
+                      // цвет, поэтому таблетки различаются боковым зрением,
+                      // а не только подписью.
+                      AnimatedScale(
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeOutCubic,
+                        scale: selected ? 1.08 : 1.0,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOutCubic,
+                          width: 23,
+                          height: 23,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _modelColor(
+                              option,
+                              cs,
+                              accent,
+                            ).withValues(alpha: selected ? 0.26 : 0.12),
+                            border: Border.all(
+                              color: _modelColor(
+                                option,
+                                cs,
+                                accent,
+                              ).withValues(alpha: selected ? 0.70 : 0.28),
+                            ),
+                            boxShadow: selected
+                                ? [
+                                    BoxShadow(
+                                      color: _modelColor(
+                                        option,
+                                        cs,
+                                        accent,
+                                      ).withValues(alpha: 0.35),
+                                      blurRadius: 9,
+                                      spreadRadius: -1,
+                                    ),
+                                  ]
+                                : const [],
+                          ),
+                          child: Icon(
+                            _modelIcon(option),
+                            size: 14,
+                            color: selected
+                                ? _modelColor(option, cs, accent)
+                                : _modelColor(
+                                    option,
+                                    cs,
+                                    accent,
+                                  ).withValues(alpha: 0.75),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeOutCubic,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: selected ? accent : cs.onSurfaceVariant,
+                        ),
+                        child: Text(
+                          option.id.isEmpty ? option.name : option.label,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -713,6 +851,45 @@ class _ForgeScreenState extends State<ForgeScreen> {
         ),
       ),
     );
+  }
+
+  /// Цвет семьи моделей: медальон значка и подсветка выбранной таблетки.
+  static Color _modelColor(
+    ForgeModelOption option,
+    ColorScheme cs,
+    Color accent,
+  ) {
+    if (option.id.isEmpty) return accent;
+    switch (option.vendor) {
+      case 'Poolside':
+        return const Color(0xFF34B6FF);
+      case 'OpenRouter':
+        return const Color(0xFF9C7BFF);
+      case 'Kilo':
+        return const Color(0xFFFFB021);
+      case 'Murakumo':
+        return const Color(0xFFFF6FA8);
+      default:
+        return cs.tertiary;
+    }
+  }
+
+  /// Значок модели: у каждой семьи свой характер, чтобы таблетки читались
+  /// с одного взгляда, а не одинаковыми пилюлями.
+  static IconData _modelIcon(ForgeModelOption option) {
+    if (option.id.isEmpty) return Icons.auto_awesome_rounded;
+    switch (option.vendor) {
+      case 'Poolside':
+        return Icons.water_rounded;
+      case 'OpenRouter':
+        return Icons.hub_rounded;
+      case 'Kilo':
+        return Icons.bolt_rounded;
+      case 'Murakumo':
+        return Icons.filter_drama_rounded;
+      default:
+        return Icons.memory_rounded;
+    }
   }
 
   /// Поле ввода «Кузницы»: стоит сверху, на месте прежней карточки-плашки с
@@ -1141,19 +1318,22 @@ class _ForgeScreenState extends State<ForgeScreen> {
     ColorScheme cs,
     Color accent,
     ForgeChatMessage message, {
+    Key? key,
     bool animate = true,
   }) {
     final isUser = message.isUser;
     return _BubbleReveal(
+      key: key,
       animate: animate,
       child: Align(
         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+        // Пузырь не наклоняется и не сжимается при зажатии: иначе текст
+        // выделялся мимо слова, а сообщение «скукоживалось» под пальцем.
         child: PressScale(
-          pressedScale: 0.985,
-          enableTilt: true,
+          pressedScale: 1.0,
+          enableTilt: false,
           duration: const Duration(milliseconds: 140),
           releaseDuration: const Duration(milliseconds: 280),
-          maxTiltAngle: 0.18,
           child: Container(
             constraints: const BoxConstraints(maxWidth: 560),
             margin: const EdgeInsets.symmetric(vertical: 5),
@@ -1287,6 +1467,52 @@ class _ForgeScreenState extends State<ForgeScreen> {
     );
   }
 
+  /// Какая модель отвечала в последнем ходе — бледной подписью в конце
+  /// чата. Полупрозрачно, чтобы не спорить с ответом, и плавно гаснет, пока
+  /// идёт новый ход.
+  Widget _modelFootprint(ColorScheme cs) {
+    final selected = _modelId.isEmpty
+        ? null
+        : _models.where((m) => m.id == _modelId).firstOrNull;
+    final provider = (_activeProvider ?? '').trim();
+    final label = provider.isNotEmpty
+        ? (selected == null ? provider : '$provider · ${selected.name}')
+        : (selected?.label ?? '');
+    if (label.isEmpty) return const SizedBox.shrink();
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 340),
+      curve: Curves.easeOutCubic,
+      opacity: _running ? 0.25 : 1,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 2),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Icon(
+              Icons.auto_awesome_rounded,
+              size: 12,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.42),
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.48),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Значок под инструмент: команды разные, и одинаковые галочки у всех
   /// шагов сливались в серую стену.
   IconData _stepIcon(String tool) => switch (tool) {
@@ -1381,7 +1607,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
 /// Поднятая из хранилища история [_animate] не включает — иначе тысяча
 /// пузырей одновременно дёргала бы кадр при открытии экрана.
 class _BubbleReveal extends StatefulWidget {
-  const _BubbleReveal({required this.child, this.animate = true});
+  const _BubbleReveal({super.key, required this.child, this.animate = true});
 
   final Widget child;
   final bool animate;
@@ -1412,6 +1638,17 @@ class _BubbleRevealState extends State<_BubbleReveal>
   void initState() {
     super.initState();
     if (widget.animate) _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BubbleReveal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // История из хранилища показывается сразу, а новые реплики — плавно.
+    if (widget.animate && !oldWidget.animate && _controller.value == 1.0) {
+      _controller
+        ..value = 0
+        ..forward();
+    }
   }
 
   @override

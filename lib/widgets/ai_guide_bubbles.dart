@@ -107,14 +107,13 @@ class _MessageBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                // 3D-наклон пузыря: чат «Соо» раньше был плоским, и
-                // зажатие читалось только по лёгкому уменьшению. Теперь
-                // пузырь, как карточки и кнопки приложения, наклоняется
-                // за пальцем и плавно «выдыхается» обратно.
+                // Нажатие на пузырь больше НЕ сжимает и не наклоняет его:
+                // текст под пальцем уезжал, и долгое нажатие выделяло не то
+                // слово («выделение не работает»), а сам пузырь при зажатии
+                // «скукоживался». Наклон остался у кнопок и значков.
                 PressScale(
-                  pressedScale: 0.986,
-                  enableTilt: true,
-                  maxTiltAngle: 0.20,
+                  pressedScale: 1.0,
+                  enableTilt: false,
                   duration: const Duration(milliseconds: 150),
                   releaseDuration: const Duration(milliseconds: 380),
                   child: Container(
@@ -224,8 +223,9 @@ class _MessageBubble extends StatelessWidget {
                             // целого пузыря. Лупа тоже отключена.
                             selectionControls: BeautifulSelectionControls(),
                             contextMenuBuilder: copyOnlyContextMenuBuilder,
-                            magnifierConfiguration:
-                                TextMagnifierConfiguration.disabled,
+                            // Лупа снова системная: с отключённой лупой
+                            // долгое нажатие на Android не давало выделить
+                            // слово («выделение не работает»).
                           ),
                         ),
                       ],

@@ -1552,6 +1552,10 @@ class AiGuideService {
 
   static Future<String> currentModelLabel() async => _shownModel;
 
+  /// Метка модели синхронно — для подписи в конце чата: она перерисовывается
+  /// по [modelLabelTick], а не ждёт Future на каждом кадре.
+  static String get shownModelLabel => _shownModel;
+
   /// Оставлять ли сообщение в ленте после очистки чата.
   ///
   /// [clearedAt] == 0 — очистки не было: показываем всё, включая старые

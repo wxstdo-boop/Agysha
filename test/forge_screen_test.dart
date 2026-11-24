@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -148,6 +149,20 @@ class _SlowScriptedChat extends _ScriptedChat {
   ) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     return super.complete(messages, tools);
+  }
+}
+
+/// Модель, которая «думает» бесконечно: так проверяется «Стоп».
+class _HangChat implements ForgeChat {
+  final Completer<void> _never = Completer<void>();
+
+  @override
+  Future<ForgeChatReply> complete(
+    List<Map<String, dynamic>> messages,
+    List<Map<String, dynamic>> tools,
+  ) async {
+    await _never.future;
+    return const ForgeChatReply();
   }
 }
 
@@ -687,5 +702,83 @@ void main() {
     for (var i = 1; i < pool.length; i++) {
       expect(pool[i - 1].power, greaterThanOrEqualTo(pool[i].power));
     }
+  });
+
+  test('в пуле ровно один Kilo и он подписан «Kilo Free»', () {
+    for (final key in <String>['', 'sk-or-test', 'poolside-test']) {
+      final pool = FreePoolForgeChat.catalogFor(key);
+      final kilo = pool.where((m) => m.vendor == 'Kilo').toList();
+      expect(
+        kilo.length,
+        1,
+        reason: 'две подписи Kilo (Auto и Free) путали выбор модели',
+      );
+      expect(kilo.single.label, 'Kilo Free');
+    }
+  });
+
+  testWidgets('«Стоп» рядом с очисткой мягко обрывает ход', (tester) async {
+    _tallSurface(tester);
+    final runner = ForgeRunner();
+    final store = InMemoryForgeTokenStore();
+    await store.write('ghp_saved_token');
+    final service = ForgeService(client: _okClient(), store: store);
+
+    await tester.pumpWidget(
+      _wrap(
+        ForgeScreen(
+          owner: 'wxstdo-boop',
+          repo: 'agysha',
+          service: service,
+          runner: runner,
+          chatFactory: (_) => _HangChat(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_input_field')),
+      'создай a.txt',
+    );
+    final send = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('forge_send')),
+    );
+    await tester.runAsync(() async {
+      send.onPressed!();
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    });
+    await tester.pump();
+
+    expect(runner.running, isTrue);
+    expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+
+    // Жмём сам обработчик кнопки: в тестовом окне AppBar перекрыт
+    // системной вставкой, но связка «кнопка → мягкая остановка» та же.
+    tester
+        .widget<IconButton>(
+          find
+              .ancestor(
+                of: find.byIcon(Icons.stop_rounded),
+                matching: find.byType(IconButton),
+              )
+              .first,
+        )
+        .onPressed!();
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      for (var i = 0; i < 200 && runner.running; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    });
+    await tester.pumpAndSettle();
+
+    expect(runner.running, isFalse);
+    expect(runner.stopping, isFalse);
+    // Ответ «Остановлено…» экран уже забрал из runner'а и показал в чате.
+    expect(_chatTextContaining('Остановлено'), findsWidgets);
+    // Кнопка снова зовёт к отправке, «Стоп» убран.
+    expect(find.byIcon(Icons.stop_rounded), findsNothing);
   });
 }

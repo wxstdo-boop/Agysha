@@ -21,6 +21,7 @@ class ForgeRunner extends ChangeNotifier {
 
   ForgeAgent? _agent;
   bool _running = false;
+  bool _stopping = false;
   String? _provider;
   String? _error;
   final List<ForgeStep> _steps = <ForgeStep>[];
@@ -28,6 +29,10 @@ class ForgeRunner extends ChangeNotifier {
   ForgeChatMessage? _finished;
 
   bool get running => _running;
+
+  /// Нажали «Стоп», но ход ещё не успел свернуться: кнопка в этот момент
+  /// показывает ожидание, а не новую отправку.
+  bool get stopping => _stopping;
   List<ForgeStep> get steps => List<ForgeStep>.unmodifiable(_steps);
   String? get provider => _provider;
   String? get error => _error;
@@ -39,6 +44,15 @@ class ForgeRunner extends ChangeNotifier {
   /// Готовый ответ, который экран ещё не забрал. Живёт здесь, чтобы ответ
   /// не пропал, если экран был закрыт в момент завершения.
   ForgeChatMessage? get finished => _finished;
+
+  /// Плавная остановка: агент прекращает ждать модель и доводит уже
+  /// сделанные правки до PR, а экран показывает «Остановлено».
+  void stop() {
+    if (!_running || _stopping) return;
+    _stopping = true;
+    _agent?.cancel();
+    notifyListeners();
+  }
 
   void acknowledgeResult() {
     _finished = null;
@@ -71,6 +85,7 @@ class ForgeRunner extends ChangeNotifier {
   }) async {
     if (_running) return;
     _running = true;
+    _stopping = false;
     _error = null;
     _provider = null;
     _finished = null;
@@ -126,6 +141,7 @@ class ForgeRunner extends ChangeNotifier {
       _error = e.toString();
     } finally {
       _running = false;
+      _stopping = false;
       notifyListeners();
     }
   }

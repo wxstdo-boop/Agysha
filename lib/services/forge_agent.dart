@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -157,6 +158,20 @@ class ForgeAgent {
   /// а не при первом вопросе: на вопрос «как устроен этот файл» ветка и PR
   /// не нужны, и создавать их было бы мусором в репозитории.
   String? _branch;
+
+  /// Кнопка «Стоп» в «Кузнице»: ход обрывается не ожиданием сети, а сразу —
+  /// незавершённый запрос к модели просто перестаёт нас интересовать, а уже
+  /// сделанные правки всё равно доводятся до PR в [_conclude].
+  bool _cancelled = false;
+  Completer<void>? _cancelSignal;
+
+  /// Просьба остановиться. Можно звать из UI в любой момент.
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    final signal = _cancelSignal;
+    if (signal != null && !signal.isCompleted) signal.complete();
+  }
 
   /// Потолок шагов: каждая итерация — это сетевой запрос к модели и к
   /// GitHub. Три тысячи — по-настоящему большой запас: агент может читать
@@ -417,6 +432,8 @@ class ForgeAgent {
     void Function(ForgeStep step)? onStep,
     void Function(String provider)? onProvider,
   }) async {
+    _cancelled = false;
+    final signal = _cancelSignal = Completer<void>();
     final messages = <Map<String, dynamic>>[
       {'role': 'system', 'content': _systemPrompt(languageCode)},
       ..._historyForPrompt(history),
@@ -431,115 +448,149 @@ class ForgeAgent {
     final deleted = <String>{};
     String? lastText;
 
-    for (var step = 0; step < maxSteps; step++) {
-      final reply = await chat.complete(messages, tools);
-      if (reply.text != null && reply.text!.trim().isNotEmpty) {
-        lastText = reply.text;
-      }
-
-      if (reply.toolCalls.isEmpty) {
-        // Модель ответила текстом. Без правок это обычный ответ в чате —
-        // никаких веток и PR. С правками — доводим работу до PR.
-        return _conclude(
-          branch: _branch,
-          base: baseBranch,
-          task: task,
-          text: reply.text ?? lastText ?? '',
-          files: _netChanged(written, deleted),
-          steps: steps,
-        );
-      }
-
-      messages.add({
-        'role': 'assistant',
-        'content': reply.text,
-        'tool_calls': [
-          for (final call in reply.toolCalls)
-            {
-              'id': call.id,
-              'type': 'function',
-              'function': {
-                'name': call.name,
-                'arguments': jsonEncode(call.arguments),
-              },
-            },
-        ],
-      });
-
-      for (final call in reply.toolCalls) {
-        if (call.name == 'finish') {
-          final summary = _str(call.arguments['summary']) ?? lastText ?? '';
-          return _conclude(
+    try {
+      for (var step = 0; step < maxSteps; step++) {
+        if (_cancelled) {
+          return await _stopped(
             branch: _branch,
             base: baseBranch,
             task: task,
-            text: summary.isEmpty ? (lastText ?? 'Готово') : summary,
-            title: _str(call.arguments['title']),
+            text: lastText,
+            files: _netChanged(written, deleted),
+            steps: steps,
+          );
+        }
+        final reply = await _race(chat.complete(messages, tools), signal);
+        if (reply.text != null && reply.text!.trim().isNotEmpty) {
+          lastText = reply.text;
+        }
+
+        if (reply.toolCalls.isEmpty) {
+          // Модель ответила текстом. Без правок это обычный ответ в чате —
+          // никаких веток и PR. С правками — доводим работу до PR.
+          return await _conclude(
+            branch: _branch,
+            base: baseBranch,
+            task: task,
+            text: reply.text ?? lastText ?? '',
             files: _netChanged(written, deleted),
             steps: steps,
           );
         }
 
-        String result;
-        var ok = true;
-        // Предохранитель, а не подсказка модели: если она упорно пишет
-        // сверх лимита, прогон останавливаем — иначе один запуск может
-        // переписать весь проект.
-        if (_isWrite(call.name) && writes >= maxWrites) {
-          ok = false;
-          result =
-              'Ошибка: предел правок ($maxWrites файлов) за один ход. '
-              'Дальше только читай или вызывай finish.';
-          steps.add(
-            ForgeStep(
-              tool: call.name,
-              detail: _str(call.arguments['path']) ?? result,
-              ok: false,
-            ),
+        messages.add({
+          'role': 'assistant',
+          'content': reply.text,
+          'tool_calls': [
+            for (final call in reply.toolCalls)
+              {
+                'id': call.id,
+                'type': 'function',
+                'function': {
+                  'name': call.name,
+                  'arguments': jsonEncode(call.arguments),
+                },
+              },
+          ],
+        });
+
+        for (final call in reply.toolCalls) {
+          if (_cancelled) {
+            return await _stopped(
+              branch: _branch,
+              base: baseBranch,
+              task: task,
+              text: lastText,
+              files: _netChanged(written, deleted),
+              steps: steps,
+            );
+          }
+          if (call.name == 'finish') {
+            final summary = _str(call.arguments['summary']) ?? lastText ?? '';
+            return await _conclude(
+              branch: _branch,
+              base: baseBranch,
+              task: task,
+              text: summary.isEmpty ? (lastText ?? 'Готово') : summary,
+              title: _str(call.arguments['title']),
+              files: _netChanged(written, deleted),
+              steps: steps,
+            );
+          }
+
+          String result;
+          var ok = true;
+          // Предохранитель, а не подсказка модели: если она упорно пишет
+          // сверх лимита, прогон останавливаем — иначе один запуск может
+          // переписать весь проект.
+          if (_isWrite(call.name) && writes >= maxWrites) {
+            ok = false;
+            result =
+                'Ошибка: предел правок ($maxWrites файлов) за один ход. '
+                'Дальше только читай или вызывай finish.';
+            steps.add(
+              ForgeStep(
+                tool: call.name,
+                detail: _str(call.arguments['path']) ?? result,
+                ok: false,
+              ),
+            );
+            onStep?.call(steps.last);
+            messages.add({
+              'role': 'tool',
+              'tool_call_id': call.id,
+              'content': result,
+            });
+            continue;
+          }
+          try {
+            // Ветку заводим ТОЛЬКО под правку. Вопрос по коду читает базовую
+            // ветку и не оставляет после себя ни ветки, ни PR.
+            final branch = _isWrite(call.name)
+                ? await _ensureBranch(task, baseBranch)
+                : (_branch ?? baseBranch);
+            result = await _execute(call, branch);
+            if (_isWrite(call.name)) {
+              writes++;
+              final p = _str(call.arguments['path']);
+              if (p != null) {
+                if (call.name == 'delete_file') {
+                  deleted.add(p);
+                } else {
+                  written.add(p);
+                }
+              }
+            }
+          } on ForgeException catch (e) {
+            ok = false;
+            result = 'Ошибка: ${e.message}';
+          }
+          final step_ = ForgeStep(
+            tool: call.name,
+            detail: _str(call.arguments['path']) ?? result,
+            ok: ok,
           );
-          onStep?.call(steps.last);
+          steps.add(step_);
+          onStep?.call(step_);
           messages.add({
             'role': 'tool',
             'tool_call_id': call.id,
             'content': result,
           });
-          continue;
         }
-        try {
-          // Ветку заводим ТОЛЬКО под правку. Вопрос по коду читает базовую
-          // ветку и не оставляет после себя ни ветки, ни PR.
-          final branch = _isWrite(call.name)
-              ? await _ensureBranch(task, baseBranch)
-              : (_branch ?? baseBranch);
-          result = await _execute(call, branch);
-          if (_isWrite(call.name)) {
-            writes++;
-            final p = _str(call.arguments['path']);
-            if (p != null) {
-              if (call.name == 'delete_file') {
-                deleted.add(p);
-              } else {
-                written.add(p);
-              }
-            }
-          }
-        } on ForgeException catch (e) {
-          ok = false;
-          result = 'Ошибка: ${e.message}';
-        }
-        final step_ = ForgeStep(
-          tool: call.name,
-          detail: _str(call.arguments['path']) ?? result,
-          ok: ok,
-        );
-        steps.add(step_);
-        onStep?.call(step_);
-        messages.add({
-          'role': 'tool',
-          'tool_call_id': call.id,
-          'content': result,
-        });
       }
+    } on _ForgeCancelled {
+      return await _stopped(
+        branch: _branch,
+        base: baseBranch,
+        task: task,
+        text: lastText,
+        files: _netChanged(written, deleted),
+        steps: steps,
+      );
+    } finally {
+      if (identical(_cancelSignal, signal)) _cancelSignal = null;
+      _cancelled = false;
     }
     // Шаги кончились. Не роняем ход: правки уже в ветке, и человеку нужен
     // PR с тем, что успели сделать, а не сообщение про «N шагов».
@@ -552,6 +603,38 @@ class ForgeAgent {
           ? 'Остановился на пределе шагов: правки ниже уже в ветке.'
           : '$note\n\n(Остановился на пределе шагов: правки ниже уже в ветке.)',
       files: _netChanged(written, deleted),
+      steps: steps,
+    );
+  }
+
+  /// Ждём ответ модели, но не дольше, чем длится ход: нажатие «Стоп»
+  /// обрывает ожидание сразу, не дожидаясь таймаута сети.
+  static Future<T> _race<T>(Future<T> work, Completer<void> signal) {
+    if (signal.isCompleted) return Future<T>.error(const _ForgeCancelled());
+    final stop = signal.future.then<T>((_) => throw const _ForgeCancelled());
+    return Future.any<T>(<Future<T>>[work, stop]);
+  }
+
+  /// Остановленный ход. Правки, которые уже успели лечь в ветку, всё равно
+  /// доводим до PR — иначе «Стоп» стирал бы сделанное.
+  Future<ForgeTurnResult> _stopped({
+    required String? branch,
+    required String base,
+    required String task,
+    required String? text,
+    required Set<String> files,
+    required List<ForgeStep> steps,
+  }) {
+    final note = (text ?? '').trim();
+    final text2 = note.isEmpty
+        ? 'Остановлено по твоей команде.'
+        : '$note\n\n(Остановлено по твоей команде.)';
+    return _conclude(
+      branch: branch,
+      base: base,
+      task: task,
+      text: text2,
+      files: files,
       steps: steps,
     );
   }
@@ -966,7 +1049,9 @@ class ForgeModelOption {
   /// Нужен свой ключ провайдера: без него модель не показываем.
   final bool needsKey;
 
-  String get label => '$vendor · $name';
+  /// Подпись для таблетки. Бесплатные варианты читаются как «Kilo Free»,
+  /// а не «Kilo · Free» — так их и просили называть.
+  String get label => name == 'Free' ? '$vendor Free' : '$vendor · $name';
 }
 
 /// Пул бесплатных OpenAI-совместимых провайдеров — тот же набор, на котором
@@ -1012,17 +1097,13 @@ class FreePoolForgeChat implements ForgeChat {
           power: 98,
           needsKey: true,
         ),
-      const ForgeModelOption(
-        id: 'kilo-auto',
-        name: 'Auto',
-        vendor: 'Kilo',
-        power: 84,
-      ),
+      // Kilo в таблетке РОВНО один: «kilo-auto» и «kilo-free» — тот же
+      // шлюз и та же бесплатная модель, и две подписи «Kilo» путали выбор.
       const ForgeModelOption(
         id: 'kilo-free',
         name: 'Free',
         vendor: 'Kilo',
-        power: 78,
+        power: 84,
       ),
       const ForgeModelOption(
         id: 'murakumo-free',
@@ -1274,4 +1355,9 @@ Map<String, dynamic> _decodeArgs(dynamic value) {
     }
   }
   return const {};
+}
+
+/// Сигнал остановки, который пролетел сквозь ожидание ответа модели.
+class _ForgeCancelled implements Exception {
+  const _ForgeCancelled();
 }

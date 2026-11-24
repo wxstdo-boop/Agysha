@@ -2226,6 +2226,52 @@ class _AiChatBodyState extends State<_AiChatBody>
                   ),
                 ),
         ),
+        // В конце чата — полупрозрачная подпись модели, которая реально
+        // ответила. Видно, кому принадлежит ответ, но подпись не спорит
+        // с сообщениями: гаснет во время ответа и мягко возвращается.
+        if (_messages.isNotEmpty)
+          ValueListenableBuilder<int>(
+            valueListenable: AiGuideService.modelLabelTick,
+            builder: (context, _, _) {
+              final label = AiGuideService.shownModelLabel.trim();
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 340),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    alignment: AlignmentDirectional.bottomCenter,
+                    child: child,
+                  ),
+                ),
+                child: label.isEmpty
+                    ? const SizedBox.shrink(
+                        key: ValueKey('model_footprint_none'),
+                      )
+                    : Padding(
+                        key: ValueKey('model_footprint_$label'),
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 2),
+                        child: Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontSize: 10.5,
+                              letterSpacing: 0.3,
+                              color: cs.onSurfaceVariant.withValues(
+                                alpha: _busy ? 0.18 : 0.42,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+              );
+            },
+          ),
         // Поле ввода.
         SafeArea(
           top: false,

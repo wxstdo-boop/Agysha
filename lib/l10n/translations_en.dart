@@ -719,6 +719,7 @@ const Map<String, String> _en = {
   'forgeChatEmpty':
       'Ask a question about the project or describe what to change.',
   'forgeClearChat': 'Clear chat',
+  'forgeStopRun': 'Stop',
   'forgeChatCleared': 'Chat cleared',
   'forgeChanges': 'Changes',
   'forgeNoChanges': 'No edits this turn',

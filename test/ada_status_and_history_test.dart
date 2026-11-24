@@ -60,6 +60,14 @@ void main() {
       );
     });
 
+    test('подпись модели в конце чата читается синхронно', () async {
+      // Внизу чата подпись рисуется по modelLabelTick: ей нужен готовый
+      // label без Future, иначе на каждом кадре подпись пустела бы.
+      AiGuideService.debugPublishProviderModel('Kilo', 'openrouter/free');
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect(AiGuideService.shownModelLabel, 'Kilo • free');
+    });
+
     test('имя без модели остаётся как есть', () async {
       AiGuideService.recordModelUsed('LLM7');
       await Future<void>.delayed(const Duration(milliseconds: 1100));

@@ -56,11 +56,26 @@ class BeautifulSelectionControls extends TextSelectionControls {
     ValueListenable<ClipboardStatus>? clipboardStatus,
     Offset? lastSecondaryTapDownPosition,
   ) {
-    // Раньше тут был shrink — при выделении ПЕРЕТАСКИВАНИЕМ ручек на телефоне
-    // панель с «Копировать» не появлялась вовсе. Теперь строим настоящий
-    // тулбар (Копировать / Поделиться / Выделить всё) — как и меню по
-    // долгому нажатию (contextMenuBuilder), единый стиль.
-    return buildChatSelectionMenu(context, delegate as EditableTextState);
+    // При перетаскивании ручек панель та же, что и по долгому нажатию —
+    // РОВНО «Копировать». «Выделить всё» здесь возвращало случайное
+    // выделение всего пузыря и перебивало ручной выбор.
+    if (delegate is! EditableTextState) {
+      return const SizedBox.shrink();
+    }
+    final editable = delegate;
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editable.contextMenuAnchors,
+      buttonItems: <ContextMenuButtonItem>[
+        if (editable.copyEnabled)
+          ContextMenuButtonItem(
+            type: ContextMenuButtonType.copy,
+            onPressed: () {
+              editable.copySelection(SelectionChangedCause.toolbar);
+              editable.hideToolbar();
+            },
+          ),
+      ],
+    );
   }
 
   @override

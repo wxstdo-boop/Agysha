@@ -725,6 +725,7 @@ const Map<String, String> _ru = {
   'forgeThinking': 'Агент думает…',
   'forgeChatEmpty': 'Спроси что-нибудь о проекте или напиши, что изменить.',
   'forgeClearChat': 'Очистить чат',
+  'forgeStopRun': 'Остановить',
   'forgeChatCleared': 'Чат очищен',
   'forgeChanges': 'Правки',
   'forgeNoChanges': 'В этот раз правок нет',
