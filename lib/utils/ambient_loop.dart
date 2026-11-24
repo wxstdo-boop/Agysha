@@ -1,12 +1,13 @@
 import 'package:flutter/scheduler.dart';
 
+import 'jank_probe.dart';
 import 'perf_prefs.dart';
 
 /// Провайдер тикеров для ВЕЧНЫХ декоративных циклов (дыхание свечения,
 /// пульсация активного таймера). Он передаёт тик не каждый кадр, а раз в
-/// [everyFrames]: на 60 Гц при `everyFrames: 3` цикл идёт ~20 fps.
+/// [everyFrames] кадров: на 60 Гц при `everyFrames: 3` цикл идёт ~20 fps.
 ///
-/// Почему это безопасно для эффекта: `AnimationController` выборывает значение
+/// Почему это безопасно для эффекта: `AnimationController` выбирает значение
 /// из симуляции по абсолютному `elapsed` (`animation_controller.dart:939`), а
 /// не суммирует приращения кадра. Пропущенные тики поэтому не сбивают ни
 /// длительность, ни форму кривой — просто те же 2600 мс дыхания доезжают до
@@ -23,10 +24,9 @@ class AmbientVsync implements TickerProvider {
   final TickerProvider _inner;
   final int everyFrames;
 
-  /// Живой источник частоты: читается на каждом тике, поэтому режим
   /// Живой источник частоты (см. [PerfPrefs.ambientEveryFrames]) читается на
-  /// каждом тике, поэтому смена режима действует сразу, без пересоздания
-  /// контроллера. Имеет приоритет над [everyFrames].
+  /// каждом тике, поэтому смена режима и частоты экрана действуют сразу, без
+  /// пересоздания контроллера. Имеет приоритет над [everyFrames].
   final int Function()? everyFramesOf;
 
   @override
@@ -37,8 +37,13 @@ class AmbientVsync implements TickerProvider {
     );
     var tick = 0;
     return _inner.createTicker((Duration elapsed) {
-      final every = everyFramesOf?.call() ?? everyFrames;
-      if (every <= 1 || ++tick % every == 1) onTick(elapsed);
+      // Частота из режима/экрана плюс торможение под нагрузкой: когда кадры
+      // уже не укладываются в бюджет, декор уступает им дорогу сам, без
+      // тумблеров (см. [JankProbe.ambientBackoff]).
+      final base = everyFramesOf?.call() ?? everyFrames;
+      final every = base * JankProbe.ambientBackoff;
+      if (every <= 0) return;
+      if (every == 1 || ++tick % every == 1) onTick(elapsed);
     });
   }
 }

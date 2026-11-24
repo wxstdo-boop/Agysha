@@ -4,6 +4,9 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/dart.dart' show DartAesGcm;
+import 'package:cryptography_flutter/cryptography_flutter.dart'
+    show FlutterCryptography;
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
@@ -36,7 +39,13 @@ class JsonFile {
   static const _recoveryModeKey = 'json_storage_recovery_v1';
   static const _recoveryCompleteKey = 'json_storage_recovery_complete_v1';
   static const _recoveryGenerationKey = 'json_storage_recovery_generation_v1';
-  static final _cipher = AesGcm.with256bits();
+  // Шифр подменяется на системный в `_enableNativeCipher`. Фабрика
+  // `AesGcm.with256bits()` всегда даёт чистый Dart — нативную реализацию
+  // отдаёт только `Cryptography.instance`.
+  static AesGcm _cipher = DartAesGcm.with256bits();
+  // Тот же AES-GCM чистым Dart: страховка на случай, если системная
+  // реализация не зарегистрирована или не разобрала файл.
+  static final _dartCipher = DartAesGcm.with256bits();
   static final _random = Random.secure();
   // Never let the plugin erase the secure-storage entry automatically after
   // a Keystore error. Losing this key would make the encrypted JSON files
@@ -53,6 +62,15 @@ class JsonFile {
   );
   static FlutterSecureStorage _activeSecureStorage = _secureStorage;
   static final Map<String, String?> _observed = {};
+  // Расшифрованный текст, уже разобранный из конкретного содержимого файла:
+  // ключ → (что лежало на диске, что было внутри). Автосохранение каждые
+  // 10 секунд перечитывает ВСЕ файлы, чтобы сравнить их с памятью, и без
+  // этого кеша каждый такой проход заново расшифровывал их все на UI-изоляте.
+  static final Map<String, (String, String)> _plainCache = {};
+  // Ключ, которым этот кеш заполнен. Ключ подменяется при восстановлении
+  // из бэкапа и в тестах — тогда старый кеш обязан исчезнуть, иначе
+  // расшифровка «чужим» ключом прошла бы из памяти и не заметила ошибку.
+  static SecretKey? _plainCacheKey;
   static final Map<String, Future<void>> _queues = {};
   static Directory? _dir;
   static Future<SecretKey>? _keyFuture;
@@ -63,6 +81,7 @@ class JsonFile {
   }
 
   static Future<void> initialize() async {
+    _enableNativeCipher();
     if (globalPrefs.getBool(_recoveryModeKey) == true) {
       await _useRecoveryStore();
       if (globalPrefs.getBool(_recoveryCompleteKey) != true) {
@@ -75,6 +94,34 @@ class JsonFile {
       _dir = null;
     }
     await _encryptionKey();
+  }
+
+  /// Переводит AES-GCM на системную реализацию (плагин `cryptography_flutter`).
+  ///
+  /// Раньше шифрование и расшифровка шли чистым Dart на UI-изоляте: полное
+  /// автосохранение — это семь файлов, и каждый проход заново расшифровывал
+  /// их, чтобы сравнить с памятью. На слабом телефоне это десятки
+  /// миллисекунд блокировки раз в 10 секунд — та самая «иногда подлагивает,
+  /// иногда норм». В системной реализации AES считает Java/Kotlin вне
+  /// главного изолята, данные и формат файлов не меняются (тот же AES-GCM,
+  /// тот же ключ из secure storage), а где плагина нет (тесты, десктоп,
+  /// web) — он сам уходит на Dart или фоновый изолят.
+  static void _enableNativeCipher() {
+    if (!FlutterCryptography.isPluginPresent) {
+      try {
+        // ignore: deprecated_member_use
+        FlutterCryptography.enable();
+      } catch (_) {
+        // Уже включён или экземпляр заморожен — просто работаем дальше.
+      }
+    }
+    try {
+      final native = Cryptography.instance.aesGcm();
+      // Без плагина `aesGcm()` — тот же Dart-шифр, подменять нечего.
+      if (native is! DartAesGcm) _cipher = native;
+    } catch (_) {
+      // Не вышло — остаёмся на Dart и фолбэке ниже.
+    }
   }
 
   static bool canRecoverFromBackup(Object error) {
@@ -396,9 +443,19 @@ class JsonFile {
       }
       if (await file.exists()) raw = await file.readAsString();
     }
-    if (raw == null) return null;
+    if (raw == null) {
+      _plainCache.remove(key);
+      return null;
+    }
+
+    final cipherKey = await _encryptionKey();
+    final cached = _plainCache[key];
+    if (cached != null && cached.$1 == raw && _cacheMatchesKey(cipherKey)) {
+      return cached.$2;
+    }
 
     final decoded = await _decode(key, raw);
+    _rememberPlain(key, raw, decoded.$1, cipherKey);
     if (!decoded.$2) await _persistPlainLocked(key, decoded.$1);
     return decoded.$1;
   }
@@ -422,10 +479,15 @@ class JsonFile {
           nonce: base64Decode(parsed['nonce'] as String),
           mac: Mac(base64Decode(parsed['mac'] as String)),
         );
-        final clear = await _cipher.decrypt(
-          box,
-          secretKey: await _encryptionKey(),
-        );
+        final key = await _encryptionKey();
+        List<int> clear;
+        try {
+          clear = await _cipher.decrypt(box, secretKey: key);
+        } catch (_) {
+          // Файл мог быть записан, когда системная реализация была
+          // недоступна: пробуем чистый Dart, прежде чем считать его битым.
+          clear = await _dartCipher.decrypt(box, secretKey: key);
+        }
         return (utf8.decode(clear), true);
       } catch (error) {
         throw JsonFileException(
@@ -437,8 +499,31 @@ class JsonFile {
     return (raw, false);
   }
 
+  /// Кладёт разобранный текст в кеш, ограничивая его парой мегабайт: файлы
+  /// данных маленькие, а история чата не должна разрастаться в памяти.
+  static void _rememberPlain(
+    String key,
+    String raw,
+    String plain,
+    SecretKey cipherKey,
+  ) {
+    if (!identical(_plainCacheKey, cipherKey)) {
+      _plainCache.clear();
+      _plainCacheKey = cipherKey;
+    }
+    if (plain.length > 2 * 1024 * 1024) {
+      _plainCache.remove(key);
+      return;
+    }
+    _plainCache[key] = (raw, plain);
+  }
+
+  static bool _cacheMatchesKey(SecretKey cipherKey) =>
+      identical(_plainCacheKey, cipherKey);
+
   static Future<void> _persistPlainLocked(String key, String value) async {
     final encrypted = await _encode(value);
+    _rememberPlain(key, encrypted, value, await _encryptionKey());
     if (kIsWeb) {
       if (!await globalPrefs.setString(key, encrypted)) {
         throw JsonFileException('Could not persist "$key"');
@@ -481,10 +566,14 @@ class JsonFile {
 
   static Future<String> _encode(String value) async {
     try {
-      final box = await _cipher.encrypt(
-        utf8.encode(value),
-        secretKey: await _encryptionKey(),
-      );
+      final key = await _encryptionKey();
+      final clear = utf8.encode(value);
+      SecretBox box;
+      try {
+        box = await _cipher.encrypt(clear, secretKey: key);
+      } catch (_) {
+        box = await _dartCipher.encrypt(clear, secretKey: key);
+      }
       return jsonEncode({
         'format': _format,
         'nonce': base64Encode(box.nonce),

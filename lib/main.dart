@@ -91,7 +91,16 @@ bool _autoSaveFailureActive = false;
 Timer? _autoSaveDebounce;
 bool _autoSaveSaving = false;
 bool _autoSaveDirty = false;
-List<ChangeNotifier> _autoSaveSources = const [];
+
+/// Слушатели сторов → что писать, когда стор изменился. Сервисы —
+/// синглтоны, поэтому ключ переживает пересоздание списка.
+final Map<ChangeNotifier, VoidCallback> _autoSaveListeners = {};
+
+/// Сторы, менявшиеся с прошлой записи. Пишем только их (и раз в минуту —
+/// всё подряд): тик каждые 10 секунд больше не сериализует и не читает
+/// шесть документов, из которых не изменился ни один.
+final Set<ChangeNotifier> _autoSavePending = <ChangeNotifier>{};
+int _autoSaveTicks = 0;
 
 /// Включено ли автосохранение прямо сейчас. Нужен, чтобы тик, который уже
 /// шёл в момент выключения, не завёл таймер заново, и чтобы уход в фон
@@ -199,18 +208,19 @@ Future<String?> _readAlarmBootPayload() async {
 /// Все локальные хранилища, которые автосохранение обязано записывать.
 /// Подписка на их изменения — вторая половина автосохранения: десятисекундный
 /// тик не успевал, если человек правил данные и сразу закрывал приложение.
-List<ChangeNotifier> _localStores() => <ChangeNotifier>[
-  HabitService(),
-  TaskService(),
-  AlarmService(),
-  RealityCheckService(),
-  // Таймер — исключение: он тикает и зовёт слушателей каждую секунду, а
-  // свой runtime-снапшот уже пишет сам раз в 10 секунд. Подписка на него
-  // означала бы запись ВСЕХ файлов ежесекундно; для таймеров хватает
-  // десятисекундного тика автосохранения.
-  NutritionService(),
-  ProfileService(),
-];
+/// Таймер — исключение: он тикает и зовёт слушателей каждую секунду, а
+/// свой runtime-снапшот уже пишет сам раз в 10 секунд. Подписка на него
+/// означала бы запись ВСЕХ файлов ежесекундно, поэтому в списке его нет:
+/// его файл пишется вместе с каждым непустым проходом автосохранения.
+Map<ChangeNotifier, Future<void> Function()> _localStores() =>
+    <ChangeNotifier, Future<void> Function()>{
+      HabitService(): () => HabitService().forceSave(),
+      TaskService(): () => TaskService().forceSave(),
+      AlarmService(): () => AlarmService().forceSave(),
+      RealityCheckService(): () => RealityCheckService().forceSave(),
+      NutritionService(): () => NutritionService().forceSave(),
+      ProfileService(): () => ProfileService().forceSave(),
+    };
 
 void startAutoSave() {
   _autoSaveOn = true;
@@ -222,24 +232,33 @@ void startAutoSave() {
 }
 
 void _listenLocalStores(bool attach) {
-  for (final store in _autoSaveSources) {
-    store.removeListener(_onLocalStoreChanged);
+  for (final entry in _autoSaveListeners.entries) {
+    entry.key.removeListener(entry.value);
   }
-  _autoSaveSources = attach ? _localStores() : const [];
-  if (attach) {
-    for (final store in _autoSaveSources) {
-      store.addListener(_onLocalStoreChanged);
-    }
+  _autoSaveListeners.clear();
+  _autoSavePending.clear();
+  if (!attach) return;
+  for (final store in _localStores().keys) {
+    void listener() => _onLocalStoreChanged(store);
+    _autoSaveListeners[store] = listener;
+    store.addListener(listener);
   }
+  // Первый проход после включения пишет всё: до него на диск ничего не шло.
+  _autoSavePending.addAll(_autoSaveListeners.keys);
 }
 
-void _onLocalStoreChanged() {
+void _onLocalStoreChanged(ChangeNotifier store) {
   if (!_autoSaveOn) return;
+  _autoSavePending.add(store);
   if (_autoSaveSaving) {
     // Правка пришла, пока шла запись: её данные в этот проход не попали.
     _autoSaveDirty = true;
     return;
   }
+  _scheduleAutoSave();
+}
+
+void _scheduleAutoSave() {
   _autoSaveDebounce?.cancel();
   _autoSaveDebounce = Timer(const Duration(milliseconds: 900), () {
     if (_autoSaveOn) _saveAllData();
@@ -248,26 +267,42 @@ void _onLocalStoreChanged() {
 
 /// Немедленная запись всех данных: включение автосохранения, уход в фон,
 /// ручной вызов после «Сохранить сейчас».
-Future<void> flushAutoSaveNow() => _saveAllData();
+Future<void> flushAutoSaveNow() => _saveAllData(force: true);
 
-/// Пишет все локальные данные на диск один раз, без запуска таймера.
-Future<void> _saveAllData() async {
+/// Пишет локальные данные на диск один раз, без запуска таймера.
+///
+/// По умолчанию — только изменившиеся с прошлого прохода сторы: каждая
+/// запись сериализует документ целиком, и полный проход каждые 10 секунд
+/// на шести файлах давал регулярный кадр-проглот даже без единой правки.
+Future<void> _saveAllData({bool force = false}) async {
   if (_autoSaveSaving) return;
+  final jobs = _localStores();
+  final pending = force ? jobs.keys.toList() : _autoSavePending.toList();
+  if (pending.isEmpty && !force) {
+    // Ничего не менялось: остальные документы не сериализуем вовсе, но
+    // время последнего сохранения двигаем как раньше — по нему человек
+    // проверяет, что автосохранение живо. Таймер не подписан на слушателей
+    // (тикает каждую секунду) и сам сравнивает состояние со снимком, так
+    // что неизменённые данные на диск не идут.
+    await TimerService().forceSave();
+    await SettingsService.markAutoSaveOk();
+    return;
+  }
   _autoSaveSaving = true;
+  _autoSavePending.clear();
   try {
-    // Параллельно — не блокируем UI последовательной записью 5 файлов
+    // Параллельно — не блокируем UI последовательной записью файлов.
     await Future.wait([
-      HabitService().forceSave(),
-      TaskService().forceSave(),
-      AlarmService().forceSave(),
-      RealityCheckService().forceSave(),
+      for (final store in pending) jobs[store]!(),
+      // Таймер не стор-источник (тикает каждую секунду), но его состояние
+      // должно пережить перезапуск — пишем вместе с любым проходом.
       TimerService().forceSave(),
-      NutritionService().forceSave(),
-      ProfileService().forceSave(),
     ]);
     _autoSaveFailureActive = false;
     await SettingsService.markAutoSaveOk();
   } catch (error, stackTrace) {
+    // Не потеряли: следующий тик попробует эти сторы снова.
+    _autoSavePending.addAll(pending);
     if (!_autoSaveFailureActive) {
       _autoSaveFailureActive = true;
       _reportPersistenceFailure(error, stackTrace);
@@ -276,13 +311,16 @@ Future<void> _saveAllData() async {
     _autoSaveSaving = false;
     if (_autoSaveDirty && _autoSaveOn) {
       _autoSaveDirty = false;
-      _onLocalStoreChanged();
+      _scheduleAutoSave();
     }
   }
 }
 
 Future<void> _autoSaveTick() async {
-  await _saveAllData();
+  _autoSaveTicks++;
+  // Раз в минуту — полный проход по всем файлам: страховка на случай, если
+  // какой-то стор изменился, не позвав слушателей.
+  await _saveAllData(force: _autoSaveTicks % 6 == 0);
   // Тик мог доработать уже после выключения автосохранения — тогда новый
   // таймер не заводим, иначе оно продолжало бы работать «выключенным».
   if (!_autoSaveOn) return;
@@ -1823,7 +1861,7 @@ class AgyshaAppState extends State<AgyshaApp>
       // Сворачивание/закрытие может заморозить процесс в любой момент,
       // поэтому при включённом автосохранении пишем данные сразу, не
       // дожидаясь следующего десятисекундного тика.
-      if (_autoSaveOn) _saveAllData();
+      if (_autoSaveOn) _saveAllData(force: true);
       if (!systemUiActive &&
           !_wakeScreenShowing &&
           !_locked &&

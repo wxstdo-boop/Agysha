@@ -184,6 +184,24 @@ void main() {
     expect(await file.readAsBytes(), encryptedBefore);
   });
 
+  test('кеш расшифровки не прячет испорченный файл', () async {
+    await JsonFile.write('profile', '{"profile":"first"}');
+    expect(await JsonFile.read('profile'), '{"profile":"first"}');
+
+    // Файл побился на диске: кеш по содержимому не совпадёт, и чтение
+    // обязано упасть с ошибкой, а не отдать расшифровку из памяти.
+    final file = File('${directory.path}/profile.json');
+    final before = await file.readAsString();
+    await file.writeAsString(
+      '${before.substring(0, 8)}x${before.substring(9)}',
+    );
+
+    await expectLater(
+      JsonFile.read('profile'),
+      throwsA(isA<JsonFileException>()),
+    );
+  });
+
   test('merges disjoint object edits and rejects overlapping edits', () {
     final merged = JsonFile.mergeConcurrentJsonForTesting(
       'settings',

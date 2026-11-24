@@ -38,6 +38,7 @@ import '../widgets/confetti_burst.dart';
 import '../widgets/stagger_in.dart';
 import '../widgets/smooth_keyboard_body.dart';
 import '../widgets/update_pill.dart';
+import 'perf_panel_screen.dart';
 import 'lock_screen.dart';
 import 'developer_corner_screen.dart';
 import '../services/update_service.dart';
