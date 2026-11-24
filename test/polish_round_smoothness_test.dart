@@ -308,4 +308,53 @@ void main() {
       );
     });
   });
+
+  group('рейтинг и цифры события', () {
+    String read(String path) => File(path).readAsStringSync();
+
+    test('высоту рейтинга сглаживает ровно одна анимация', () {
+      final src = read('lib/screens/profile_cards.dart');
+      final card = src.substring(
+        src.indexOf('Widget _leaderboardCard('),
+        src.indexOf('Widget _leaderRow('),
+      );
+      final rows = card.indexOf('_LeaderboardRows(');
+      expect(rows, greaterThan(0));
+      // `AnimatedSize` вокруг уже анимированной высоты смягчал её второй раз:
+      // текст под карточкой подтягивался рывком (быстро — пауза — доезд).
+      expect(
+        card.substring(0, rows).contains('AnimatedSize('),
+        isFalse,
+        reason: 'высота строк уже едет твином — второй аниматор даёт двойную кривую',
+      );
+      // Подсказка без друзей появляется кадром, поэтому её высоту ведёт
+      // собственный `AnimatedSize` — и он стоит ПОСЛЕ строк.
+      expect(
+        card.substring(rows).contains('AnimatedSize('),
+        isTrue,
+        reason: 'иначе подсказка «добавьте друзей» щёлкает высотой',
+      );
+    });
+
+    test('разряд перекатывается без второй кривой поверх волны', () {
+      final src = read('lib/widgets/new_year_event_banner.dart');
+      final slot = src.substring(src.indexOf('class _DigitSlot'));
+      expect(
+        slot.contains('Curves.'),
+        isFalse,
+        reason: 'доля уже прошла через кривую волны: второй ease менял цифру '
+            'в первые 40 % хода и потом замирал',
+      );
+      expect(
+        slot.contains('Transform.translate('),
+        isTrue,
+        reason: 'цифра должна перекатываться, а не подменяться кадром',
+      );
+      expect(
+        slot.contains('ClipRect('),
+        isTrue,
+        reason: 'без клипа уезжающая цифра вылезает на подпись',
+      );
+    });
+  });
 }
