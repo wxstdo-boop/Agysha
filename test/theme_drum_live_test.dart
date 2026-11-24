@@ -94,4 +94,22 @@ void main() {
       reason: 'движение должно учитывать и палец, и довод',
     );
   });
+
+  test('пока барабан едет, значок в центре тоже меняется сразу', () {
+    final src = read('lib/screens/settings_theme_carousel.dart');
+    final instant = '? Duration.zero'.allMatches(src).length;
+    expect(
+      instant,
+      greaterThanOrEqualTo(2),
+      reason:
+          'подпись и значок обязаны переключаться мгновенно во время '
+          'кручения: любое затухание наслаивало несколько полупрозрачных '
+          'глифов и читалось как «значки сменяются неплавно»',
+    );
+    expect(
+      src,
+      contains('const Duration(milliseconds: 380)'),
+      reason: 'на остановке значок должен проявиться двухфазным затуханием',
+    );
+  });
 }
