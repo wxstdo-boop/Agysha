@@ -165,11 +165,13 @@ class ProfileService extends ChangeNotifier {
   String get prestigeTitle =>
       _prestigeTitle.trim().isEmpty ? 'Cyberpunk 2077 Legend' : _prestigeTitle;
   int get zenKarma => _zenKarma;
+
   /// Предел избранных артефактов-талисманов (до 5 штук, парящих вокруг карточки).
   static const int maxFavoriteGifts = 5;
 
   List<ProfileGift> get gifts => List.unmodifiable(_gifts);
-  List<ProfileGift> get favoriteGifts => _gifts.where((g) => g.isFavorite).toList();
+  List<ProfileGift> get favoriteGifts =>
+      _gifts.where((g) => g.isFavorite).toList();
   ProfileGift? get activeTalisman {
     try {
       return _gifts.firstWhere((g) => g.isFavorite);
@@ -177,6 +179,7 @@ class ProfileService extends ChangeNotifier {
       return null;
     }
   }
+
   /// Своя подборка музыки (до [maxTracks] штук).
   List<MusicTrack> get tracks => List.unmodifiable(_tracks);
 
@@ -241,8 +244,8 @@ class ProfileService extends ChangeNotifier {
         final map = jsonDecode(raw) as Map<String, dynamic>;
         _name = (map['name'] ?? '').toString();
         _avatarIndex = (map['avatar'] as num?)?.toInt() ?? 0;
-        _prestigeTitle =
-            (map['prestigeTitle'] ?? 'Cyberpunk 2077 Legend').toString();
+        _prestigeTitle = (map['prestigeTitle'] ?? 'Cyberpunk 2077 Legend')
+            .toString();
         _zenKarma = (map['zenKarma'] as num?)?.toInt() ?? 0;
         final rawGifts = (map['gifts'] as List?) ?? const [];
         if (rawGifts.isNotEmpty) {
@@ -250,7 +253,8 @@ class ProfileService extends ChangeNotifier {
             ..clear()
             ..addAll(
               rawGifts.map(
-                (e) => ProfileGift.fromJson(Map<String, dynamic>.from(e as Map)),
+                (e) =>
+                    ProfileGift.fromJson(Map<String, dynamic>.from(e as Map)),
               ),
             );
         }
@@ -263,7 +267,9 @@ class ProfileService extends ChangeNotifier {
         final seenPath = <String>{};
         for (final item in rawTracks) {
           final t = MusicTrack.fromJson(Map<String, dynamic>.from(item as Map));
-          if (t.fingerprint.isNotEmpty && seenFp.contains(t.fingerprint)) continue;
+          if (t.fingerprint.isNotEmpty && seenFp.contains(t.fingerprint)) {
+            continue;
+          }
           if (t.path.isNotEmpty && seenPath.contains(t.path)) continue;
           if (t.fingerprint.isNotEmpty) seenFp.add(t.fingerprint);
           if (t.path.isNotEmpty) seenPath.add(t.path);
@@ -288,9 +294,8 @@ class ProfileService extends ChangeNotifier {
           ..clear()
           ..addAll(
             list.map(
-              (e) => ProfileFriend.fromJson(
-                Map<String, dynamic>.from(e as Map),
-              ),
+              (e) =>
+                  ProfileFriend.fromJson(Map<String, dynamic>.from(e as Map)),
             ),
           );
       } catch (_) {
@@ -536,8 +541,13 @@ class ProfileService extends ChangeNotifier {
   /// после обновления), — так цифра не обнуляется у тех, кто уже что-то сделал.
   int localScore() {
     var score = ScoreService().total;
-    for (final h in HabitService().habits) {
-      if (h.streak > 0) score += h.streak;
+    final habits = HabitService();
+    for (final h in habits.habits) {
+      // Через displayStreak, а не сырое поле: после пропущенного дня серия
+      // уже не живёт, и очки за неё начисляться не должны. Раньше копилка
+      // держала credit мёртвой серии — цифра «не исчезала» вместе с точками.
+      final alive = habits.displayStreak(h);
+      if (alive > 0) score += alive;
     }
     score += TaskService().tasks.where((t) => t.done).length;
     final days = CompletionLogService().lastDays(14);
