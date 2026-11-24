@@ -18,6 +18,7 @@ import '../l10n/locale_provider.dart';
 import '../l10n/translations.dart';
 import '../services/haptics.dart';
 import '../services/music_service.dart';
+import '../services/phonk_filter.dart';
 import '../services/new_year_event_service.dart';
 import '../services/profile_service.dart';
 import '../services/score_service.dart';
@@ -485,16 +486,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  /// Что вообще считаем фонком: по этим словам отбираем результаты.
-  static const List<String> _phonkWords = [
-    'phonk',
-    'drift',
-    'memphis',
-    'brazil',
-    'bass',
-    'hard',
-  ];
-
   /// Запросы к archive.org. Перебираем по очереди, пока не найдём трек.
   static const List<String> _phonkQueries = [
     'phonk AND mediatype:audio AND format:(MP3)',
@@ -507,52 +498,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     'phonk instrumental AND mediatype:audio AND format:(MP3)',
   ];
 
-  /// Слова, по которым видно сборник, часовой микс или подкаст. Такие
-  /// записи формально «audio», но это не трек: раньше фильтр их пропускал,
-  /// и в подборку попадал случайный кусок чужого микса.
-  static const List<String> _junkWords = [
-    'mix',
-    'compilation',
-    'playlist',
-    'podcast',
-    'radio show',
-    'full album',
-    'best of',
-    'collection',
-    'live set',
-  ];
-
-  /// Годится ли запись archive.org как отдельный трек: есть человеческое
-  /// название из нескольких слов и это не сборник/микс.
-  bool _isPlayableTrackTitle(String title, String id) {
-    final t = '${title.toLowerCase()} ${id.toLowerCase()}';
-    if (t.trim().isEmpty) return false;
-    // «1 hour», «3 hrs» — это микс, а не трек. Отдельно от слов ниже:
-    // «Golden Hour» — нормальное название песни.
-    if (RegExp(r'\b\d+\s*(hour|hours|hrs?)\b').hasMatch(t)) return false;
-    for (final w in _junkWords) {
-      // По границе слова: «remix» — настоящий трек, «mix» в конце
-      // названия — уже сборник.
-      final re = RegExp(
-        r'(^|[^\p{L}])' + RegExp.escape(w) + r'([^\p{L}]|$)',
-        unicode: true,
-      );
-      if (re.hasMatch(t)) return false;
-    }
-    // Название из одного слова-идентификатора («audio_2024_05_11») — это
-    // запись с диктофона, а не песня: требуем минимум два слова с буквами.
-    final words = title
-        .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
-        .where((w) => w.length > 1)
-        .length;
-    return words >= 2;
-  }
-
-  bool _looksLikePhonk(String text) {
-    final t = text.toLowerCase();
-    return _phonkWords.any(t.contains);
-  }
-
   /// Скачивает один небольшой mp3-трек с archive.org.
   ///
   /// Ограничения по длительности и размеру отсекают подкасты, лекции и
@@ -561,7 +506,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<({List<int> bytes, String identifier})?> _downloadPhonkFromArchive(
     Set<String> existingFingerprints,
   ) async {
-    final deadline = DateTime.now().add(const Duration(seconds: 14));
+    // 26 секунд: поиск + метаданные + скачивание одного трека. На 14
+    // секундах загрузка часто не успевала, и вместо музыки включался
+    // синтезированный «запасной» трек.
+    final deadline = DateTime.now().add(const Duration(seconds: 26));
     final queries = [..._phonkQueries]..shuffle();
     for (final q in queries) {
       if (DateTime.now().isAfter(deadline)) break;
@@ -582,7 +530,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         final id = d['identifier']?.toString() ?? '';
         if (id.isEmpty) return false;
         final title = d['title']?.toString() ?? '';
-        return _isPlayableTrackTitle(title, id);
+        return isPlayableTrackTitle(title, id);
       }).toList();
       // Сначала те, где жанр прямо в названии или идентификаторе: они
       // точнее попадают в фонк. Остальные — запасной вариант, но тоже
@@ -591,7 +539,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       final rest = <dynamic>[];
       for (final d in candidates) {
         final t = '${d['title']} ${d['identifier']}';
-        (_looksLikePhonk(t) ? onGenre : rest).add(d);
+        (looksLikePhonk(t) ? onGenre : rest).add(d);
       }
       onGenre.shuffle();
       rest.shuffle();
@@ -613,16 +561,30 @@ class _ProfileScreenState extends State<ProfileScreen>
           final name = (f['name']?.toString() ?? '').toLowerCase();
           if (!name.endsWith('.mp3')) return false;
           final size = int.tryParse('${f['size'] ?? ''}') ?? 0;
-          final length = double.tryParse('${f['length'] ?? ''}') ?? 0;
-          return size > 400000 && size < 14000000 && length >= 45;
+          final length = double.tryParse('${f['length']}') ?? 0;
+          // Трек, а не подкаст и не часовой микс: 1–7 минут и до 7 МБ.
+          return size > 300000 &&
+              size < 7000000 &&
+              length >= 60 &&
+              length <= 420;
         }).toList();
         if (audio.isEmpty) continue;
-        // Самый короткий подходящий файл — обычно это и есть трек.
-        audio.sort(
-          (a, b) => (double.tryParse('${a['length']}') ?? 0).compareTo(
-            double.tryParse('${b['length']}') ?? 0,
-          ),
-        );
+        // Больше трёх mp3 — это альбом, EP или архив чужих записей. Раньше
+        // из такого набора брался самый короткий файл, и в подборку попадал
+        // случайный кусок чужого релиза.
+        if (audio.length > 3) continue;
+        // Берём файл, в имени которого есть фонк-слово, иначе самый длинный
+        // (он точнее похож на полноценный трек, а не на интро).
+        audio.sort((a, b) {
+          final an = a['name'].toString().toLowerCase();
+          final bn = b['name'].toString().toLowerCase();
+          final ap = looksLikePhonk(an) ? 1 : 0;
+          final bp = looksLikePhonk(bn) ? 1 : 0;
+          if (ap != bp) return bp - ap;
+          return (double.tryParse('${b['length']}') ?? 0).compareTo(
+            double.tryParse('${a['length']}') ?? 0,
+          );
+        });
         final file = audio.first;
         final fileName = Uri.encodeComponent(file['name'].toString());
         final dlUri = Uri.parse('https://archive.org/download/$id/$fileName');

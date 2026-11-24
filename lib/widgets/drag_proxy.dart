@@ -88,18 +88,28 @@ Widget buildDragProxy(
       );
     },
     child: RepaintBoundary(
-      child: Material(
-        // Высота ФИКСИРОВАНА: анимация elevation заставляла движок
-        // пересчитывать тень каждый кадр.
-        elevation: 8,
-        shadowColor: theme.colorScheme.primary.withValues(alpha: 0.20),
-        borderRadius: BorderRadius.circular(borderRadius),
-        // Цвет КАРТОЧКИ, а не фона страницы: с `surface` поднятая
-        // карточка теряла свой тон и сливалась с фоном — при зажатии
-        // казалось, что фон «проглотил» карточку.
-        color: theme.cardTheme.color ?? theme.colorScheme.surfaceContainerLow,
-        clipBehavior: Clip.none,
-        child: child,
+      // Никакой сплошной подложки под карточкой: Material с заливкой
+      // рисовал непрозрачный прямоугольник ПОД содержимым, и при зажатии
+      // карточка теряла свой фон (градиент/стекло) — «фон глотается».
+      // Тень даёт только скруглённая тень, а сам вид карточки остаётся
+      // ровно таким, каким он был в списке.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(borderRadius),
+          boxShadow: [
+            BoxShadow(
+              color: theme.colorScheme.primary.withValues(alpha: 0.20),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: BorderRadius.circular(borderRadius),
+          clipBehavior: Clip.none,
+          child: child,
+        ),
       ),
     ),
   );
