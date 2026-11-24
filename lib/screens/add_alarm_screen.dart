@@ -939,11 +939,21 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                                   ? cs.primaryContainer
                                   : cs.surfaceContainerHigh;
                               return PressScale(
-                                // Таблетка звука — плавная отдача-«вдавливание».
-                                pressedScale: 0.94,
+                                // Таблетка звука: не только вдавливание, но и
+                                // наклон под палец с отсветом — раньше она
+                                // только сжималась, и отдача читалась слабо.
+                                pressedScale: 0.93,
+                                maxTiltAngle: 0.22,
+                                pressTint: cs.primary,
+                                pressTintStrength: 0.08,
+                                pressTintRadius: BorderRadius.circular(18),
+                                pressOverlay: pressGloss(
+                                  BorderRadius.circular(18),
+                                  strength: 0.14,
+                                ),
                                 duration: const Duration(milliseconds: 160),
                                 releaseDuration: const Duration(
-                                  milliseconds: 220,
+                                  milliseconds: 240,
                                 ),
                                 child: GestureDetector(
                                   onTap: () => setState(() => _soundName = s),

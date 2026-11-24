@@ -268,15 +268,15 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
       // 0.985 было почти незаметно: строка звука на 56 px сжималась на
       // полтора пикселя, и владелец справедливо не видел отдачи. Теперь
       // вдавливание и наклон читаются так же, как у карточек настроек.
-      pressedScale: 0.955,
+      pressedScale: 0.94,
       pressedOpacity: 0.94,
       duration: const Duration(milliseconds: 170),
       releaseDuration: const Duration(milliseconds: 300),
-      maxTiltAngle: 0.17,
+      maxTiltAngle: 0.20,
       pressTint: Theme.of(context).colorScheme.primary,
       pressTintStrength: 0.07,
       pressTintRadius: BorderRadius.circular(20),
-      pressOverlay: pressGloss(BorderRadius.circular(20), strength: 0.12),
+      pressOverlay: pressGloss(BorderRadius.circular(20), strength: 0.16),
       child: tile,
     );
     if (s == 'Default') return pressable;
@@ -346,9 +346,20 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
                 strength: 0.12,
               ),
               maxTiltAngle: 0.22,
-              child: TextButton(
-                onPressed: _save,
-                child: Text(Translations.saveOf(context)),
+              // В шапке была плоская текстовая кнопка высотой 36: рядом с
+              // большой кнопкой внизу она читалась «укороченной». Теперь это
+              // такая же таблетка-кнопка, только компактная.
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: FilledButton(
+                  onPressed: _save,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    textStyle: theme.textTheme.labelLarge,
+                  ),
+                  child: Text(Translations.saveOf(context)),
+                ),
               ),
             ),
           ],

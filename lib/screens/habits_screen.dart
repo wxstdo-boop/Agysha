@@ -517,6 +517,14 @@ class _HabitsScreenState extends State<HabitsScreen>
     // sectionScrollOffset мог остаться stale. Форсируем ресинк с реального
     // контроллера, чтобы таблетка встала по месту сразу, без пролистывания.
     if (state == AppLifecycleState.resumed) {
+      // Телефон мог проспать полночь в фоне: Timer.periodic в фоне не тикает,
+      // и карточка возвращалась с ВЧЕРАШНИМИ точками серии — «скипнул день,
+      // а стрик не исчез». Поэтому на возврате сразу нормализуем день и
+      // перерисовываем: точки считаются из displayStreak и гаснут тем же
+      // кадром, без ожидания таймера.
+      _service.normalizeIfDayChanged();
+      _dayStamp = HabitService.mskToday();
+      if (mounted) setState(() {});
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _syncPillOffset();
       });

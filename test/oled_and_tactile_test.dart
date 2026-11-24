@@ -91,11 +91,14 @@ void main() {
       await tester.pump();
 
       // Find PressScale with pressedScale 0.92
-      final pressScales = tester.widgetList<PressScale>(find.byType(PressScale));
+      final pressScales = tester.widgetList<PressScale>(
+        find.byType(PressScale),
+      );
       expect(
         pressScales.any((ps) => ps.pressedScale == 0.92),
         isTrue,
-        reason: 'Icon picker circle should be wrapped in PressScale(pressedScale: 0.92)',
+        reason:
+            'Icon picker circle should be wrapped in PressScale(pressedScale: 0.92)',
       );
     });
 
@@ -105,15 +108,18 @@ void main() {
       await tester.pumpWidget(
         LocaleProvider(
           locale: const Locale('en'),
-          child: const MaterialApp(
-            home: Scaffold(body: AddTimerScreen()),
-          ),
+          child: const MaterialApp(home: Scaffold(body: AddTimerScreen())),
         ),
       );
       await tester.pump();
 
-      // Find PressScale wrapping FilledButton.tonal
-      final durationButton = find.byType(FilledButton);
+      // Кнопку длительности ищем по подписи: в шапке экрана теперь тоже есть
+      // FilledButton («Сохранить»), и по типу их стало две.
+      final durationButton = find.ancestor(
+        of: find.text('Duration'),
+        matching: find.byType(FilledButton),
+      );
+
       expect(durationButton, findsOneWidget);
 
       final parentPressScale = find.ancestor(
