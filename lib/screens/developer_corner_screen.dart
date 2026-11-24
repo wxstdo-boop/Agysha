@@ -12,6 +12,7 @@ import '../widgets/smooth_typing.dart';
 import '../widgets/stagger_in.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import '../utils/wide_dash_formatter.dart';
+import '../widgets/smooth_caret.dart';
 
 /// Единая «карточная» пластика экрана — в стиле карточек питания:
 /// тёплый градиент от поверхности к насыщенной, тонкая цветная кайма
@@ -83,7 +84,9 @@ Widget devWavyTile(
         child: Stack(
           children: [
             ClipRRect(
-              borderRadius: const BorderRadius.all(Radius.circular(Radii.ringInner)),
+              borderRadius: const BorderRadius.all(
+                Radius.circular(Radii.ringInner),
+              ),
               child: ColoredBox(
                 // Плотная подложка, чтобы градиент кольца не просвечивал
                 // сквозь карточку посередине.
@@ -469,7 +472,9 @@ class _DeveloperModePasswordDialogState
                                 pressedScale: 0.96,
                                 enableTilt: true,
                                 duration: const Duration(milliseconds: 140),
-                                releaseDuration: const Duration(milliseconds: 220),
+                                releaseDuration: const Duration(
+                                  milliseconds: 220,
+                                ),
                                 child: TextButton(
                                   onPressed: _busy ? null : widget.onCancel,
                                   child: Text(widget.cancelLabel),
@@ -482,7 +487,9 @@ class _DeveloperModePasswordDialogState
                                 pressedScale: 0.96,
                                 enableTilt: true,
                                 duration: const Duration(milliseconds: 140),
-                                releaseDuration: const Duration(milliseconds: 220),
+                                releaseDuration: const Duration(
+                                  milliseconds: 220,
+                                ),
                                 child: FilledButton.icon(
                                   onPressed: _busy ? null : _submit,
                                   icon: SizedBox.square(
@@ -609,7 +616,9 @@ class _DeveloperCornerScreenState extends State<DeveloperCornerScreen> {
                                     color: widget.accent.withValues(alpha: 0.4),
                                   ),
                                 ),
-                                child: const Center(child: CanaryIcon(size: 36)),
+                                child: const Center(
+                                  child: CanaryIcon(size: 36),
+                                ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
@@ -618,17 +627,19 @@ class _DeveloperCornerScreenState extends State<DeveloperCornerScreen> {
                                   children: [
                                     Text(
                                       widget.title,
-                                      style: theme.textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.w800,
-                                      ),
+                                      style: theme.textTheme.titleLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                     ),
                                     const SizedBox(height: 5),
                                     Text(
                                       widget.subtitle,
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: colors.onSurfaceVariant,
-                                        height: 1.4,
-                                      ),
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: colors.onSurfaceVariant,
+                                            height: 1.4,
+                                          ),
                                     ),
                                   ],
                                 ),
@@ -641,7 +652,11 @@ class _DeveloperCornerScreenState extends State<DeveloperCornerScreen> {
                     const SizedBox(height: 28),
                     Row(
                       children: [
-                        Icon(Icons.tune_rounded, size: 18, color: widget.accent),
+                        Icon(
+                          Icons.tune_rounded,
+                          size: 18,
+                          color: widget.accent,
+                        ),
                         const SizedBox(width: 9),
                         Text(
                           widget.controlsLabel,
@@ -683,7 +698,10 @@ class _DeveloperCornerScreenState extends State<DeveloperCornerScreen> {
                         releaseDuration: const Duration(milliseconds: 220),
                         child: TextButton.icon(
                           onPressed: widget.onDisable,
-                          icon: const Icon(Icons.lock_outline_rounded, size: 18),
+                          icon: const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 18,
+                          ),
                           label: Text(widget.disableLabel),
                           style: TextButton.styleFrom(
                             foregroundColor: colors.error,
@@ -831,53 +849,56 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
               // проявляет каждую букву, курсор анимированный, лупа и выделение отключены.
               SmoothTyping(
                 controller: _controller,
-                builder: (typingStyle) => TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  style: typingStyle,
-                  onChanged: _onChanged,
-                  minLines: 4,
-                  maxLines: 8,
-                  maxLength: _maxLength,
-                  maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                  buildCounter:
-                      (
-                        context, {
-                        required currentLength,
-                        required isFocused,
-                        required maxLength,
-                      }) => null,
-                  textCapitalization: TextCapitalization.sentences,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
-                  cursorOpacityAnimates: true,
-                  magnifierConfiguration: TextMagnifierConfiguration.disabled,
-                  enableInteractiveSelection: false,
-                  contextMenuBuilder: (context, _) => const SizedBox.shrink(),
-                  inputFormatters: [WideDashFormatter()],
-                  decoration: InputDecoration(
-                    hintText: Translations.t('devPromptHint', context),
-                    alignLabelWithHint: true,
-                    filled: true,
-                    fillColor: colors.surfaceContainerHighest.withValues(
-                      alpha: 0.45,
-                    ),
-                    contentPadding: const EdgeInsets.all(16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                        color: colors.outlineVariant.withValues(alpha: 0.65),
+                builder: (typingStyle) => SmoothCaret(
+                  builder: (context, caret) => TextField(
+                    scrollController: caret,
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    style: typingStyle,
+                    onChanged: _onChanged,
+                    minLines: 4,
+                    maxLines: 8,
+                    maxLength: _maxLength,
+                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                    buildCounter:
+                        (
+                          context, {
+                          required currentLength,
+                          required isFocused,
+                          required maxLength,
+                        }) => null,
+                    textCapitalization: TextCapitalization.sentences,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    cursorOpacityAnimates: true,
+                    magnifierConfiguration: TextMagnifierConfiguration.disabled,
+                    enableInteractiveSelection: false,
+                    contextMenuBuilder: (context, _) => const SizedBox.shrink(),
+                    inputFormatters: [WideDashFormatter()],
+                    decoration: InputDecoration(
+                      hintText: Translations.t('devPromptHint', context),
+                      alignLabelWithHint: true,
+                      filled: true,
+                      fillColor: colors.surfaceContainerHighest.withValues(
+                        alpha: 0.45,
                       ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                        color: colors.outlineVariant.withValues(alpha: 0.65),
+                      contentPadding: const EdgeInsets.all(16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: colors.outlineVariant.withValues(alpha: 0.65),
+                        ),
                       ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: accent, width: 1.6),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: colors.outlineVariant.withValues(alpha: 0.65),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: accent, width: 1.6),
+                      ),
                     ),
                   ),
                 ),
@@ -906,7 +927,9 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
                           status,
                           key: ValueKey(status),
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: _saveFailed ? colors.error : colors.onSurfaceVariant,
+                            color: _saveFailed
+                                ? colors.error
+                                : colors.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -927,8 +950,12 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
                               borderRadius: BorderRadius.circular(16),
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(16),
-                                splashColor: Colors.white.withValues(alpha: 0.22),
-                                highlightColor: Colors.white.withValues(alpha: 0.12),
+                                splashColor: Colors.white.withValues(
+                                  alpha: 0.22,
+                                ),
+                                highlightColor: Colors.white.withValues(
+                                  alpha: 0.12,
+                                ),
                                 onTap: !_saving && !isBlank
                                     ? () => unawaited(_save())
                                     : null,
@@ -941,82 +968,76 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
                                   ),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(16),
-                                    // Кроваво-рубиновый градиент с объёмом
-                                    gradient: const LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        Color(0xFFFF1E38), // Артериальный рубин
-                                        Color(0xFFC60018), // Густая багровая кровь
-                                        Color(0xFF7A000E), // Тёмное винное ядро
-                                        Color(0xFF380006), // Глубокая обсидиановая тень
-                                      ],
-                                      stops: [0.0, 0.38, 0.76, 1.0],
-                                    ),
+                                    // Монотонный полупрозрачный тон акцента:
+                                    // раньше тут был четырёхступенчатый
+                                    // рубиновый градиент с неоновым свечением
+                                    // и светлым ободком — кнопка спорила с
+                                    // полем и мигала ярче текста.
+                                    color: accent.withValues(alpha: 0.14),
                                     border: Border.all(
-                                      color: const Color(0xFFFF5268).withValues(alpha: 0.75),
-                                      width: 1.3,
+                                      color: accent.withValues(alpha: 0.32),
+                                      width: 1.1,
                                     ),
-                                    boxShadow: [
-                                      // Рубиновое неоновое свечение крови
-                                      BoxShadow(
-                                        color: const Color(0xFFFF1E38).withValues(alpha: 0.42),
-                                        blurRadius: 18,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                      // Внутренний светлый ободок сверху
-                                      BoxShadow(
-                                        color: Colors.white.withValues(alpha: 0.22),
-                                        blurRadius: 0,
-                                        spreadRadius: -1,
-                                        offset: const Offset(0, -1),
-                                      ),
-                                      // Тёмная тень снизу для глубины
-                                      BoxShadow(
-                                        color: const Color(0xFF220003).withValues(alpha: 0.55),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       AnimatedSwitcher(
-                                        duration: const Duration(milliseconds: 320),
+                                        duration: const Duration(
+                                          milliseconds: 320,
+                                        ),
                                         switchInCurve: Curves.easeInOutCubic,
                                         switchOutCurve: Curves.easeInOutCubic,
-                                        transitionBuilder: (child, anim) => ScaleTransition(
-                                          scale: Tween<double>(begin: 0.75, end: 1.0).animate(anim),
-                                          child: FadeTransition(opacity: anim, child: child),
-                                        ),
+                                        transitionBuilder: (child, anim) =>
+                                            ScaleTransition(
+                                              scale: Tween<double>(
+                                                begin: 0.75,
+                                                end: 1.0,
+                                              ).animate(anim),
+                                              child: FadeTransition(
+                                                opacity: anim,
+                                                child: child,
+                                              ),
+                                            ),
                                         child: _saving
-                                            ? const SizedBox.square(
-                                                key: ValueKey('save_spin'),
-                                                dimension: 18,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2.2,
-                                                  color: Colors.white,
+                                            ? SizedBox.square(
+                                                key: const ValueKey(
+                                                  'save_spin',
                                                 ),
+                                                dimension: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2.2,
+                                                      color: accent,
+                                                    ),
                                               )
                                             : Icon(
                                                 isDirty
-                                                    ? Icons.bookmark_added_rounded
-                                                    : Icons.check_circle_rounded,
-                                                key: ValueKey(isDirty ? 'save_dirty' : 'save_ok'),
+                                                    ? Icons
+                                                          .bookmark_added_rounded
+                                                    : Icons
+                                                          .check_circle_rounded,
+                                                key: ValueKey(
+                                                  isDirty
+                                                      ? 'save_dirty'
+                                                      : 'save_ok',
+                                                ),
                                                 size: 19,
-                                                color: Colors.white,
+                                                color: accent,
                                               ),
                                       ),
                                       const SizedBox(width: 9),
                                       Text(
-                                        Translations.t('devPromptSave', context),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 15,
-                                          letterSpacing: 0.4,
+                                        Translations.t(
+                                          'devPromptSave',
+                                          context,
                                         ),
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                              color: accent,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.3,
+                                            ),
                                       ),
                                     ],
                                   ),

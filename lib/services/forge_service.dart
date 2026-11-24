@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import 'json_file.dart';
+
 /// Ответ GitHub с кодом != 2xx. Текст от GitHub информативнее любой
 /// обёртки («Bad credentials», «Not Found»), поэтому показываем его как есть.
 class ForgeException implements Exception {
@@ -83,6 +85,101 @@ class SecureForgeTokenStore implements ForgeTokenStore {
   Future<void> delete() => _storage.delete(key: _key);
 }
 
+/// Запасное хранилище токена: тот же шифрованный `JsonFile`, где лежат
+/// ключи ИИ. Нужен на телефонах, где Keystore сломан.
+class JsonFileForgeTokenStore implements ForgeTokenStore {
+  const JsonFileForgeTokenStore({this.key = 'forge_github_token_fallback'});
+
+  final String key;
+
+  @override
+  Future<String?> read() async {
+    final raw = await JsonFile.read(key);
+    if (raw == null || raw.trim().isEmpty) return null;
+    final decoded = jsonDecode(raw);
+    if (decoded is Map && decoded['token'] is String) {
+      final token = (decoded['token'] as String).trim();
+      return token.isEmpty ? null : token;
+    }
+    return null;
+  }
+
+  @override
+  Future<void> write(String value) =>
+      JsonFile.write(key, jsonEncode({'token': value.trim()}));
+
+  @override
+  Future<void> delete() => JsonFile.remove(key);
+}
+
+/// Keystore, который не падает: если плагин защищённого хранилища на
+/// устройстве сломан (после переустановки, смены ключа шифрования или
+/// прошивки запись/удаление бросают исключение), токен уходит в запасное
+/// хранилище приложения — тот же шифрованный `JsonFile`, где лежат ключи ИИ.
+///
+/// Без этого «Кузница» на таком телефоне была мертва: сохранение отвечало
+/// «не удалось сохранить», а удаление вообще не стирало значение, потому что
+/// исключение вылетало до очистки поля.
+class ResilientForgeTokenStore implements ForgeTokenStore {
+  const ResilientForgeTokenStore({
+    this.secure = const SecureForgeTokenStore(),
+    this.fallback = const JsonFileForgeTokenStore(),
+  });
+
+  final ForgeTokenStore secure;
+  final ForgeTokenStore fallback;
+
+  @override
+  Future<String?> read() async {
+    try {
+      final value = (await secure.read())?.trim() ?? '';
+      if (value.isNotEmpty) return value;
+    } catch (_) {
+      // Читаем запасное значение ниже.
+    }
+    try {
+      return await fallback.read();
+    } catch (_) {}
+    return null;
+  }
+
+  @override
+  Future<void> write(String value) async {
+    final token = value.trim();
+    try {
+      await secure.write(token);
+      // В защищённом хранилище записалось — запасную копию убираем, чтобы
+      // токен не лежал в двух местах.
+      try {
+        await fallback.delete();
+      } catch (_) {}
+      return;
+    } catch (_) {
+      // Падаем в запасное хранилище.
+    }
+    await fallback.write(token);
+  }
+
+  @override
+  Future<void> delete() async {
+    Object? failure;
+    var clearedSomething = false;
+    try {
+      await secure.delete();
+      clearedSomething = true;
+    } catch (e) {
+      failure = e;
+    }
+    try {
+      await fallback.delete();
+      clearedSomething = true;
+    } catch (e) {
+      failure ??= e;
+    }
+    if (!clearedSomething && failure != null) throw failure;
+  }
+}
+
 @visibleForTesting
 class InMemoryForgeTokenStore implements ForgeTokenStore {
   String? _value;
@@ -103,7 +200,7 @@ class InMemoryForgeTokenStore implements ForgeTokenStore {
 class ForgeService {
   ForgeService({http.Client? client, ForgeTokenStore? store})
     : _client = client ?? http.Client(),
-      _store = store ?? const SecureForgeTokenStore();
+      _store = store ?? const ResilientForgeTokenStore();
 
   static const api = 'https://api.github.com';
 
@@ -152,7 +249,11 @@ class ForgeService {
     return false;
   }
 
-  Future<String> defaultBranch(String owner, String repo, {String? token}) async {
+  Future<String> defaultBranch(
+    String owner,
+    String repo, {
+    String? token,
+  }) async {
     final t = token ?? await loadToken();
     final body =
         await _get('/repos/$owner/$repo', token: t) as Map<String, dynamic>;

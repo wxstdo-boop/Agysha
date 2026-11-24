@@ -32,6 +32,7 @@ import '../widgets/smooth_typing.dart';
 import 'agysha_confirm_dialog.dart';
 import 'inline_keyboard.dart';
 import '../utils/design_tokens.dart';
+import '../widgets/smooth_caret.dart';
 
 export 'berserk_sheet.dart';
 part 'ai_guide_bubbles.dart';
@@ -2291,33 +2292,36 @@ class _AiChatBodyState extends State<_AiChatBody>
                               height: 1.4,
                               color: cs.onSurface,
                             ),
-                            builder: (style) => TextField(
-                              style: style,
-                              readOnly: true,
-                              showCursor: true,
-                              magnifierConfiguration:
-                                  TextMagnifierConfiguration.disabled,
-                              controller: _inputCtrl,
-                              focusNode: _inputFocus,
-                              textInputAction: TextInputAction.send,
-                              onSubmitted: (_) => _send(),
-                              minLines: 1,
-                              maxLines: 4,
-                              maxLength: 13000,
-                              inputFormatters: [WideDashFormatter()],
-                              spellCheckConfiguration:
-                                  SpellCheckConfiguration.disabled(),
-                              enableSuggestions: false,
-                              autocorrect: false,
-                              contextMenuBuilder: minimalContextMenuBuilder,
-                              scrollPadding: EdgeInsets.zero,
-                              cursorOpacityAnimates: true,
-                              decoration: InputDecoration(
-                                counterText: '',
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 12,
+                            builder: (style) => SmoothCaret(
+                              builder: (context, caret) => TextField(
+                                scrollController: caret,
+                                style: style,
+                                readOnly: true,
+                                showCursor: true,
+                                magnifierConfiguration:
+                                    TextMagnifierConfiguration.disabled,
+                                controller: _inputCtrl,
+                                focusNode: _inputFocus,
+                                textInputAction: TextInputAction.send,
+                                onSubmitted: (_) => _send(),
+                                minLines: 1,
+                                maxLines: 4,
+                                maxLength: 13000,
+                                inputFormatters: [WideDashFormatter()],
+                                spellCheckConfiguration:
+                                    SpellCheckConfiguration.disabled(),
+                                enableSuggestions: false,
+                                autocorrect: false,
+                                contextMenuBuilder: minimalContextMenuBuilder,
+                                scrollPadding: EdgeInsets.zero,
+                                cursorOpacityAnimates: true,
+                                decoration: InputDecoration(
+                                  counterText: '',
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 18,
+                                    vertical: 12,
+                                  ),
                                 ),
                               ),
                             ),

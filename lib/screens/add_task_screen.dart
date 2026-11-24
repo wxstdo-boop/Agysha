@@ -23,6 +23,7 @@ import '../widgets/smooth_keyboard_body.dart';
 import '../services/haptics.dart';
 import '../widgets/agysha_confirm_dialog.dart';
 import '../widgets/auto_save_on_exit.dart';
+import '../widgets/smooth_caret.dart';
 
 class AddTaskScreen extends StatefulWidget {
   final Task? existing;
@@ -547,7 +548,11 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   }
 
   String _estimateLabel(BuildContext context, int minutes) => minutes < 60
-      ? Translations.t('durMin', context, '{n} мин').replaceAll('{n}', '$minutes')
+      ? Translations.t(
+          'durMin',
+          context,
+          '{n} мин',
+        ).replaceAll('{n}', '$minutes')
       : Translations.t(
           'durHour',
           context,
@@ -581,406 +586,413 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     return AutoSaveOnExit(
       onExit: _exitWithAutoSave,
       child: Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _editing
-              ? Translations.t('editTask', context)
-              : Translations.t('newTask', context),
-        ),
-        leading: const BackButtonTooltip(),
-        centerTitle: true,
-        actions: [
-          PressScale(
-            pressedScale: 0.96,
-            duration: const Duration(milliseconds: 200),
-            releaseDuration: const Duration(milliseconds: 340),
-            pressOverlay: pressGloss(
-              BorderRadius.circular(999),
-              strength: 0.12,
-            ),
-            maxTiltAngle: 0.22,
-            child: TextButton(
-              onPressed: _save,
-              child: Text(Translations.saveOf(context)),
-            ),
+        appBar: AppBar(
+          title: Text(
+            _editing
+                ? Translations.t('editTask', context)
+                : Translations.t('newTask', context),
           ),
-        ],
-      ),
-      resizeToAvoidBottomInset: false,
-      body: SmoothKeyboardBody(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            StaggerIn(
-              index: 0,
-              child: Center(
-                // Та же отдача, что у выбора иконки в привычке: кружок
-                // мягко вдавливается под пальцем, а не «стоит» статуей.
-                child: PressScale(
-                  pressedScale: 0.92,
-                  duration: const Duration(milliseconds: 160),
-                  releaseDuration: const Duration(milliseconds: 300),
-                  child: GestureDetector(
-                    onTap: _pickIcon,
-                    child: Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(
-                          alpha: 0.12,
-                        ),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.50,
-                          ),
-                          width: 2,
-                        ),
-                      ),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeOutBack,
-                        switchOutCurve: Curves.easeIn,
-                        transitionBuilder: (child, animation) =>
-                            ScaleTransition(
-                              scale: animation,
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: child,
-                              ),
-                            ),
-                        child: Icon(
-                          iconDataForCodePoint(_iconCodePoint),
-                          key: ValueKey(_iconCodePoint),
-                          size: 32,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+          leading: const BackButtonTooltip(),
+          centerTitle: true,
+          actions: [
+            PressScale(
+              pressedScale: 0.96,
+              duration: const Duration(milliseconds: 200),
+              releaseDuration: const Duration(milliseconds: 340),
+              pressOverlay: pressGloss(
+                BorderRadius.circular(999),
+                strength: 0.12,
+              ),
+              maxTiltAngle: 0.22,
+              child: TextButton(
+                onPressed: _save,
+                child: Text(Translations.saveOf(context)),
               ),
             ),
-            const SizedBox(height: 4),
-            StaggerIn(
-              index: 1,
-              child: Center(
-                child: PressScale(
-                  pressedScale: 0.93,
-                  duration: const Duration(milliseconds: 190),
-                  releaseDuration: const Duration(milliseconds: 320),
-                  child: TextButton.icon(
-                    onPressed: _pickIcon,
-                    icon: const Icon(Icons.touch_app, size: 16),
-                    label: Text(Translations.t('changeIcon', context)),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            StaggerIn(
-              index: 2,
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: SmoothTyping(
-                    controller: _titleCtrl,
-                    builder: (style) => TextField(
-                      style: style,
-                      cursorOpacityAnimates: true,
-                      magnifierConfiguration:
-                          TextMagnifierConfiguration.disabled,
-                      controller: _titleCtrl,
-                      contextMenuBuilder: minimalContextMenuBuilder,
-                      maxLength: 1000,
-                      inputFormatters: [WideDashFormatter()],
-                      enableSuggestions: false,
-                      autocorrect: false,
-                      maxLines: 5,
-                      buildCounter: smoothCharCounterBuilder,
-                      decoration: InputDecoration(
-                        labelText: Translations.t('taskTitle', context),
-                        prefixIcon: const Icon(Icons.edit_outlined),
-                        border: const OutlineInputBorder(),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            StaggerIn(
-              index: 3,
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        Translations.t('priority', context),
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Свой селектор вместо SegmentedButton: капсулы с
-                      // градиентом, бликом и цветным свечением выбранного
-                      // уровня — тот же визуальный язык, что у таблетки
-                      // приоритета в списке задач, но «глубже».
-                      PrioritySelector(
-                        value: _priority,
-                        onChanged: (p) => setState(() => _priority = p),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            StaggerIn(
-              index: 4,
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              Translations.categoryOf(context),
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                          // Карандаш + корзина: обе плавно появляются/
-                          // исчезают (AnimatedSwitcher: fade + scale) ТОЛЬКО
-                          // когда выбрана конкретная категория.
-                          // Unique: slide-from-right + subtle scale
-                          SizedBox(
-                            height: 36,
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 420),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              // Карандаш и корзина ВЫЛЕТАЮТ из мелкого в
-                              // крупное с плавным фейдом и так же плавно
-                              // улетают обратно. Прозрачность — линейная
-                              // (без overshoot), масштаб — легко «пружинит»
-                              // (easeOutBack), поэтому появление живое, но
-                              // не дёргается.
-                              transitionBuilder: (child, anim) {
-                                final curved = CurvedAnimation(
-                                  parent: anim,
-                                  curve: Curves.easeOutBack,
-                                  reverseCurve: Curves.easeInCubic,
-                                );
-                                return FadeTransition(
-                                  opacity: anim,
-                                  child: ScaleTransition(
-                                    scale: Tween<double>(
-                                      begin: 0.42,
-                                      end: 1.0,
-                                    ).animate(curved),
-                                    child: child,
-                                  ),
-                                );
-                              },
-                              child: _category.isNotEmpty
-                                  ? Row(
-                                      // Ключ зависит только от ФАКТА выбора,
-                                      // а не от имени категории: при смене
-                                      // категории ряд НЕ пересоздаётся и не
-                                      // мигает повторным появлением.
-                                      key: ValueKey(
-                                        'cat_btns_${_category.isNotEmpty}',
-                                      ),
-                                      mainAxisSize: MainAxisSize.min,
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        SmoothTooltip(
-                                          message: Translations.t(
-                                            'category',
-                                            context,
-                                          ),
-                                          preferredAbove: true,
-                                          child: PressScale(
-                                            // Медленная плавная отдача: при
-                                            // зажатии карандаш мягко уменьшается.
-                                            pressedScale: 0.86,
-                                            duration: const Duration(
-                                              milliseconds: 460,
-                                            ),
-                                            child: IconButton(
-                                              icon: const Icon(
-                                                Icons.edit_outlined,
-                                                size: 17,
-                                              ),
-                                              onPressed: () =>
-                                                  _renameCategory(_category),
-                                              // Заливка отклика — в тон темы, а
-                                              // не серый кружок по умолчанию.
-                                              splashColor: theme
-                                                  .colorScheme
-                                                  .primary
-                                                  .withValues(alpha: 0.12),
-                                              highlightColor:
-                                                  Colors.transparent,
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(
-                                                minWidth: 32,
-                                                minHeight: 32,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        SmoothTooltip(
-                                          message: Translations.t(
-                                            'deleteCategory',
-                                            context,
-                                            'Удалить категорию',
-                                          ),
-                                          preferredAbove: true,
-                                          child: PressScale(
-                                            // Медленная плавная отдача: при
-                                            // зажатии корзина мягко уменьшается.
-                                            pressedScale: 0.86,
-                                            duration: const Duration(
-                                              milliseconds: 460,
-                                            ),
-                                            child: IconButton(
-                                              icon: Icon(
-                                                Icons.delete_outline,
-                                                size: 17,
-                                                color: theme.colorScheme.error,
-                                              ),
-                                              onPressed: () async {
-                                                final confirm =
-                                                    await showAgyshaConfirm(
-                                                      context,
-                                                      title: Translations.t(
-                                                        'deleteCategory',
-                                                        context,
-                                                      ),
-                                                      body: _category,
-                                                      icon: Icons
-                                                          .delete_outline_rounded,
-                                                      confirmLabel:
-                                                          Translations.deleteOf(
-                                                            context,
-                                                          ),
-                                                      destructive: true,
-                                                    );
-                                                if (confirm == true &&
-                                                    mounted) {
-                                                  setState(() {
-                                                    _taskSvc.removeCategory(
-                                                      _category,
-                                                    );
-                                                    _category = '';
-                                                  });
-                                                }
-                                              },
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              padding: EdgeInsets.zero,
-                                              splashColor: theme
-                                                  .colorScheme
-                                                  .error
-                                                  .withValues(alpha: 0.12),
-                                              highlightColor:
-                                                  Colors.transparent,
-                                              constraints: const BoxConstraints(
-                                                minWidth: 32,
-                                                minHeight: 32,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  : const SizedBox.shrink(
-                                      key: ValueKey('cat_btns_empty'),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      ListenableBuilder(
-                        listenable: _taskSvc,
-                        builder: (ctx, _) {
-                          final cats = <String>['', ..._taskSvc.categories];
-                          final showTrailing =
-                              _taskSvc.categories.length <
-                              _taskSvc.maxCategories;
-                          final target = <String>[
-                            ...cats,
-                            if (showTrailing) '__new__',
-                          ];
-                          if (!_sameCatList(_catItems, target)) {
-                            // Синхронизируем AnimatedList ПОСЛЕ кадра:
-                            // внутри builder нельзя звать insert/remove.
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (mounted) _syncCatList(target);
-                            });
-                          }
-                          return SizedBox(
-                            height: 44,
-                            child: AnimatedList(
-                              key: _catListKey,
-                              scrollDirection: Axis.horizontal,
-                              initialItemCount: _catItems.length,
-                              itemBuilder: (context, i, animation) {
-                                final name = i < _catItems.length
-                                    ? _catItems[i]
-                                    : '__new__';
-                                return _catItemBuilder(
-                                  context,
-                                  name,
-                                  animation,
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            // Срок — ПОСЛЕ категории (категория теперь ниже приоритета):
-            // «до какого дня» + «за сколько», короткими чипами.
-            StaggerIn(index: 5, child: _deadlineCard(context, theme)),
           ],
         ),
-      ),
+        resizeToAvoidBottomInset: false,
+        body: SmoothKeyboardBody(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              StaggerIn(
+                index: 0,
+                child: Center(
+                  // Та же отдача, что у выбора иконки в привычке: кружок
+                  // мягко вдавливается под пальцем, а не «стоит» статуей.
+                  child: PressScale(
+                    pressedScale: 0.92,
+                    duration: const Duration(milliseconds: 160),
+                    releaseDuration: const Duration(milliseconds: 300),
+                    child: GestureDetector(
+                      onTap: _pickIcon,
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.12,
+                          ),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.50,
+                            ),
+                            width: 2,
+                          ),
+                        ),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 260),
+                          switchInCurve: Curves.easeOutBack,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (child, animation) =>
+                              ScaleTransition(
+                                scale: animation,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              ),
+                          child: Icon(
+                            iconDataForCodePoint(_iconCodePoint),
+                            key: ValueKey(_iconCodePoint),
+                            size: 32,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              StaggerIn(
+                index: 1,
+                child: Center(
+                  child: PressScale(
+                    pressedScale: 0.93,
+                    duration: const Duration(milliseconds: 190),
+                    releaseDuration: const Duration(milliseconds: 320),
+                    child: TextButton.icon(
+                      onPressed: _pickIcon,
+                      icon: const Icon(Icons.touch_app, size: 16),
+                      label: Text(Translations.t('changeIcon', context)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              StaggerIn(
+                index: 2,
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: SmoothTyping(
+                      controller: _titleCtrl,
+                      builder: (style) => SmoothCaret(
+                        builder: (context, caret) => TextField(
+                          scrollController: caret,
+                          style: style,
+                          cursorOpacityAnimates: true,
+                          magnifierConfiguration:
+                              TextMagnifierConfiguration.disabled,
+                          controller: _titleCtrl,
+                          contextMenuBuilder: minimalContextMenuBuilder,
+                          maxLength: 1000,
+                          inputFormatters: [WideDashFormatter()],
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          maxLines: 5,
+                          buildCounter: smoothCharCounterBuilder,
+                          decoration: InputDecoration(
+                            labelText: Translations.t('taskTitle', context),
+                            prefixIcon: const Icon(Icons.edit_outlined),
+                            border: const OutlineInputBorder(),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              StaggerIn(
+                index: 3,
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          Translations.t('priority', context),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Свой селектор вместо SegmentedButton: капсулы с
+                        // градиентом, бликом и цветным свечением выбранного
+                        // уровня — тот же визуальный язык, что у таблетки
+                        // приоритета в списке задач, но «глубже».
+                        PrioritySelector(
+                          value: _priority,
+                          onChanged: (p) => setState(() => _priority = p),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              StaggerIn(
+                index: 4,
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                Translations.categoryOf(context),
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                            // Карандаш + корзина: обе плавно появляются/
+                            // исчезают (AnimatedSwitcher: fade + scale) ТОЛЬКО
+                            // когда выбрана конкретная категория.
+                            // Unique: slide-from-right + subtle scale
+                            SizedBox(
+                              height: 36,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 420),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                // Карандаш и корзина ВЫЛЕТАЮТ из мелкого в
+                                // крупное с плавным фейдом и так же плавно
+                                // улетают обратно. Прозрачность — линейная
+                                // (без overshoot), масштаб — легко «пружинит»
+                                // (easeOutBack), поэтому появление живое, но
+                                // не дёргается.
+                                transitionBuilder: (child, anim) {
+                                  final curved = CurvedAnimation(
+                                    parent: anim,
+                                    curve: Curves.easeOutBack,
+                                    reverseCurve: Curves.easeInCubic,
+                                  );
+                                  return FadeTransition(
+                                    opacity: anim,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: 0.42,
+                                        end: 1.0,
+                                      ).animate(curved),
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: _category.isNotEmpty
+                                    ? Row(
+                                        // Ключ зависит только от ФАКТА выбора,
+                                        // а не от имени категории: при смене
+                                        // категории ряд НЕ пересоздаётся и не
+                                        // мигает повторным появлением.
+                                        key: ValueKey(
+                                          'cat_btns_${_category.isNotEmpty}',
+                                        ),
+                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.end,
+                                        children: [
+                                          SmoothTooltip(
+                                            message: Translations.t(
+                                              'category',
+                                              context,
+                                            ),
+                                            preferredAbove: true,
+                                            child: PressScale(
+                                              // Медленная плавная отдача: при
+                                              // зажатии карандаш мягко уменьшается.
+                                              pressedScale: 0.86,
+                                              duration: const Duration(
+                                                milliseconds: 460,
+                                              ),
+                                              child: IconButton(
+                                                icon: const Icon(
+                                                  Icons.edit_outlined,
+                                                  size: 17,
+                                                ),
+                                                onPressed: () =>
+                                                    _renameCategory(_category),
+                                                // Заливка отклика — в тон темы, а
+                                                // не серый кружок по умолчанию.
+                                                splashColor: theme
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.12),
+                                                highlightColor:
+                                                    Colors.transparent,
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      minWidth: 32,
+                                                      minHeight: 32,
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                          SmoothTooltip(
+                                            message: Translations.t(
+                                              'deleteCategory',
+                                              context,
+                                              'Удалить категорию',
+                                            ),
+                                            preferredAbove: true,
+                                            child: PressScale(
+                                              // Медленная плавная отдача: при
+                                              // зажатии корзина мягко уменьшается.
+                                              pressedScale: 0.86,
+                                              duration: const Duration(
+                                                milliseconds: 460,
+                                              ),
+                                              child: IconButton(
+                                                icon: Icon(
+                                                  Icons.delete_outline,
+                                                  size: 17,
+                                                  color:
+                                                      theme.colorScheme.error,
+                                                ),
+                                                onPressed: () async {
+                                                  final confirm =
+                                                      await showAgyshaConfirm(
+                                                        context,
+                                                        title: Translations.t(
+                                                          'deleteCategory',
+                                                          context,
+                                                        ),
+                                                        body: _category,
+                                                        icon: Icons
+                                                            .delete_outline_rounded,
+                                                        confirmLabel:
+                                                            Translations.deleteOf(
+                                                              context,
+                                                            ),
+                                                        destructive: true,
+                                                      );
+                                                  if (confirm == true &&
+                                                      mounted) {
+                                                    setState(() {
+                                                      _taskSvc.removeCategory(
+                                                        _category,
+                                                      );
+                                                      _category = '';
+                                                    });
+                                                  }
+                                                },
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                padding: EdgeInsets.zero,
+                                                splashColor: theme
+                                                    .colorScheme
+                                                    .error
+                                                    .withValues(alpha: 0.12),
+                                                highlightColor:
+                                                    Colors.transparent,
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      minWidth: 32,
+                                                      minHeight: 32,
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : const SizedBox.shrink(
+                                        key: ValueKey('cat_btns_empty'),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        ListenableBuilder(
+                          listenable: _taskSvc,
+                          builder: (ctx, _) {
+                            final cats = <String>['', ..._taskSvc.categories];
+                            final showTrailing =
+                                _taskSvc.categories.length <
+                                _taskSvc.maxCategories;
+                            final target = <String>[
+                              ...cats,
+                              if (showTrailing) '__new__',
+                            ];
+                            if (!_sameCatList(_catItems, target)) {
+                              // Синхронизируем AnimatedList ПОСЛЕ кадра:
+                              // внутри builder нельзя звать insert/remove.
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted) _syncCatList(target);
+                              });
+                            }
+                            return SizedBox(
+                              height: 44,
+                              child: AnimatedList(
+                                key: _catListKey,
+                                scrollDirection: Axis.horizontal,
+                                initialItemCount: _catItems.length,
+                                itemBuilder: (context, i, animation) {
+                                  final name = i < _catItems.length
+                                      ? _catItems[i]
+                                      : '__new__';
+                                  return _catItemBuilder(
+                                    context,
+                                    name,
+                                    animation,
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Срок — ПОСЛЕ категории (категория теперь ниже приоритета):
+              // «до какого дня» + «за сколько», короткими чипами.
+              StaggerIn(index: 5, child: _deadlineCard(context, theme)),
+            ],
+          ),
+        ),
       ),
     );
   }

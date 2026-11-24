@@ -198,7 +198,8 @@ class ForgeAgent {
           'properties': {
             'path': {
               'type': 'string',
-              'description': 'Путь каталога, например lib/screens. Пусто — корень.',
+              'description':
+                  'Путь каталога, например lib/screens. Пусто — корень.',
             },
           },
         },
@@ -448,7 +449,10 @@ class ForgeAgent {
       onStep: onStep,
     );
     if (!turn.madeChanges) {
-      throw ForgeException(500, turn.text.isEmpty ? 'Агент ничего не изменил' : turn.text);
+      throw ForgeException(
+        500,
+        turn.text.isEmpty ? 'Агент ничего не изменил' : turn.text,
+      );
     }
     return ForgeRunResult(
       branch: turn.branch ?? '',
@@ -463,8 +467,10 @@ class ForgeAgent {
 
   /// Итоговый набор изменённых файлов. Файл, записанный и затем удалённый в
   /// одном ходе, к результату не относится — его из набора убираем.
-  static Set<String> _netChanged(Set<String> written, Set<String> deleted) =>
-      {...written.difference(deleted), ...deleted.difference(written)};
+  static Set<String> _netChanged(Set<String> written, Set<String> deleted) => {
+    ...written.difference(deleted),
+    ...deleted.difference(written),
+  };
 
   /// Рабочая ветка диалога: создаётся при первой правке и дальше живёт до
   /// конца сессии — так правки одного диалога ложатся в один PR.
@@ -524,9 +530,7 @@ class ForgeAgent {
           ref: branch,
         );
         if (entries.isEmpty) return 'Каталог пуст или не найден';
-        return entries
-            .map((e) => e.isDir ? '${e.path}/' : e.path)
-            .join('\n');
+        return entries.map((e) => e.isDir ? '${e.path}/' : e.path).join('\n');
       case 'search_code':
         final query = _str(call.arguments['query'])?.trim() ?? '';
         if (query.isEmpty) {
@@ -543,8 +547,18 @@ class ForgeAgent {
       case 'write_file':
         final path = _requirePath(call);
         final content = _str(call.arguments['content']);
-        if (content == null) {
+        if (content == null || content.trim().isEmpty) {
           throw ForgeException(400, 'write_file без content');
+        }
+        // Модель иногда присылает не файл целиком, а кусок диффа: запись
+        // такого содержимого молча ломала файл в ветке. Отправляем ошибку
+        // обратно в диалог — модель переписывает файл целиком.
+        if (_looksLikePatch(content)) {
+          throw ForgeException(
+            400,
+            'content не полный файл, а фрагмент/дифф. Пришли ПОЛНОЕ новое '
+            'содержимое файла целиком.',
+          );
         }
         final existing = await service.readFile(owner, repo, path, ref: branch);
         await service.writeFile(
@@ -572,6 +586,20 @@ class ForgeAgent {
     }
   }
 
+  /// Признаки того, что `content` — не файл, а кусок патча или обрезок
+  /// (модели любят присылать `diff --git`, маркеры конфликта или заголовок
+  /// ханка). Такой текст в репозиторий писать нельзя.
+  static bool _looksLikePatch(String content) {
+    final head = content.trimLeft();
+    if (head.startsWith('diff --git') ||
+        head.startsWith('--- a/') ||
+        head.startsWith('+++ b/') ||
+        head.startsWith('@@')) {
+      return true;
+    }
+    return content.contains('<<<<<<< ') || content.contains('>>>>>>> ');
+  }
+
   String _requirePath(ForgeToolCall call) {
     final path = _str(call.arguments['path']);
     if (path == null || path.trim().isEmpty) {
@@ -597,6 +625,16 @@ class ForgeAgent {
       'delete_file, и заверши вызовом finish с кратким summary.\n'
       '— Помни предыдущие реплики диалога и продолжай начатую работу, не '
       'начиная всё заново.\n'
+      'Правила работы с кодом:\n'
+      '— Пути бери ТОЛЬКО из list_dir/read_file. Если файла нет в выдаче — '
+      'сначала найди его через search_code, не угадывай путь.\n'
+      '— Один шаг — один файл. Прочитал файл, затем write_file с полным '
+      'новым содержимым ИМЕННО этого файла; остальные файлы в этом вызове '
+      'не меняй.\n'
+      '— Не присылай диффы, фрагменты и «...» вместо кода: только полный '
+      'файл. Если файл большой — правь его по частям отдельными шагами.\n'
+      '— Если инструмент вернул ошибку, исправь аргументы и повтори; не '
+      'делай вид, что записал.\n'
       'Не выдумывай код, которого не видел. Не трогай секреты и файлы '
       'подписи. Держись стиля проекта: комментарии по-русски, без лишних '
       'слов. Пиши по делу и коротко.\n'
@@ -604,7 +642,9 @@ class ForgeAgent {
 
   String _prTitle(String task) {
     final oneLine = task.replaceAll(RegExp(r'\s+'), ' ').trim();
-    final short = oneLine.length <= 60 ? oneLine : '${oneLine.substring(0, 60)}…';
+    final short = oneLine.length <= 60
+        ? oneLine
+        : '${oneLine.substring(0, 60)}…';
     return 'Кузница: $short';
   }
 
@@ -675,8 +715,10 @@ class FreePoolForgeChat implements ForgeChat {
         final reply = await _ask(provider, messages, tools);
         onProvider?.call(provider.label);
         return reply;
-      } on ForgeException {
-        rethrow; // осмысленный отказ провайдера — не глотаем
+      } on ForgeException catch (e) {
+        // Отказ разобранного ответа (обрезка/пустой ответ) — не повод
+        // бросать весь пул: следующий провайдер может ответить нормально.
+        failures.add('${provider.label}: ${e.message}');
       } catch (e) {
         failures.add('${provider.label}: $e');
       }
@@ -756,8 +798,12 @@ class FreePoolForgeChat implements ForgeChat {
             'model': provider.model,
             'messages': messages,
             'tools': tools,
+            'tool_choice': 'auto',
+            // Код, а не проза: низкая температура держит модель на рельсах
+            // инструментов и не даёт «пересочинять» файл.
+            'temperature': 0.15,
             // Агенту нужно писать целые файлы, а не реплики чата.
-            'max_tokens': 8000,
+            'max_tokens': 12000,
           }),
         )
         .timeout(_timeout);
@@ -776,6 +822,15 @@ class FreePoolForgeChat implements ForgeChat {
     final choices = decoded['choices'];
     if (choices is! List || choices.isEmpty) throw Exception('пустой ответ');
     final first = choices.first;
+    // Обрезанный по лимиту токенов ответ с вызовами инструментов — это
+    // половина файла: писать её в репозиторий нельзя. Отдаём провайдеру
+    // отказ, и пул пробует следующего с более щедрым лимитом.
+    if (first is Map &&
+        first['finish_reason'] == 'length' &&
+        first['message'] is Map &&
+        (first['message'] as Map)['tool_calls'] is List) {
+      throw Exception('ответ обрезан по лимиту токенов');
+    }
     final message = first is Map ? first['message'] : null;
     if (message is! Map) throw Exception('пустой ответ');
 

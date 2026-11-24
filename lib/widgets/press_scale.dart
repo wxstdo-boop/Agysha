@@ -44,9 +44,8 @@ class PressScale extends StatefulWidget {
   /// Включён ли тактильный 3D-наклон карточки по направлению касания.
   final bool enableTilt;
 
-  /// Максимальный угол наклона (радианы). По умолчанию 0.17 (~10°) —
-  /// сочный, ощутимый 3D-тилт: у 0.13 карточка под пальцем почти не
-  /// отзывалась, и владелец просил вернуть прежнюю «пищдатость».
+  /// Максимальный угол наклона (радианы). По умолчанию 0.22 (~12.6°) —
+  /// ощутимый 3D-тилт: 0.17 под пальцем читался как «слабовато».
   final double maxTiltAngle;
 
   /// Подложка отдачи: цвет, который мягко проявляется под содержимым
@@ -83,7 +82,7 @@ class PressScale extends StatefulWidget {
     this.enabled = true,
     this.pressedOpacity = 1.0,
     this.enableTilt = true,
-    this.maxTiltAngle = 0.17,
+    this.maxTiltAngle = 0.22,
     this.pressTint,
     this.pressTintStrength = 0.12,
     this.pressTintRadius,
@@ -285,8 +284,8 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         ? 0.0
         : (pos.dy - start.dy) / size.height * 2.0;
     final target = Offset(
-      _softClamp(rawNx * 0.75 + dragNx * 1.15),
-      _softClamp(rawNy * 0.75 + dragNy * 1.15),
+      _softClamp(rawNx * 0.78 + dragNx * 1.35),
+      _softClamp(rawNy * 0.78 + dragNy * 1.35),
     );
     // Держим наклон заметным и в центре элемента (см. [_minTilt]).
     final len = target.distance;

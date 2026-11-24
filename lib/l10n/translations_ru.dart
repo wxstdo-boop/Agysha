@@ -708,6 +708,8 @@ const Map<String, String> _ru = {
   'forgeTokenEmpty': 'Нужен токен',
   'forgeTokenSaveFailed': 'Не удалось сохранить токен — хранилище недоступно',
   'forgeTokenForgotten': 'Токен удалён',
+  'forgeTokenForgetFailed':
+      'Токен стёрт с экрана, но хранилище не ответило — перезапусти приложение, чтобы убедиться',
   'forgeChatSection': 'ЧАТ',
   'forgeTaskHint': 'Спроси о коде или опиши, что изменить…',
   'forgeRun': 'Отправить',

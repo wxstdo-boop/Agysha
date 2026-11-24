@@ -701,6 +701,8 @@ const Map<String, String> _en = {
   'forgeTokenEmpty': 'Token needed',
   'forgeTokenSaveFailed': 'Could not save the token — storage unavailable',
   'forgeTokenForgotten': 'Token removed',
+  'forgeTokenForgetFailed':
+      'Token removed here, but the secure storage refused to answer — restart the app to be sure',
   'forgeChatSection': 'CHAT',
   'forgeTaskHint': 'Ask about the code or describe a change…',
   'forgeRun': 'Send',

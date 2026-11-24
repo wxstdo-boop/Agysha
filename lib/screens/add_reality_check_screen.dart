@@ -13,6 +13,7 @@ import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/smooth_keyboard_body.dart';
 import '../widgets/auto_save_on_exit.dart';
+import '../widgets/smooth_caret.dart';
 
 class AddRealityCheckScreen extends StatefulWidget {
   final RealityCheck? existing;
@@ -84,132 +85,135 @@ class _AddRealityCheckScreenState extends State<AddRealityCheckScreen> {
     return AutoSaveOnExit(
       onExit: _exitWithAutoSave,
       child: Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _editing
-              ? Translations.t('editRc', context)
-              : Translations.t('newRc', context),
+        appBar: AppBar(
+          title: Text(
+            _editing
+                ? Translations.t('editRc', context)
+                : Translations.t('newRc', context),
+          ),
+          leading: const BackButtonTooltip(),
+          centerTitle: true,
+          actions: [
+            PressScale(
+              pressedScale: 0.96,
+              duration: const Duration(milliseconds: 200),
+              releaseDuration: const Duration(milliseconds: 340),
+              pressOverlay: pressGloss(
+                BorderRadius.circular(999),
+                strength: 0.12,
+              ),
+              maxTiltAngle: 0.22,
+              child: TextButton(
+                onPressed: _save,
+                child: Text(Translations.saveOf(context)),
+              ),
+            ),
+          ],
         ),
-        leading: const BackButtonTooltip(),
-        centerTitle: true,
-        actions: [
-          PressScale(
-            pressedScale: 0.96,
-            duration: const Duration(milliseconds: 200),
-            releaseDuration: const Duration(milliseconds: 340),
-            pressOverlay: pressGloss(
-              BorderRadius.circular(999),
-              strength: 0.12,
-            ),
-            maxTiltAngle: 0.22,
-            child: TextButton(
-              onPressed: _save,
-              child: Text(Translations.saveOf(context)),
-            ),
-          ),
-        ],
-      ),
-      resizeToAvoidBottomInset: false,
-      // Фон страницы «приколот» к окну отдельным слоем: при подъёме
-      // клавиатуры контент уезжает вверх (SmoothKeyboardBody), а подложка
-      // остаётся на месте. Раньше фон просвечивал сквозь анимируемый
-      // контент и читался как «фон поднимается сзади клавиатуры».
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          ColoredBox(color: theme.colorScheme.surface),
-          SmoothKeyboardBody(
-            background: Colors.transparent,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Center(
-                  child: PressScale(
-                    pressedScale: 0.92,
-                    child: GestureDetector(
-                      onTap: _pickIcon,
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.12,
+        resizeToAvoidBottomInset: false,
+        // Фон страницы «приколот» к окну отдельным слоем: при подъёме
+        // клавиатуры контент уезжает вверх (SmoothKeyboardBody), а подложка
+        // остаётся на месте. Раньше фон просвечивал сквозь анимируемый
+        // контент и читался как «фон поднимается сзади клавиатуры».
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: theme.colorScheme.surface),
+            SmoothKeyboardBody(
+              background: Colors.transparent,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Center(
+                    child: PressScale(
+                      pressedScale: 0.92,
+                      child: GestureDetector(
+                        onTap: _pickIcon,
+                        child: Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.12,
+                            ),
+                            shape: BoxShape.circle,
                           ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 260),
-                          switchInCurve: Curves.easeOutBack,
-                          switchOutCurve: Curves.easeIn,
-                          transitionBuilder: (child, animation) =>
-                              ScaleTransition(
-                                scale: animation,
-                                child: FadeTransition(
-                                  opacity: animation,
-                                  child: child,
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 260),
+                            switchInCurve: Curves.easeOutBack,
+                            switchOutCurve: Curves.easeIn,
+                            transitionBuilder: (child, animation) =>
+                                ScaleTransition(
+                                  scale: animation,
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  ),
                                 ),
-                              ),
-                          child: Icon(
-                            iconDataForCodePoint(_iconCodePoint),
-                            key: ValueKey(_iconCodePoint),
-                            size: 32,
-                            color: theme.colorScheme.primary,
+                            child: Icon(
+                              iconDataForCodePoint(_iconCodePoint),
+                              key: ValueKey(_iconCodePoint),
+                              size: 32,
+                              color: theme.colorScheme.primary,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Center(
-                  child: TextButton.icon(
-                    onPressed: _pickIcon,
-                    icon: const Icon(Icons.touch_app, size: 16),
-                    label: Text(Translations.t('changeIcon', context)),
+                  const SizedBox(height: 4),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _pickIcon,
+                      icon: const Icon(Icons.touch_app, size: 16),
+                      label: Text(Translations.t('changeIcon', context)),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: SmoothTyping(
-                      controller: _questionCtrl,
-                      builder: (style) => TextField(
-                        style: style,
-                        cursorOpacityAnimates: true,
-                        magnifierConfiguration:
-                            TextMagnifierConfiguration.disabled,
+                  const SizedBox(height: 8),
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: SmoothTyping(
                         controller: _questionCtrl,
-                        contextMenuBuilder: minimalContextMenuBuilder,
-                        maxLength: 200,
-                        inputFormatters: [WideDashFormatter()],
-                        enableSuggestions: false,
-                        autocorrect: false,
-                        maxLines: 3,
-                        buildCounter: smoothCharCounterBuilder,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _save(),
-                        decoration: InputDecoration(
-                          labelText: Translations.t('rcQuestion', context),
-                          prefixIcon: const Icon(Icons.help_outline),
-                          border: const OutlineInputBorder(),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
+                        builder: (style) => SmoothCaret(
+                          builder: (context, caret) => TextField(
+                            scrollController: caret,
+                            style: style,
+                            cursorOpacityAnimates: true,
+                            magnifierConfiguration:
+                                TextMagnifierConfiguration.disabled,
+                            controller: _questionCtrl,
+                            contextMenuBuilder: minimalContextMenuBuilder,
+                            maxLength: 200,
+                            inputFormatters: [WideDashFormatter()],
+                            enableSuggestions: false,
+                            autocorrect: false,
+                            maxLines: 3,
+                            buildCounter: smoothCharCounterBuilder,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _save(),
+                            decoration: InputDecoration(
+                              labelText: Translations.t('rcQuestion', context),
+                              prefixIcon: const Icon(Icons.help_outline),
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

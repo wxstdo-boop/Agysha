@@ -20,6 +20,7 @@ import '../widgets/volumetric_switch.dart';
 import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/smooth_keyboard_body.dart';
+import '../widgets/smooth_caret.dart';
 
 class AddHabitScreen extends StatefulWidget {
   final Habit? existing;
@@ -180,24 +181,27 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
         ),
         content: SmoothTyping(
           controller: ctrl,
-          builder: (style) => TextField(
-            style: style,
-            cursorOpacityAnimates: true,
-            magnifierConfiguration: TextMagnifierConfiguration.disabled,
-            controller: ctrl,
-            contextMenuBuilder: minimalContextMenuBuilder,
-            maxLength: 50,
-            inputFormatters: [WideDashFormatter()],
-            enableSuggestions: false,
-            autocorrect: false,
-            maxLines: 3,
-            buildCounter: smoothCharCounterBuilder,
-            decoration: InputDecoration(
-              hintText: Translations.t('habitStatusHint', context),
-              border: const OutlineInputBorder(),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
+          builder: (style) => SmoothCaret(
+            builder: (context, caret) => TextField(
+              scrollController: caret,
+              style: style,
+              cursorOpacityAnimates: true,
+              magnifierConfiguration: TextMagnifierConfiguration.disabled,
+              controller: ctrl,
+              contextMenuBuilder: minimalContextMenuBuilder,
+              maxLength: 50,
+              inputFormatters: [WideDashFormatter()],
+              enableSuggestions: false,
+              autocorrect: false,
+              maxLines: 3,
+              buildCounter: smoothCharCounterBuilder,
+              decoration: InputDecoration(
+                hintText: Translations.t('habitStatusHint', context),
+                border: const OutlineInputBorder(),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
             ),
           ),
@@ -490,27 +494,30 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
                     padding: const EdgeInsets.all(4),
                     child: SmoothTyping(
                       controller: _nameCtrl,
-                      builder: (style) => TextField(
-                        style: style,
-                        cursorOpacityAnimates: true,
-                        magnifierConfiguration:
-                            TextMagnifierConfiguration.disabled,
-                        controller: _nameCtrl,
-                        contextMenuBuilder: minimalContextMenuBuilder,
-                        maxLength: 150,
-                        inputFormatters: [WideDashFormatter()],
-                        enableSuggestions: false,
-                        autocorrect: false,
-                        maxLines: 5,
-                        buildCounter: smoothCharCounterBuilder,
-                        textInputAction: TextInputAction.next,
-                        decoration: InputDecoration(
-                          labelText: Translations.t('habitName', context),
-                          prefixIcon: const Icon(Icons.edit_outlined),
-                          border: const OutlineInputBorder(),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
+                      builder: (style) => SmoothCaret(
+                        builder: (context, caret) => TextField(
+                          scrollController: caret,
+                          style: style,
+                          cursorOpacityAnimates: true,
+                          magnifierConfiguration:
+                              TextMagnifierConfiguration.disabled,
+                          controller: _nameCtrl,
+                          contextMenuBuilder: minimalContextMenuBuilder,
+                          maxLength: 150,
+                          inputFormatters: [WideDashFormatter()],
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          maxLines: 5,
+                          buildCounter: smoothCharCounterBuilder,
+                          textInputAction: TextInputAction.next,
+                          decoration: InputDecoration(
+                            labelText: Translations.t('habitName', context),
+                            prefixIcon: const Icon(Icons.edit_outlined),
+                            border: const OutlineInputBorder(),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
                           ),
                         ),
                       ),
@@ -573,29 +580,32 @@ class _AddHabitScreenState extends State<AddHabitScreen> {
                           padding: const EdgeInsets.all(4),
                           child: SmoothTyping(
                             controller: _notesCtrl,
-                            builder: (style) => TextField(
-                              style: style,
-                              cursorOpacityAnimates: true,
-                              magnifierConfiguration:
-                                  TextMagnifierConfiguration.disabled,
-                              controller: _notesCtrl,
-                              contextMenuBuilder: minimalContextMenuBuilder,
-                              maxLength: 500,
-                              inputFormatters: [WideDashFormatter()],
-                              enableSuggestions: false,
-                              autocorrect: false,
-                              minLines: 5,
-                              maxLines: 12,
-                              buildCounter: smoothCharCounterBuilder,
-                              keyboardType: TextInputType.multiline,
-                              textInputAction: TextInputAction.newline,
-                              decoration: InputDecoration(
-                                labelText: Translations.t('notes', context),
-                                prefixIcon: const Icon(Icons.notes_outlined),
-                                border: const OutlineInputBorder(),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 16,
+                            builder: (style) => SmoothCaret(
+                              builder: (context, caret) => TextField(
+                                scrollController: caret,
+                                style: style,
+                                cursorOpacityAnimates: true,
+                                magnifierConfiguration:
+                                    TextMagnifierConfiguration.disabled,
+                                controller: _notesCtrl,
+                                contextMenuBuilder: minimalContextMenuBuilder,
+                                maxLength: 500,
+                                inputFormatters: [WideDashFormatter()],
+                                enableSuggestions: false,
+                                autocorrect: false,
+                                minLines: 5,
+                                maxLines: 12,
+                                buildCounter: smoothCharCounterBuilder,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
+                                decoration: InputDecoration(
+                                  labelText: Translations.t('notes', context),
+                                  prefixIcon: const Icon(Icons.notes_outlined),
+                                  border: const OutlineInputBorder(),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 16,
+                                  ),
                                 ),
                               ),
                             ),

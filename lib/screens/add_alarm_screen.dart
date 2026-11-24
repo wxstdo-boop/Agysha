@@ -24,6 +24,7 @@ import '../widgets/smooth_keyboard_body.dart';
 import '../widgets/blood_speck.dart' show BloodSpeck, BloodSpeckPainter;
 import '../widgets/press_scale.dart';
 import '../widgets/auto_save_on_exit.dart';
+import '../widgets/smooth_caret.dart';
 
 class AddAlarmScreen extends StatefulWidget {
   final Alarm? existing;
@@ -797,28 +798,31 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                     padding: const EdgeInsets.all(8),
                     child: SmoothTyping(
                       controller: _labelCtrl,
-                      builder: (style) => TextField(
-                        style: style,
-                        cursorOpacityAnimates: true,
-                        magnifierConfiguration:
-                            TextMagnifierConfiguration.disabled,
-                        controller: _labelCtrl,
-                        contextMenuBuilder: minimalContextMenuBuilder,
-                        maxLength: 100,
-                        inputFormatters: [WideDashFormatter()],
-                        enableSuggestions: false,
-                        autocorrect: false,
-                        maxLines: 2,
-                        buildCounter: smoothCharCounterBuilder,
-                        decoration: InputDecoration(
-                          labelText: Translations.labelOf(context),
-                          prefixIcon: const Icon(Icons.label_outline),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
+                      builder: (style) => SmoothCaret(
+                        builder: (context, caret) => TextField(
+                          scrollController: caret,
+                          style: style,
+                          cursorOpacityAnimates: true,
+                          magnifierConfiguration:
+                              TextMagnifierConfiguration.disabled,
+                          controller: _labelCtrl,
+                          contextMenuBuilder: minimalContextMenuBuilder,
+                          maxLength: 100,
+                          inputFormatters: [WideDashFormatter()],
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          maxLines: 2,
+                          buildCounter: smoothCharCounterBuilder,
+                          decoration: InputDecoration(
+                            labelText: Translations.labelOf(context),
+                            prefixIcon: const Icon(Icons.label_outline),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
                           ),
                         ),
                       ),

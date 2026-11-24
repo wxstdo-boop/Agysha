@@ -34,6 +34,7 @@ import '../widgets/section_pill.dart'
         sectionDragPage;
 import 'add_task_screen.dart';
 import '../widgets/agysha_confirm_dialog.dart';
+import '../widgets/smooth_caret.dart';
 
 class TasksScreen extends StatefulWidget {
   /// Персональный notifier скролла раздела (см. AlarmsScreen).
@@ -1761,37 +1762,42 @@ class _TaskNoteSheetState extends State<_TaskNoteSheet> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: SmoothTyping(
                 controller: _ctrl,
-                builder: (style) => TextField(
-                  style: style,
-                  cursorOpacityAnimates: true,
-                  controller: _ctrl,
-                  focusNode: _focus,
-                  // Заметка «вспомнил, что использую»: лимит поднят со 150
-                  // до 1000 — в 150 символов не влезала настоящая мысль.
-                  maxLength: 1000,
-                  inputFormatters: [WideDashFormatter()],
-                  enableSuggestions: false,
-                  autocorrect: false,
-                  // ВСЕ строки заметки всегда видны: поле растёт под весь
-                  // текст без ограничения строк, а общее окно скроллится при
-                  // нехватке места на экране.
-                  maxLines: null,
-                  minLines: 3,
-                  textCapitalization: TextCapitalization.sentences,
-                  magnifierConfiguration: TextMagnifierConfiguration.disabled,
-                  contextMenuBuilder: minimalContextMenuBuilder,
-                  buildCounter: smoothCharCounterBuilder,
-                  decoration: InputDecoration(
-                    hintText: Translations.t('taskNoteHint', context),
-                    filled: true,
-                    fillColor: cs.surfaceContainerLowest.withValues(alpha: 0.7),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    counterStyle: TextStyle(
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.7),
-                      fontSize: 12,
+                builder: (style) => SmoothCaret(
+                  builder: (context, caret) => TextField(
+                    scrollController: caret,
+                    style: style,
+                    cursorOpacityAnimates: true,
+                    controller: _ctrl,
+                    focusNode: _focus,
+                    // Заметка «вспомнил, что использую»: лимит поднят со 150
+                    // до 1000 — в 150 символов не влезала настоящая мысль.
+                    maxLength: 1000,
+                    inputFormatters: [WideDashFormatter()],
+                    enableSuggestions: false,
+                    autocorrect: false,
+                    // ВСЕ строки заметки всегда видны: поле растёт под весь
+                    // текст без ограничения строк, а общее окно скроллится при
+                    // нехватке места на экране.
+                    maxLines: null,
+                    minLines: 3,
+                    textCapitalization: TextCapitalization.sentences,
+                    magnifierConfiguration: TextMagnifierConfiguration.disabled,
+                    contextMenuBuilder: minimalContextMenuBuilder,
+                    buildCounter: smoothCharCounterBuilder,
+                    decoration: InputDecoration(
+                      hintText: Translations.t('taskNoteHint', context),
+                      filled: true,
+                      fillColor: cs.surfaceContainerLowest.withValues(
+                        alpha: 0.7,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      counterStyle: TextStyle(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),

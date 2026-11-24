@@ -838,38 +838,41 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                         height: 1.3,
                         color: cs.onSurface,
                       ),
-                      builder: (style) => TextField(
-                        style: style,
-                        magnifierConfiguration:
-                            TextMagnifierConfiguration.disabled,
-                        contextMenuBuilder: minimalContextMenuBuilder,
-                        controller: _inputCtrl,
-                        minLines: 1,
-                        maxLines: 2,
-                        inputFormatters: [WideDashFormatter()],
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _send(),
-                        // Автопробел клавиатуры — убираем подсказки.
-                        spellCheckConfiguration:
-                            SpellCheckConfiguration.disabled(),
-                        enableSuggestions: false,
-                        autocorrect: false,
-                        // Каретка мигает плавно (fade), а не резко вкл/выкл.
-                        cursorOpacityAnimates: true,
-                        decoration: InputDecoration(
-                          counterText: '',
-                          isDense: true,
-                          filled: true,
-                          fillColor: cs.surfaceContainerHigh.withValues(
-                            alpha: 0.7,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide.none,
+                      builder: (style) => SmoothCaret(
+                        builder: (context, caret) => TextField(
+                          scrollController: caret,
+                          style: style,
+                          magnifierConfiguration:
+                              TextMagnifierConfiguration.disabled,
+                          contextMenuBuilder: minimalContextMenuBuilder,
+                          controller: _inputCtrl,
+                          minLines: 1,
+                          maxLines: 2,
+                          inputFormatters: [WideDashFormatter()],
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _send(),
+                          // Автопробел клавиатуры — убираем подсказки.
+                          spellCheckConfiguration:
+                              SpellCheckConfiguration.disabled(),
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          // Каретка мигает плавно (fade), а не резко вкл/выкл.
+                          cursorOpacityAnimates: true,
+                          decoration: InputDecoration(
+                            counterText: '',
+                            isDense: true,
+                            filled: true,
+                            fillColor: cs.surfaceContainerHigh.withValues(
+                              alpha: 0.7,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                         ),
                       ),

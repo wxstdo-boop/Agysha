@@ -715,6 +715,8 @@ const Map<String, String> _fr = {
   'forgeTokenSaveFailed':
       'Impossible d’enregistrer le jeton — stockage indisponible',
   'forgeTokenForgotten': 'Jeton supprimé',
+  'forgeTokenForgetFailed':
+      'Jeton effacé ici, mais le stockage sécurisé n’a pas répondu — redémarrez l’application',
   'forgeChatSection': 'DISCUSSION',
   'forgeTaskHint': 'Pose une question ou décris la modification…',
   'forgeRun': 'Envoyer',

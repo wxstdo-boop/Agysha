@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:agysha/l10n/locale_provider.dart';
-import 'package:agysha/l10n/translations.dart';
 import 'package:agysha/screens/forge_screen.dart';
 import 'package:agysha/services/forge_agent.dart';
 import 'package:agysha/services/forge_chat_store.dart';
@@ -63,20 +62,24 @@ MockClient _okClient() => MockClient((request) async {
         headers: {'content-type': 'application/json'},
       );
     }
-    return http.Response('{"message":"Not Found"}', 404, headers: {
-      'content-type': 'application/json',
-    });
+    return http.Response(
+      '{"message":"Not Found"}',
+      404,
+      headers: {'content-type': 'application/json'},
+    );
   }
   if (path == '/repos/wxstdo-boop/agysha/pulls') {
     return http.Response(
-      jsonEncode({
-        'html_url': 'https://github.com/wxstdo-boop/agysha/pull/1',
-      }),
+      jsonEncode({'html_url': 'https://github.com/wxstdo-boop/agysha/pull/1'}),
       201,
       headers: {'content-type': 'application/json'},
     );
   }
-  return http.Response('{}', 200, headers: {'content-type': 'application/json'});
+  return http.Response(
+    '{}',
+    200,
+    headers: {'content-type': 'application/json'},
+  );
 });
 
 Widget _wrap(Widget child) => LocaleProvider(
@@ -181,7 +184,7 @@ void _tallSurface(WidgetTester tester) {
 /// поэтому ход прогоняем в «живом» времени.
 Future<void> _sendAndSettle(WidgetTester tester) async {
   final sendButton = tester.widget<FilledButton>(
-    find.widgetWithText(FilledButton, 'Отправить'),
+    find.byKey(const ValueKey('forge_send')),
   );
   await tester.runAsync(() async {
     sendButton.onPressed!();
@@ -253,7 +256,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).at(1), 'создай a.txt');
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_input_field')),
+      'создай a.txt',
+    );
     await _sendAndSettle(tester);
 
     // Ход дошёл до PR: значит ключ ИИ не потребовался.
@@ -285,7 +291,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).at(1), 'где точка входа?');
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_input_field')),
+      'где точка входа?',
+    );
     await _sendAndSettle(tester);
 
     expect(_chatText('Точка входа в lib/main.dart.'), findsOneWidget);
@@ -336,7 +345,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final field = tester.widget<TextField>(find.byType(TextField).first);
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('forge_token_field')),
+    );
     expect(field.controller?.text, 'ghp_saved_token');
     // Токен не показываем открытым текстом.
     expect(field.obscureText, isTrue);
@@ -354,7 +365,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final token = tester.widget<TextField>(find.byType(TextField).first);
+    final token = tester.widget<TextField>(
+      find.byKey(const ValueKey('forge_token_field')),
+    );
     expect(token.obscureText, isTrue);
     // Глазка быть не должно: секрет не раскрывается на экране.
     expect(find.byIcon(Icons.visibility_outlined), findsNothing);
@@ -376,12 +389,17 @@ void main() {
     await tester.pumpAndSettle();
 
     // Поле задачи — второе: токен, затем задача.
-    final task = tester.widget<TextField>(find.byType(TextField).at(1));
+    final task = tester.widget<TextField>(
+      find.byKey(const ValueKey('forge_input_field')),
+    );
     expect(task.magnifierConfiguration, isA<TextMagnifierConfiguration>());
     expect(task.contextMenuBuilder, isNotNull);
     expect(task.buildCounter, isNotNull);
 
-    await tester.enterText(find.byType(TextField).at(1), 'поправь кнопку');
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_input_field')),
+      'поправь кнопку',
+    );
     // Анимация букв не должна «заедать»: после прокачки кадров текст на месте.
     await tester.pump(const Duration(milliseconds: 400));
     expect(task.controller?.text, 'поправь кнопку');
@@ -404,7 +422,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, 'ghp_typed_token');
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_token_field')),
+      'ghp_typed_token',
+    );
     await tester.pump();
 
     final button = tester.widget<FilledButton>(
@@ -432,7 +453,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, 'ghp_typed_token');
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_token_field')),
+      'ghp_typed_token',
+    );
     await tester.pump();
 
     final finder = find.ancestor(
@@ -465,7 +489,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, 'ghp_typed_token');
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_token_field')),
+      'ghp_typed_token',
+    );
     await tester.pump();
 
     final finder = find.ancestor(
@@ -483,14 +510,18 @@ void main() {
     expect(tester.widget<FilledButton>(finder).onPressed, isNotNull);
   });
 
-  testWidgets('сбой записи в хранилище показывается пользователю', (
+  testWidgets('сбой записи в Keystore не теряет токен — уходит в запасное', (
     tester,
   ) async {
-    // Молча «сохранить» при недоступном Keystore нельзя: пользователь решит,
-    // что токен записан, и будет ждать, почему агент не работает.
+    // Keystore отказал в записи: токен обязан лечь в запасное шифрованное
+    // хранилище, а не пропасть с «не удалось сохранить».
+    final fallback = InMemoryForgeTokenStore();
     final service = ForgeService(
       client: _okClient(),
-      store: _BrokenStore(failRead: false, failWrite: true),
+      store: ResilientForgeTokenStore(
+        secure: _BrokenStore(failRead: false, failWrite: true),
+        fallback: fallback,
+      ),
     );
     await tester.pumpWidget(
       _wrap(
@@ -498,7 +529,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'ghp_typed_token');
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_token_field')),
+      'ghp_typed_token',
+    );
     await tester.pump();
 
     final finder = find.ancestor(
@@ -511,12 +545,7 @@ void main() {
     });
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(Translations.t('forgeTokenSaveFailed', tester.element(
-        find.byType(ForgeScreen),
-      ))),
-      findsOneWidget,
-    );
+    expect(await fallback.read(), 'ghp_typed_token');
   });
 
   testWidgets('без сохранённого токена поле пустое', (tester) async {
@@ -531,7 +560,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final field = tester.widget<TextField>(find.byType(TextField).first);
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('forge_token_field')),
+    );
     expect(field.controller?.text, isEmpty);
   });
 
@@ -551,7 +582,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(await service.loadToken(), isNull);
-    final field = tester.widget<TextField>(find.byType(TextField).first);
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('forge_token_field')),
+    );
     expect(field.controller?.text, isEmpty);
   });
 }
