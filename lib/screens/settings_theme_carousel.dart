@@ -137,6 +137,16 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// Барабан сейчас в движении: палец на нём или идёт довод.
   bool get _moving => _dragging || _spin.isAnimating;
 
+  /// Насколько камора под указателем «в переходе»: 0 — стоит ровно под
+  /// стрелкой, 1 — ровно между двумя каморами.
+  double get _spinCross => ((_pos - _pos.round()).abs() * 2).clamp(0.0, 1.0);
+
+  /// Притухание на переходе. Подпись и глиф меняются в самой бледной точке,
+  /// поэтому смена читается как растворение, а не как подмена кадром.
+  /// Полностью в ноль не уходим: барабан крутится быстро, и мигающий текст
+  /// читался бы хуже, чем спокойное «дыхание».
+  double get _spinFade => 1.0 - 0.55 * _spinCross;
+
   /// Подтягивает центр к каморе под указателем. Вызывается на каждом шаге
   /// вращения — иначе название «застывало» до остановки.
   void _syncHub() {
@@ -426,31 +436,34 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
               const SizedBox(height: 6),
               SizedBox(
                 height: 24,
-                child: AnimatedSwitcher(
-                  // Только перекрёстное затухание: со сползанием текста
-                  // подписи при быстрой прокрутке наезжали друг на друга.
-                  // Пока барабан едет, подпись меняется сразу, вслед за
-                  // каморой под указателем: так название «сменяется» во
-                  // время кручения, а не только после остановки. Затухание
-                  // включается на остановке — там ему есть что сглаживать.
-                  duration: _moving
-                      ? Duration.zero
-                      : const Duration(milliseconds: 280),
-                  switchInCurve: Curves.easeOut,
-                  switchOutCurve: Curves.easeIn,
-                  transitionBuilder: (child, anim) =>
-                      FadeTransition(opacity: anim, child: child),
-                  child: Text(
-                    entry.label,
-                    // В ключе — сама подпись: у Cyberpunk и персика она
-                    // меняется вместе с вариантом, и без этого переключение
-                    // подменялось кадром вместо плавного затухания.
-                    key: ValueKey('theme_label_${entry.key}_${entry.label}'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.2,
+                child: Opacity(
+                  opacity: _moving ? _spinFade : 1,
+                  child: AnimatedSwitcher(
+                    // Только перекрёстное затухание: со сползанием текста
+                    // подписи при быстрой прокрутке наезжали друг на друга.
+                    // Пока барабан едет, подпись меняется сразу, вслед за
+                    // каморой под указателем: так название «сменяется» во
+                    // время кручения, а не только после остановки. Затухание
+                    // включается на остановке — там ему есть что сглаживать.
+                    duration: _moving
+                        ? Duration.zero
+                        : const Duration(milliseconds: 280),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, anim) =>
+                        FadeTransition(opacity: anim, child: child),
+                    child: Text(
+                      entry.label,
+                      // В ключе — сама подпись: у Cyberpunk и персика она
+                      // меняется вместе с вариантом, и без этого переключение
+                      // подменялось кадром вместо плавного затухания.
+                      key: ValueKey('theme_label_${entry.key}_${entry.label}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ),
                 ),
@@ -553,62 +566,65 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
               ],
             ),
             child: Center(
-              child: AnimatedSwitcher(
-                // Чистое перекрёстное затухание без масштаба: значок в центре
-                // не «выпрыгивает», а спокойно растворяется в новый.
-                //
-                // 420 мс и ОДНА анимация на смену. Раньше их было две:
-                // переключатель на 240 мс и отдельный TweenAnimationBuilder
-                // на цвет 320 мс. На переходе mutilated ↔ светлая они
-                // сталкивались (старый значок гас, новый уже перекрашивался),
-                // и центр читался как «дёргается». Теперь цвет берётся прямо
-                // из палитры: её саму плавно ведёт AnimatedTheme, поэтому
-                // оттенок едет одной кривой вместе с фоном, без второго
-                // таймера.
-                // Две фазы вместо одновременного перекрёстного затухания:
-                // старый значок уходит за первые ~40 % времени, новый
-                // проявляется во второй половине. При чистом кросс-фейде
-                // оба глифа секунду лежали друг на друге полупрозрачными —
-                // именно это и читалось как «значки сменяются неплавно».
-                // Пока барабан едет, значок меняется мгновенно: камор под
-                // указателем проносится много, и любое затухание (даже
-                // 110 мс) наслаивало по три-четыре полупрозрачных глифа
-                // друг на друга — это и читалось как «значки сменяются
-                // неплавно». Двухфазные 380 мс остаются для остановки:
-                // там смена одна и её видно.
-                duration: _moving
-                    ? Duration.zero
-                    : const Duration(milliseconds: 380),
-                switchInCurve: const Interval(
-                  0.38,
-                  1.0,
-                  curve: Curves.easeOutCubic,
-                ),
-                switchOutCurve: const Interval(
-                  0.0,
-                  0.42,
-                  curve: Curves.easeInCubic,
-                ),
-                transitionBuilder: (child, anim) => FadeTransition(
-                  opacity: anim,
-                  child: ScaleTransition(
-                    // 0.9 → 1: новый значок «встаёт» на место, а не
-                    // проступает из ничего. Масштаб крошечный — край
-                    // глифа не пересэмплируется в мыло.
-                    scale: Tween<double>(begin: 0.9, end: 1.0).animate(anim),
-                    child: child,
+              child: Opacity(
+                opacity: _moving ? _spinFade : 1,
+                child: AnimatedSwitcher(
+                  // Чистое перекрёстное затухание без масштаба: значок в центре
+                  // не «выпрыгивает», а спокойно растворяется в новый.
+                  //
+                  // 420 мс и ОДНА анимация на смену. Раньше их было две:
+                  // переключатель на 240 мс и отдельный TweenAnimationBuilder
+                  // на цвет 320 мс. На переходе mutilated ↔ светлая они
+                  // сталкивались (старый значок гас, новый уже перекрашивался),
+                  // и центр читался как «дёргается». Теперь цвет берётся прямо
+                  // из палитры: её саму плавно ведёт AnimatedTheme, поэтому
+                  // оттенок едет одной кривой вместе с фоном, без второго
+                  // таймера.
+                  // Две фазы вместо одновременного перекрёстного затухания:
+                  // старый значок уходит за первые ~40 % времени, новый
+                  // проявляется во второй половине. При чистом кросс-фейде
+                  // оба глифа секунду лежали друг на друге полупрозрачными —
+                  // именно это и читалось как «значки сменяются неплавно».
+                  // Пока барабан едет, значок меняется мгновенно: камор под
+                  // указателем проносится много, и любое затухание (даже
+                  // 110 мс) наслаивало по три-четыре полупрозрачных глифа
+                  // друг на друга — это и читалось как «значки сменяются
+                  // неплавно». Двухфазные 380 мс остаются для остановки:
+                  // там смена одна и её видно.
+                  duration: _moving
+                      ? Duration.zero
+                      : const Duration(milliseconds: 380),
+                  switchInCurve: const Interval(
+                    0.38,
+                    1.0,
+                    curve: Curves.easeOutCubic,
                   ),
-                ),
-                // Ключ — на самом ребёнке AnimatedSwitcher: раньше он висел
-                // на Icon внутри билдера, и переключатель считал виджет тем
-                // же самым, подменяя значок одним кадром («перебор»).
-                child: Icon(
-                  entry.icon,
-                  key: ValueKey<String>(
-                    'hub_${entry.key}_${entry.icon.codePoint}',
+                  switchOutCurve: const Interval(
+                    0.0,
+                    0.42,
+                    curve: Curves.easeInCubic,
                   ),
-                  size: hub * 0.36,
-                  color: cs.primary,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: ScaleTransition(
+                      // 0.9 → 1: новый значок «встаёт» на место, а не
+                      // проступает из ничего. Масштаб крошечный — край
+                      // глифа не пересэмплируется в мыло.
+                      scale: Tween<double>(begin: 0.9, end: 1.0).animate(anim),
+                      child: child,
+                    ),
+                  ),
+                  // Ключ — на самом ребёнке AnimatedSwitcher: раньше он висел
+                  // на Icon внутри билдера, и переключатель считал виджет тем
+                  // же самым, подменяя значок одним кадром («перебор»).
+                  child: Icon(
+                    entry.icon,
+                    key: ValueKey<String>(
+                      'hub_${entry.key}_${entry.icon.codePoint}',
+                    ),
+                    size: hub * 0.36,
+                    color: cs.primary,
+                  ),
                 ),
               ),
             ),

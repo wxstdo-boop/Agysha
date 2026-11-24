@@ -186,4 +186,26 @@ void main() {
       reason: 'перенос закончился — возвращаем отдачу',
     );
   });
+
+  test('подсветка карточки будильника идёт поверх фона и без вспышки', () {
+    final src = File('lib/screens/alarms_screen.dart').readAsStringSync();
+    // Card рисует свою непрозрачную заливку поверх pressTint, поэтому
+    // затемнение под пальцем было видно только рывком — на отпускании.
+    expect(
+      src.contains('pressOverlay: (context, v) =>'),
+      isTrue,
+      reason: 'выделение рисуется над заливкой карточки',
+    );
+    expect(
+      src.contains('alpha: 0.05 * v'),
+      isTrue,
+      reason:
+          'прозрачность ведёт прогресс нажатия: вспышки на первом кадре нет',
+    );
+    expect(
+      src.contains('pressTint:'),
+      isFalse,
+      reason: 'pressTint под непрозрачной карточкой не виден',
+    );
+  });
 }

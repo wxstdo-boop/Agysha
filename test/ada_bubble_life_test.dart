@@ -70,11 +70,12 @@ void main() {
       reason: 'вход только альфой: масштаб пересэмплировал край и мигал',
     );
     expect(
-      src.contains('return Opacity(opacity: eased, child: drift);'),
+      src.contains('opacity: eased,'),
       isTrue,
+      reason: 'вход идёт выдохом альфы',
     );
     expect(
-      src.contains('if (e >= 0.999) return drift;'),
+      src.contains('if (e >= 0.999) return RepaintBoundary(child: child);'),
       isTrue,
       reason: 'после входа не должно оставаться лишних слоёв альфы',
     );
@@ -127,35 +128,47 @@ void main() {
     );
   });
 
-  test('качание идёт вечно и гаснет множителем, а не остановкой', () {
+  test('самокатания нет, а после отпускания пузырь прилипает к краю', () {
     final src = read(overlay);
-    expect(src.contains('_drift.repeat()'), isTrue);
     expect(
-      src.contains('milliseconds: 5600'),
-      isTrue,
-      reason:
-          'на 12 секундах шаг за кадр был меньше сотой доли dp и округлялся '
-          'до целых пикселей — качание читалось рывками; 5.6 с убирает шаг',
-    );
-    expect(src.contains('math.sin(t) * 3.6 * free'), isTrue);
-    expect(
-      src.contains('_drift.stop()'),
+      src.contains('_drift'),
       isFalse,
-      reason: 'остановка давала прыжок в другую точку синуса — «мигание»',
+      reason: 'автоперемещение убрано: пузырь двигает только палец',
     );
     expect(
-      src.contains('late final AnimationController _hold'),
-      isTrue,
-      reason: 'под пальцем качание гаснет плавно',
+      src.contains('math.sin('),
+      isFalse,
+      reason: 'постоянный синус давал дрожание и читался как рывки',
     );
     expect(
       src.contains('RepaintBoundary'),
       isTrue,
-      reason: 'качание не должно перерисовывать круг',
+      reason: 'проявление и отдача не должны перерисовывать круг',
     );
-    // Нативное «самокатание» через updateViewLayout каждые 33 мс убрано:
-    // именно оно давало рваное движение.
     final java = read(service);
+    expect(
+      java.contains('snapToNearestAnchor()'),
+      isTrue,
+      reason: 'на отпускании окно доводится до ближайшей точки у края',
+    );
+    expect(
+      java.contains(
+        'final int[] xs = {left, right, left, right, left, right, midX, midX};',
+      ),
+      isTrue,
+      reason: 'четыре угла и середина каждой стороны — восемь якорей',
+    );
+    expect(
+      java.contains('SNAP_DURATION_MS'),
+      isTrue,
+      reason: 'доводка анимируется, а не прыгает кадром',
+    );
+    expect(
+      java.contains('cancelSnap();\n                dragging = false;'),
+      isTrue,
+      reason: 'пузырь можно поймать пальцем прямо в полёте к краю',
+    );
+    // Нативное «самокатание» через updateViewLayout каждые 33 мс убрано.
     expect(java.contains('FLOAT_INTERVAL_MS'), isFalse);
     expect(java.contains('floatRunnable'), isFalse);
   });
@@ -192,12 +205,6 @@ void main() {
       java.contains('dx * dx + dy * dy < 9'),
       isTrue,
       reason: 'окно стартует с 3 px, а не отлипает от пальца',
-    );
-    final src = read(overlay);
-    expect(
-      src.contains('_hold.value = 1'),
-      isTrue,
-      reason: 'под пальцем качание гаснет сразу, без проскальзывания',
     );
   });
 

@@ -112,4 +112,27 @@ void main() {
       reason: 'на остановке значок должен проявиться двухфазным затуханием',
     );
   });
+
+  test('подпись и значок в центре дышат вместе с барабаном', () {
+    final src = read('lib/screens/settings_theme_carousel.dart');
+    expect(
+      src,
+      contains('double get _spinFade => 1.0 - 0.55 * _spinCross;'),
+      reason:
+          'смена подписи должна приходиться на самую бледную точку перехода, '
+          'иначе текст подменяется кадром и читается как мигание',
+    );
+    expect(
+      'opacity: _moving ? _spinFade : 1,'.allMatches(src).length,
+      2,
+      reason: 'притухают оба: и название, и значок — иначе значок щёлкает',
+    );
+    expect(
+      src,
+      contains(r"ValueKey('theme_label_${entry.key}_${entry.label}')"),
+      reason:
+          'в ключе подписи должна быть сама подпись, иначе смена '
+          'варианта у Cyberpunk подменяется кадром',
+    );
+  });
 }

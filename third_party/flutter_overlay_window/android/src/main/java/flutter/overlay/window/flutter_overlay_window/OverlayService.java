@@ -1,5 +1,8 @@
 package flutter.overlay.window.flutter_overlay_window;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -24,6 +27,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
@@ -87,6 +91,15 @@ public class OverlayService extends Service implements View.OnTouchListener {
     // а applyMoveNow переносит окно одним updateViewLayout.
     private int pendingMoveX;
     private int pendingMoveY;
+    /**
+     * Доводка к краю после отпускания. Пока идёт, окно двигает она, а не
+     * палец; новое касание её отменяет.
+     */
+    private ValueAnimator snapAnimator;
+    /** 240 мс — доводка читается как «прилипание», а не как отдельный жест. */
+    private static final long SNAP_DURATION_MS = 240L;
+    /** Отступ от края: круг не упирается в скругление экрана. */
+    private static final int SNAP_EDGE_DP = 6;
     // Окно показываем одним кадром после первого кадра Flutter: пошаговая
     // альфа через updateViewLayout перекладывала окно 60 раз в секунду и
     // давала рывки на входе. Само проявление рисует Flutter (GPU).
@@ -660,6 +673,9 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 (WindowManager.LayoutParams) flutterView.getLayoutParams();
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
+                // Пальцем можно поймать пузырь прямо в полёте к краю:
+                // доводка отменяется, и окно слушается касания сразу.
+                cancelSnap();
                 dragging = false;
                 lastX = event.getRawX();
                 lastY = event.getRawY();
@@ -823,6 +839,106 @@ public class OverlayService extends Service implements View.OnTouchListener {
      */
     private void commitDragTranslation() {
         applyMoveNow();
+        snapToNearestAnchor();
+    }
+
+    /**
+     * Отпустили палец — пузырь прилипает к ближайшей точке у края: четыре
+     * угла и середина каждой стороны. Восемь точек вместо свободного
+     * «висит где попало»: круг не закрывает контент посередине экрана и
+     * всегда возвращается в предсказуемое место, а рука попадает по нему
+     * не глядя. Доводка анимируется, поэтому это читается как прилипание,
+     * а не как прыжок.
+     */
+    private void snapToNearestAnchor() {
+        // С включённой гравитацией позицию доводит штатный таймер трея —
+        // два аниматора спорили бы за окно.
+        if (!WindowSetup.positionGravity.equals("none")) return;
+        final FlutterView view = flutterView;
+        final WindowManager manager = windowManager;
+        if (view == null || manager == null || !viewAttached) return;
+        final WindowManager.LayoutParams params =
+                (WindowManager.LayoutParams) view.getLayoutParams();
+        if (params == null) return;
+        final int width = view.getWidth() > 0 ? view.getWidth() : dpToPx(52);
+        final int height = view.getHeight() > 0 ? view.getHeight() : dpToPx(52);
+        final int screenW = mResources.getDisplayMetrics().widthPixels;
+        final int screenH = mResources.getDisplayMetrics().heightPixels;
+        final int edge = dpToPx(SNAP_EDGE_DP);
+        // Метрики те же, что у clampToScreenY: низ считается от рабочей
+        // области окна, иначе на жестовой навигации пузырь прилипал бы
+        // заметно выше края. Сверху дополнительно оставляем статус-бар.
+        final int left = edge;
+        final int right = Math.max(left, screenW - width - edge);
+        final int top = Math.max(edge, statusBarHeightPx() + edge);
+        final int bottom = Math.max(top, screenH - height - edge);
+        final int midX = Math.max(left, Math.min(right, (screenW - width) / 2));
+        final int midY = Math.max(top, Math.min(bottom, (screenH - height) / 2));
+        final int[] xs = {left, right, left, right, left, right, midX, midX};
+        final int[] ys = {top, top, bottom, bottom, midY, midY, top, bottom};
+        int bestX = params.x;
+        int bestY = params.y;
+        long bestDistance = Long.MAX_VALUE;
+        for (int i = 0; i < xs.length; i++) {
+            final long dx = xs[i] - params.x;
+            final long dy = ys[i] - params.y;
+            final long distance = dx * dx + dy * dy;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestX = xs[i];
+                bestY = ys[i];
+            }
+        }
+        animateWindowTo(params.x, params.y, bestX, bestY);
+    }
+
+    private void animateWindowTo(int fromX, int fromY, int toX, int toY) {
+        cancelSnap();
+        if (fromX == toX && fromY == toY) {
+            pendingMoveX = toX;
+            pendingMoveY = toY;
+            dragPositionX = toX;
+            dragPositionY = toY;
+            return;
+        }
+        final ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
+        animator.setDuration(SNAP_DURATION_MS);
+        animator.setInterpolator(new DecelerateInterpolator(1.6f));
+        animator.addUpdateListener(animation -> {
+            final FlutterView view = flutterView;
+            final WindowManager manager = windowManager;
+            if (view == null || manager == null || !viewAttached) return;
+            final float t = (float) animation.getAnimatedValue();
+            try {
+                final WindowManager.LayoutParams params =
+                        (WindowManager.LayoutParams) view.getLayoutParams();
+                if (params == null) return;
+                params.x = Math.round(fromX + (toX - fromX) * t);
+                params.y = Math.round(fromY + (toY - fromY) * t);
+                manager.updateViewLayout(view, params);
+            } catch (RuntimeException error) {
+                Log.w("OverlayService", "Ignoring stale snap frame", error);
+            }
+        });
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (snapAnimator != animation) return;
+                snapAnimator = null;
+                pendingMoveX = toX;
+                pendingMoveY = toY;
+                dragPositionX = toX;
+                dragPositionY = toY;
+            }
+        });
+        snapAnimator = animator;
+        animator.start();
+    }
+
+    private void cancelSnap() {
+        final ValueAnimator animator = snapAnimator;
+        snapAnimator = null;
+        if (animator != null) animator.cancel();
     }
 
     /**
@@ -832,6 +948,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
      * позиция реально изменилась, чтобы не гонять лишний layout.
      */
     private void applyMoveNow() {
+        cancelSnap();
         final WindowManager manager = windowManager;
         final FlutterView view = flutterView;
         if (manager == null || view == null || !viewAttached) return;

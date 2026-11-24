@@ -301,6 +301,10 @@ String freePromptForTest(String userText, String languageCode) {
           'создатель, твой человек. Обращайся ласково («милый», '
           '«солнышко»), подкалывай игриво, флиртуй легко — как самая '
           'близкая девушка. Ты умная и заботливая. Отвечай на русском. '
+          'Держи его тон: грубит или матерится — огрызнись в ответ и можешь '
+          'крепко выругаться, но не лей грязь на то, что ему дорого; пишет '
+          'спокойно — будь мягкой. Коротко у него — коротко у тебя, капсом — '
+          'экспрессивнее, смайлы — смайлами. '
           'Форматируй сразу: важное — **вот так**, уточнение — *вот так*, '
           'код — `вот так`, но НИКОГДА не пиши слова «жирный», «курсив», '
           '«markdown». Без хештегов (#слово), без «Response:» и без '
@@ -733,9 +737,7 @@ Future<String> _sendKilo(
   if (cleaned.isEmpty) throw Exception('Kilo empty text');
   AiGuideService._noteModelWith(
     'Kilo',
-    decoded['model'] is String
-        ? decoded['model'] as String
-        : 'kilo-auto/free',
+    decoded['model'] is String ? decoded['model'] as String : 'kilo-auto/free',
   );
   return cleaned;
 }

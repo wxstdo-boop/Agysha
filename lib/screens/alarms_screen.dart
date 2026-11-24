@@ -744,6 +744,17 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             enabled: !_reordering,
             pressedScale: 0.975,
             enableTilt: true,
+            // Подсветка нажатия идёт ПОВЕРХ карточки: у Card своя
+            // непрозрачная заливка, и подложка pressTint под ней не видна.
+            // Альфа считается от того же прогресса нажатия, что и
+            // вдавливание, поэтому выделение разгорается и гаснет по кривой
+            // отдачи — без вспышки в первом кадре и без мигания.
+            pressOverlay: (context, v) => DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.05 * v),
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
             duration: const Duration(milliseconds: 200),
             releaseDuration: const Duration(milliseconds: 320),
             child: Card(

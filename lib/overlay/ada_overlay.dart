@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -126,27 +125,6 @@ class _AdaBubbleState extends State<_AdaBubble>
     value: 1,
   );
 
-  /// Вечное самокатание: контроллер не останавливается НИКОГДА. Раньше он
-  /// вставал под пальцем и стартовал заново на отпускании — синус начинался
-  /// с другой точки, пузырь прыгал, и это читалось как «мигает при нажатии».
-  /// Теперь фаза живёт, а качание гасится множителем [_hold].
-  ///
-  /// Период 5.6 с, а не 12: на двенадцати секундах круг обходился так
-  /// медленно, что глаз читал его не как катание, а как «пузырь стоит и
-  /// изредка вздрагивает». Амплитуда та же (3.6 × 3 dp), но за оборот
-  /// пузырь успевает пройти заметный путь, и движение видно постоянно.
-  late final AnimationController _drift = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 5600),
-  );
-
-  /// 1 — пузырь держат (качание плавно сходит на нет), 0 — свободен.
-  late final AnimationController _hold = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 160),
-    reverseDuration: const Duration(milliseconds: 520),
-  );
-
   /// Отдача на нажатие: круг мягко продавливается и так же мягко отпускает.
   /// Считается в общем AnimatedBuilder без setState — перестройка дерева на
   /// каждом касании тоже добавляла мигание.
@@ -167,8 +145,6 @@ class _AdaBubbleState extends State<_AdaBubble>
     // нет намеренно: растяжение полупрозрачной текстуры по чужым обоям
     // пересэмплирует край и читается как мигание.
     _appear.forward(from: 0);
-    // Качание идёт всегда: любая остановка — прыжок в другую точку синуса.
-    _drift.repeat();
   }
 
   @override
@@ -176,8 +152,6 @@ class _AdaBubbleState extends State<_AdaBubble>
     if (identical(_live, this)) _live = null;
     WidgetsBinding.instance.removeObserver(this);
     _appear.dispose();
-    _drift.dispose();
-    _hold.dispose();
     _press.dispose();
     super.dispose();
   }
@@ -197,9 +171,7 @@ class _AdaBubbleState extends State<_AdaBubble>
     final live = _live;
     if (live == null) return;
     live._opening = false;
-    live._hold.value = 0;
     live._press.value = 0;
-    if (!live._drift.isAnimating) live._drift.repeat();
     // Старт проявления — не в тот же кадр, а через короткую паузу: команда
     // «покажись» приходит ДО того, как окно оверлея реально добавлено в
     // оконный менеджер. Если запустить затухание сразу, анимация успевает
@@ -219,7 +191,6 @@ class _AdaBubbleState extends State<_AdaBubble>
   static void onHostFadeOut() {
     final live = _live;
     if (live == null) return;
-    live._hold.reverse();
     live._press.reverse();
     live._appear.reverse();
   }
@@ -276,10 +247,6 @@ class _AdaBubbleState extends State<_AdaBubble>
   void _onDown(PointerDownEvent event) {
     _downAt = event.position;
     _downTime = DateTime.now();
-    // Качание гасим МГНОВЕННО, а не за 160 мс: пока пузырь «догонял» палец,
-    // круг уезжал из-под касания — это и читалось как «дёргается/мигает».
-    // Контроллер фазы продолжает идти, поэтому отпускание не даёт прыжка.
-    _hold.value = 1;
     _press.forward();
   }
 
@@ -288,7 +255,6 @@ class _AdaBubbleState extends State<_AdaBubble>
     final downTime = _downTime;
     _downAt = null;
     _downTime = null;
-    _hold.reverse();
     _press.reverse();
     if (downAt == null || downTime == null) return;
     // Тап по пузырю, который ещё не дорисовался, раньше молча терялся
@@ -303,7 +269,6 @@ class _AdaBubbleState extends State<_AdaBubble>
   void _onCancel(PointerCancelEvent event) {
     _downAt = null;
     _downTime = null;
-    _hold.reverse();
     _press.reverse();
   }
 
@@ -316,31 +281,23 @@ class _AdaBubbleState extends State<_AdaBubble>
       onPointerUp: _onUp,
       onPointerCancel: _onCancel,
       child: AnimatedBuilder(
-        animation: Listenable.merge([_appear, _drift, _hold, _press]),
+        animation: Listenable.merge([_appear, _press]),
         builder: (context, child) {
-          final t = _drift.value * 2 * math.pi;
-          // Качание 3.6 × 3.0 dp: заметное, но круг остаётся внутри окна
-          // (запас — 4 dp с каждой стороны). Одна трансформация, ребёнок под
-          // RepaintBoundary — «самокатание» стоит композитору, не растеризатору.
-          final free = 1.0 - Curves.easeOutCubic.transform(_hold.value);
-          // Отдачу нажатия НЕ делаем масштабом: полупрозрачное окно поверх
-          // чужих обоев при каждом кадре пересэмплировало готовую текстуру
-          // круга, и край мигал. Теперь плита и значок отзываются цветом и
-          // размером глифа (см. [_bubbleBody]) — перерисовки края нет вовсе,
-          // а качание остаётся переносом уже закэшированного кадра.
-          final drift = Transform.translate(
-            offset: Offset(math.sin(t) * 3.6 * free, math.cos(t) * 3.0 * free),
-            child: RepaintBoundary(child: child),
-          );
+          // Самокатания больше нет: пузырь стоит там, куда его поставил
+          // палец, и прилипает к ближайшей точке у края (см. OverlayService).
+          // Постоянный перенос кадра на доли dp давал только дрожание.
           final e = _appear.value;
           // Слой альфы живёт только пока идёт вход или выход: в покое его нет.
-          if (e >= 0.999) return drift;
+          if (e >= 0.999) return RepaintBoundary(child: child);
           final eased = Curves.easeOutCubic.transform(e.clamp(0.0, 1.0));
           // Только альфа. Масштаб 0.86 → 1 заставлял каждый кадр
           // пересэмплировать полупрозрачную текстуру круга поверх чужих
           // обоев — край «дышал» и это читалось как мигание. Плавность
           // здесь даёт кривая, а не зум.
-          return Opacity(opacity: eased, child: drift);
+          return Opacity(
+            opacity: eased,
+            child: RepaintBoundary(child: child),
+          );
         },
         child: Center(child: _bubbleBody()),
       ),
