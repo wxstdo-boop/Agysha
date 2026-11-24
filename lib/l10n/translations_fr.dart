@@ -733,6 +733,7 @@ const Map<String, String> _fr = {
   'forgeChatEmpty':
       'Pose une question sur le projet ou décris ce qu’il faut modifier.',
   'forgeClearChat': 'Effacer la discussion',
+  'forgeStopRun': 'Arrêter',
   'forgeChatCleared': 'Discussion effacée',
   'forgeChanges': 'Modifications',
   'forgeNoChanges': 'Aucune modification cette fois',
