@@ -191,10 +191,11 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     if (size == null) return 0.0;
     final longest = math.max(size.width, size.height);
     if (longest <= 0) return 0.0;
-    // 0.11 вместо 0.072: у широких карточек (~360 px) перспектива выходила
-    // 0.0002, и наклон на них читался как «ничего не происходит» — на
-    // проверках это и заметил владелец. Край при таком значении ещё цел.
-    return math.min(0.0012, 0.11 / longest);
+    // 0.42 вместо 0.11: у широких карточек (~360 px) перспектива выходила
+    // 0.0003 — почти ортогональная проекция, и наклон читался как «ничего не
+    // происходит». При 0.0011 край карточки ещё не выпадает, зато объём
+    // виден и на плашках, и на строках звука (у них 0.0024 — полный).
+    return math.min(0.0024, 0.42 / longest);
   }
 
   @override
@@ -297,8 +298,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       // тем сильнее, чем ближе касание к середине, — иначе случайные 1–2 px
       // раздувались бы до полной амплитуды в случайную сторону.
       final t = (len / _minTilt).clamp(0.0, 1.0);
-      final dir =
-          (target / math.max(len, 1e-6)) * t + _centerTilt * (1.0 - t);
+      final dir = (target / math.max(len, 1e-6)) * t + _centerTilt * (1.0 - t);
       final dl = dir.distance;
       floored = dl > 1e-6 ? dir * (_minTilt / dl) : _centerTilt * _minTilt;
     }

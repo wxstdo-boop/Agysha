@@ -22,19 +22,38 @@ const List<String> junkWords = [
   'compilation',
   'playlist',
   'podcast',
+  'radio',
   'radio show',
   'full album',
   'best of',
   'collection',
   'live set',
   'album',
+  'albums',
+  'ep',
+  'lp',
+  'mixtape',
   'vol.',
   'volume',
   'discography',
   'complete works',
   'greatest hits',
+  'hits',
   'thesis',
   'sample pool',
+  'sample pack',
+  'loop kit',
+  'stems',
+  'beat tape',
+  'soundtrack',
+  'ost',
+  'audiobook',
+  'lecture',
+  'sermon',
+  'slowed',
+  'boosted',
+  'reverb',
+  'mega',
   'сборник',
   'треков',
   'микс',
@@ -83,7 +102,9 @@ bool isPlayableTrackTitle(String title, String id) {
       .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
       .where((w) => w.length > 1 && RegExp(r'\p{L}', unicode: true).hasMatch(w))
       .length;
-  return words >= 2;
+  // Десяток слов в заголовке — это описание сборника («Summer Melody Phonk
+  // 2025 … Nhạc Hot»), а не название трека.
+  return words >= 2 && words <= 8;
 }
 
 /// Есть ли в тексте хоть одно фонк-слово.

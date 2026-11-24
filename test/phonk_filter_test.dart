@@ -14,10 +14,12 @@ const List<String> _junk = [
   'Sascha Müller - 40 Tracks For 40 Days',
   'audio_2024_05_11',
   'y2mate.com - phonk drift',
+  // Перезаливы «slowed + bass boosted»: тянутся минутами и звучат как
+  // чужой ролик с ютуба, а не трек. В подборку они не идут.
+  'GIGACHAD Theme Song (Phonk House) Super Slowed & Bass Boosted',
 ];
 
 const List<String> _tracks = [
-  'GIGACHAD Theme Song (Phonk House) Super Slowed & Bass Boosted',
   'xxanteria & Isq - FUNKED UP!',
   'ORQUESTRA MALDITA ( BRAZILIAN PHONK)',
   'Blow My High Phonk Wave',

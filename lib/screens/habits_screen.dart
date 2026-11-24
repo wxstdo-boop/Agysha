@@ -1527,58 +1527,64 @@ class _HabitsScreenState extends State<HabitsScreen>
                                 ),
                               ),
                           child: habit.type == 'good'
-                              ? Padding(
-                                  key: const ValueKey('streak_dots'),
-                                  padding: const EdgeInsets.only(
-                                    top: 6,
-                                    bottom: 2,
-                                  ),
-                                  child: Row(
-                                    children: List.generate(7, (index) {
-                                      // lastDoneDate == null → история пуста
-                                      // (никогда не отмечалась или был сброс).
-                                      // Осиротевший streak>0 без даты — артефакт
-                                      // старой версии/импорта: точки не должны
-                                      // «нарисоваться» из мёртвого счётчика.
-                                      //
-                                      // ВАЖНО: точки = streak БЕЗ вычитания.
-                                      // Стрик-счётчик уже включает последний
-                                      // завершённый день (он растёт в момент
-                                      // отметки, а не в полночь). Раньше здесь
-                                      // было `doneToday ? streak : streak - 1`,
-                                      // и каждое утро до отметки левый кружок
-                                      // «съедался» — при стрике 7 показывалось
-                                      // 6, при стрике 1 не показывалось ничего,
-                                      // хотя стрик не отменялся. Счётчик и точки
-                                      // теперь всегда совпадают.
-                                      // Серия читается через сервис: если
-                                      // после последней отметки пропущен день,
-                                      // точки гаснут сразу, не дожидаясь
-                                      // таймера смены суток.
-                                      final effectiveStreak = _service
-                                          .displayStreak(habit);
-                                      final isDone =
-                                          effectiveStreak > (6 - index);
-                                      return AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 320,
+                              ? (_service.displayStreak(habit) > 0
+                                    ? Padding(
+                                        key: const ValueKey('streak_dots'),
+                                        padding: const EdgeInsets.only(
+                                          top: 6,
+                                          bottom: 2,
                                         ),
-                                        curve: Curves.easeOut,
-                                        margin: const EdgeInsets.only(right: 6),
-                                        width: 10,
-                                        height: 10,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: isDone
-                                              ? theme.colorScheme.primary
-                                              : theme
-                                                    .colorScheme
-                                                    .surfaceContainerHighest,
+                                        child: Row(
+                                          children: List.generate(7, (index) {
+                                            // lastDoneDate == null → история пуста
+                                            // (никогда не отмечалась или был сброс).
+                                            // Осиротевший streak>0 без даты — артефакт
+                                            // старой версии/импорта: точки не должны
+                                            // «нарисоваться» из мёртвого счётчика.
+                                            //
+                                            // ВАЖНО: точки = streak БЕЗ вычитания.
+                                            // Стрик-счётчик уже включает последний
+                                            // завершённый день (он растёт в момент
+                                            // отметки, а не в полночь). Раньше здесь
+                                            // было `doneToday ? streak : streak - 1`,
+                                            // и каждое утро до отметки левый кружок
+                                            // «съедался» — при стрике 7 показывалось
+                                            // 6, при стрике 1 не показывалось ничего,
+                                            // хотя стрик не отменялся. Счётчик и точки
+                                            // теперь всегда совпадают.
+                                            // Серия читается через сервис: если
+                                            // после последней отметки пропущен день,
+                                            // точки гаснут сразу, не дожидаясь
+                                            // таймера смены суток.
+                                            final effectiveStreak = _service
+                                                .displayStreak(habit);
+                                            final isDone =
+                                                effectiveStreak > (6 - index);
+                                            return AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 320,
+                                              ),
+                                              curve: Curves.easeOut,
+                                              margin: const EdgeInsets.only(
+                                                right: 6,
+                                              ),
+                                              width: 10,
+                                              height: 10,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: isDone
+                                                    ? theme.colorScheme.primary
+                                                    : theme
+                                                          .colorScheme
+                                                          .surfaceContainerHighest,
+                                              ),
+                                            );
+                                          }),
                                         ),
-                                      );
-                                    }),
-                                  ),
-                                )
+                                      )
+                                    : const SizedBox.shrink(
+                                        key: ValueKey('streak_empty'),
+                                      ))
                               : habit.doneToday
                               ? _erasedBadge(context, theme)
                               : const SizedBox.shrink(

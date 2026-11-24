@@ -106,6 +106,10 @@ class MusicService extends ChangeNotifier {
   /// Идёт пересборка очереди ради новых подписей.
   bool _reloading = false;
 
+  /// Очередь изменилась, пока музыка играла: пересобирать источник на ходу
+  /// нельзя (слышимая дырка), поэтому работа ждёт паузы или остановки.
+  bool _pendingQueueRefresh = false;
+
   Timer? _fadeTimer;
 
   /// Поколение фейдов: старый таймер, увидев чужое поколение, тихо выходит,
@@ -156,6 +160,14 @@ class MusicService extends ChangeNotifier {
     // музыка обрывалась, даже если удаляли трек, который не играет.
     if (_canMutateQueue(_queue, nextTitles)) {
       unawaited(_applyQueueDiff(nextPaths, nextTitles));
+      return;
+    }
+    // Пересборка источника на ходу даёт слышимую дырку (ExoPlayer
+    // пересоздаёт очередь) — именно это читалось как «при поиске трека
+    // играющий заедает». Пока музыка звучит, откладываем: очередь
+    // обновится в паузе, в конце трека или при следующем запуске.
+    if (_playing) {
+      _pendingQueueRefresh = true;
       return;
     }
     unawaited(_refreshQueueTags());
@@ -242,6 +254,11 @@ class MusicService extends ChangeNotifier {
   /// Обновить теги играющей очереди, не теряя позицию и громкость.
   Future<void> _refreshQueueTags() async {
     if (_reloading) return;
+    // На ходу источник не пересобираем: пока звук идёт, работа ждёт.
+    if (_playing) {
+      _pendingQueueRefresh = true;
+      return;
+    }
     final current = _path;
     if (current == null || _playlist.isEmpty) return;
     final paths = _queue.contains(current) ? _queue : <String>[current];
@@ -344,6 +361,13 @@ class MusicService extends ChangeNotifier {
     try {
       await _player.pause();
     } catch (_) {}
+    // Пока играло, очередь могла поменяться — теперь её можно спокойно
+    // пересобрать: пауза не «дёрнется», а следующее включение возьмёт
+    // актуальный состав и названия.
+    if (_pendingQueueRefresh) {
+      _pendingQueueRefresh = false;
+      unawaited(_refreshQueueTags());
+    }
   }
 
   /// Полная остановка: используется при удалении трека.
@@ -359,6 +383,10 @@ class MusicService extends ChangeNotifier {
       await _player.stop();
       await _player.setVolume(1);
     } catch (_) {}
+    if (_pendingQueueRefresh) {
+      _pendingQueueRefresh = false;
+      unawaited(_refreshQueueTags());
+    }
   }
 
   /// Сменить режим очереди. Тот же режим не переключаем: повторный тап

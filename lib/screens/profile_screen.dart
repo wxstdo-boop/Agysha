@@ -544,7 +544,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       onGenre.shuffle();
       rest.shuffle();
 
-      for (final doc in [...onGenre, ...rest].take(12)) {
+      // Если в выдаче есть записи, где фонк прямо назван, чужие треки не
+      // трогаем вовсе: раньше «запасной» список подмешивался к основному, и
+      // вместо фонка в подборку лезли случайные хаус-сеты и чужие альбомы.
+      final ordered = onGenre.isNotEmpty ? onGenre : rest;
+
+      for (final doc in ordered.take(12)) {
         if (DateTime.now().isAfter(deadline)) break;
         final id = doc['identifier'].toString();
         final metaUri = Uri.parse('https://archive.org/metadata/$id/files');

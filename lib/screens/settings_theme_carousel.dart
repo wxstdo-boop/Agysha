@@ -535,32 +535,52 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
             child: Center(
               child: AnimatedSwitcher(
                 // Чистое перекрёстное затухание без масштаба: значок в центре
-                // не «выпрыгивает», а спокойно растворяется в новый. 240 мс —
-                // столько же, сколько у остальных плавных смен в приложении.
-                duration: const Duration(milliseconds: 240),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                transitionBuilder: (child, anim) =>
-                    FadeTransition(opacity: anim, child: child),
-                // Цвет значка едет за палитрой плавно. Раньше он брался
-                // напрямую из cs.primary: при смене темы значок успевал
-                // щёлкнуть новым цветом до окончания AnimatedTheme — это и
-                // читалось как «мигает».
-                child: TweenAnimationBuilder<Color?>(
-                  // Ключ — на самом ребёнке AnimatedSwitcher: раньше он висел
-                  // на Icon внутри билдера, и переключатель считал виджет тем
-                  // же самым, подменяя значок одним кадром («перебор»).
+                // не «выпрыгивает», а спокойно растворяется в новый.
+                //
+                // 420 мс и ОДНА анимация на смену. Раньше их было две:
+                // переключатель на 240 мс и отдельный TweenAnimationBuilder
+                // на цвет 320 мс. На переходе mutilated ↔ светлая они
+                // сталкивались (старый значок гас, новый уже перекрашивался),
+                // и центр читался как «дёргается». Теперь цвет берётся прямо
+                // из палитры: её саму плавно ведёт AnimatedTheme, поэтому
+                // оттенок едет одной кривой вместе с фоном, без второго
+                // таймера.
+                // Две фазы вместо одновременного перекрёстного затухания:
+                // старый значок уходит за первые ~40 % времени, новый
+                // проявляется во второй половине. При чистом кросс-фейде
+                // оба глифа секунду лежали друг на друге полупрозрачными —
+                // именно это и читалось как «значки сменяются неплавно».
+                duration: const Duration(milliseconds: 380),
+                switchInCurve: const Interval(
+                  0.38,
+                  1.0,
+                  curve: Curves.easeOutCubic,
+                ),
+                switchOutCurve: const Interval(
+                  0.0,
+                  0.42,
+                  curve: Curves.easeInCubic,
+                ),
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: ScaleTransition(
+                    // 0.9 → 1: новый значок «встаёт» на место, а не
+                    // проступает из ничего. Масштаб крошечный — край
+                    // глифа не пересэмплируется в мыло.
+                    scale: Tween<double>(begin: 0.9, end: 1.0).animate(anim),
+                    child: child,
+                  ),
+                ),
+                // Ключ — на самом ребёнке AnimatedSwitcher: раньше он висел
+                // на Icon внутри билдера, и переключатель считал виджет тем
+                // же самым, подменяя значок одним кадром («перебор»).
+                child: Icon(
+                  entry.icon,
                   key: ValueKey<String>(
                     'hub_${entry.key}_${entry.icon.codePoint}',
                   ),
-                  tween: ColorTween(end: cs.primary),
-                  duration: const Duration(milliseconds: 320),
-                  curve: Curves.easeOutCubic,
-                  builder: (context, color, _) => Icon(
-                    entry.icon,
-                    size: hub * 0.36,
-                    color: color ?? cs.primary,
-                  ),
+                  size: hub * 0.36,
+                  color: cs.primary,
                 ),
               ),
             ),

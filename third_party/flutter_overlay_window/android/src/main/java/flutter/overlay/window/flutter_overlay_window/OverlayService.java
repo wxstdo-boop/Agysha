@@ -80,6 +80,14 @@ public class OverlayService extends Service implements View.OnTouchListener {
     /** Время касания: тап без движения открывает чат. */
     private long tapDownAtMs = 0;
     private static final long TAP_MAX_MS = 1200L;
+    /**
+     * Когда приложение последний раз поднимали на передний план тапом.
+     * Тап приходит ДВУМЯ путями: сенсорное событие окна и команда Dart.
+     * Оба поднимали задачу, из-за чего Android дважды пересобирал экран
+     * поверх пузыря — снаружи это читалось как «пузырь мигает при тапе».
+     */
+    private long lastRaiseAtMs = 0;
+    private static final long RAISE_DEBOUNCE_MS = 700L;
     // Координаты движения сливаются в один updateViewLayout на vsync.
     // Это не даёт MethodChannel и WindowManager накапливать старые кадры.
     private boolean moveFramePosted = false;
@@ -133,9 +141,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
         int startY = intent.getIntExtra("startY", OverlayConstants.DEFAULT_XY);
         boolean isCloseWindow = intent.getBooleanExtra(INTENT_EXTRA_IS_CLOSE_WINDOW, false);
         if (isCloseWindow) {
-            removeOverlayViewSafely();
-            isRunning = false;
-            stopSelfResult(startId);
+            hideOverlaySmoothly(startId);
             return START_NOT_STICKY;
         }
         if (windowManager != null || flutterView != null) {
@@ -207,7 +213,7 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 // поднять задачу (агрессивные прошивки), Dart заберёт метку
                 // на следующем resume и откроет чат.
                 rememberOpenAdaChat();
-                bringAppToFront();
+                raiseAppOnce();
             }
             // Мессенджер главного движка может быть уже отцеплен (приложение
             // выгрузили). Раньше это роняло обработчик — и тап по пузырю
@@ -293,6 +299,33 @@ public class OverlayService extends Service implements View.OnTouchListener {
             }
         }, 0);
         return START_NOT_STICKY;
+    }
+
+    /**
+     * Скрыть пузырь плавно: сначала альфа вьюхи 1 -> 0, и только потом окно
+     * снимается. Раньше здесь стоял removeViewImmediate, и окно обрывалось
+     * в середине Dart-фейда — со стороны это «пропал рывком», а при тапе
+     * ещё и мигало между пузырём и поднятой активити.
+     */
+    private void hideOverlaySmoothly(final int startId) {
+        final FlutterView view = flutterView;
+        if (view == null || !viewAttached || windowManager == null) {
+            removeOverlayViewSafely();
+            isRunning = false;
+            stopSelfResult(startId);
+            return;
+        }
+        view.animate().alpha(0f).setDuration(150).withEndAction(new Runnable() {
+            @Override
+            public void run() {
+                // Пока шёл фейд, пузырь могли показать заново: тогда новую
+                // view снимать нельзя, иначе она мигнёт и пропадёт.
+                if (flutterView != view) return;
+                removeOverlayViewSafely();
+                isRunning = false;
+                stopSelfResult(startId);
+            }
+        }).start();
     }
 
     private void removeOverlayViewSafely() {
@@ -671,17 +704,22 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 applyDragTranslation();
                 break;
             case MotionEvent.ACTION_UP:
-                if (dragging) commitDragTranslation();
+                // Сначала запоминаем, БЫЛ ли это перетаскиванием: ниже
+                // `dragging` сбрасывается, и проверка «!dragging» была
+                // всегда истинной — короткий сдвиг пузыря тоже считался
+                // тапом и открывал Аду.
+                final boolean wasDrag = dragging;
+                if (wasDrag) commitDragTranslation();
                 dragging = false;
                 lastYPosition = Math.round(dragPositionY);
                 // Тап по пузырю открываем и отсюда: Dart-оверлей мог не
                 // получить событие (окно только что показалось, движок
                 // оверлея ещё поднимается). Пальцем не двигали и держали
                 // недолго — значит это тап, а не перетаскивание.
-                if (!dragging && tapDownAtMs > 0
+                if (!wasDrag && tapDownAtMs > 0
                         && System.currentTimeMillis() - tapDownAtMs <= TAP_MAX_MS) {
                     rememberOpenAdaChat();
-                    bringAppToFront();
+                    raiseAppOnce();
                 }
                 tapDownAtMs = 0;
                 break;
@@ -732,7 +770,15 @@ public class OverlayService extends Service implements View.OnTouchListener {
             manager.updateViewLayout(view, params);
         } catch (RuntimeException error) {
             entryRevealed = false;
+            return;
         }
+        // Само окно проявляем альфой САМОЙ вьюхи: это свойство поверхности,
+        // его рисует GPU, и WindowManager не перекладывается ни на кадр.
+        // Раньше params.alpha прыгал с 0 на 1 одним кадром, и если движок
+        // оверлея уже был поднят (повторный показ пузыря), пузырь появлялся
+        // рывком — Dart-анимация к тому моменту была уже на конце.
+        view.setAlpha(0f);
+        view.animate().alpha(1f).setDuration(220).start();
     }
 
     /**
@@ -749,6 +795,19 @@ public class OverlayService extends Service implements View.OnTouchListener {
         } catch (RuntimeException error) {
             Log.w("OverlayService", "Could not persist open-chat request", error);
         }
+    }
+
+    /**
+     * Поднимает Agysha на передний план ровно один раз на тап.
+     * Второй вызов в пределах {@link #RAISE_DEBOUNCE_MS} игнорируется:
+     * тап приходит и из сенсора, и командой Dart, а двойной подъём задачи
+     * пересобирал экран дважды — пузырь при этом мигал.
+     */
+    private void raiseAppOnce() {
+        final long now = System.currentTimeMillis();
+        if (now - lastRaiseAtMs < RAISE_DEBOUNCE_MS) return;
+        lastRaiseAtMs = now;
+        bringAppToFront();
     }
 
     /**

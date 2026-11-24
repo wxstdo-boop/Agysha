@@ -102,16 +102,19 @@ void main() {
     }
 
     testWidgets(
-      'у широкой карточки перспектива почти нулевая — фон не съедает',
+      'у широкой карточки перспектива умеренная — объём виден, край цел',
       (tester) async {
         final wide = await perspectiveWhilePressed(
           tester,
           const Size(300, 200),
         );
+        // Нижняя граница: при 0.11/longest наклон на карточке 360 px
+        // вырождался в плоскую картинку и читался как «наклона нет».
+        // Верхняя: сильнее — и угол зажатия уезжает за экран.
         expect(
           wide.abs(),
-          lessThan(0.0005),
-          reason: 'сильная перспектива у широкой карточки срезала край зажатия',
+          inInclusiveRange(0.0010, 0.0024),
+          reason: 'перспектива обязана читаться, но не срезать край',
         );
       },
     );
@@ -192,7 +195,9 @@ void main() {
     test('слой строк рейтинга не режет призрак последнего друга', () {
       final src = File('lib/screens/profile_cards.dart').readAsStringSync();
       expect(
-        src.contains('tween: Tween<double>(end: rows.length * _leaderRowHeight)'),
+        src.contains(
+          'tween: Tween<double>(end: rows.length * _leaderRowHeight)',
+        ),
         isTrue,
         reason: 'высота слоя должна ехать к новой вместе с призраком',
       );
@@ -215,7 +220,8 @@ void main() {
       expect(
         src.contains("minDigits: '\$_kTotalHats'.length"),
         isTrue,
-        reason: 'на «9 → 10» строка расширялась, и scaleDown поджимал весь текст',
+        reason:
+            'на «9 → 10» строка расширялась, и scaleDown поджимал весь текст',
       );
       expect(
         src.contains(
@@ -325,7 +331,8 @@ void main() {
       expect(
         card.substring(0, rows).contains('AnimatedSize('),
         isFalse,
-        reason: 'высота строк уже едет твином — второй аниматор даёт двойную кривую',
+        reason:
+            'высота строк уже едет твином — второй аниматор даёт двойную кривую',
       );
       // Подсказка без друзей появляется кадром, поэтому её высоту ведёт
       // собственный `AnimatedSize` — и он стоит ПОСЛЕ строк.
@@ -342,7 +349,8 @@ void main() {
       expect(
         slot.contains('Curves.'),
         isFalse,
-        reason: 'доля уже прошла через кривую волны: второй ease менял цифру '
+        reason:
+            'доля уже прошла через кривую волны: второй ease менял цифру '
             'в первые 40 % хода и потом замирал',
       );
       expect(

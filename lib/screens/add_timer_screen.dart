@@ -348,15 +348,16 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
               maxTiltAngle: 0.22,
               // В шапке была плоская текстовая кнопка высотой 36: рядом с
               // большой кнопкой внизу она читалась «укороченной». Теперь это
-              // такая же таблетка-кнопка, только компактная.
+              // та же таблетка, что и внизу, — 52 в высоту, с тем же
+              // заголовочным начертанием, только с полями по бокам.
               child: Padding(
-                padding: const EdgeInsets.only(right: 4),
+                padding: const EdgeInsets.only(right: 8),
                 child: FilledButton(
                   onPressed: _save,
                   style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    textStyle: theme.textTheme.labelLarge,
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 26),
+                    textStyle: theme.textTheme.titleMedium,
                   ),
                   child: Text(Translations.saveOf(context)),
                 ),
