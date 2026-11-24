@@ -968,15 +968,16 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
                                   ),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(16),
-                                    // Монотонный полупрозрачный тон акцента:
-                                    // раньше тут был четырёхступенчатый
-                                    // рубиновый градиент с неоновым свечением
-                                    // и светлым ободком — кнопка спорила с
-                                    // полем и мигала ярче текста.
-                                    color: accent.withValues(alpha: 0.14),
+                                    // Полупрозрачная красная «таблетка»:
+                                    // ровная заливка без градиента и свечения,
+                                    // чтобы кнопка читалась как удаление/
+                                    // сохранение, но не перекрывала текст поля.
+                                    color: colors.error.withValues(alpha: 0.16),
                                     border: Border.all(
-                                      color: accent.withValues(alpha: 0.32),
-                                      width: 1.1,
+                                      color: colors.error.withValues(
+                                        alpha: 0.42,
+                                      ),
+                                      width: 1.2,
                                     ),
                                   ),
                                   child: Row(
@@ -1008,7 +1009,7 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
                                                 child:
                                                     CircularProgressIndicator(
                                                       strokeWidth: 2.2,
-                                                      color: accent,
+                                                      color: colors.error,
                                                     ),
                                               )
                                             : Icon(
@@ -1023,7 +1024,7 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
                                                       : 'save_ok',
                                                 ),
                                                 size: 19,
-                                                color: accent,
+                                                color: colors.error,
                                               ),
                                       ),
                                       const SizedBox(width: 9),
@@ -1034,7 +1035,7 @@ class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
                                         ),
                                         style: theme.textTheme.labelLarge
                                             ?.copyWith(
-                                              color: accent,
+                                              color: colors.error,
                                               fontWeight: FontWeight.w700,
                                               letterSpacing: 0.3,
                                             ),

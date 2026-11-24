@@ -1083,8 +1083,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       // строки её не было вовсе, и удаление последнего таймера выглядело
       // иначе, чем удаление любого другого.
       resizeDuration: const Duration(milliseconds: 300),
-      // Фон удаления = границы карточки (у неё горизонтальный margin 12).
-      inset: const EdgeInsets.symmetric(horizontal: 12),
+      // Фон удаления = границы карточки: у неё margin 12 по бокам и 5
+      // сверху/снизу. Без вертикального отступа плашка была на 10 px выше
+      // карточки — читалась «шире карточки».
+      inset: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       confirmDismiss: (_) async {
         final ok = await showAgyshaConfirm(
           context,

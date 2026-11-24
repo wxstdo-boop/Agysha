@@ -95,6 +95,11 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
   /// Ширина блока из последней раскладки — в ней же считаем прогресс и позицию.
   double _width = 1;
 
+  /// Ширина самой карточки внутри блока (за вычетом горизонтального [inset]).
+  /// Свайп и красная плашка считаются по ней, а не по ширине блока: иначе
+  /// карточка с полями 12 px отставала от пальца, а плашка вылезала за неё.
+  double _cardWidth = 1;
+
   /// Смещение пальца с начала жеста (влево — отрицательное).
   double _dragDx = 0;
   double _dragStartProgress = 0;
@@ -215,7 +220,8 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
     if (_dismissed || _collapsing || _confirming) return;
     _dragDx += details.delta.dx;
     // Влево (delta.dx < 0) — прогресс растёт; вправо — упираемся в 0.
-    _move.value = (_dragStartProgress - _dragDx / _width).clamp(0.0, 1.0);
+    // Делим на ширину КАРТОЧКИ, а не блока: карточка едет ровно за пальцем.
+    _move.value = (_dragStartProgress - _dragDx / _cardWidth).clamp(0.0, 1.0);
   }
 
   Future<void> _onDragEnd(DragEndDetails details) async {
@@ -314,6 +320,8 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
         _width = constraints.maxWidth.isFinite && constraints.maxWidth > 0
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
+        final inset = widget.inset.resolve(TextDirection.ltr);
+        _cardWidth = (_width - inset.horizontal).clamp(1.0, _width);
         final content = AnimatedBuilder(
           // Слушаем и _move, и _resize: плашка удаления гаснет вместе с
           // ужатием строки, а не остаётся красным прямоугольником до конца.
@@ -360,7 +368,7 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
                     // фона за ней — на слабом железе это и давало рывки.
                     RepaintBoundary(
                       child: Transform.translate(
-                        offset: Offset(-p * _width, 0),
+                        offset: Offset(-p * _cardWidth, 0),
                         child: widget.child,
                       ),
                     ),
@@ -417,11 +425,8 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
 
   Widget _buildBackground(BuildContext context, double p) {
     if (p <= 0.001) return const SizedBox.shrink();
-    final w = _width;
-    final inset = widget.inset.resolve(TextDirection.ltr);
     final opacity = (0.40 + 0.60 * p).clamp(0.0, 1.0);
-    final cardWidth = (w - inset.left - inset.right).clamp(0.0, w);
-    final revealed = (p.clamp(0.0, 1.0) * w).clamp(0.0, cardWidth);
+    final revealed = (p.clamp(0.0, 1.0) * _cardWidth).clamp(0.0, _cardWidth);
     if (revealed < 0.5) return const SizedBox.shrink();
 
     // Красный фон удаления со скруглением по радиусу карточки,

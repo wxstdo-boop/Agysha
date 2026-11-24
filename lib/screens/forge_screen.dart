@@ -62,6 +62,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
   bool _loadingToken = true;
   bool _checking = false;
   bool _running = false;
+
+  /// Поле токена гаснет перед очисткой и плавно возвращается пустым:
+  /// иначе «Забыть токен» стирал текст кадром.
+  bool _forgettingToken = false;
   String? _login;
   String? _tokenError;
   String _baseBranch = 'main';
@@ -217,20 +221,26 @@ class _ForgeScreenState extends State<ForgeScreen> {
   }
 
   Future<void> _forgetToken() async {
+    if (_forgettingToken) return;
     // Поле чистим ВСЕГДА, даже если хранилище ругнулось: иначе пользователь
     // нажимает «удалить», а токен остаётся на экране — и выглядит это так,
     // будто удаление не работает вовсе.
+    setState(() => _forgettingToken = true);
     Object? failure;
     try {
       await _service.clearToken();
     } catch (e) {
       failure = e;
     }
+    // Даём тексту поля погаснуть, даже если хранилище ответило мгновенно:
+    // иначе токен исчезал одним кадром. Затем поле проявляется пустым.
+    await Future<void>.delayed(const Duration(milliseconds: 150));
     if (!mounted) return;
     setState(() {
       _tokenController.clear();
       _login = null;
       _tokenError = null;
+      _forgettingToken = false;
     });
     showBeautifulSnackBar(
       context,
@@ -645,41 +655,48 @@ class _ForgeScreenState extends State<ForgeScreen> {
               // экране незачем, а подтверждение всё равно приходит логином ниже.
               // Оформление — как у остальных полей приложения (плотное, радиус
               // 14, минимальное меню, без лупы).
-              TextField(
-                key: const ValueKey('forge_token_field'),
-                controller: _tokenController,
-                focusNode: _tokenFocus,
-                obscureText: true,
-                obscuringCharacter: '•',
-                autocorrect: false,
-                enableSuggestions: false,
-                maxLines: 1,
-                textInputAction: TextInputAction.done,
-                cursorOpacityAnimates: true,
-                magnifierConfiguration: TextMagnifierConfiguration.disabled,
-                contextMenuBuilder: minimalContextMenuBuilder,
-                decoration: InputDecoration(
-                  isDense: true,
-                  counterText: '',
-                  hintText: 'ghp_… / github_pat_…',
-                  filled: true,
-                  fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 14,
-                    horizontal: 14,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide(
-                      color: cs.outlineVariant.withValues(alpha: 0.65),
+              AnimatedOpacity(
+                opacity: _forgettingToken ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOutCubic,
+                child: TextField(
+                  key: const ValueKey('forge_token_field'),
+                  controller: _tokenController,
+                  focusNode: _tokenFocus,
+                  obscureText: true,
+                  obscuringCharacter: '•',
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  maxLines: 1,
+                  textInputAction: TextInputAction.done,
+                  cursorOpacityAnimates: true,
+                  magnifierConfiguration: TextMagnifierConfiguration.disabled,
+                  contextMenuBuilder: minimalContextMenuBuilder,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    counterText: '',
+                    hintText: 'ghp_… / github_pat_…',
+                    filled: true,
+                    fillColor: cs.surfaceContainerHighest.withValues(
+                      alpha: 0.45,
                     ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide(color: accent, width: 1.6),
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 14,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide(
+                        color: cs.outlineVariant.withValues(alpha: 0.65),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide(color: accent, width: 1.6),
+                    ),
                   ),
                 ),
               ),
@@ -720,7 +737,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                     releaseDuration: const Duration(milliseconds: 220),
                     child: IconButton(
                       tooltip: Translations.t('forgeTokenForget', context),
-                      onPressed: _loadingToken
+                      onPressed: _loadingToken || _forgettingToken
                           ? null
                           : () {
                               Haptics.light();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../utils/motion_prefs.dart';
 import 'swipe_to_delete.dart' show SwipeToDeleteScope;
@@ -119,6 +120,15 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
 
   Offset _tilt = Offset.zero;
 
+  /// Куда наклон едет прямо сейчас (см. [_updateTilt]) и тикер, который
+  /// ведёт [_tilt] к цели. Раньше сглаживание шло «одним шагом на каждое
+  /// событие пальца»: при неровном потоке move-событий (а он неровный —
+  /// 30–120 Гц плюс паузы) карточка шла рывками. Тикер считает по кадрам,
+  /// а не по событиям, поэтому движение ровное на любом железе.
+  Offset _tiltTarget = Offset.zero;
+  late final Ticker _tiltTicker;
+  Duration _lastTiltTick = Duration.zero;
+
   /// Размер элемента на момент последнего наклона: по нему подбирается сила
   /// перспективы (см. [_perspectiveFor]).
   Size? _tiltSize;
@@ -212,6 +222,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInOutCubic,
     );
+    _tiltTicker = createTicker(_onTiltTick);
     _tiltFade =
         AnimationController(
           vsync: this,
@@ -254,6 +265,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _tiltTicker.dispose();
     _stuckGuard?.cancel();
     _tiltNotifier.dispose();
     _tiltFade.dispose();
@@ -302,10 +314,34 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       final dl = dir.distance;
       floored = dl > 1e-6 ? dir * (_minTilt / dl) : _centerTilt * _minTilt;
     }
-    if (smooth) {
-      _tilt = Offset.lerp(_tilt, floored, 0.55) ?? floored;
-    } else {
+    _tiltTarget = floored;
+    if (!smooth) {
+      _tiltTicker.stop();
       _tilt = floored;
+      _tiltNotifier.value = _tilt;
+      return;
+    }
+    if (!_tiltTicker.isActive) {
+      _lastTiltTick = Duration.zero;
+      _tiltTicker.start();
+    }
+  }
+
+  /// Кадровое сглаживание наклона: доля перехода считается от времени кадра,
+  /// а не от «одного события пальца», — поэтому движение одинаково ровное
+  /// и на 60, и на 120 Гц, и не замирает на полпути, если палец остановился.
+  void _onTiltTick(Duration elapsed) {
+    final dt = ((elapsed - _lastTiltTick).inMicroseconds / 1e6).clamp(
+      0.0,
+      0.05,
+    );
+    _lastTiltTick = elapsed;
+    // 65 мс — время «догона» пальца: заметно отзывчиво, но без щелчка.
+    final k = 1.0 - math.exp(-dt / 0.065);
+    _tilt = _tilt + (_tiltTarget - _tilt) * k;
+    if ((_tiltTarget - _tilt).distance < 0.002) {
+      _tilt = _tiltTarget;
+      _tiltTicker.stop();
     }
     _tiltNotifier.value = _tilt;
   }
@@ -451,96 +487,114 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         _ctrl.reverse();
       });
     }
+
+    // Содержимое (вдавливание, подложка, свечение) пересобирается ТОЛЬКО на
+    // тиках контроллеров нажатия, а наклон — отдельным внешним слоем. Раньше
+    // всё жило в одном AnimatedBuilder: каждое move-событие пальца
+    // пересобирало подложку и свечение, и на больших карточках это давало
+    // те самые подлагивания.
+    final pressed = AnimatedBuilder(
+      animation: Listenable.merge([_ctrl, _swipeAnim]),
+      builder: (context, child) {
+        // В покое и нажатии — плавная кривая, при возврате — своя,
+        // если задана: отдача читается «пружинкой», а не вялым спадом.
+        final curve = (_ctrl.status == AnimationStatus.reverse
+            ? (widget.releaseCurve ?? widget.curve)
+            : widget.curve);
+        final v = curve.transform(_ctrl.value) * _swipeAnim.value;
+        final s = 1.0 + (widget.pressedScale - 1.0) * v;
+
+        // Подложка отдачи живёт ВНУТРИ Transform: она проявляется и
+        // сжимается вместе с содержимым, без резкого появления фона.
+        Widget content = child!;
+        final tint = widget.pressTint;
+        if (tint != null) {
+          content = DecoratedBox(
+            decoration: BoxDecoration(
+              color: tint.withValues(
+                alpha: (widget.pressTintStrength * v).clamp(0.0, 1.0),
+              ),
+              borderRadius: widget.pressTintRadius,
+            ),
+            child: content,
+          );
+        }
+
+        if (widget.pressOverlay != null) {
+          content = Stack(
+            children: [
+              content,
+              Positioned.fill(
+                child: IgnorePointer(child: widget.pressOverlay!(context, v)),
+              ),
+            ],
+          );
+        }
+
+        // Дерево НЕ меняет форму между кадрами. Раньше в покое
+        // возвращался голый child, а при нажатии — child в Transform:
+        // Flutter пересоздавал поддерево вместе с распознавателями
+        // жестов, и нажатие, начатое до первого кадра анимации, терялось
+        // (кнопка «не нажималась с первого раза»). В покое единичная
+        // матрица и Opacity 1.0 не создают лишних слоёв.
+        return Opacity(
+          opacity: 1.0 - (1.0 - widget.pressedOpacity) * v,
+          child: Transform(
+            transform: Matrix4.identity()..scaleByDouble(s, s, 1.0, 1.0),
+            alignment: Alignment.center,
+            transformHitTests: false,
+            child: content,
+          ),
+        );
+      },
+      child: RepaintBoundary(child: widget.child),
+    );
+
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: _down,
       onPointerMove: _move,
       onPointerUp: _up,
       onPointerCancel: _cancel,
+      // Наклон — свой слой: при движении пальца пересобирается только
+      // матрица, а не содержимое карточки (оно приходит готовым `child`).
       child: AnimatedBuilder(
-        animation: Listenable.merge([
-          _ctrl,
-          _tiltNotifier,
-          _swipeAnim,
-          _tiltFade,
-        ]),
+        animation: Listenable.merge([_tiltNotifier, _tiltFade]),
         builder: (context, child) {
-          // В покое и нажатии — плавная кривая, при возврате — своя,
-          // если задана: отдача читается «пружинкой», а не вялым спадом.
-          final curve = (_ctrl.status == AnimationStatus.reverse
-              ? (widget.releaseCurve ?? widget.curve)
-              : widget.curve);
-          final v = curve.transform(_ctrl.value) * _swipeAnim.value;
-          final s = 1.0 + (widget.pressedScale - 1.0) * v;
-
           final currentTilt = _ctrl.status == AnimationStatus.reverse
               ? _releaseTilt
-              : _tilt;
+              : _tiltNotifier.value;
           final tiltFade = _tiltFade.value;
           final tiltActive =
               widget.enableTilt &&
               !MotionPrefs.shouldReduceMotion &&
               tiltFade > 0.001 &&
               currentTilt != Offset.zero;
-
+          if (!tiltActive) {
+            return Transform(
+              transform: Matrix4.identity(),
+              alignment: Alignment.center,
+              transformHitTests: false,
+              child: child,
+            );
+          }
           // Угол зависит ТОЛЬКО от силы наклона (tiltFade), а не от прогресса
           // нажатия: свайп гасит нажатие мгновенно, но наклон уходит плавно.
           final tiltX = -currentTilt.dy * widget.maxTiltAngle * tiltFade;
           final tiltY = currentTilt.dx * widget.maxTiltAngle * tiltFade;
-
           final matrix = Matrix4.identity();
-          if (tiltActive) {
-            final perspective = _perspectiveFor(_tiltSize);
-            if (perspective > 0) matrix.setEntry(3, 2, perspective);
-            matrix.rotateX(tiltX);
-            matrix.rotateY(tiltY);
-          }
-          matrix.scaleByDouble(s, s, 1.0, 1.0);
-
-          // Подложка отдачи живёт ВНУТРИ Transform: она проявляется и
-          // сжимается вместе с содержимым, без резкого появления фона.
-          Widget content = child!;
-          final tint = widget.pressTint;
-          if (tint != null) {
-            content = DecoratedBox(
-              decoration: BoxDecoration(
-                color: tint.withValues(
-                  alpha: (widget.pressTintStrength * v).clamp(0.0, 1.0),
-                ),
-                borderRadius: widget.pressTintRadius,
-              ),
-              child: content,
-            );
-          }
-
-          if (widget.pressOverlay != null) {
-            content = Stack(
-              children: [
-                content,
-                Positioned.fill(
-                  child: IgnorePointer(child: widget.pressOverlay!(context, v)),
-                ),
-              ],
-            );
-          }
-
-          // Дерево НЕ меняет форму между кадрами. Раньше в покое
-          // возвращался голый child, а при нажатии — child в Transform:
-          // Flutter пересоздавал поддерево вместе с распознавателями
-          // жестов, и нажатие, начатое до первого кадра анимации, терялось
-          // (кнопка «не нажималась с первого раза»). В покое единичная
-          // матрица и Opacity 1.0 не создают лишних слоёв.
-          return Opacity(
-            opacity: 1.0 - (1.0 - widget.pressedOpacity) * v,
-            child: Transform(
-              transform: matrix,
-              alignment: Alignment.center,
-              transformHitTests: false,
-              child: content,
-            ),
+          final perspective = _perspectiveFor(_tiltSize);
+          if (perspective > 0) matrix.setEntry(3, 2, perspective);
+          matrix.rotateX(tiltX);
+          matrix.rotateY(tiltY);
+          return Transform(
+            transform: matrix,
+            alignment: Alignment.center,
+            transformHitTests: false,
+            child: child,
           );
         },
-        child: RepaintBoundary(child: widget.child),
+        child: pressed,
       ),
     );
   }
