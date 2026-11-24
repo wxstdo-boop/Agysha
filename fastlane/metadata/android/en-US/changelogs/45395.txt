@@ -1,0 +1,1 @@
+- ✨ Убрать cryptography_flutter — с AGP 9 APK не собирался (#65)
