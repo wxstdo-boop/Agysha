@@ -1,8 +1,9 @@
 AntiFeatures:
   - NonFreeNet
 Categories:
-  - Productivity
-  - Time
+  - Alarm Clock
+  - Habit Tracker
+  - Task
 License: MIT
 AuthorName: Wetidom
 SourceCode: https://github.com/wxstdo-boop/Agysha
