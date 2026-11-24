@@ -263,13 +263,28 @@ class _AdaBubbleState extends State<_AdaBubble>
     if (_appear.value < 0.999) return;
     final moved = (event.position - downAt).distance;
     final held = DateTime.now().difference(downTime);
-    if (moved <= _tapSlop && held <= _tapTime) unawaited(_openChat());
+    if (moved <= _tapSlop && held <= _tapTime) {
+      unawaited(_openChat());
+      return;
+    }
+    if (moved > _tapSlop) _rememberSettledPosition();
   }
 
   void _onCancel(PointerCancelEvent event) {
     _downAt = null;
     _downTime = null;
     _press.reverse();
+    _rememberSettledPosition();
+  }
+
+  /// После отпускания окно ещё доводится до ближайшего якоря, поэтому
+  /// позицию записываем с запасом на эту доводку: иначе следующий запуск
+  /// поднимал бы пузырь там, где палец разжался, а не у края.
+  void _rememberSettledPosition() {
+    Timer(const Duration(milliseconds: 320), () {
+      if (!identical(_live, this) || !mounted) return;
+      unawaited(_rememberPosition());
+    });
   }
 
   @override

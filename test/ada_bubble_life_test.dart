@@ -266,4 +266,15 @@ void main() {
       reason: 'сначала открываем чат, потом сохраняем координаты',
     );
   });
+
+  test('после перетаскивания запоминается позиция уже у якоря', () {
+    final src = read(overlay);
+    // Окно доводится до края анимацией, поэтому сохранять позицию сразу
+    // после пальца нельзя: при следующем запуске пузырь вставал бы
+    // посреди экрана.
+    expect(src, contains('void _rememberSettledPosition()'));
+    expect(src, contains('milliseconds: 320'));
+    expect(src, contains('if (moved > _tapSlop) _rememberSettledPosition();'));
+    expect(src, contains('_press.reverse();\n    _rememberSettledPosition();'));
+  });
 }
