@@ -58,7 +58,6 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback? onTogglePin;
   final VoidCallback? onToggleLike;
   final VoidCallback? onCopy;
-  final VoidCallback? onCycleAvatar;
   const _MessageBubble({
     super.key,
     required this.message,
@@ -72,7 +71,6 @@ class _MessageBubble extends StatelessWidget {
     this.onTogglePin,
     this.onToggleLike,
     this.onCopy,
-    this.onCycleAvatar,
   });
 
   /// Сообщение-награда Ады (стрики/задачи) — особая «подарочная» плашка.

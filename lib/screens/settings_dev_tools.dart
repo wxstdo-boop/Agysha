@@ -299,7 +299,7 @@ extension _SettingsDevTools on _SettingsScreenState {
                         transitionDuration: const Duration(milliseconds: 320),
                         reverseTransitionDuration:
                             const Duration(milliseconds: 260),
-                        pageBuilder: (_, __, ___) => const ForgeScreen(
+                        pageBuilder: (_, _, _) => const ForgeScreen(
                           owner: kUpdateRepoOwner,
                           repo: kUpdateRepoName,
                         ),

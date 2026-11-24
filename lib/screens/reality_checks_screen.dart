@@ -27,14 +27,12 @@ import '../widgets/agysha_confirm_dialog.dart';
 import '../widgets/smooth_tooltip.dart' show SmoothTooltip;
 
 class RealityChecksScreen extends StatefulWidget {
-  final VoidCallback? onExit;
   final ValueNotifier<double>? scrollOffset;
 
   /// Индекс этого раздела в PageView — ключ в sectionOffsetByPage.
   final int pillIndex;
   const RealityChecksScreen({
     super.key,
-    this.onExit,
     this.scrollOffset,
     this.pillIndex = 0,
   });

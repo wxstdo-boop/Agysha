@@ -569,7 +569,6 @@ class _HomeScreenState extends State<HomeScreen>
           // проявление вместо кадра «пусто → готовый экран».
           child: _SectionReveal(
             child: RealityChecksScreen(
-              onExit: () => _onTabTap(0),
               scrollOffset: sectionScrollOffset,
               pillIndex: 3,
             ),

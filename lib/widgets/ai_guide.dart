@@ -2089,7 +2089,6 @@ class _AiChatBodyState extends State<_AiChatBody>
                               onTogglePin: m.isUser
                                   ? null
                                   : () => _togglePin(m),
-                              onCycleAvatar: _cycleAvatar,
                             ),
                           );
                         },
