@@ -488,13 +488,17 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       });
     }
 
-    // Содержимое (вдавливание, подложка, свечение) пересобирается ТОЛЬКО на
-    // тиках контроллеров нажатия, а наклон — отдельным внешним слоем. Раньше
-    // всё жило в одном AnimatedBuilder: каждое move-событие пальца
-    // пересобирало подложку и свечение, и на больших карточках это давало
-    // те самые подлагивания.
+    // Содержимое (вдавливание, подложка, свечение) и наклон живут в одном
+    // слое: наклон — внутренний Transform, вдавливание — внешний. Порядок
+    // важен: внешним должен остаться масштаб нажатия, иначе матрица наклона
+    // перекрывает его и кнопка «не сжимается» для тестов и для глаз.
     final pressed = AnimatedBuilder(
-      animation: Listenable.merge([_ctrl, _swipeAnim]),
+      animation: Listenable.merge([
+        _ctrl,
+        _swipeAnim,
+        _tiltNotifier,
+        _tiltFade,
+      ]),
       builder: (context, child) {
         // В покое и нажатии — плавная кривая, при возврате — своя,
         // если задана: отдача читается «пружинкой», а не вялым спадом.
@@ -537,10 +541,40 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         // жестов, и нажатие, начатое до первого кадра анимации, терялось
         // (кнопка «не нажималась с первого раза»). В покое единичная
         // матрица и Opacity 1.0 не создают лишних слоёв.
+        final currentTilt = _ctrl.status == AnimationStatus.reverse
+            ? _releaseTilt
+            : _tiltNotifier.value;
+        final tiltFade = _tiltFade.value;
+        final tiltActive =
+            widget.enableTilt &&
+            !MotionPrefs.shouldReduceMotion &&
+            tiltFade > 0.001 &&
+            currentTilt != Offset.zero;
+        final tiltMatrix = Matrix4.identity();
+        if (tiltActive) {
+          // Угол зависит ТОЛЬКО от силы наклона (tiltFade), а не от прогресса
+          // нажатия: свайп гасит нажатие мгновенно, но наклон уходит плавно.
+          final tiltX = -currentTilt.dy * widget.maxTiltAngle * tiltFade;
+          final tiltY = currentTilt.dx * widget.maxTiltAngle * tiltFade;
+          final perspective = _perspectiveFor(_tiltSize);
+          if (perspective > 0) tiltMatrix.setEntry(3, 2, perspective);
+          tiltMatrix.rotateX(tiltX);
+          tiltMatrix.rotateY(tiltY);
+        }
+
+        // Один Transform на всё: вдавливание и наклон в одной матрице.
+        // Отдельные вложенные Transform-слои давали «двойную» структуру —
+        // наклон снаружи перекрывал масштаб нажатия, и кнопка визуально
+        // переставала сжиматься. Общая матрица решает оба движения разом:
+        // сначала масштаб, затем перспектива и поворот.
+        final matrix = Matrix4.identity()..scaleByDouble(s, s, 1.0, 1.0);
+        if (tiltActive) {
+          matrix.multiply(tiltMatrix);
+        }
         return Opacity(
           opacity: 1.0 - (1.0 - widget.pressedOpacity) * v,
           child: Transform(
-            transform: Matrix4.identity()..scaleByDouble(s, s, 1.0, 1.0),
+            transform: matrix,
             alignment: Alignment.center,
             transformHitTests: false,
             child: content,
@@ -556,46 +590,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       onPointerMove: _move,
       onPointerUp: _up,
       onPointerCancel: _cancel,
-      // Наклон — свой слой: при движении пальца пересобирается только
-      // матрица, а не содержимое карточки (оно приходит готовым `child`).
-      child: AnimatedBuilder(
-        animation: Listenable.merge([_tiltNotifier, _tiltFade]),
-        builder: (context, child) {
-          final currentTilt = _ctrl.status == AnimationStatus.reverse
-              ? _releaseTilt
-              : _tiltNotifier.value;
-          final tiltFade = _tiltFade.value;
-          final tiltActive =
-              widget.enableTilt &&
-              !MotionPrefs.shouldReduceMotion &&
-              tiltFade > 0.001 &&
-              currentTilt != Offset.zero;
-          if (!tiltActive) {
-            return Transform(
-              transform: Matrix4.identity(),
-              alignment: Alignment.center,
-              transformHitTests: false,
-              child: child,
-            );
-          }
-          // Угол зависит ТОЛЬКО от силы наклона (tiltFade), а не от прогресса
-          // нажатия: свайп гасит нажатие мгновенно, но наклон уходит плавно.
-          final tiltX = -currentTilt.dy * widget.maxTiltAngle * tiltFade;
-          final tiltY = currentTilt.dx * widget.maxTiltAngle * tiltFade;
-          final matrix = Matrix4.identity();
-          final perspective = _perspectiveFor(_tiltSize);
-          if (perspective > 0) matrix.setEntry(3, 2, perspective);
-          matrix.rotateX(tiltX);
-          matrix.rotateY(tiltY);
-          return Transform(
-            transform: matrix,
-            alignment: Alignment.center,
-            transformHitTests: false,
-            child: child,
-          );
-        },
-        child: pressed,
-      ),
+      child: pressed,
     );
   }
 }
