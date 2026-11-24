@@ -9,7 +9,6 @@ import 'package:agysha/services/habit_service.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/task_service.dart';
-import 'package:agysha/widgets/section_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -70,8 +69,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
   }
 
-  bool ticks(WidgetTester tester, Type screen) =>
-      TickerMode.of(tester.element(find.byType(screen, skipOffstage: false)));
+  bool ticks(WidgetTester tester, Type screen) => TickerMode.valuesOf(
+    tester.element(find.byType(screen, skipOffstage: false)),
+  ).enabled;
 
   testWidgets('в покое тикает только видимый раздел', (tester) async {
     await boot(tester);
