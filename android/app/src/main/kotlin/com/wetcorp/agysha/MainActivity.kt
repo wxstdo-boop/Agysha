@@ -25,6 +25,7 @@ import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterShellArgs
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 import flutter.overlay.window.flutter_overlay_window.FlutterOverlayWindowPlugin
@@ -36,6 +37,10 @@ class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "com.wetcorp.agysha/alarm_payload"
     private val HAPTICS_CHANNEL = "com.wetcorp.agysha/haptics"
     private val LAUNCH_CHANNEL = "com.wetcorp.agysha/launch"
+    private val RENDER_CHANNEL = "com.wetcorp.agysha/renderer"
+    private val RENDER_PREFS = "agysha_render"
+    private val RENDER_KEY = "mode"
+    private var activeRenderer = "skia"
     private var methodChannel: MethodChannel? = null
     private var launchChannel: MethodChannel? = null
 
@@ -53,6 +58,23 @@ class MainActivity : AudioServiceActivity() {
         // ещё не слушает канал, флаг останется и его заберут при старте.
         launchChannel?.invokeMethod("open_ada_chat", null)
     }
+
+    // Движок отрисовки выбирается ДО старта Flutter: манифест по умолчанию
+    // держит Skia (`EnableImpeller=false`), а явный аргумент командной строки
+    // сильнее манифеста — так уголок разработчика может переключить Agysha на
+    // Impeller без пересборки. Флаг читает FlutterLoader: сначала аргументы,
+    // манифест только если аргумента нет.
+    override fun getFlutterShellArgs(): FlutterShellArgs {
+        val args = super.getFlutterShellArgs()
+        val mode = readRendererMode()
+        activeRenderer = mode
+        args.add(if (mode == "impeller") "--enable-impeller=true" else "--enable-impeller=false")
+        return args
+    }
+
+    private fun readRendererMode(): String =
+        getSharedPreferences(RENDER_PREFS, Context.MODE_PRIVATE)
+            .getString(RENDER_KEY, "skia") ?: "skia"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -200,6 +222,30 @@ class MainActivity : AudioServiceActivity() {
             }
         }
         launchChannel = launch
+
+        // Выбор движка отрисовки: Skia или Impeller (см. getFlutterShellArgs).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, RENDER_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "status" -> result.success(
+                        mapOf(
+                            "selected" to readRendererMode(),
+                            "active" to activeRenderer,
+                        )
+                    )
+                    "set" -> {
+                        val mode = call.argument<String>("mode")
+                        if (mode != "skia" && mode != "impeller") {
+                            result.error("badRenderer", "Unknown renderer: $mode", null)
+                            return@setMethodCallHandler
+                        }
+                        getSharedPreferences(RENDER_PREFS, Context.MODE_PRIVATE)
+                            .edit().putString(RENDER_KEY, mode).apply()
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
 
         // Уведомления НЕ отменяем — fullScreenIntent только что показал
         // alarm-нотификацию с играющим звуком. cancelAlarmNotifications()

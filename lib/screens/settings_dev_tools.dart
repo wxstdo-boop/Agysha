@@ -210,7 +210,10 @@ extension _SettingsDevTools on _SettingsScreenState {
                       value: value,
                       onChanged: savePerfectionism,
                       activeColor: const Color(0xFFB39DDB),
-                      semanticLabel: Translations.t('perfectionism', routeContext),
+                      semanticLabel: Translations.t(
+                        'perfectionism',
+                        routeContext,
+                      ),
                       // Крупнее и объёмнее — уголок разработчика.
                       scale: 1.28,
                     ),
@@ -238,7 +241,10 @@ extension _SettingsDevTools on _SettingsScreenState {
                       value: value,
                       onChanged: saveTaskNotes,
                       activeColor: const Color(0xFFD3A7FF),
-                      semanticLabel: Translations.t('taskNotesTitle', routeContext),
+                      semanticLabel: Translations.t(
+                        'taskNotesTitle',
+                        routeContext,
+                      ),
                       scale: 1.28,
                     ),
                   ),
@@ -265,7 +271,10 @@ extension _SettingsDevTools on _SettingsScreenState {
                       value: value,
                       onChanged: saveBerserk,
                       activeColor: const Color(0xFFFF5265),
-                      semanticLabel: Translations.t('berserkCardTitle', routeContext),
+                      semanticLabel: Translations.t(
+                        'berserkCardTitle',
+                        routeContext,
+                      ),
                       scale: 1.28,
                     ),
                   ),
@@ -294,39 +303,45 @@ extension _SettingsDevTools on _SettingsScreenState {
                   // Снимаем фокус с полей ввода перед переходом в Кузницу и при возврате
                   FocusManager.instance.primaryFocus?.unfocus();
                   unawaited(
-                    Navigator.of(routeContext).push(
-                      PageRouteBuilder<void>(
-                        transitionDuration: const Duration(milliseconds: 320),
-                        reverseTransitionDuration:
-                            const Duration(milliseconds: 260),
-                        pageBuilder: (_, _, _) => const ForgeScreen(
-                          owner: kUpdateRepoOwner,
-                          repo: kUpdateRepoName,
-                        ),
-                        transitionsBuilder: (context, animation, _, child) {
-                          final curved = CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutCubic,
-                            reverseCurve: Curves.easeInCubic,
-                          );
-                          return SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0.08, 0),
-                              end: Offset.zero,
-                            ).animate(curved),
-                            child: FadeTransition(
-                              opacity: curved,
-                              child: RepaintBoundary(child: child),
+                    Navigator.of(routeContext)
+                        .push(
+                          PageRouteBuilder<void>(
+                            transitionDuration: const Duration(
+                              milliseconds: 320,
                             ),
-                          );
-                        },
-                      ),
-                    ).then((_) {
-                      FocusManager.instance.primaryFocus?.unfocus();
-                    }),
+                            reverseTransitionDuration: const Duration(
+                              milliseconds: 260,
+                            ),
+                            pageBuilder: (_, _, _) => const ForgeScreen(
+                              owner: kUpdateRepoOwner,
+                              repo: kUpdateRepoName,
+                            ),
+                            transitionsBuilder: (context, animation, _, child) {
+                              final curved = CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                                reverseCurve: Curves.easeInCubic,
+                              );
+                              return SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0.08, 0),
+                                  end: Offset.zero,
+                                ).animate(curved),
+                                child: FadeTransition(
+                                  opacity: curved,
+                                  child: RepaintBoundary(child: child),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                        .then((_) {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                        }),
                   );
                 },
               ),
+              const _RenderEngineTile(),
             ],
           );
         },
@@ -459,5 +474,103 @@ extension _SettingsDevTools on _SettingsScreenState {
               : formatHmValues(alarm.time.hour, alarm.time.minute))
         : 'Alarm test';
     await _runDiag(99999, alarmsText, body);
+  }
+}
+
+/// Движок отрисовки: Skia (по умолчанию) или Impeller.
+///
+/// Переключатель не меняет вид приложения — он выбирает, чем Flutter
+/// растеризует кадры. На части GPU Impeller заметно дешевле на размытиях
+/// и тенях, на части — наоборот; поэтому выбор отдан пользователю, а не
+/// зашит в манифест. Применяется только со следующего запуска.
+class _RenderEngineTile extends StatefulWidget {
+  const _RenderEngineTile();
+
+  @override
+  State<_RenderEngineTile> createState() => _RenderEngineTileState();
+}
+
+class _RenderEngineTileState extends State<_RenderEngineTile> {
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    RendererService.load().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> _set(bool impeller) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    await RendererService.select(
+      impeller ? RendererService.impeller : RendererService.skia,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    final ru = LocaleProvider.of(context).languageCode == 'ru';
+    showBeautifulSnackBar(
+      context,
+      message: ru
+          ? 'Перезапустите Agysha полностью — движок сменится при старте.'
+          : 'Restart Agysha fully — the engine changes on next launch.',
+      icon: Icons.restart_alt_rounded,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final code = LocaleProvider.of(context).languageCode;
+    final impeller = RendererService.selected == RendererService.impeller;
+    final active = RendererService.active;
+    final String subtitle;
+    if (impeller && active != RendererService.impeller) {
+      subtitle = switch (code) {
+        'ru' => 'Выбран Impeller — включится после полного перезапуска.',
+        'fr' => 'Impeller choisi — actif après un redémarrage complet.',
+        _ => 'Impeller selected — active after a full restart.',
+      };
+    } else if (active == RendererService.impeller) {
+      subtitle = switch (code) {
+        'ru' => 'Работает Impeller.',
+        'fr' => 'Impeller actif.',
+        _ => 'Impeller is running.',
+      };
+    } else {
+      subtitle = switch (code) {
+        'ru' =>
+          'Работает Skia. Impeller дешевле на размытиях и тенях — '
+              'включите и сравните, если подтормаживает.',
+        'fr' =>
+          'Skia actif. Impeller coûte moins cher sur les flous et les '
+              'ombres — activez-le pour comparer.',
+        _ =>
+          'Skia is running. Impeller is cheaper on blurs and shadows — '
+              'turn it on to compare.',
+      };
+    }
+    final title = switch (code) {
+      'ru' => 'Движок отрисовки',
+      'fr' => 'Moteur de rendu',
+      _ => 'Render engine',
+    };
+    return ListTile(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+      leading: const Icon(Icons.memory_rounded, color: Color(0xFF4DD0E1)),
+      title: Text(title),
+      subtitle: Text(subtitle, maxLines: 3, overflow: TextOverflow.ellipsis),
+      trailing: RepaintBoundary(
+        child: VolumetricSwitch(
+          value: impeller,
+          onChanged: _busy ? null : _set,
+          activeColor: const Color(0xFF4DD0E1),
+          semanticLabel: title,
+          scale: 1.28,
+        ),
+      ),
+      onTap: _busy ? null : () => _set(!impeller),
+    );
   }
 }
