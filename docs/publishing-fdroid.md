@@ -238,7 +238,7 @@ PR в `main` по их шаблону.
 > **Статус подачи (обновлено 24.11).** Ревьюер `seekme-seekyou` закрыл MR
 > `!57343` с формулировкой «does not provide any unique value», удалив из
 > рецепта `Summary`/`Description`. Ответ опубликован в MR, рецепт переписан
-> по `templates/build-flutter.yml` (коммит `d2ad97c`), MR переоткрыт автором
+> по `templates/build-flutter.yml` (коммиты `d2ad97c`, `1e0b169`), MR переоткрыт автором
 > и ждёт второго захода. Что именно отвечено ревьюеру: задачи-будильники
 > (звонок не выключается тапом — только решённая задача), Reality Check как
 > отдельный тип записи, Ада как способ ввода голосом/текстом, единое
@@ -251,7 +251,11 @@ PR в `main` по их шаблону.
 >   Текущий рецепт в MR: `v1.6.327+45403` (`4ca93b4`), `srclibs: flutter@stable`
 >   с checkout версии из `.github/workflows/release.yml` (3.50.1),
 >   `sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'`, строка
->   `signingConfig` вырезается (F-Droid подписывает своим ключом). Локальная
+>   `signingConfig` вырезается (F-Droid подписывает своим ключом), категории —
+>   `Alarm Clock`, `Habit Tracker`, `Task` (слов `Productivity`/`Time` в
+>   `config/categories.yml` fdroiddata нет — `fdroid lint` на них ругался).
+>   `fdroid lint` (fdroidserver 2.4.5) по файлу проходит чисто, `fdroid rewritemeta`
+>   оставляет его побайтово тем же. Локальная
 >   копия — `fdroid/metadata/com.wetcorp.agysha.yml`, она побайтово совпадает
 >   с файлом в MR.
 >
