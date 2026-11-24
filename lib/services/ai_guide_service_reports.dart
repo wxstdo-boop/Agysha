@@ -330,17 +330,21 @@ Future<List<String>> _collectRewardsImpl(String languageCode) async {
   }
   // Вехи стриков.
   const milestones = [3, 7, 14, 30, 60, 100, 150, 200, 300, 365];
-  for (final h in HabitService().habits) {
-    if (h.streak > 0 && milestones.contains(h.streak)) {
-      final key = 'streak_${h.id}_${h.streak}';
+  final habitService = HabitService();
+  for (final h in habitService.habits) {
+    // Медаль за веху — только за живую серию: пропущенный день гасит
+    // счётчик на карточке, и награда за него выглядела бы враньём.
+    final streak = habitService.displayStreak(h);
+    if (streak > 0 && milestones.contains(streak)) {
+      final key = 'streak_${h.id}_$streak';
       if (!done.contains(key)) {
         done.add(key);
         changed = true;
         rewards.add(
           text(
-            '🎖️ ${h.name}: серия ${_streakUnit(h.streak, ru)} — ${h.streak}! Ты настоящий герой, я горжусь тобой ❤️',
-            '🎖️ ${h.name} : série de ${h.streak} jours ! Tu es un vrai héros, je suis fière de toi ❤️',
-            '🎖️ ${h.name}: ${h.streak}-day streak! You are a true hero, I am so proud of you ❤️',
+            '🎖️ ${h.name}: серия ${_streakUnit(streak, ru)} — $streak! Ты настоящий герой, я горжусь тобой ❤️',
+            '🎖️ ${h.name} : série de $streak jours ! Tu es un vrai héros, je suis fière de toi ❤️',
+            '🎖️ ${h.name}: $streak-day streak! You are a true hero, I am so proud of you ❤️',
           ),
         );
       }

@@ -352,11 +352,18 @@ class AiGuideService {
         );
         buf.write('.\n');
       }
-      final habits = HabitService().habits;
+      final habitService = HabitService();
+      final habits = habitService.habits;
       if (habits.isNotEmpty) {
         buf.write('Привычки (${habits.length}): ');
+        // Серия читается через displayStreak: Ада не должна считать живой
+        // серию, которая уже оборвалась после пропущенного дня.
         buf.write(
-          habits.map((h) => '${h.name} (стрик ${h.streak} дн.)').join('; '),
+          habits
+              .map(
+                (h) => '${h.name} (стрик ${habitService.displayStreak(h)} дн.)',
+              )
+              .join('; '),
         );
         buf.write('.\n');
       }
