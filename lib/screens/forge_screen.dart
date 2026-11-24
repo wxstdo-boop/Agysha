@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../l10n/locale_provider.dart';
 import '../l10n/translations.dart';
 import '../services/forge_agent.dart';
+import '../services/forge_runner.dart';
 import '../services/forge_chat_store.dart';
 import '../services/forge_service.dart';
 import '../services/haptics.dart';
@@ -35,6 +36,7 @@ class ForgeScreen extends StatefulWidget {
     required this.repo,
     this.service,
     this.chatFactory,
+    this.runner,
   });
 
   final String owner;
@@ -47,6 +49,10 @@ class ForgeScreen extends StatefulWidget {
   /// Подменяемый диалог с моделью: в бою — пул бесплатных провайдеров,
   /// в тестах — скрипт, чтобы не ходить в сеть.
   final ForgeChat Function(String apiKey)? chatFactory;
+
+  /// Прогон агента. По умолчанию общий на приложение, поэтому уход с экрана
+  /// его не останавливает; в тестах подставляется свой.
+  final ForgeRunner? runner;
 
   @override
   State<ForgeScreen> createState() => _ForgeScreenState();
@@ -94,9 +100,13 @@ class _ForgeScreenState extends State<ForgeScreen> {
 
   String? _runError;
 
-  /// Агент один на экран: он держит рабочую ветку диалога, поэтому правки
-  /// нескольких ходов ложатся в один pull request.
-  ForgeAgent? _agent;
+  /// Прогон живёт вне экрана: закрыл «Кузницу» — агент продолжает работу,
+  /// а готовый ответ ляжет в историю и появится при следующем открытии.
+  late final ForgeRunner _runner = widget.runner ?? ForgeRunner.instance;
+
+  /// Номер последнего показанного результата: защита от повторной вставки
+  /// одного и того же ответа.
+  int _handledResultSeq = 0;
 
   @override
   void initState() {
@@ -104,8 +114,42 @@ class _ForgeScreenState extends State<ForgeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FocusManager.instance.primaryFocus?.unfocus();
     });
+    _runner.addListener(_onRunnerChanged);
+    _handledResultSeq = _runner.resultSeq;
+    if (_runner.running) {
+      _running = true;
+      _activeProvider = _runner.provider;
+      _liveSteps
+        ..clear()
+        ..addAll(_runner.steps);
+    }
     unawaited(_restoreToken());
     unawaited(_restoreChat());
+  }
+
+  /// Состояние прогона приходит извне: экран только отражает его.
+  void _onRunnerChanged() {
+    if (!mounted) return;
+    setState(() {
+      _running = _runner.running;
+      _activeProvider = _runner.provider;
+      _runError = _runner.error;
+      _liveSteps
+        ..clear()
+        ..addAll(_runner.steps);
+    });
+    final done = _runner.finished;
+    if (done != null && _runner.resultSeq != _handledResultSeq) {
+      _handledResultSeq = _runner.resultSeq;
+      setState(() {
+        _appendMessage(done);
+        _liveSteps.clear();
+      });
+      _runner.acknowledgeResult();
+      if (done.pullRequestUrl != null) Haptics.heavy();
+      unawaited(ForgeChatStore.save(_messages));
+      _scrollToEnd();
+    }
   }
 
   @override
@@ -116,6 +160,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
     _tokenController.dispose();
     _inputController.dispose();
     _scrollController.dispose();
+    // Слушателя снимаем, прогон НЕ останавливаем: работа продолжается.
+    _runner.removeListener(_onRunnerChanged);
     super.dispose();
   }
 
@@ -299,10 +345,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
       _messages.clear();
       _liveSteps.clear();
       _runError = null;
-      _agent = null; // новая сессия — новая рабочая ветка
       _animateFrom = 0;
       _clearingChat = false;
     });
+    _runner.reset(); // новая сессия — новая рабочая ветка
     showBeautifulSnackBar(
       context,
       message: Translations.t('forgeChatCleared', context),
@@ -369,66 +415,30 @@ class _ForgeScreenState extends State<ForgeScreen> {
       // Пул — единственный путь: «Кузница» работает и без ключа. Свой ключ
       // ИИ, если задан, просто пробуется первым, а при отказе пул
       // продолжает на бесплатных провайдерах.
-      var providerLogged = false;
       final chat =
           widget.chatFactory?.call(apiKey) ??
           FreePoolForgeChat(
             apiKey: apiKey,
             onProvider: (name) {
-              if (providerLogged || !mounted) return;
-              providerLogged = true;
-              setState(() {
-                _activeProvider = name;
-                _liveSteps.add(ForgeStep(tool: name, detail: providerNote));
-              });
+              if (!mounted) return;
+              _activeProvider = name;
             },
           );
-      final agent =
-          _agent ??
-          ForgeAgent(
-            service: _service,
-            chat: chat,
-            owner: widget.owner,
-            repo: widget.repo,
-            baseBranch: _baseBranch,
-          );
-      _agent = agent;
-
-      final turn = await agent.respond(
+      await _runner.start(
+        service: _service,
+        chat: chat,
+        owner: widget.owner,
+        repo: widget.repo,
+        baseBranch: _baseBranch,
         history: history,
         task: text,
-        baseBranch: _baseBranch,
         languageCode: languageCode,
-        onStep: (step) {
-          if (!mounted) return;
-          setState(() => _liveSteps.add(step));
-          _scrollToEnd();
-        },
+        providerNote: providerNote,
       );
-      if (!mounted) return;
-      setState(() {
-        _running = false;
-        _appendMessage(
-          ForgeChatMessage(
-            isUser: false,
-            text: turn.text.isEmpty
-                ? Translations.t('forgeDone', context)
-                : turn.text,
-            steps: turn.steps,
-            pullRequestUrl: turn.pullRequestUrl,
-            branch: turn.branch,
-            ts: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
-        _liveSteps.clear();
-      });
-      await ForgeChatStore.save(_messages);
-      if (turn.madeChanges) Haptics.heavy();
-      _scrollToEnd();
     } on ForgeException catch (e) {
-      _failRun(e.message);
+      if (mounted) _failRun(e.message);
     } catch (e) {
-      _failRun(e.toString());
+      if (mounted) _failRun(e.toString());
     }
   }
 
@@ -1047,6 +1057,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                     message.text,
                     theme.textTheme.bodyMedium!.copyWith(height: 1.35),
                   ),
+                  contextMenuBuilder: copyOnlyContextMenuBuilder,
                 ),
                 if (message.steps.isNotEmpty) ...[
                   const SizedBox(height: 10),
@@ -1069,6 +1080,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                             color: cs.primary,
                             decoration: TextDecoration.underline,
                           ),
+                          contextMenuBuilder: copyOnlyContextMenuBuilder,
                         ),
                       ),
                     ],

@@ -47,6 +47,36 @@ void _toggleItalic(EditableTextState editableTextState) {
   }
 }
 
+/// Выделение в сообщениях чата: только «Копировать».
+///
+/// В пузырях агента и пользователя нужен ровно один пункт — скопировать
+/// фрагмент. «Выделить всё» и «Поделиться» там только мешают: выделение
+/// целого пузыря одним тапом читалось как случайное и перебивало ручное.
+Widget copyOnlyContextMenuBuilder(
+  BuildContext context,
+  EditableTextState editableTextState,
+) {
+  final items = <ContextMenuButtonItem>[];
+  if (editableTextState.copyEnabled) {
+    items.add(
+      ContextMenuButtonItem(
+        onPressed: () =>
+            editableTextState.copySelection(SelectionChangedCause.toolbar),
+        type: ContextMenuButtonType.copy,
+      ),
+    );
+  }
+  if (items.isEmpty) {
+    // Копировать нечего (пустое выделение) — панель не показываем вовсе.
+    editableTextState.hideToolbar();
+    return const SizedBox.shrink();
+  }
+  return AdaptiveTextSelectionToolbar.buttonItems(
+    anchors: editableTextState.contextMenuAnchors,
+    buttonItems: items,
+  );
+}
+
 /// Builds a minimal text selection context menu that only shows Copy, Paste,
 /// Cut and Italic (Курсив). Use it as the [TextField.contextMenuBuilder] for
 /// input fields.

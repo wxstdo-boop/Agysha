@@ -689,25 +689,32 @@ void main() {
       );
     });
 
-    test('превышение лимита правок останавливает агента', () async {
+    test('предел правок за ход не превышается, а ход доходит до PR', () async {
+      // Предохранитель от «перепиши весь проект одним ходом»: лишние записи
+      // отклоняются, но прогон не падает — сделанное уходит в PR.
       final replies = <ForgeChatReply>[
-        for (var i = 0; i < ForgeAgent.maxWrites + 1; i++)
+        for (var i = 0; i < ForgeAgent.maxWrites + 3; i++)
           _call('write_file', {
             'path': 'lib/file$i.dart',
             'content': '// $i',
           }),
         _call('finish', {'summary': 'готово'}),
       ];
+      final fake = _FakeGitHub();
       final agent = ForgeAgent(
-        service: await _serviceWithToken(_FakeGitHub().client),
+        service: await _serviceWithToken(fake.client),
         chat: _ScriptedChat(replies),
         owner: 'wxstdo-boop',
         repo: 'agysha',
       );
-      await expectLater(
-        agent.run(task: 'перепиши всё', baseBranch: 'main'),
-        throwsA(isA<ForgeException>()),
+      final turn = await agent.run(task: 'перепиши всё', baseBranch: 'main');
+      expect(turn.filesChanged, ForgeAgent.maxWrites);
+      expect(turn.pullRequestUrl, isNotNull);
+      final branch = fake.branchFiles.keys.firstWhere((b) => b != 'main');
+      final written = fake.branchFiles[branch]!.keys.where(
+        (k) => k.startsWith('lib/file'),
       );
+      expect(written, hasLength(ForgeAgent.maxWrites));
     });
   });
 }

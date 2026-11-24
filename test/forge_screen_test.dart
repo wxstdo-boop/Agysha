@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:agysha/l10n/locale_provider.dart';
 import 'package:agysha/screens/forge_screen.dart';
+import 'package:agysha/services/forge_runner.dart';
 import 'package:agysha/services/forge_agent.dart';
 import 'package:agysha/services/forge_chat_store.dart';
 import 'package:agysha/services/forge_service.dart';
@@ -136,6 +137,20 @@ class _ScriptedChat implements ForgeChat {
   }
 }
 
+/// Модель-скрипт с паузой: ход длится дольше, чем экран остаётся на месте.
+class _SlowScriptedChat extends _ScriptedChat {
+  _SlowScriptedChat(super.replies);
+
+  @override
+  Future<ForgeChatReply> complete(
+    List<Map<String, dynamic>> messages,
+    List<Map<String, dynamic>> tools,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    return super.complete(messages, tools);
+  }
+}
+
 /// Ответ-правка: пишет файл. Затем [finish] завершает ход и открывает PR.
 ForgeChatReply _write(String path) => ForgeChatReply(
   toolCalls: [
@@ -248,6 +263,7 @@ void main() {
           owner: 'wxstdo-boop',
           repo: 'agysha',
           service: service,
+          runner: ForgeRunner(),
           chatFactory: (apiKey) => _ScriptedChat([_write('a.txt'), _finish]),
         ),
       ),
@@ -267,6 +283,60 @@ void main() {
     expect(_chatText('создай a.txt'), findsOneWidget);
   });
 
+  testWidgets('уход с экрана не обрывает прогон агента', (tester) async {
+    // Жалоба: «при выходе из кузницы работа останавливаться не должна».
+    // Ход живёт в ForgeRunner, поэтому экран можно закрыть на полпути.
+    _tallSurface(tester);
+    final runner = ForgeRunner();
+    final store = InMemoryForgeTokenStore();
+    await store.write('ghp_saved_token');
+    final service = ForgeService(client: _okClient(), store: store);
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        _wrap(
+          ForgeScreen(
+            owner: 'wxstdo-boop',
+            repo: 'agysha',
+            service: service,
+            runner: runner,
+            chatFactory: (apiKey) =>
+                _SlowScriptedChat([_write('a.txt'), _finish]),
+          ),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_input_field')),
+      'создай a.txt',
+    );
+    final sendButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('forge_send')),
+    );
+    await tester.runAsync(() async {
+      sendButton.onPressed!();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+
+    // Экран закрывается, пока агент ещё думает.
+    await tester.pumpWidget(_wrap(const SizedBox.shrink()));
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      for (var i = 0; i < 300 && runner.running; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    });
+
+    expect(runner.running, isFalse);
+    expect(runner.finished, isNotNull);
+    expect(runner.finished!.pullRequestUrl, contains('pull/1'));
+    expect(runner.finished!.text, 'Готово');
+  });
+
   testWidgets('вопрос без правок не создаёт ветку и PR', (tester) async {
     _tallSurface(tester);
     // Раньше любой запуск сразу заводил ветку и требовал finish. Теперь
@@ -281,6 +351,7 @@ void main() {
           owner: 'wxstdo-boop',
           repo: 'agysha',
           service: service,
+          runner: ForgeRunner(),
           chatFactory: (apiKey) => _ScriptedChat([
             const ForgeChatReply(text: 'Точка входа в lib/main.dart.'),
           ]),
@@ -318,7 +389,12 @@ void main() {
     await tester.runAsync(() async {
       await tester.pumpWidget(
         _wrap(
-          ForgeScreen(owner: 'wxstdo-boop', repo: 'agysha', service: service),
+          ForgeScreen(
+            owner: 'wxstdo-boop',
+            repo: 'agysha',
+            service: service,
+            runner: ForgeRunner(),
+          ),
         ),
       );
       await Future<void>.delayed(const Duration(milliseconds: 300));

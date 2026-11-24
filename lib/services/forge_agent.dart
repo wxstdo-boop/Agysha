@@ -159,9 +159,11 @@ class ForgeAgent {
   String? _branch;
 
   /// Потолок шагов: каждая итерация — это сетевой запрос к модели и к
-  /// GitHub, а платим за это лимитами. Шестнадцати хватает на «прочитал
-  /// пять файлов, поправил три, проверил и открыл PR».
-  static const maxSteps = 16;
+  /// GitHub. Сорока хватает на «прочитал двадцать файлов, поправил десять,
+  /// посмотрел прогоны Actions и открыл PR». Упор в потолок больше НЕ
+  /// роняет ход: накопленное отдаётся как результат, иначе человек видел
+  /// «агент не уложился в N шагов» вместо уже сделанных правок.
+  static const maxSteps = 40;
 
   /// Сколько символов истории диалога уходит в запрос. Длинный чат (до 1000
   /// реплик) иначе переполняет окно модели и прогон падает на первом шаге.
@@ -171,8 +173,10 @@ class ForgeAgent {
   static const maxReadLines = 700;
 
   /// Сколько файлов агент может изменить за один прогон. Ограничение ловит
-  /// разбушевавшуюся модель до того, как она перепишет весь проект.
-  static const maxWrites = 8;
+  /// разбушевавшуюся модель до того, как она перепишет весь проект. Упор
+  /// возвращается модели как ошибка инструмента — чтобы она успела вызвать
+  /// finish, а не падала всей сессией.
+  static const maxWrites = 16;
 
   /// Пути, которые агенту закрыты: секреты подписи и локальные настройки.
   /// Токен GitHub лежит в защищённом хранилище, но подписной ключ и пароли
@@ -298,6 +302,83 @@ class ForgeAgent {
     {
       'type': 'function',
       'function': {
+        'name': 'workflow_runs',
+        'description':
+            'Последние прогоны GitHub Actions: статус, ветка, ссылка. '
+            'Смотри их, если сборка или релиз красные.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'branch': {
+              'type': 'string',
+              'description': 'Только прогоны этой ветки. Пусто — все.',
+            },
+          },
+        },
+      },
+    },
+    {
+      'type': 'function',
+      'function': {
+        'name': 'run_jobs',
+        'description':
+            'Задания и упавшие шаги конкретного прогона Actions (id из workflow_runs).',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'run_id': {
+              'type': 'integer',
+              'description': 'id прогона, например 45356405768.',
+            },
+          },
+          'required': ['run_id'],
+        },
+      },
+    },
+    {
+      'type': 'function',
+      'function': {
+        'name': 'check_annotations',
+        'description':
+            'Проверки коммита и текст их ошибок: почему красный CI/линтер.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'ref': {
+              'type': 'string',
+              'description': 'SHA, ветка или тег. Пусто — рабочая ветка.',
+            },
+          },
+        },
+      },
+    },
+    {
+      'type': 'function',
+      'function': {
+        'name': 'pull_requests',
+        'description': 'Открытые pull request\'ы репозитория.',
+        'parameters': {'type': 'object', 'properties': {}},
+      },
+    },
+    {
+      'type': 'function',
+      'function': {
+        'name': 'recent_commits',
+        'description': 'Последние коммиты ветки — что уже влито и собрано.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'ref': {
+              'type': 'string',
+              'description': 'Ветка. Пусто — рабочая ветка.',
+            },
+          },
+        },
+      },
+    },
+    {
+      'type': 'function',
+      'function': {
         'name': 'finish',
         'description':
             'Закончить работу и открыть pull request. Вызывай, когда правки готовы.',
@@ -331,6 +412,7 @@ class ForgeAgent {
     String baseBranch = 'main',
     String languageCode = 'ru',
     void Function(ForgeStep step)? onStep,
+    void Function(String provider)? onProvider,
   }) async {
     final messages = <Map<String, dynamic>>[
       {'role': 'system', 'content': _systemPrompt(languageCode)},
@@ -401,10 +483,24 @@ class ForgeAgent {
         // сверх лимита, прогон останавливаем — иначе один запуск может
         // переписать весь проект.
         if (_isWrite(call.name) && writes >= maxWrites) {
-          throw ForgeException(
-            429,
-            'Достигнут предел правок ($maxWrites) за один ход',
+          ok = false;
+          result =
+              'Ошибка: предел правок ($maxWrites файлов) за один ход. '
+              'Дальше только читай или вызывай finish.';
+          steps.add(
+            ForgeStep(
+              tool: call.name,
+              detail: _str(call.arguments['path']) ?? result,
+              ok: false,
+            ),
           );
+          onStep?.call(steps.last);
+          messages.add({
+            'role': 'tool',
+            'tool_call_id': call.id,
+            'content': result,
+          });
+          continue;
         }
         try {
           // Ветку заводим ТОЛЬКО под правку. Вопрос по коду читает базовую
@@ -442,9 +538,18 @@ class ForgeAgent {
         });
       }
     }
-    throw ForgeException(
-      500,
-      'Агент не уложился в $maxSteps шагов — задача слишком большая',
+    // Шаги кончились. Не роняем ход: правки уже в ветке, и человеку нужен
+    // PR с тем, что успели сделать, а не сообщение про «N шагов».
+    final note = (lastText ?? '').trim();
+    return _conclude(
+      branch: _branch,
+      base: baseBranch,
+      task: task,
+      text: note.isEmpty
+          ? 'Остановился на пределе шагов: правки ниже уже в ветке.'
+          : '$note\n\n(Остановился на пределе шагов: правки ниже уже в ветке.)',
+      files: _netChanged(written, deleted),
+      steps: steps,
     );
   }
 
@@ -455,6 +560,7 @@ class ForgeAgent {
     required String baseBranch,
     String languageCode = 'ru',
     void Function(ForgeStep step)? onStep,
+    void Function(String provider)? onProvider,
   }) async {
     final turn = await respond(
       history: const [],
@@ -462,6 +568,7 @@ class ForgeAgent {
       baseBranch: baseBranch,
       languageCode: languageCode,
       onStep: onStep,
+      onProvider: onProvider,
     );
     if (!turn.madeChanges) {
       throw ForgeException(
@@ -602,6 +709,43 @@ class ForgeAgent {
           sha: existing?.sha,
         );
         return 'Записано: $path';
+      case 'workflow_runs':
+        final branch = _str(call.arguments['branch']);
+        final runs = await service.workflowRuns(
+          owner,
+          repo,
+          branch: branch,
+        );
+        if (runs.isEmpty) return 'Прогонов Actions не найдено';
+        return runs.join('\n');
+      case 'run_jobs':
+        final id = _int(call.arguments['run_id']);
+        if (id == null) throw ForgeException(400, 'run_jobs без run_id');
+        final jobs = await service.runJobs(owner, repo, id);
+        if (jobs.isEmpty) return 'Заданий у прогона $id нет';
+        return jobs.join('\n');
+      case 'check_annotations':
+        final ref =
+            _str(call.arguments['ref'])?.trim().isNotEmpty == true
+            ? _str(call.arguments['ref'])!.trim()
+            : (branch);
+        final checks = await service.checkAnnotations(owner, repo, ref);
+        if (checks.isEmpty) {
+          return 'Проверок с ошибками нет (или у токена нет доступа к checks)';
+        }
+        return checks.join('\n');
+      case 'pull_requests':
+        final prs = await service.pullRequests(owner, repo);
+        if (prs.isEmpty) return 'Открытых pull request нет';
+        return prs.join('\n');
+      case 'recent_commits':
+        final ref =
+            _str(call.arguments['ref'])?.trim().isNotEmpty == true
+            ? _str(call.arguments['ref'])!.trim()
+            : branch;
+        final commits = await service.recentCommits(owner, repo, ref: ref);
+        if (commits.isEmpty) return 'Коммитов не видно';
+        return commits.join('\n');
       case 'delete_file':
         final path = _requirePath(call);
         await service.deleteFile(
@@ -690,6 +834,11 @@ class ForgeAgent {
       'разработчиком и по его просьбе правишь код настоящими коммитами в '
       'отдельной ветке, затем открываешь pull request.\n'
       'Порядок работы над любой задачей:\n'
+      '0) Если человек просит СДЕЛАТЬ (поправить, добавить, исправить, '
+      'починить) — делай сразу: читай файлы, правь, finish. Не отвечай '
+      'планом, не спрашивай «продолжить?», не проси подтверждения и не '
+      'пересказывай, что собираешься сделать. Уточняющий вопрос — только '
+      'когда без него правка станет угадыванием.\n'
       '1) Пойми, что просят, с учётом всего диалога и уже сделанного. Если '
       'просьба допускает разные трактовки — задай ОДИН короткий уточняющий '
       'вопрос текстом, не правя файлы наугад.\n'
@@ -717,6 +866,15 @@ class ForgeAgent {
       'большой — правь его по частям отдельными шагами.\n'
       '— Если инструмент вернул ошибку, исправь аргументы и повтори; не '
       'делай вид, что записал.\n'
+      '— GitHub Actions, проверки и PR — часть работы, а не «чёрный ящик»: '
+      'workflow_runs показывает прогоны, run_jobs — упавшие шаги, '
+      'check_annotations — текст ошибок CI, pull_requests и recent_commits — '
+      'что уже отправлено и влито. Файлы workflow лежат в .github/workflows '
+      'и правятся обычным read_file/write_file, как любой другой код. Если '
+      'CI красный — сначала посмотри причину, потом правь.\n'
+      '— Предел правок за ход — $maxWrites файлов, шагов — $maxSteps. '
+      'Если задача явно больше, сделай главное и вызови finish с честным '
+      'summary о том, что осталось: правки уже попадут в PR.\n'
       'Не выдумывай код, которого не видел. Не трогай секреты и файлы '
       'подписи. Держись стиля проекта: комментарии по-русски, без лишних '
       'слов. Пиши по делу и коротко.\n'

@@ -334,17 +334,32 @@ class ForgeService {
   }) async {
     final t = token ?? await loadToken();
     final clean = path.replaceAll(RegExp(r'^/+'), '');
-    await _send(
-      'PUT',
-      '/repos/$owner/$repo/contents/$clean',
-      token: t,
-      payload: {
-        'message': message,
-        'content': base64.encode(utf8.encode(content)),
-        'branch': branch,
-        if (sha != null && sha.isNotEmpty) 'sha': sha,
-      },
-    );
+    try {
+      await _send(
+        'PUT',
+        '/repos/$owner/$repo/contents/$clean',
+        token: t,
+        payload: {
+          'message': message,
+          'content': base64.encode(utf8.encode(content)),
+          'branch': branch,
+          if (sha != null && sha.isNotEmpty) 'sha': sha,
+        },
+      );
+    } on ForgeException catch (e) {
+      // GitHub отказывает в правке workflow без scope `workflow` и отвечает
+      // 404/403 — по коду это неотличимо от «файла нет». Подсказываем
+      // причину, иначе агент бессмысленно повторяет ту же запись.
+      if (clean.startsWith('.github/workflows/') &&
+          (e.statusCode == 403 || e.statusCode == 404)) {
+        throw ForgeException(
+          e.statusCode,
+          'Токен не может менять GitHub Actions: нужен scope `workflow` '
+          '(${e.message})',
+        );
+      }
+      rethrow;
+    }
   }
 
   /// Поиск по коду репозитория. Без него агент вынужден перебирать каталоги
@@ -494,6 +509,151 @@ class ForgeService {
       rethrow;
     }
   }
+
+  /// Последние прогоны GitHub Actions. Без них агент «не видел» CI: он
+  /// правил код вслепую и не мог ответить, почему сборка красная.
+  Future<List<String>> workflowRuns(
+    String owner,
+    String repo, {
+    String? branch,
+    String? token,
+  }) async {
+    final t = token ?? await loadToken();
+    final b = branch == null || branch.isEmpty
+        ? ''
+        : '&branch=${Uri.encodeQueryComponent(branch)}';
+    final body = await _get(
+      '/repos/$owner/$repo/actions/runs?per_page=10$b',
+      token: t,
+    );
+    if (body is! Map<String, dynamic>) return const [];
+    final runs = body['workflow_runs'];
+    if (runs is! List) return const [];
+    return [
+      for (final run in runs)
+        if (run is Map<String, dynamic>)
+          'run ${run['id']} · ${run['name'] ?? run['display_title'] ?? '?'} · '
+              '${run['status']}/${run['conclusion'] ?? '-'} · '
+              'ветка ${run['head_branch'] ?? '-'} · ${run['created_at'] ?? ''}'
+              '${run['html_url'] is String ? ' · ${run['html_url']}' : ''}',
+    ];
+  }
+
+  /// Задания прогона Actions: какие шаги упали. Этого обычно хватает, чтобы
+  /// понять причину (например, «Gradle task assembleRelease failed»).
+  Future<List<String>> runJobs(
+    String owner,
+    String repo,
+    int runId, {
+    String? token,
+  }) async {
+    final t = token ?? await loadToken();
+    final body = await _get(
+      '/repos/$owner/$repo/actions/runs/$runId/jobs?per_page=20',
+      token: t,
+    );
+    if (body is! Map<String, dynamic>) return const [];
+    final jobs = body['jobs'];
+    if (jobs is! List) return const [];
+    final lines = <String>[];
+    for (final job in jobs) {
+      if (job is! Map<String, dynamic>) continue;
+      lines.add(
+        'job «${job['name'] ?? '?'}» — ${job['status']}/${job['conclusion'] ?? '-'}',
+      );
+      final steps = job['steps'];
+      if (steps is List) {
+        for (final step in steps) {
+          if (step is! Map<String, dynamic>) continue;
+          final conclusion = step['conclusion'];
+          if (conclusion == 'failure' || conclusion == 'cancelled') {
+            lines.add('  шаг «${step['name'] ?? '?'}» — $conclusion');
+          }
+        }
+      }
+    }
+    return lines;
+  }
+
+  /// Аннотации проверок коммита — там GitHub пишет текст ошибки сборки или
+  /// линтера. Читаем по одной-две строки, чтобы не выжигать контекст.
+  Future<List<String>> checkAnnotations(
+    String owner,
+    String repo,
+    String ref, {
+    String? token,
+  }) async {
+    final t = token ?? await loadToken();
+    final body = await _get(
+      '/repos/$owner/$repo/commits/${Uri.encodeComponent(ref)}/check-runs'
+      '?per_page=20',
+      token: t,
+    );
+    if (body is! Map<String, dynamic>) return const [];
+    final runs = body['check_runs'];
+    if (runs is! List) return const [];
+    final lines = <String>[];
+    for (final run in runs) {
+      if (run is! Map<String, dynamic>) continue;
+      final conclusion = run['conclusion'];
+      if (conclusion == null || conclusion == 'success') continue;
+      lines.add('check «${run['name'] ?? '?'}» — $conclusion');
+      final annotations = run['output'];
+      if (annotations is Map) {
+        final summary = annotations['summary'];
+        if (summary is String && summary.trim().isNotEmpty) {
+          lines.add('  ${_clip(summary.trim(), 600)}');
+        }
+      }
+    }
+    return lines;
+  }
+
+  /// Открытые pull request'ы: агент видит, что уже отправлено и какие PR
+  /// висят с красными проверками.
+  Future<List<String>> pullRequests(
+    String owner,
+    String repo, {
+    String? token,
+  }) async {
+    final t = token ?? await loadToken();
+    final body = await _get(
+      '/repos/$owner/$repo/pulls?state=open&per_page=10',
+      token: t,
+    );
+    if (body is! List) return const [];
+    return [
+      for (final pr in body)
+        if (pr is Map<String, dynamic>)
+          '#${pr['number']} ${pr['title'] ?? ''} · ${pr['head'] is Map ? (pr['head'] as Map)['ref'] : '?'} '
+              '· ${pr['html_url'] ?? ''}',
+    ];
+  }
+
+  /// Последние коммиты ветки: агент понимает, куда попали его правки и что
+  /// релизный workflow уже мог собрать.
+  Future<List<String>> recentCommits(
+    String owner,
+    String repo, {
+    String ref = 'main',
+    String? token,
+  }) async {
+    final t = token ?? await loadToken();
+    final body = await _get(
+      '/repos/$owner/$repo/commits?per_page=10&sha=${Uri.encodeQueryComponent(ref)}',
+      token: t,
+    );
+    if (body is! List) return const [];
+    return [
+      for (final c in body)
+        if (c is Map<String, dynamic>)
+          '${(c['sha'] is String ? (c['sha'] as String).substring(0, 7) : '?')} '
+              '${_clip((c['commit'] is Map ? (c['commit'] as Map)['message'] : '')?.toString() ?? '', 140)}',
+    ];
+  }
+
+  static String _clip(String value, int limit) =>
+      value.length <= limit ? value : '${value.substring(0, limit)}…';
 
   Map<String, String> _headers(String? token) => {
     'Accept': 'application/vnd.github+json',
