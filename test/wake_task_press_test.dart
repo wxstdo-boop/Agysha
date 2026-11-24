@@ -19,16 +19,21 @@ void main() {
   /// остаётся единичной, и максимум всегда равен 1.0.
   ///
   /// `PressScale` держит `Transform` в дереве всегда (стабильная структура
-  /// не рвёт распознаватели жестов), поэтому в покое берём единичную
-  /// матрицу из первого `Transform`.
+  /// не рвёт распознаватели жестов). Слоёв теперь два — внешний наклон и
+  /// внутреннее вдавливание, — и порядок между ними не гарантирован,
+  /// поэтому берём САМЫЙ сжатый по X: в покое он единичный, под пальцем
+  /// именно он и уменьшается.
   double scaleOf(WidgetTester tester, Finder pressScale) {
     final transforms = find.descendant(
       of: pressScale,
       matching: find.byType(Transform),
     );
-    if (transforms.evaluate().isEmpty) return 1.0;
-    final t = tester.widget<Transform>(transforms.first);
-    return t.transform.entry(0, 0);
+    final values = transforms
+        .evaluate()
+        .map((e) => (e.widget as Transform).transform.entry(0, 0))
+        .toList();
+    if (values.isEmpty) return 1.0;
+    return values.reduce((a, b) => a < b ? a : b);
   }
 
   testWidgets('кнопка «Отключить» окна пробуждения отдаёт вдавливанием', (
