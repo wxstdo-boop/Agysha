@@ -20,6 +20,7 @@ import '../widgets/settings_search_icon.dart';
 import '../widgets/press_scale.dart';
 import '../services/alarm_service.dart';
 import '../services/app_version.dart';
+import '../services/renderer_service.dart';
 import '../services/settings_service.dart';
 import '../services/timer_service.dart';
 import '../services/prefs.dart';
