@@ -107,15 +107,15 @@ class _MessageBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                // Нажатие на пузырь больше НЕ сжимает и не наклоняет его:
-                // текст под пальцем уезжал, и долгое нажатие выделяло не то
-                // слово («выделение не работает»), а сам пузырь при зажатии
-                // «скукоживался». Наклон остался у кнопок и значков.
+                // Пузырь не сжимается (текст под пальцем не уезжает и
+                // выделение работает), но получает мягкую 3D-отдачу: угол
+                // небольшой, чтобы палец всё равно попадал в слово.
                 PressScale(
                   pressedScale: 1.0,
-                  enableTilt: false,
-                  duration: const Duration(milliseconds: 150),
-                  releaseDuration: const Duration(milliseconds: 380),
+                  enableTilt: true,
+                  maxTiltAngle: 0.07,
+                  duration: const Duration(milliseconds: 160),
+                  releaseDuration: const Duration(milliseconds: 420),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -232,6 +232,10 @@ class _MessageBubble extends StatelessWidget {
                     ),
                   ),
                 ),
+                // Какая именно модель ответила — прямо под её ответом,
+                // полупрозрачно и плавно. Общая подпись в конце чата убрана.
+                if (!isUser && (message.model ?? '').trim().isNotEmpty)
+                  _AnswerModelCaption(label: message.model!.trim()),
                 // Действия под сообщением Ады: сердечко, скопировать, булавка.
                 if (!isUser)
                   _BubbleActions(
@@ -1138,3 +1142,69 @@ class _PinnedBar extends StatelessWidget {
 /// живёт поверх всех экранов и не исчезает при выходе из приложения
 /// (режим хранится в prefs). Тап по кнопке «развернуть» плавно открывает
 /// полный чат. Скрывается на PIN-локскрине (приватность «недавних»).
+
+/// Подпись модели под конкретным ответом Ады: проявляется мягко, чтобы не
+/// вставляться кадром посреди разговора.
+class _AnswerModelCaption extends StatefulWidget {
+  const _AnswerModelCaption({required this.label});
+
+  final String label;
+
+  @override
+  State<_AnswerModelCaption> createState() => _AnswerModelCaptionState();
+}
+
+class _AnswerModelCaptionState extends State<_AnswerModelCaption>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 460),
+  )..forward();
+
+  late final CurvedAnimation _curve = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return FadeTransition(
+      opacity: _curve,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 26, top: 4, bottom: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome_rounded,
+              size: 10,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.38),
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.25,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.42),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -131,6 +131,9 @@ class _FakeGitHub {
 class _ScriptedChat implements ForgeChat {
   _ScriptedChat(this.replies);
 
+  @override
+  String? get lastModel => null;
+
   final List<ForgeChatReply> replies;
   final List<List<Map<String, dynamic>>> seenMessages = [];
   int _index = 0;

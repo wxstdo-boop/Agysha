@@ -19,6 +19,9 @@ import 'package:agysha/services/forge_service.dart';
 
 class _ScriptedChat implements ForgeChat {
   _ScriptedChat(this.replies);
+  @override
+  String? get lastModel => null;
+
   final List<ForgeChatReply> replies;
   final List<List<Map<String, dynamic>>> seen = [];
   int _i = 0;

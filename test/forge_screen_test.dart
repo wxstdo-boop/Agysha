@@ -120,6 +120,9 @@ class _BrokenStore implements ForgeTokenStore {
 class _ScriptedChat implements ForgeChat {
   _ScriptedChat(this.replies);
 
+  @override
+  String? get lastModel => null;
+
   /// Сценарий: список ответов по порядку. Каждый следующий вызов берёт
   /// следующий ответ, последний повторяется.
   final List<ForgeChatReply> replies;
@@ -155,6 +158,9 @@ class _SlowScriptedChat extends _ScriptedChat {
 /// Модель, которая «думает» бесконечно: так проверяется «Стоп».
 class _HangChat implements ForgeChat {
   final Completer<void> _never = Completer<void>();
+
+  @override
+  String? get lastModel => null;
 
   @override
   Future<ForgeChatReply> complete(

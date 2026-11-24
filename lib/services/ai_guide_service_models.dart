@@ -11,9 +11,22 @@ class AiMessage {
   /// сообщением (время ответа Ады). null у старых сообщений — время
   /// тогда не показываем, только галочку.
   final int? ts;
-  const AiMessage({required this.isUser, required this.text, this.ts});
 
-  Map<String, dynamic> toJson() => {'isUser': isUser, 'text': text, 'ts': ts};
+  /// Какая именно модель ответила (подпись под ответом Ады).
+  final String? model;
+  const AiMessage({
+    required this.isUser,
+    required this.text,
+    this.ts,
+    this.model,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'isUser': isUser,
+    'text': text,
+    'ts': ts,
+    'model': model,
+  };
   factory AiMessage.fromJson(Map<String, dynamic> json) => AiMessage(
     isUser: json['isUser'] is bool
         ? (json['isUser'] as bool)
@@ -22,6 +35,7 @@ class AiMessage {
         : false,
     text: json['text'] as String? ?? '',
     ts: (json['ts'] as num?)?.toInt(),
+    model: json['model'] as String?,
   );
 }
 

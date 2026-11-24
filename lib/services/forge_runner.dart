@@ -129,6 +129,7 @@ class ForgeRunner extends ChangeNotifier {
         pullRequestUrl: turn.pullRequestUrl,
         branch: turn.branch,
         ts: DateTime.now().millisecondsSinceEpoch,
+        model: chat.lastModel,
       );
       // В хранилище пишем, не задерживая ход: экран всё равно покажет ответ,
       // а если хранилище недоступно, ждать его незачем.

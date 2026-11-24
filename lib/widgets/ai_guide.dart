@@ -497,6 +497,14 @@ class _AiChatBodyState extends State<_AiChatBody>
 
   /// Добавить сообщение и пометить его как новое (плавный вход).
   void _pushMessage(AiMessage m, {bool animate = true}) {
+    // Ответ Ады подписываем моделью, которая его принесла: подпись живёт под
+    // самим пузырём, а не общей строкой в конце чата.
+    if (!m.isUser && (m.model ?? '').trim().isEmpty) {
+      final label = _modelLabel.trim();
+      if (label.isNotEmpty) {
+        m = AiMessage(isUser: false, text: m.text, ts: m.ts, model: label);
+      }
+    }
     _messages.add(m);
     if (!animate) return;
     final ts = m.ts;
@@ -2233,52 +2241,6 @@ class _AiChatBodyState extends State<_AiChatBody>
                   ),
                 ),
         ),
-        // В конце чата — полупрозрачная подпись модели, которая реально
-        // ответила. Видно, кому принадлежит ответ, но подпись не спорит
-        // с сообщениями: гаснет во время ответа и мягко возвращается.
-        if (_messages.isNotEmpty)
-          ValueListenableBuilder<int>(
-            valueListenable: AiGuideService.modelLabelTick,
-            builder: (context, _, _) {
-              final label = AiGuideService.shownModelLabel.trim();
-              return AnimatedSwitcher(
-                duration: const Duration(milliseconds: 340),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SizeTransition(
-                    sizeFactor: animation,
-                    alignment: AlignmentDirectional.bottomCenter,
-                    child: child,
-                  ),
-                ),
-                child: label.isEmpty
-                    ? const SizedBox.shrink(
-                        key: ValueKey('model_footprint_none'),
-                      )
-                    : Padding(
-                        key: ValueKey('model_footprint_$label'),
-                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 2),
-                        child: Align(
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              fontSize: 10.5,
-                              letterSpacing: 0.3,
-                              color: cs.onSurfaceVariant.withValues(
-                                alpha: _busy ? 0.18 : 0.42,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-              );
-            },
-          ),
         // Поле ввода.
         SafeArea(
           top: false,

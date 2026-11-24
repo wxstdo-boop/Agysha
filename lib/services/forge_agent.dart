@@ -40,6 +40,10 @@ abstract class ForgeChat {
     List<Map<String, dynamic>> messages,
     List<Map<String, dynamic>> tools,
   );
+
+  /// Реальная модель, ответившая последней (шлюзы отдают её в поле
+  /// `model`). null — провайдер не сказал, тогда подпись не показываем.
+  String? get lastModel => null;
 }
 
 /// Шаг работы агента — для живого лога в экране.
@@ -75,6 +79,7 @@ class ForgeChatMessage {
     this.pullRequestUrl,
     this.branch,
     this.ts,
+    this.model,
   });
 
   final bool isUser;
@@ -84,12 +89,17 @@ class ForgeChatMessage {
   final String? branch;
   final int? ts;
 
+  /// Модель, которая ответила этой репликой: «Poolside · laguna-s-2.1».
+  /// Подписывается под ответом, чтобы было видно, кто именно отвечал.
+  final String? model;
+
   Map<String, dynamic> toJson() => {
     'isUser': isUser,
     'text': text,
     'ts': ts,
     'branch': branch,
     'pullRequestUrl': pullRequestUrl,
+    'model': model,
     'steps': [
       for (final step in steps)
         {'tool': step.tool, 'detail': step.detail, 'ok': step.ok},
@@ -104,6 +114,7 @@ class ForgeChatMessage {
       ts: (json['ts'] as num?)?.toInt(),
       branch: json['branch'] as String?,
       pullRequestUrl: json['pullRequestUrl'] as String?,
+      model: json['model'] as String?,
       steps: rawSteps is List
           ? [
               for (final item in rawSteps)
@@ -223,6 +234,36 @@ class ForgeAgent {
   }
 
   List<Map<String, dynamic>> _tools() => [
+    // write_file идёт ПЕРВЫМ: правка файла — основная работа агента, и
+    // когда он последний в списке, модель чаще отвечала прозой или
+    // фрагментом, а «write_file: content не полный файл» сыпался ошибкой.
+    {
+      'type': 'function',
+      'function': {
+        'name': 'write_file',
+        'description':
+            'Записать файл в рабочую ветку. Всегда передавай ПОЛНОЕ новое '
+            'содержимое файла целиком (весь файл от первой до последней '
+            'строки). Не присылай фрагмент, дифф или «...» — такой вызов '
+            'будет отклонён.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'path': {'type': 'string', 'description': 'Путь файла.'},
+            'content': {
+              'type': 'string',
+              'description':
+                  'Полное новое содержимое файла (все строки файла).',
+            },
+            'message': {
+              'type': 'string',
+              'description': 'Короткое сообщение коммита.',
+            },
+          },
+          'required': ['path', 'content'],
+        },
+      },
+    },
     {
       'type': 'function',
       'function': {
@@ -279,29 +320,6 @@ class ForgeAgent {
             },
           },
           'required': ['path'],
-        },
-      },
-    },
-    {
-      'type': 'function',
-      'function': {
-        'name': 'write_file',
-        'description':
-            'Записать файл в рабочую ветку. Указывай ПОЛНОЕ содержимое файла, не фрагмент.',
-        'parameters': {
-          'type': 'object',
-          'properties': {
-            'path': {'type': 'string', 'description': 'Путь файла.'},
-            'content': {
-              'type': 'string',
-              'description': 'Полное новое содержимое файла.',
-            },
-            'message': {
-              'type': 'string',
-              'description': 'Короткое сообщение коммита.',
-            },
-          },
-          'required': ['path', 'content'],
         },
       },
     },
@@ -1173,6 +1191,13 @@ class FreePoolForgeChat implements ForgeChat {
 
   final http.Client _client;
 
+  /// Подпись модели последнего ответа: шлюз может вернуть конкретную
+  /// подмодель, а не ту, что просили, — показываем то, что реально ответило.
+  String? _lastModel;
+
+  @override
+  String? get lastModel => _lastModel;
+
   /// Дольше ждать бессмысленно: прогон агента делает много шагов, и один
   /// зависший провайдер съел бы весь бюджет времени. Упавший — пропускаем.
   static const _timeout = Duration(seconds: 45);
@@ -1318,6 +1343,10 @@ class FreePoolForgeChat implements ForgeChat {
 
     final decoded = jsonDecode(raw);
     if (decoded is! Map) throw Exception('не JSON-объект');
+    final served = decoded['model'];
+    _lastModel = served is String && served.trim().isNotEmpty
+        ? '${provider.label} · ${served.trim()}'
+        : '${provider.label} · ${provider.model}';
     final choices = decoded['choices'];
     if (choices is! List || choices.isEmpty) throw Exception('пустой ответ');
     final first = choices.first;
