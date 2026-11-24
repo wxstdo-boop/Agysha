@@ -56,6 +56,9 @@ class _AlarmsScreenState extends State<AlarmsScreen>
   // и привычках до появления такого же гварда).
   bool _loaded = false;
 
+  /// Идёт переупорядочивание: на это время свайп по карточке выключен.
+  bool _reordering = false;
+
   @override
   void initState() {
     super.initState();
@@ -698,11 +701,17 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           _service.reorder(oldIndex, newIndex),
       proxyDecorator: (child, index, animation) =>
           buildDragProxy(child, theme, animation),
+      // Пока карточка едет, свайп выключен: иначе горизонтальный жест
+      // перехватывал зажатие, карточка уезжала вбок и из-под неё
+      // проступала красная плашка — «фон глотается при зажатии».
+      onReorderStart: (_) => setState(() => _reordering = true),
+      onReorderEnd: (_) => setState(() => _reordering = false),
       itemBuilder: (_, i) {
         final alarm = alarms[i];
         return SwipeToDelete(
           // Ключ на ВНЕШНЕМ виджете: ReorderableListView берёт key от него.
           key: ValueKey('item_alarm_${alarm.id}'),
+          enabled: !_reordering,
           dismissKey: ValueKey('dismiss_${alarm.id}'),
           // Фон удаления = границы карточки: у неё margin снизу 8 (зазор
           // между будильниками). Без этого красная плашка выше карточки.
@@ -727,6 +736,12 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             // пальца, что у карточек привычек и задач: раньше будильники
             // были единственным разделом без наклона, и карточка читалась
             // «плоской» на фоне соседних экранов.
+            //
+            // Пока карточку тащат, отдача выключена: прокси встаёт на её
+            // место без нажатия, и если бы исходная карточка оставалась
+            // вдавленной, при подъёме она «глотала» свой фон — тень и
+            // затемнение оставались под пальцем, а прокси приходил чистым.
+            enabled: !_reordering,
             pressedScale: 0.975,
             enableTilt: true,
             duration: const Duration(milliseconds: 200),

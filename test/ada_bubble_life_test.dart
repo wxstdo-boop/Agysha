@@ -131,11 +131,13 @@ void main() {
     final src = read(overlay);
     expect(src.contains('_drift.repeat()'), isTrue);
     expect(
-      src.contains('milliseconds: 12000'),
+      src.contains('milliseconds: 5600'),
       isTrue,
-      reason: 'медленное качание читается спокойным, а не рваным',
+      reason:
+          'на 12 секундах шаг за кадр был меньше сотой доли dp и округлялся '
+          'до целых пикселей — качание читалось рывками; 5.6 с убирает шаг',
     );
-    expect(src.contains('math.sin(t) * 3.4 * free'), isTrue);
+    expect(src.contains('math.sin(t) * 3.6 * free'), isTrue);
     expect(
       src.contains('_drift.stop()'),
       isFalse,
@@ -158,17 +160,33 @@ void main() {
     expect(java.contains('floatRunnable'), isFalse);
   });
 
-  test('перетаскивание двигает окно сразу, без кадра задержки', () {
+  test('перетаскивание двигает само окно, без очереди на кадр', () {
     final java = read(service);
     expect(
       java.contains('applyMoveNow()'),
       isTrue,
-      reason: 'позиция пишется в том же событии касания',
+      reason: 'позиция окна пишется в WindowManager',
     );
     expect(
       java.contains('Choreographer.getInstance().postFrameCallback'),
       isFalse,
-      reason: 'кадровая очередь добавляла отставание на каждом движении',
+      reason:
+          'очередь на кадр добавляла к касанию целый кадр — пузырь '
+          'отставал от пальца и это читалось как торможение',
+    );
+    expect(
+      java.contains('view.setTranslationX(tx)'),
+      isFalse,
+      reason:
+          'сдвиг вида внутри 52 dp-окна обрезал пузырь по краям — '
+          'жест читался как дёрганье по текстурам экрана',
+    );
+    expect(
+      java.contains('dragPositionX = params.x;'),
+      isTrue,
+      reason:
+          'у края экрана накопленная позиция подтягивается к реальной, '
+          'иначе палец возвращается на «съеденное» расстояние',
     );
     expect(
       java.contains('dx * dx + dy * dy < 9'),

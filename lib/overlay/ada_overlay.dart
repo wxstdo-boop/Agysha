@@ -130,9 +130,15 @@ class _AdaBubbleState extends State<_AdaBubble>
   /// вставал под пальцем и стартовал заново на отпускании — синус начинался
   /// с другой точки, пузырь прыгал, и это читалось как «мигает при нажатии».
   /// Теперь фаза живёт, а качание гасится множителем [_hold].
+  ///
+  /// Период 5.6 с, а не 12: на 12 секундах смещение за кадр было меньше
+  /// сотой доли dp, растеризатор «округлял» его до целых пикселей — и
+  /// качание выглядело не плавным ходом, а редкими рывками на пиксель.
+  /// На 5.6 с движение идёт теми же 3.6 × 3 dp, но успевает сдвинуться
+  /// заметно за кадр, и шаг перестаёт читаться.
   late final AnimationController _drift = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 12000),
+    duration: const Duration(milliseconds: 5600),
   );
 
   /// 1 — пузырь держат (качание плавно сходит на нет), 0 — свободен.
@@ -314,7 +320,7 @@ class _AdaBubbleState extends State<_AdaBubble>
         animation: Listenable.merge([_appear, _drift, _hold, _press]),
         builder: (context, child) {
           final t = _drift.value * 2 * math.pi;
-          // Качание 3.4 × 2.8 dp: заметное, но круг остаётся внутри окна
+          // Качание 3.6 × 3.0 dp: заметное, но круг остаётся внутри окна
           // (запас — 4 dp с каждой стороны). Одна трансформация, ребёнок под
           // RepaintBoundary — «самокатание» стоит композитору, не растеризатору.
           final free = 1.0 - Curves.easeOutCubic.transform(_hold.value);
@@ -324,7 +330,7 @@ class _AdaBubbleState extends State<_AdaBubble>
           // размером глифа (см. [_bubbleBody]) — перерисовки края нет вовсе,
           // а качание остаётся переносом уже закэшированного кадра.
           final drift = Transform.translate(
-            offset: Offset(math.sin(t) * 3.4 * free, math.cos(t) * 2.8 * free),
+            offset: Offset(math.sin(t) * 3.6 * free, math.cos(t) * 3.0 * free),
             child: RepaintBoundary(child: child),
           );
           final e = _appear.value;

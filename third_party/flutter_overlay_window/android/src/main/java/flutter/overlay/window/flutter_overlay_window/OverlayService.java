@@ -16,7 +16,6 @@ import android.graphics.Point;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
-import android.view.Choreographer;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
@@ -69,12 +68,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
     private Handler mAnimationHandler = new Handler();
     private float lastX, lastY;
     private float dragPositionX, dragPositionY;
-    // Пока палец ведёт пузырь, окно НЕ перекладываем: сдвигаем уже готовую
-    // поверхность транслейтом. updateViewLayout на каждом MOVE заставлял
-    // WindowManager заново раскладывать окно с Flutter-поверхностью, и круг
-    // догонял палец рывками — со стороны это читалось как «торможенно».
-    private int dragBaseX, dragBaseY;
-    private float dragTranslationX, dragTranslationY;
+    // Пока палец ведёт пузырь, двигаем само окно (см. applyDragTranslation):
+    // сдвиг вида внутри окна 52 dp обрезался его границами.
     private int lastYPosition;
     private boolean dragging;
     /** Время касания: тап без движения открывает чат. */
@@ -88,10 +83,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
      */
     private long lastRaiseAtMs = 0;
     private static final long RAISE_DEBOUNCE_MS = 700L;
-    // Координаты движения сливаются в один updateViewLayout на vsync.
-    // Это не даёт MethodChannel и WindowManager накапливать старые кадры.
-    private boolean moveFramePosted = false;
-    private int moveFrameGeneration = 0;
+    // Следующая позиция окна: и перетаскивание, и команда из Dart пишут сюда,
+    // а applyMoveNow переносит окно одним updateViewLayout.
     private int pendingMoveX;
     private int pendingMoveY;
     // Окно показываем одним кадром после первого кадра Flutter: пошаговая
@@ -329,8 +322,6 @@ public class OverlayService extends Service implements View.OnTouchListener {
     }
 
     private void removeOverlayViewSafely() {
-        moveFrameGeneration++;
-        moveFramePosted = false;
         entryRevealed = false;
         if (mTrayAnimationTimer != null) {
             mTrayAnimationTimer.cancel();
@@ -439,8 +430,6 @@ public class OverlayService extends Service implements View.OnTouchListener {
         try {
             // Отбрасываем старую координату, которая могла быть запланирована
             // ещё для предыдущего размера окна.
-            moveFrameGeneration++;
-            moveFramePosted = false;
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) view.getLayoutParams();
             if (params == null) {
                 result.success(false);
@@ -676,10 +665,6 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 lastY = event.getRawY();
                 dragPositionX = params.x;
                 dragPositionY = params.y;
-                dragBaseX = params.x;
-                dragBaseY = params.y;
-                dragTranslationX = 0f;
-                dragTranslationY = 0f;
                 tapDownAtMs = System.currentTimeMillis();
                 break;
             case MotionEvent.ACTION_MOVE:
@@ -810,51 +795,42 @@ public class OverlayService extends Service implements View.OnTouchListener {
         bringAppToFront();
     }
 
-    /**
-     * Двигаем окно сразу, не откладывая до следующего кадра. Раньше позиция
-     * ждала Choreographer: к задержке касания добавлялся целый кадр, и на
-     * каждом движении пузырь отставал от пальца — это и читалось как
-     * «перемещается тормозно». Записываем только когда позиция реально
-     * изменилась, чтобы не гонять лишний layout.
-     */
-    /**
-     * Сдвиг во время жеста: транслейт готовой поверхности, без пересборки окна.
-     * Края экрана держим здесь же, чтобы пузырь не «выпал» за границу до
-     * отпускания пальца.
-     */
     private void applyDragTranslation() {
-        final FlutterView view = flutterView;
-        if (view == null || !viewAttached) return;
-        final int w = Math.max(1, view.getWidth());
-        final int h = Math.max(1, view.getHeight());
-        final int screenW = mResources.getDisplayMetrics().widthPixels;
-        final int screenH = mResources.getDisplayMetrics().heightPixels;
-        float tx = pendingMoveX - dragBaseX;
-        float ty = pendingMoveY - dragBaseY;
-        tx = Math.max(-dragBaseX, Math.min(tx, screenW - w - dragBaseX));
-        ty = Math.max(-dragBaseY, Math.min(ty, screenH - h - dragBaseY));
-        dragTranslationX = tx;
-        dragTranslationY = ty;
-        view.setTranslationX(tx);
-        view.setTranslationY(ty);
-    }
-
-    /**
-     * Отпустили: окно встаёт в конечную точку, а сдвиг снимается в том же
-     * кадре — визуально пузырь не прыгает.
-     */
-    private void commitDragTranslation() {
+        // Двигаем САМО ОКНО, а не вид внутри него. `view.setTranslationX`
+        // сдвигал FlutterView внутри окна шириной 52 dp: всё, что выезжало
+        // за границы, обрезалось, и на каждом движении пузырь то срезался,
+        // то появлялся целиком — жест читался как «дёргает по текстурам
+        // экрана». Окно перемещается целиком, обрезки нет вовсе.
+        //
+        // Позицию пишем сразу, без очереди на кадр: отложенный перенос
+        // добавлял к касанию целый кадр, и пузырь отставал от пальца.
+        // ACTION_MOVE и так приходит не чаще кадра.
+        applyMoveNow();
+        // У края экрана окно упирается: подтягиваем накопленную позицию к
+        // реальной, иначе пальцу пришлось бы возвращаться на «съеденное»
+        // расстояние, прежде чем пузырь снова поедет.
         final FlutterView view = flutterView;
         if (view == null) return;
-        pendingMoveX = dragBaseX + Math.round(dragTranslationX);
-        pendingMoveY = dragBaseY + Math.round(dragTranslationY);
-        applyMoveNow();
-        view.setTranslationX(0f);
-        view.setTranslationY(0f);
-        dragTranslationX = 0f;
-        dragTranslationY = 0f;
+        final WindowManager.LayoutParams params =
+                (WindowManager.LayoutParams) view.getLayoutParams();
+        if (params == null) return;
+        dragPositionX = params.x;
+        dragPositionY = params.y;
     }
 
+    /**
+     * Отпустили: окно встаёт в конечную точку последним updateViewLayout.
+     */
+    private void commitDragTranslation() {
+        applyMoveNow();
+    }
+
+    /**
+     * Перенос окна. Позицию пишем сразу, не откладывая до следующего кадра:
+     * очередь на кадр добавляла к касанию целый кадр, и пузырь отставал от
+     * пальца — это читалось как «перемещается тормозно». Пишем только когда
+     * позиция реально изменилась, чтобы не гонять лишний layout.
+     */
     private void applyMoveNow() {
         final WindowManager manager = windowManager;
         final FlutterView view = flutterView;

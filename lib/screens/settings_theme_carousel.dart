@@ -127,15 +127,23 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
 
   int get _index => _norm(_pos.round());
 
-  /// Камора, чей значок и подпись сейчас показаны в центре. Меняется не на
-  /// каждом кадре прокрутки, а когда камора уже почти встала под указатель:
-  /// иначе при быстром вращении десяток перекрёстных затуханий накладывались
-  /// друг на друга, и центр «мигал» (mutilated → светлая и обратно).
-  /// Меняется ТОЛЬКО когда барабан встал. Пока крутится, центр держит
-  /// прежнюю тему: иначе каждый пройденный сектор запускал своё затухание,
-  /// десяток перекрёстных фейдов накладывался друг на друга — и значки
-  /// «мигали» ровно на переходах mutilated ↔ светлая.
+  /// Камора, чей значок и подпись сейчас показаны в центре. Идёт за
+  /// барабаном ЖИВЬЁМ — как раньше: во время кручения название сменяется
+  /// вслед за каморой под указателем, а тема применяется один раз, когда
+  /// барабан встал. Чтобы частые смены не наслаивали десяток затуханий,
+  /// пока барабан едет, смена идёт короткой вспышкой (см. [_moving]).
   int _hubIndex = 0;
+
+  /// Барабан сейчас в движении: палец на нём или идёт довод.
+  bool get _moving => _dragging || _spin.isAnimating;
+
+  /// Подтягивает центр к каморе под указателем. Вызывается на каждом шаге
+  /// вращения — иначе название «застывало» до остановки.
+  void _syncHub() {
+    final next = _norm(_pos.round());
+    if (next == _hubIndex) return;
+    _hubIndex = next;
+  }
 
   @override
   void initState() {
@@ -200,7 +208,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _onSpinTick() {
     final anim = _spinAnim;
     if (anim == null) return;
-    setState(() => _pos = anim.value);
+    setState(() {
+      _pos = anim.value;
+      _syncHub();
+    });
   }
 
   /// Щелчок вибрации на каждой пройденной каморе — так колесо «щёлкает».
@@ -300,7 +311,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _lastRadius = radius;
     _lastAngle = math.atan2(v.dy, v.dx);
     if (delta == 0) return;
-    setState(() => _pos -= delta);
+    setState(() {
+      _pos -= delta;
+      _syncHub();
+    });
     _tickHaptics();
   }
 
@@ -415,7 +429,13 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                 child: AnimatedSwitcher(
                   // Только перекрёстное затухание: со сползанием текста
                   // подписи при быстрой прокрутке наезжали друг на друга.
-                  duration: const Duration(milliseconds: 280),
+                  // Пока барабан едет, подпись меняется сразу, вслед за
+                  // каморой под указателем: так название «сменяется» во
+                  // время кручения, а не только после остановки. Затухание
+                  // включается на остановке — там ему есть что сглаживать.
+                  duration: _moving
+                      ? Duration.zero
+                      : const Duration(milliseconds: 280),
                   switchInCurve: Curves.easeOut,
                   switchOutCurve: Curves.easeIn,
                   transitionBuilder: (child, anim) =>
@@ -550,7 +570,13 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                 // проявляется во второй половине. При чистом кросс-фейде
                 // оба глифа секунду лежали друг на друге полупрозрачными —
                 // именно это и читалось как «значки сменяются неплавно».
-                duration: const Duration(milliseconds: 380),
+                // Пока барабан едет, смена короткая: камор проносится
+                // много, и 380 мс на каждую наслаивали бы полупрозрачные
+                // глифы друг на друга — это и читалось как «мигание».
+                // Двухфазные 380 мс остаются для остановки.
+                duration: _moving
+                    ? const Duration(milliseconds: 110)
+                    : const Duration(milliseconds: 380),
                 switchInCurve: const Interval(
                   0.38,
                   1.0,

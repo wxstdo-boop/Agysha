@@ -164,4 +164,26 @@ void main() {
       reason: 'Кнопка теста должна быть у каждого будильника',
     );
   });
+
+  test('пока будильник тащат, его отдача и свайп выключены', () {
+    final src = File('lib/screens/alarms_screen.dart').readAsStringSync();
+    // Прокси приходит на место карточки без нажатия: если исходная карточка
+    // остаётся вдавленной, при подъёме она «глотает» свой фон (тень и
+    // затемнение под пальцем), и это читается как рывок.
+    expect(
+      src.contains('enabled: !_reordering,'),
+      isTrue,
+      reason: 'PressScale и SwipeToDelete должны гаснуть на время переноса',
+    );
+    expect(
+      src.contains('onReorderStart: (_) => setState(() => _reordering = true)'),
+      isTrue,
+      reason: 'перенос начинается — сразу выключаем отдачу',
+    );
+    expect(
+      src.contains('onReorderEnd: (_) => setState(() => _reordering = false)'),
+      isTrue,
+      reason: 'перенос закончился — возвращаем отдачу',
+    );
+  });
 }

@@ -70,6 +70,12 @@ class SwipeToDelete extends StatefulWidget {
   /// Передавай сюда ТОТ ЖЕ margin, что стоит у [Card].
   final EdgeInsetsGeometry inset;
 
+  /// Свайп влево/вправо можно выключить на время перетаскивания карточки.
+  /// Пока идёт переупорядочивание, горизонтальный жест не нужен вовсе: он
+  /// перехватывал зажатие и уводил карточку вбок, а из-под неё проступала
+  /// красная плашка удаления — фон карточки «глотался».
+  final bool enabled;
+
   const SwipeToDelete({
     super.key,
     required this.dismissKey,
@@ -80,6 +86,7 @@ class SwipeToDelete extends StatefulWidget {
     this.resizeDuration = const Duration(milliseconds: 320),
     this.borderRadius = 20,
     this.inset = EdgeInsets.zero,
+    this.enabled = true,
   });
 
   @override
@@ -332,17 +339,16 @@ class _SwipeToDeleteState extends State<SwipeToDelete>
               isSwiping: p > 0.002,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                // `down`, а не `start`: иначе первые ~18 px (touch slop)
-                // съедаются распознавателем, и карточка стоит, пока палец
-                // уже едет — это и есть то самое «заедание» в начале свайпа.
-                // С `down` стартовая точка берётся от касания, и смещение
-                // считается от неё, поэтому карточка идёт за пальцем с
-                // первого же пикселя.
+                // `down`, а не `start`: смещение считается от точки
+                // касания, и карточка идёт за пальцем с первого пикселя,
+                // без «заедания» на touch slop. Конфликт с долгим нажатием
+                // (перетаскивание) снят не здесь, а флагом [enabled]:
+                // пока карточка едет, свайп выключен целиком.
                 dragStartBehavior: DragStartBehavior.down,
-                onHorizontalDragStart: _onDragStart,
-                onHorizontalDragUpdate: _onDragUpdate,
-                onHorizontalDragEnd: _onDragEnd,
-                onHorizontalDragCancel: _onDragCancel,
+                onHorizontalDragStart: widget.enabled ? _onDragStart : null,
+                onHorizontalDragUpdate: widget.enabled ? _onDragUpdate : null,
+                onHorizontalDragEnd: widget.enabled ? _onDragEnd : null,
+                onHorizontalDragCancel: widget.enabled ? _onDragCancel : null,
                 child: Stack(
                   key: widget.dismissKey,
                   // Карточка уезжает за границы блока, как и у [Dismissible].

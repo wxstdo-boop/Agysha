@@ -10,6 +10,7 @@ void main() {
     WidgetTester tester, {
     ValueChanged<DismissDirection>? onDismissed,
     ConfirmDismissCallback? confirmDismiss,
+    bool enabled = true,
   }) async {
     await tester.pumpWidget(
       LocaleProvider(
@@ -21,6 +22,7 @@ void main() {
                 width: 400,
                 child: SwipeToDelete(
                   dismissKey: const ValueKey('d'),
+                  enabled: enabled,
                   onDismissed: onDismissed,
                   confirmDismiss: confirmDismiss,
                   child: const Card(
@@ -46,7 +48,9 @@ void main() {
     await pumpCard(tester);
     final start = tester.getTopLeft(find.text('card'));
 
-    final gesture = await tester.startGesture(tester.getCenter(find.text('card')));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('card')),
+    );
     await tester.pump();
     await gesture.moveBy(const Offset(-32, 0)); // 8% от 400
     await tester.pump();
@@ -91,7 +95,9 @@ void main() {
       },
     );
 
-    final gesture = await tester.startGesture(tester.getCenter(find.text('card')));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('card')),
+    );
     await tester.pump();
     // 150 px = 37.5% ширины — уверенно за порогом 24%.
     for (var i = 0; i < 10; i++) {
@@ -134,7 +140,9 @@ void main() {
     expect(dismissed, 1, reason: 'после схлопывания — ровно один раз');
   });
 
-  testWidgets('confirmDismiss=false возвращает карточку на место', (tester) async {
+  testWidgets('confirmDismiss=false возвращает карточку на место', (
+    tester,
+  ) async {
     var dismissed = 0;
     await pumpCard(
       tester,
@@ -143,7 +151,9 @@ void main() {
     );
     final start = tester.getTopLeft(find.text('card'));
 
-    final gesture = await tester.startGesture(tester.getCenter(find.text('card')));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('card')),
+    );
     await tester.pump();
     for (var i = 0; i < 10; i++) {
       await gesture.moveBy(const Offset(-15, 0));
@@ -154,5 +164,32 @@ void main() {
 
     expect(dismissed, 0);
     expect(dx(tester, start).abs(), lessThan(0.5));
+  });
+
+  testWidgets('пока карточку перетаскивают, свайп выключен целиком', (
+    tester,
+  ) async {
+    await pumpCard(tester, enabled: false);
+    final start = tester.getTopLeft(find.text('card'));
+
+    // Долгое нажатие по ручке драга неизбежно ведёт палец вбок на пару
+    // пикселей. Раньше это подхватывал свайп, карточка уезжала и из-под неё
+    // показывалась красная плашка — «фон глотался» на вибрации.
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('card')),
+    );
+    await tester.pump();
+    for (var i = 0; i < 10; i++) {
+      await gesture.moveBy(const Offset(-15, 0));
+      await tester.pump();
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      dx(tester, start).abs(),
+      lessThan(0.5),
+      reason: 'выключенный свайп не должен сдвигать карточку ни на пиксель',
+    );
   });
 }

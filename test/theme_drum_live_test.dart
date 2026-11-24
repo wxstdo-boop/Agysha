@@ -1,0 +1,97 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'source_scope.dart';
+
+/// Регресс-тест барабана тем: подпись и значок в центре обязаны меняться
+/// ЖИВЬЁМ, пока барабан крутится, а тема — применяться один раз, когда он
+/// встал. Раньше подпись «застывала» до остановки, и это читалось как
+/// поломка: крутишь — ничего не происходит, отпустил — переключилось.
+void main() {
+  String read(String path) {
+    final f = File(path);
+    expect(
+      f.existsSync(),
+      isTrue,
+      reason: '$path не найден — тест не из корня',
+    );
+    return readLibrary(path);
+  }
+
+  /// Тело метода от сигнатуры до следующей сигнатуры того же уровня.
+  String body(String src, String signature, String next) {
+    final start = src.indexOf(signature);
+    expect(start, greaterThan(-1), reason: 'не нашёл $signature');
+    final end = src.indexOf(next, start);
+    expect(end, greaterThan(start), reason: 'не нашёл конец $signature');
+    return src.substring(start, end);
+  }
+
+  test('во время кручения центральная подпись идёт за барабаном', () {
+    final src = read('lib/screens/settings_theme_carousel.dart');
+
+    expect(
+      body(src, 'void _onPointerMove(', 'void _onPointerUp('),
+      contains('_syncHub()'),
+      reason: 'подпись не сменялась, пока палец ещё крутит барабан',
+    );
+    expect(
+      body(src, 'void _onSpinTick(', 'void _tickHaptics('),
+      contains('_syncHub()'),
+      reason:
+          'на доводе после отпускания подпись тоже должна идти за барабаном',
+    );
+    expect(
+      body(src, 'void _syncHub()', 'int _shortestDelta('),
+      contains('_norm(_pos.round())'),
+      reason: 'центр показывает не ту камору, что встала под указателем',
+    );
+    expect(
+      src,
+      contains('widget.entries[_hubIndex]'),
+      reason: 'значок и подпись в центре не привязаны к живой каморе',
+    );
+  });
+
+  test('тема применяется только на остановке барабана', () {
+    final src = read('lib/screens/settings_theme_carousel.dart');
+
+    expect(
+      body(src, 'void _onPointerMove(', 'void _onPointerUp('),
+      isNot(contains('onCommit')),
+      reason: 'тема переключалась прямо под пальцем, а не после довода',
+    );
+    expect(
+      body(src, 'void _onSpinTick(', 'void _tickHaptics('),
+      isNot(contains('onCommit')),
+      reason: 'довод не должен ставить тему на каждом кадре',
+    );
+    final settle = body(src, 'void _settleTo(', 'void _onPointerDown(');
+    expect(
+      settle,
+      contains('widget.onCommit(widget.entries[_index])'),
+      reason: 'после остановки тема обязана примениться',
+    );
+  });
+
+  test('пока барабан едет, смена подписи короткая и без наслоений', () {
+    final src = read('lib/screens/settings_theme_carousel.dart');
+    expect(
+      src,
+      contains('duration: _moving\n                      ? Duration.zero'),
+      reason:
+          'пока барабан едет, подпись меняется сразу — длинный кроссфейд '
+          'наслаивал десяток затуханий и читался как «не меняется»',
+    );
+    expect(
+      src,
+      contains('const Duration(milliseconds: 280)'),
+      reason: 'на остановке подпись должна доехать плавным затуханием',
+    );
+    expect(
+      src,
+      contains('bool get _moving => _dragging || _spin.isAnimating;'),
+      reason: 'движение должно учитывать и палец, и довод',
+    );
+  });
+}
