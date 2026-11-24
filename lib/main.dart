@@ -1647,7 +1647,12 @@ class AgyshaAppState extends State<AgyshaApp>
   String get languageCode => _languageCode;
 
   Locale _resolveLocale() {
-    if (_languageCode != 'system') return Locale(_languageCode);
+    // Настройки могли не догрузиться (зависший канал, первый запуск):
+    // неизвестный код — это «системный», а не `Locale('')` (та падает
+    // ассертом и оставляет белый экран).
+    if (_languageCode != 'system' && _supported.contains(_languageCode)) {
+      return Locale(_languageCode);
+    }
     // Use PlatformDispatcher for web compatibility (Platform.localeName crashes on web)
     final dispatcher = WidgetsBinding.instance.platformDispatcher;
     final candidates = [dispatcher.locale, ...dispatcher.locales];
