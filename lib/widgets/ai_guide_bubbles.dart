@@ -223,9 +223,11 @@ class _MessageBubble extends StatelessWidget {
                             // целого пузыря. Лупа тоже отключена.
                             selectionControls: BeautifulSelectionControls(),
                             contextMenuBuilder: copyOnlyContextMenuBuilder,
-                            // Лупа снова системная: с отключённой лупой
-                            // долгое нажатие на Android не давало выделить
-                            // слово («выделение не работает»).
+                            // Лупы выделения нет ни у своих сообщений, ни у
+                            // ответов Ады: она закрывала слово и мешала
+                            // ручкам выделения.
+                            magnifierConfiguration:
+                                TextMagnifierConfiguration.disabled,
                           ),
                         ),
                       ],

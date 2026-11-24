@@ -223,6 +223,202 @@ class _ForgeScreenState extends State<ForgeScreen> {
     }
   }
 
+  /// Долгое нажатие на таблетку модели открывает один лист со ВСЕМИ
+  /// доступными моделями для кодинга (сильнейшие сверху). Выбор применяется
+  /// тем же кросс-фейдом, что и тап по таблетке, и лист закрывается сам.
+  Future<void> _openModelSheet(ColorScheme cs, Color accent) async {
+    final options = <ForgeModelOption>[
+      const ForgeModelOption(
+        id: '',
+        name: 'Авто · весь пул',
+        vendor: 'Пул',
+        power: 1000,
+      ),
+      ..._models,
+    ];
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.42),
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        return DraggableScrollableSheet(
+          initialChildSize: 0.62,
+          minChildSize: 0.42,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (context, scrollController) => Container(
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.memory_rounded, size: 18, color: accent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Модели для кодинга',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Доступны с текущим ключом · сильнейшие сверху',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.separated(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+                    itemCount: options.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 6),
+                    itemBuilder: (context, index) {
+                      final option = options[index];
+                      final selected = option.id == _modelId;
+                      final color = _modelColor(option, cs, accent);
+                      return PressScale(
+                        pressedScale: 0.975,
+                        enableTilt: true,
+                        duration: const Duration(milliseconds: 130),
+                        releaseDuration: const Duration(milliseconds: 280),
+                        maxTiltAngle: 0.10,
+                        pressTint: Colors.transparent,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            unawaited(
+                              _selectModel(option.id.isEmpty ? null : option),
+                            );
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? color.withValues(alpha: 0.12)
+                                  : cs.surface.withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: selected
+                                    ? color.withValues(alpha: 0.55)
+                                    : cs.outlineVariant.withValues(alpha: 0.28),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: color.withValues(
+                                      alpha: selected ? 0.24 : 0.10,
+                                    ),
+                                    border: Border.all(
+                                      color: color.withValues(
+                                        alpha: selected ? 0.65 : 0.26,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    _modelIcon(option),
+                                    size: 16,
+                                    color: color,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        option.id.isEmpty
+                                            ? option.name
+                                            : option.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: selected
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w600,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        option.id.isEmpty
+                                            ? 'Перебор всего пула'
+                                            : '${option.vendor} · сила ${option.power}',
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color: cs.onSurfaceVariant
+                                                  .withValues(alpha: 0.7),
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                AnimatedOpacity(
+                                  opacity: selected ? 1 : 0,
+                                  duration: const Duration(milliseconds: 260),
+                                  curve: Curves.easeOutCubic,
+                                  child: Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 19,
+                                    color: color,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _restoreChat() async {
     final saved = await ForgeChatStore.load();
     if (!mounted || saved.isEmpty) return;
@@ -465,8 +661,6 @@ class _ForgeScreenState extends State<ForgeScreen> {
 
     final history = List<ForgeChatMessage>.from(_messages);
     _inputController.clear();
-    // После отправки фокус остаётся на поле задачи, а не уезжает на ключ.
-    _inputFocus.requestFocus();
     setState(() {
       _running = true;
       _runError = null;
@@ -600,92 +794,94 @@ class _ForgeScreenState extends State<ForgeScreen> {
           centerTitle: true,
           backgroundColor: Colors.transparent,
           actions: [
-            // «Стоп» стоит рядом с очисткой. Вход и выход — один мягкий
-            // проход прозрачности и ширины (ширина ведёт AnimatedSize, а не
-            // подмена виджета кадром): на остановке кнопка именно гаснет, а
-            // не исчезает рывком.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.centerRight,
-              clipBehavior: Clip.hardEdge,
-              child: AnimatedOpacity(
-                opacity: _running ? 1.0 : 0.0,
-                duration: Duration(milliseconds: _running ? 260 : 220),
+            // «Стоп» стоит рядом с очисткой. Кнопка смонтирована всегда:
+            // появление и исчезновение — один проход прозрачности и
+            // масштаба, без подмены виджета кадром и без схлопывания
+            // ширины (раньше стоп именно «выдёргивался» из шапки).
+            AnimatedOpacity(
+              opacity: _running ? 1 : 0,
+              duration: Duration(milliseconds: _running ? 280 : 240),
+              curve: _running ? Curves.easeOutCubic : Curves.easeInCubic,
+              child: AnimatedScale(
+                scale: _running ? 1 : 0.78,
+                duration: Duration(milliseconds: _running ? 300 : 240),
                 curve: _running ? Curves.easeOutCubic : Curves.easeInCubic,
-                child: _running
-                    ? Padding(
-                        padding: const EdgeInsets.only(right: 2),
-                        child: PressScale(
-                          pressedScale: 0.9,
-                          enableTilt: true,
-                          duration: const Duration(milliseconds: 150),
-                          releaseDuration: const Duration(milliseconds: 300),
-                          maxTiltAngle: 0.14,
-                          pressTint: cs.error,
-                          pressTintStrength: 0.09,
-                          pressTintRadius: BorderRadius.circular(999),
-                          child: IconButton(
-                            onPressed: _stopping ? null : _stopRun,
-                            iconSize: 16,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(
-                              width: 36,
-                              height: 36,
+                child: IgnorePointer(
+                  ignoring: !_running,
+                  child: SizedBox(
+                    width: 38,
+                    height: 48,
+                    child: Center(
+                      child: PressScale(
+                        pressedScale: 0.9,
+                        enableTilt: true,
+                        duration: const Duration(milliseconds: 150),
+                        releaseDuration: const Duration(milliseconds: 300),
+                        maxTiltAngle: 0.14,
+                        pressTint: cs.error,
+                        pressTintStrength: 0.09,
+                        pressTintRadius: BorderRadius.circular(999),
+                        child: IconButton(
+                          onPressed: _stopping ? null : _stopRun,
+                          iconSize: 16,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 36,
+                            height: 36,
+                          ),
+                          // Спокойная монотонная «таблетка стопа»: тонкая
+                          // ошибка-обводка и еле заметная заливка вместо
+                          // тяжёлой иконки посреди шапки.
+                          style: IconButton.styleFrom(
+                            backgroundColor: cs.error.withValues(alpha: 0.10),
+                            side: BorderSide(
+                              color: cs.error.withValues(alpha: 0.30),
+                              width: 1,
                             ),
-                            // Спокойная монотонная «таблетка стопа»: тонкая
-                            // ошибка-обводка и еле заметная заливка вместо
-                            // тяжёлой иконки посреди шапки.
-                            style: IconButton.styleFrom(
-                              backgroundColor: cs.error.withValues(alpha: 0.10),
-                              side: BorderSide(
-                                color: cs.error.withValues(alpha: 0.30),
-                                width: 1,
+                            shape: const CircleBorder(),
+                          ),
+                          icon: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, anim) => FadeTransition(
+                              opacity: anim,
+                              child: ScaleTransition(
+                                scale: Tween<double>(
+                                  begin: 0.86,
+                                  end: 1,
+                                ).animate(anim),
+                                child: child,
                               ),
-                              shape: const CircleBorder(),
                             ),
-                            icon: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              transitionBuilder: (child, anim) =>
-                                  FadeTransition(
-                                    opacity: anim,
-                                    child: ScaleTransition(
-                                      scale: Tween<double>(
-                                        begin: 0.86,
-                                        end: 1,
-                                      ).animate(anim),
-                                      child: child,
+                            child: _stopping
+                                ? SizedBox(
+                                    key: const ValueKey('forge_stop_busy'),
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: cs.error,
+                                    ),
+                                  )
+                                : Semantics(
+                                    key: const ValueKey('forge_stop_icon'),
+                                    label: Translations.t(
+                                      'forgeStopRun',
+                                      context,
+                                      'Остановить',
+                                    ),
+                                    child: Icon(
+                                      Icons.stop_rounded,
+                                      color: cs.error.withValues(alpha: 0.9),
                                     ),
                                   ),
-                              child: _stopping
-                                  ? SizedBox(
-                                      key: const ValueKey('forge_stop_busy'),
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: cs.error,
-                                      ),
-                                    )
-                                  : Semantics(
-                                      key: const ValueKey('forge_stop_icon'),
-                                      label: Translations.t(
-                                        'forgeStopRun',
-                                        context,
-                                        'Остановить',
-                                      ),
-                                      child: Icon(
-                                        Icons.stop_rounded,
-                                        color: cs.error.withValues(alpha: 0.9),
-                                      ),
-                                    ),
-                            ),
                           ),
                         ),
-                      )
-                    : const SizedBox(width: 0, height: 48),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             // Кнопка очистки постоянная: она не исчезает вместе с историей —
@@ -865,6 +1061,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
                   onTap: () => unawaited(
                     _selectModel(option.id.isEmpty ? null : option),
                   ),
+                  // Долгое нажатие — один лист со всеми моделями.
+                  onLongPress: () => unawaited(_openModelSheet(cs, accent)),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 420),
                     curve: Curves.easeOutCubic,
@@ -1571,6 +1769,9 @@ class _ForgeScreenState extends State<ForgeScreen> {
                     theme.textTheme.bodyMedium!.copyWith(height: 1.35),
                   ),
                   contextMenuBuilder: copyOnlyContextMenuBuilder,
+                  // Лупа выделения убрана: при перетаскивании ручек она
+                  // перекрывала текст и мешала попасть по слову.
+                  magnifierConfiguration: TextMagnifierConfiguration.disabled,
                 ),
                 if (message.steps.isNotEmpty) ...[
                   const SizedBox(height: 10),

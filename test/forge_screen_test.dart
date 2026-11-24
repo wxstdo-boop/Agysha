@@ -730,6 +730,36 @@ void main() {
     }
   });
 
+  testWidgets('долгое нажатие на таблетку открывает лист всех моделей', (
+    tester,
+  ) async {
+    _tallSurface(tester);
+    final service = ForgeService(
+      client: _okClient(),
+      store: InMemoryForgeTokenStore(),
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        ForgeScreen(owner: 'wxstdo-boop', repo: 'agysha', service: service),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('Авто · весь пул'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Модели для кодинга'), findsOneWidget);
+    final pool = FreePoolForgeChat.catalogFor('');
+    expect(pool, isNotEmpty);
+    // Последнее вхождение — строка листа (в таблетке та же подпись).
+    expect(find.text(pool.first.label), findsWidgets);
+
+    await tester.tap(find.text(pool.first.label).last);
+    await tester.pumpAndSettle();
+    expect(find.text('Модели для кодинга'), findsNothing);
+  });
+
   test('в пуле ровно один Kilo и он подписан «Kilo Free»', () {
     for (final key in <String>['', 'sk-or-test', 'poolside-test']) {
       final pool = FreePoolForgeChat.catalogFor(key);
@@ -804,7 +834,16 @@ void main() {
     expect(runner.stopping, isFalse);
     // Ответ «Остановлено…» экран уже забрал из runner'а и показал в чате.
     expect(_chatTextContaining('Остановлено'), findsWidgets);
-    // Кнопка снова зовёт к отправке, «Стоп» убран.
-    expect(find.byIcon(Icons.stop_rounded), findsNothing);
+    // Кнопка остаётся смонтированной (иначе она выдёргивалась из шапки
+    // кадром), но полностью погашена и не принимает нажатия.
+    final stopOpacity = tester.widget<AnimatedOpacity>(
+      find
+          .ancestor(
+            of: find.byIcon(Icons.stop_rounded),
+            matching: find.byType(AnimatedOpacity),
+          )
+          .first,
+    );
+    expect(stopOpacity.opacity, 0);
   });
 }

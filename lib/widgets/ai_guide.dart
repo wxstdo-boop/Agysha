@@ -500,7 +500,11 @@ class _AiChatBodyState extends State<_AiChatBody>
     // Ответ Ады подписываем моделью, которая его принесла: подпись живёт под
     // самим пузырём, а не общей строкой в конце чата.
     if (!m.isUser && (m.model ?? '').trim().isEmpty) {
-      final label = _modelLabel.trim();
+      // Берём СВЕЖУЮ метку сервиса, а не показываемую плашку: та
+      // публикуется с задержкой, и ответ успевал лечь в ленту без модели.
+      final label = AiGuideService.lastUsedModel.trim().isNotEmpty
+          ? AiGuideService.lastUsedModel.trim()
+          : _modelLabel.trim();
       if (label.isNotEmpty) {
         m = AiMessage(isUser: false, text: m.text, ts: m.ts, model: label);
       }
