@@ -10,6 +10,7 @@ import '../services/forge_service.dart';
 import '../services/haptics.dart';
 import '../services/settings_service.dart';
 import '../utils/context_menu.dart';
+import '../utils/markdown_text.dart';
 import '../utils/snackbar.dart';
 
 import '../widgets/press_scale.dart';
@@ -66,12 +67,24 @@ class _ForgeScreenState extends State<ForgeScreen> {
   /// Поле токена гаснет перед очисткой и плавно возвращается пустым:
   /// иначе «Забыть токен» стирал текст кадром.
   bool _forgettingToken = false;
+
+  /// Наружу поле гаснет быстрее, чем возвращается: после удаления пустое
+  /// поле «вплывает» спокойнее, чем исчезает старое значение.
+  Duration _tokenFadeDuration = const Duration(milliseconds: 340);
+
+  /// Чат гаснет перед очисткой, чтобы история не исчезала одним кадром.
+  bool _clearingChat = false;
   String? _login;
   String? _tokenError;
   String _baseBranch = 'main';
 
   /// Разговор с агентом. Живёт между запусками приложения.
   final List<ForgeChatMessage> _messages = <ForgeChatMessage>[];
+
+  /// С этого индекса реплики проявляются анимацией. Поднятая из хранилища
+  /// история показывается сразу: тысяча одновременных анимаций — это тормоза,
+  /// а не плавность.
+  int _animateFrom = 0;
 
   /// Шаги текущего хода: показываются в «живом» пузыре, пока агент думает.
   final List<ForgeStep> _liveSteps = <ForgeStep>[];
@@ -109,7 +122,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
   Future<void> _restoreChat() async {
     final saved = await ForgeChatStore.load();
     if (!mounted || saved.isEmpty) return;
-    setState(() => _messages.addAll(saved));
+    setState(() {
+      _messages.addAll(saved);
+      _animateFrom = _messages.length;
+    });
     _scrollToEnd();
   }
 
@@ -225,7 +241,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
     // Поле чистим ВСЕГДА, даже если хранилище ругнулось: иначе пользователь
     // нажимает «удалить», а токен остаётся на экране — и выглядит это так,
     // будто удаление не работает вовсе.
-    setState(() => _forgettingToken = true);
+    setState(() {
+      _forgettingToken = true;
+      _tokenFadeDuration = const Duration(milliseconds: 240);
+    });
     Object? failure;
     try {
       await _service.clearToken();
@@ -234,13 +253,14 @@ class _ForgeScreenState extends State<ForgeScreen> {
     }
     // Даём тексту поля погаснуть, даже если хранилище ответило мгновенно:
     // иначе токен исчезал одним кадром. Затем поле проявляется пустым.
-    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await Future<void>.delayed(const Duration(milliseconds: 250));
     if (!mounted) return;
     setState(() {
       _tokenController.clear();
       _login = null;
       _tokenError = null;
       _forgettingToken = false;
+      _tokenFadeDuration = const Duration(milliseconds: 340);
     });
     showBeautifulSnackBar(
       context,
@@ -254,15 +274,35 @@ class _ForgeScreenState extends State<ForgeScreen> {
     );
   }
 
+  /// Добавляет реплику и держит историю в пределах [ForgeChatStore.maxMessages]:
+  /// 1000 последних сообщений — это и потолок контекста для модели.
+  void _appendMessage(ForgeChatMessage message) {
+    _messages.add(message);
+    final overflow = _messages.length - ForgeChatStore.maxMessages;
+    if (overflow > 0) {
+      _messages.removeRange(0, overflow);
+      _animateFrom = (_animateFrom - overflow)
+          .clamp(0, _messages.length)
+          .toInt();
+    }
+  }
+
   Future<void> _clearChat() async {
+    if (_clearingChat) return;
+    setState(() => _clearingChat = true);
+    await ForgeChatStore.clear();
+    // Сначала история гаснет, и только потом подменяется: очистка одним
+    // кадром читалась как рывок.
+    await Future<void>.delayed(const Duration(milliseconds: 240));
+    if (!mounted) return;
     setState(() {
       _messages.clear();
       _liveSteps.clear();
       _runError = null;
       _agent = null; // новая сессия — новая рабочая ветка
+      _animateFrom = 0;
+      _clearingChat = false;
     });
-    await ForgeChatStore.clear();
-    if (!mounted) return;
     showBeautifulSnackBar(
       context,
       message: Translations.t('forgeChatCleared', context),
@@ -313,7 +353,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
       _runError = null;
       _liveSteps.clear();
       _activeProvider = null;
-      _messages.add(
+      _appendMessage(
         ForgeChatMessage(
           isUser: true,
           text: text,
@@ -321,6 +361,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
         ),
       );
     });
+    // Реплику сохраняем сразу: даже если прогон упадёт, разговор не потеряется.
+    unawaited(ForgeChatStore.save(_messages));
     _scrollToEnd();
 
     try {
@@ -366,7 +408,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
       if (!mounted) return;
       setState(() {
         _running = false;
-        _messages.add(
+        _appendMessage(
           ForgeChatMessage(
             isUser: false,
             text: turn.text.isEmpty
@@ -397,6 +439,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
       _runError = message;
       _liveSteps.clear();
     });
+    // Неудачный прогон тоже часть разговора: он должен пережить перезапуск.
+    unawaited(ForgeChatStore.save(_messages));
     _scrollToEnd();
   }
 
@@ -431,10 +475,26 @@ class _ForgeScreenState extends State<ForgeScreen> {
           backgroundColor: Colors.transparent,
           actions: [
             if (_messages.isNotEmpty)
-              IconButton(
-                tooltip: Translations.t('forgeClearChat', context),
-                onPressed: _running ? null : () => unawaited(_clearChat()),
-                icon: const Icon(Icons.cleaning_services_rounded),
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: PressScale(
+                  pressedScale: 0.88,
+                  enableTilt: true,
+                  duration: const Duration(milliseconds: 130),
+                  releaseDuration: const Duration(milliseconds: 220),
+                  maxTiltAngle: 0.20,
+                  child: IconButton(
+                    // Тултип убран: на телефоне он вылезал поверх чата.
+                    // Подпись остаётся только для экранного диктора.
+                    onPressed: _running || _clearingChat
+                        ? null
+                        : () => unawaited(_clearChat()),
+                    icon: Semantics(
+                      label: Translations.t('forgeClearChat', context),
+                      child: const Icon(Icons.cleaning_services_rounded),
+                    ),
+                  ),
+                ),
               ),
           ],
         ),
@@ -475,13 +535,32 @@ class _ForgeScreenState extends State<ForgeScreen> {
                             const SizedBox(height: 8),
                             if (_messages.isEmpty && !_running)
                               _emptyChat(theme, cs),
-                            for (final message in _messages)
-                              _bubble(theme, cs, accent, message),
-                            if (_running) _runningBubble(theme, cs, accent),
-                            if (_runError != null) ...[
-                              const SizedBox(height: 12),
-                              _errorCard(theme, cs),
-                            ],
+                            AnimatedOpacity(
+                              opacity: _clearingChat ? 0.0 : 1.0,
+                              duration: const Duration(milliseconds: 240),
+                              curve: _clearingChat
+                                  ? Curves.easeInCubic
+                                  : Curves.easeOutCubic,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  for (var i = 0; i < _messages.length; i++)
+                                    _bubble(
+                                      theme,
+                                      cs,
+                                      accent,
+                                      _messages[i],
+                                      animate: i >= _animateFrom,
+                                    ),
+                                  if (_running)
+                                    _runningBubble(theme, cs, accent),
+                                  if (_runError != null) ...[
+                                    const SizedBox(height: 12),
+                                    _errorCard(theme, cs),
+                                  ],
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -529,7 +608,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                         style: typingStyle,
                         minLines: 1,
                         maxLines: 6,
-                        maxLength: 4000,
+                        maxLength: 10000,
                         enabled: !_running,
                         textCapitalization: TextCapitalization.sentences,
                         keyboardType: TextInputType.multiline,
@@ -587,16 +666,38 @@ class _ForgeScreenState extends State<ForgeScreen> {
                         foregroundColor: Colors.white,
                         shape: const CircleBorder(),
                       ),
-                      child: _running
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                      // Иконка и загрузка сменяют друг друга через
+                      // масштаб и растворение, а не подменой кадром.
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, anim) => FadeTransition(
+                          opacity: anim,
+                          child: ScaleTransition(
+                            scale: Tween<double>(
+                              begin: 0.72,
+                              end: 1.0,
+                            ).animate(anim),
+                            child: child,
+                          ),
+                        ),
+                        child: _running
+                            ? const SizedBox(
+                                key: ValueKey('forge_send_busy'),
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.send_rounded,
+                                key: ValueKey('forge_send_icon'),
+                                size: 20,
                               ),
-                            )
-                          : const Icon(Icons.send_rounded, size: 20),
+                      ),
                     ),
                   ),
                 ),
@@ -655,50 +756,74 @@ class _ForgeScreenState extends State<ForgeScreen> {
               // экране незачем, а подтверждение всё равно приходит логином ниже.
               // Оформление — как у остальных полей приложения (плотное, радиус
               // 14, минимальное меню, без лупы).
-              AnimatedOpacity(
-                opacity: _forgettingToken ? 0.0 : 1.0,
-                duration: const Duration(milliseconds: 150),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutCubic,
-                child: TextField(
-                  key: const ValueKey('forge_token_field'),
-                  controller: _tokenController,
-                  focusNode: _tokenFocus,
-                  obscureText: true,
-                  obscuringCharacter: '•',
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  maxLines: 1,
-                  textInputAction: TextInputAction.done,
-                  cursorOpacityAnimates: true,
-                  magnifierConfiguration: TextMagnifierConfiguration.disabled,
-                  contextMenuBuilder: minimalContextMenuBuilder,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    counterText: '',
-                    hintText: 'ghp_… / github_pat_…',
-                    filled: true,
-                    fillColor: cs.surfaceContainerHighest.withValues(
-                      alpha: 0.45,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 14,
-                      horizontal: 14,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(
-                        color: cs.outlineVariant.withValues(alpha: 0.65),
+                alignment: Alignment.topCenter,
+                // Пока хранилище читается, на месте поля — ровная плашка.
+                // Сохранённый токен не должен «проявляться» уже после запуска.
+                child: _loadingToken
+                    ? _tokenSkeleton(cs)
+                    : AnimatedOpacity(
+                        opacity: _forgettingToken ? 0.0 : 1.0,
+                        duration: _tokenFadeDuration,
+                        curve: _forgettingToken
+                            ? Curves.easeInCubic
+                            : Curves.easeOutCubic,
+                        child: AnimatedScale(
+                          scale: _forgettingToken ? 0.985 : 1.0,
+                          duration: _tokenFadeDuration,
+                          curve: Curves.easeOutCubic,
+                          child: TextField(
+                            key: const ValueKey('forge_token_field'),
+                            controller: _tokenController,
+                            focusNode: _tokenFocus,
+                            obscureText: true,
+                            obscuringCharacter: '•',
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            // Секрет нельзя ни выделить, ни скопировать с экрана.
+                            enableInteractiveSelection: false,
+                            maxLines: 1,
+                            textInputAction: TextInputAction.done,
+                            cursorOpacityAnimates: true,
+                            magnifierConfiguration:
+                                TextMagnifierConfiguration.disabled,
+                            contextMenuBuilder: minimalContextMenuBuilder,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              counterText: '',
+                              hintText: 'ghp_… / github_pat_…',
+                              filled: true,
+                              fillColor: cs.surfaceContainerHighest.withValues(
+                                alpha: 0.45,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                                horizontal: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide(
+                                  color: cs.outlineVariant.withValues(
+                                    alpha: 0.65,
+                                  ),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide(
+                                  color: accent,
+                                  width: 1.6,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: accent, width: 1.6),
-                    ),
-                  ),
-                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -824,6 +949,19 @@ class _ForgeScreenState extends State<ForgeScreen> {
     );
   }
 
+  /// Заглушка поля токена на время чтения хранилища: той же высоты, что и
+  /// поле, поэтому карточка не прыгает по высоте после загрузки.
+  Widget _tokenSkeleton(ColorScheme cs) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+      ),
+    );
+  }
+
   Widget _emptyChat(ThemeData theme, ColorScheme cs) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -856,86 +994,99 @@ class _ForgeScreenState extends State<ForgeScreen> {
     ThemeData theme,
     ColorScheme cs,
     Color accent,
-    ForgeChatMessage message,
-  ) {
+    ForgeChatMessage message, {
+    bool animate = true,
+  }) {
     final isUser = message.isUser;
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 560),
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isUser
-              ? accent.withValues(alpha: 0.14)
-              : cs.surfaceContainerHighest.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isUser
-                ? accent.withValues(alpha: 0.35)
-                : cs.outlineVariant.withValues(alpha: 0.5),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!isUser) ...[
-              Row(
-                children: [
-                  Icon(Icons.smart_toy_outlined, size: 15, color: accent),
-                  const SizedBox(width: 7),
-                  Text(
-                    Translations.t('forgeTitle', context, 'Кузница'),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: accent,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
+    return _BubbleReveal(
+      animate: animate,
+      child: Align(
+        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+        child: PressScale(
+          pressedScale: 0.985,
+          enableTilt: true,
+          duration: const Duration(milliseconds: 140),
+          releaseDuration: const Duration(milliseconds: 280),
+          maxTiltAngle: 0.10,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 560),
+            margin: const EdgeInsets.symmetric(vertical: 5),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isUser
+                  ? accent.withValues(alpha: 0.14)
+                  : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isUser
+                    ? accent.withValues(alpha: 0.35)
+                    : cs.outlineVariant.withValues(alpha: 0.5),
               ),
-              const SizedBox(height: 6),
-            ],
-            SelectableText(
-              message.text,
-              style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
             ),
-            if (message.steps.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              _stepsList(theme, cs, message.steps),
-            ],
-            if (message.pullRequestUrl != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.merge_type_rounded,
-                    size: 16,
-                    color: Colors.green,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: SelectableText(
-                      message.pullRequestUrl!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.primary,
-                        decoration: TextDecoration.underline,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!isUser) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.smart_toy_outlined, size: 15, color: accent),
+                      const SizedBox(width: 7),
+                      Text(
+                        Translations.t('forgeTitle', context, 'Кузница'),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                SelectableText.rich(
+                  parseMarkdownSpans(
+                    message.text,
+                    theme.textTheme.bodyMedium!.copyWith(height: 1.35),
+                  ),
+                ),
+                if (message.steps.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _stepsList(theme, cs, message.steps),
+                ],
+                if (message.pullRequestUrl != null) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.merge_type_rounded,
+                        size: 16,
+                        color: Colors.green,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SelectableText(
+                          message.pullRequestUrl!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.primary,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (message.branch != null && message.steps.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '${Translations.t('forgeBranch', context)}: ${message.branch}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontFamily: 'monospace',
                     ),
                   ),
                 ],
-              ),
-            ],
-            if (message.branch != null && message.steps.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                '${Translations.t('forgeBranch', context)}: ${message.branch}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ],
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -988,7 +1139,24 @@ class _ForgeScreenState extends State<ForgeScreen> {
     );
   }
 
+  /// Значок под инструмент: команды разные, и одинаковые галочки у всех
+  /// шагов сливались в серую стену.
+  IconData _stepIcon(String tool) => switch (tool) {
+    'list_dir' => Icons.folder_open_rounded,
+    'search_code' => Icons.search_rounded,
+    'read_file' => Icons.description_outlined,
+    'write_file' => Icons.edit_note_rounded,
+    'delete_file' => Icons.delete_outline_rounded,
+    'finish' => Icons.flag_rounded,
+    _ => Icons.bolt_rounded,
+  };
+
   Widget _stepsList(ThemeData theme, ColorScheme cs, List<ForgeStep> steps) {
+    final detailStyle = theme.textTheme.bodySmall?.copyWith(
+      fontFamily: 'monospace',
+      color: cs.onSurfaceVariant,
+      height: 1.3,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -999,18 +1167,32 @@ class _ForgeScreenState extends State<ForgeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  step.ok ? Icons.check_circle_outline : Icons.error_outline,
-                  size: 14,
-                  color: step.ok ? cs.primary : cs.error,
+                  step.ok ? _stepIcon(step.tool) : Icons.error_outline_rounded,
+                  size: 15,
+                  color: step.ok
+                      ? cs.primary.withValues(alpha: 0.85)
+                      : cs.error,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    '${step.tool}: ${step.detail}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontFamily: 'monospace',
-                      color: cs.onSurfaceVariant,
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: step.tool,
+                          style: detailStyle?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: step.ok ? cs.onSurface : cs.error,
+                          ),
+                        ),
+                        TextSpan(
+                          text: step.detail.isEmpty ? '' : ' · ${step.detail}',
+                          style: detailStyle,
+                        ),
+                      ],
                     ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -1043,6 +1225,59 @@ class _ForgeScreenState extends State<ForgeScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Появление реплики: короткий подъём и растворение вместо подмены кадром.
+/// Поднятая из хранилища история [_animate] не включает — иначе тысяча
+/// пузырей одновременно дёргала бы кадр при открытии экрана.
+class _BubbleReveal extends StatefulWidget {
+  const _BubbleReveal({required this.child, this.animate = true});
+
+  final Widget child;
+  final bool animate;
+
+  @override
+  State<_BubbleReveal> createState() => _BubbleRevealState();
+}
+
+class _BubbleRevealState extends State<_BubbleReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    value: widget.animate ? 0.0 : 1.0,
+  );
+
+  late final CurvedAnimation _curve = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+
+  late final Animation<Offset> _offset = Tween<Offset>(
+    begin: const Offset(0, 0.06),
+    end: Offset.zero,
+  ).animate(_curve);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.animate) _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _curve,
+      child: SlideTransition(position: _offset, child: widget.child),
     );
   }
 }

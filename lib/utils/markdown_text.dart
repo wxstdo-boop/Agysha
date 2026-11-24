@@ -106,7 +106,8 @@ TextSpan splitTrailingPunctuation(String value, TextStyle style) {
 class _MdPiece {
   final String text;
 
-  /// 0 — обычный, 1 — жирный, 2 — курсив, 3 — моноширинный «код».
+  /// 0 — обычный, 1 — жирный, 2 — курсив, 3 — моноширинный «код»,
+  /// 4 — заголовок строки (`#`, `##`, `###`).
   final int kind;
   const _MdPiece(this.text, this.kind);
 }
@@ -119,19 +120,19 @@ class _MdPiece {
 final Map<String, List<_MdPiece>> _mdCache = {};
 
 /// Регулярки и проверки пунктуации компилируются один раз на запуск.
-final RegExp _mdRegex = RegExp(r'(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|[^*`]+)');
-final RegExp _leadPunct = RegExp(r'^(?:[ 	]*[,.;!?…:»]+|[ 	]*[—–])');
+final RegExp _mdRegex = RegExp(
+  r'(\*\*(.+?)\*\*|__(.+?)__|\*(.+?)\*|_(.+?)_|`(.+?)`|[^*_`]+)',
+);
 
-List<_MdPiece> _parsePieces(String text) {
-  final cached = _mdCache[text];
-  if (cached != null) return cached;
-  final pieces = <_MdPiece>[];
-  for (final match in _mdRegex.allMatches(
-    joinTrailingSymbols(sanitizeTextForWrap(text)),
-  )) {
-    final bold = match.group(2);
-    final italic = match.group(3);
-    final code = match.group(4);
+/// Строка-заголовок markdown: «### Итог». Модели любят писать так в
+/// рассуждениях, и решётки нужно убирать, а строку выделять.
+final RegExp _mdHeading = RegExp(r'^[ \t]*#{1,6}[ \t]*(.+)$');
+
+List<_MdPiece> _parseInline(String text, List<_MdPiece> pieces) {
+  for (final match in _mdRegex.allMatches(text)) {
+    final bold = match.group(2) ?? match.group(3);
+    final italic = match.group(4) ?? match.group(5);
+    final code = match.group(6);
     final kind = bold != null
         ? 1
         : italic != null
@@ -148,6 +149,25 @@ List<_MdPiece> _parsePieces(String text) {
       if (value.isEmpty) continue;
     }
     pieces.add(_MdPiece(value, kind));
+  }
+  return pieces;
+}
+
+final RegExp _leadPunct = RegExp(r'^(?:[ 	]*[,.;!?…:»]+|[ 	]*[—–])');
+
+List<_MdPiece> _parsePieces(String text) {
+  final cached = _mdCache[text];
+  if (cached != null) return cached;
+  final pieces = <_MdPiece>[];
+  final cleaned = joinTrailingSymbols(sanitizeTextForWrap(text));
+  for (final line in cleaned.split('\n')) {
+    if (pieces.isNotEmpty) pieces.add(const _MdPiece('\n', 0));
+    final heading = _mdHeading.firstMatch(line);
+    if (heading != null) {
+      pieces.add(_MdPiece(heading.group(1)!.trimRight(), 4));
+      continue;
+    }
+    _parseInline(line, pieces);
   }
   if (_mdCache.length > 96) _mdCache.clear();
   _mdCache[text] = pieces;
@@ -171,6 +191,11 @@ TextStyle _styleForKind(int kind, TextStyle baseStyle) => switch (kind) {
   2 => baseStyle.copyWith(fontStyle: FontStyle.italic),
   3 => baseStyle.copyWith(
     backgroundColor: baseStyle.color?.withValues(alpha: 0.10),
+  ),
+  4 => baseStyle.copyWith(
+    fontWeight: FontWeight.w800,
+    fontSize: (baseStyle.fontSize ?? 16) * 1.05,
+    height: 1.25,
   ),
   _ => baseStyle,
 };

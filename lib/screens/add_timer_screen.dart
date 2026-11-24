@@ -338,29 +338,20 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
           centerTitle: true,
           actions: [
             PressScale(
-              pressedScale: 0.96,
-              duration: const Duration(milliseconds: 200),
-              releaseDuration: const Duration(milliseconds: 340),
+              pressedScale: 0.92,
+              duration: const Duration(milliseconds: 180),
+              releaseDuration: const Duration(milliseconds: 240),
               pressOverlay: pressGloss(
                 BorderRadius.circular(999),
                 strength: 0.12,
               ),
               maxTiltAngle: 0.22,
-              // В шапке была плоская текстовая кнопка высотой 36: рядом с
-              // большой кнопкой внизу она читалась «укороченной». Теперь это
-              // та же таблетка, что и внизу, — 52 в высоту, с тем же
-              // заголовочным начертанием, только с полями по бокам.
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilledButton(
-                  onPressed: _save,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 52),
-                    padding: const EdgeInsets.symmetric(horizontal: 26),
-                    textStyle: theme.textTheme.titleMedium,
-                  ),
-                  child: Text(Translations.saveOf(context)),
-                ),
+              // В шапке — обычная текстовая кнопка, как в «Будильнике» и
+              // остальных окнах добавления: таблетка-заливка тут выглядела
+              // чужим элементом.
+              child: TextButton(
+                onPressed: _save,
+                child: Text(Translations.saveOf(context)),
               ),
             ),
           ],

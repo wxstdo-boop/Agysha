@@ -159,9 +159,16 @@ class ForgeAgent {
   String? _branch;
 
   /// Потолок шагов: каждая итерация — это сетевой запрос к модели и к
-  /// GitHub, а платим за это лимитами. Двенадцати хватает на «прочитал три
-  /// файла, поправил два, открыл PR».
-  static const maxSteps = 12;
+  /// GitHub, а платим за это лимитами. Шестнадцати хватает на «прочитал
+  /// пять файлов, поправил три, проверил и открыл PR».
+  static const maxSteps = 16;
+
+  /// Сколько символов истории диалога уходит в запрос. Длинный чат (до 1000
+  /// реплик) иначе переполняет окно модели и прогон падает на первом шаге.
+  static const historyBudget = 24000;
+
+  /// Сколько строк файла отдаём за одно чтение: больше — модель тонет.
+  static const maxReadLines = 700;
 
   /// Сколько файлов агент может изменить за один прогон. Ограничение ловит
   /// разбушевавшуюся модель до того, как она перепишет весь проект.
@@ -227,11 +234,21 @@ class ForgeAgent {
       'type': 'function',
       'function': {
         'name': 'read_file',
-        'description': 'Прочитать файл из репозитория.',
+        'description':
+            'Прочитать файл из репозитория. Для больших файлов читай '
+            'по частям: start/end — номера строк (с 1).',
         'parameters': {
           'type': 'object',
           'properties': {
             'path': {'type': 'string', 'description': 'Путь файла.'},
+            'start': {
+              'type': 'integer',
+              'description': 'Первая строка диапазона, с 1. Пусто — с начала.',
+            },
+            'end': {
+              'type': 'integer',
+              'description': 'Последняя строка диапазона включительно.',
+            },
           },
           'required': ['path'],
         },
@@ -317,9 +334,7 @@ class ForgeAgent {
   }) async {
     final messages = <Map<String, dynamic>>[
       {'role': 'system', 'content': _systemPrompt(languageCode)},
-      for (final m in history)
-        if (m.text.trim().isNotEmpty)
-          {'role': m.isUser ? 'user' : 'assistant', 'content': m.text},
+      ..._historyForPrompt(history),
       {'role': 'user', 'content': task},
     ];
     final tools = _tools();
@@ -543,7 +558,23 @@ class ForgeAgent {
         final path = _requirePath(call);
         final file = await service.readFile(owner, repo, path, ref: branch);
         if (file == null) return 'Файл не найден: $path';
-        return file.content;
+        final lines = file.content.split('\n');
+        final requestedStart = (_int(call.arguments['start']) ?? 1).clamp(
+          1,
+          lines.isEmpty ? 1 : lines.length,
+        );
+        final requestedEnd = (_int(call.arguments['end']) ?? lines.length)
+            .clamp(requestedStart, lines.length);
+        var end = requestedEnd;
+        final capped = end - requestedStart + 1 > maxReadLines;
+        if (capped) end = requestedStart + maxReadLines - 1;
+        final slice = lines.sublist(requestedStart - 1, end);
+        final header = 'Строки $requestedStart-$end из ${lines.length}\n';
+        final tail = capped
+            ? '\n\n[Обрезано на $maxReadLines строках. Продолжи с '
+                  'start=$end + 1.]'
+            : '';
+        return '$header${slice.join('\n')}$tail';
       case 'write_file':
         final path = _requirePath(call);
         final content = _str(call.arguments['content']);
@@ -600,6 +631,48 @@ class ForgeAgent {
     return content.contains('<<<<<<< ') || content.contains('>>>>>>> ');
   }
 
+  /// История для запроса: последние реплики в пределах [historyBudget], плюс
+  /// самая первая просьба пользователя — она задаёт рамку всей работы. Если
+  /// середина выпала, модель получает честную пометку об этом, а не тихую
+  /// дыру в памяти.
+  List<Map<String, dynamic>> _historyForPrompt(List<ForgeChatMessage> history) {
+    final usable = history
+        .where((m) => m.text.trim().isNotEmpty)
+        .toList(growable: false);
+    if (usable.isEmpty) return const [];
+    final tail = <ForgeChatMessage>[];
+    var used = 0;
+    for (var i = usable.length - 1; i >= 0; i--) {
+      final len = usable[i].text.length;
+      if (tail.isNotEmpty && used + len > historyBudget) break;
+      tail.add(usable[i]);
+      used += len;
+    }
+    final start = usable.length - tail.length;
+    final result = <Map<String, dynamic>>[];
+    if (start > 1) {
+      result.add({'role': 'user', 'content': usable.first.text});
+      result.add({
+        'role': 'system',
+        'content':
+            'Середина диалога ($start реплик) не поместилась в контекст. '
+            'Опирайся на первую просьбу, последние реплики и на реальное '
+            'содержимое файлов в ветке; не выдумывай пропавшие детали.',
+      });
+    }
+    for (final m in tail.reversed) {
+      result.add({'role': m.isUser ? 'user' : 'assistant', 'content': m.text});
+    }
+    return result;
+  }
+
+  static int? _int(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
   String _requirePath(ForgeToolCall call) {
     final path = _str(call.arguments['path']);
     if (path == null || path.trim().isEmpty) {
@@ -616,23 +689,32 @@ class ForgeAgent {
       '(Flutter/Dart, репозиторий $owner/$repo). Ты ведёшь ЖИВОЙ ДИАЛОГ с '
       'разработчиком и по его просьбе правишь код настоящими коммитами в '
       'отдельной ветке, затем открываешь pull request.\n'
-      'Как вести себя:\n'
+      'Порядок работы над любой задачей:\n'
+      '1) Пойми, что просят, с учётом всего диалога и уже сделанного. Если '
+      'просьба допускает разные трактовки — задай ОДИН короткий уточняющий '
+      'вопрос текстом, не правя файлы наугад.\n'
+      '2) Найди нужное: search_code и list_dir, затем read_file. Большой '
+      'файл читай диапазонами start/end, а не целиком.\n'
+      '3) Правь минимально и по делу: одна правка — одна причина. Не '
+      'переписывай файл ради стиля и не удаляй чужую работу.\n'
+      '4) После правок мысленно пройди по изменённому коду: не сломал ли ты '
+      'существующее поведение, имена, тесты и импорты. Если сломал — '
+      'исправь тем же ходом.\n'
+      '5) Заканчивай вызовом finish с честным summary: что изменено и что '
+      'осталось непроверенным.\n'
+      'Правила:\n'
       '— На вопрос о коде отвечай текстом, опираясь на реальные файлы: '
       'сначала list_dir/read_file, потом ответ. Для ответа НЕ вызывай '
       'finish и не правь файлы — ветка и PR на вопросы не создаются.\n'
-      '— Когда просят что-то изменить: прочитай нужные файлы, вызови '
-      'write_file с ПОЛНЫМ содержимым файла (не фрагмент), при необходимости '
-      'delete_file, и заверши вызовом finish с кратким summary.\n'
       '— Помни предыдущие реплики диалога и продолжай начатую работу, не '
-      'начиная всё заново.\n'
-      'Правила работы с кодом:\n'
+      'начиная всё заново. Ссылки вроде «этот экран», «эту кнопку», «как в '
+      'привычках» разрешай по истории и по коду, а не догадками.\n'
       '— Пути бери ТОЛЬКО из list_dir/read_file. Если файла нет в выдаче — '
       'сначала найди его через search_code, не угадывай путь.\n'
-      '— Один шаг — один файл. Прочитал файл, затем write_file с полным '
-      'новым содержимым ИМЕННО этого файла; остальные файлы в этом вызове '
-      'не меняй.\n'
-      '— Не присылай диффы, фрагменты и «...» вместо кода: только полный '
-      'файл. Если файл большой — правь его по частям отдельными шагами.\n'
+      '— Перед write_file файл должен быть прочитан в этом ходе: правишь то, '
+      'что видел. Один шаг — один файл, content — ПОЛНОЕ содержимое.\n'
+      '— Не присылай диффы, фрагменты и «...» вместо кода. Если файл '
+      'большой — правь его по частям отдельными шагами.\n'
       '— Если инструмент вернул ошибку, исправь аргументы и повтори; не '
       'делай вид, что записал.\n'
       'Не выдумывай код, которого не видел. Не трогай секреты и файлы '

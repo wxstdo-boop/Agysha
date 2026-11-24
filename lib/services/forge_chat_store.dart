@@ -13,9 +13,10 @@ class ForgeChatStore {
 
   static const key = 'forge_chat_history';
 
-  /// Потолок истории: контекст уходит в промпт, и бесконечный лог съел бы
-  /// окно модели. Держим последние реплики.
-  static const maxMessages = 200;
+  /// Потолок истории: 1000 реплик. В промпт уходит только часть ([ForgeAgent]
+  /// режет историю по бюджету символов), поэтому хранилище может быть
+  /// заметно больше контекста модели.
+  static const maxMessages = 1000;
 
   static List<ForgeChatMessage> parse(String? raw) {
     if (raw == null || raw.isEmpty) return const [];

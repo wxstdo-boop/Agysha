@@ -155,21 +155,19 @@ const _finish = ForgeChatReply(
 
 /// Текст пузыря чата. Реплики рисуются через SelectableText, поэтому
 /// обычный find.text их не находит — ищем по обоим типам.
-Finder _chatText(String value) => find.byWidgetPredicate(
-  (w) => w is Text
-      ? (w.data ?? w.textSpan?.toPlainText() ?? '') == value
-      : w is SelectableText
-      ? (w.data ?? '') == value
-      : false,
-);
+/// Текст пузыря: реплики рендерятся через `SelectableText.rich`, поэтому
+/// читаем и `data`, и `textSpan`.
+String _widgetText(Widget w) => w is Text
+    ? (w.data ?? w.textSpan?.toPlainText() ?? '')
+    : w is SelectableText
+    ? (w.data ?? w.textSpan?.toPlainText() ?? '')
+    : '';
 
-Finder _chatTextContaining(String part) => find.byWidgetPredicate(
-  (w) => w is Text
-      ? (w.data ?? w.textSpan?.toPlainText() ?? '').contains(part)
-      : w is SelectableText
-      ? (w.data ?? '').contains(part)
-      : false,
-);
+Finder _chatText(String value) =>
+    find.byWidgetPredicate((w) => _widgetText(w) == value);
+
+Finder _chatTextContaining(String part) =>
+    find.byWidgetPredicate((w) => _widgetText(w).contains(part));
 
 /// Развернуть поверхность теста: история чата уезжает вниз, и без высокого
 /// экрана ListView просто не строит пузыри — их не найти в дереве.
