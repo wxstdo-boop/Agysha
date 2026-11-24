@@ -11,11 +11,17 @@ class ForgeToolCall {
     required this.id,
     required this.name,
     required this.arguments,
+    this.argumentsBroken = false,
   });
 
   final String id;
   final String name;
   final Map<String, dynamic> arguments;
+
+  /// Аргументы пришли обрезанным/битым JSON. Молча считать, что их нет,
+  /// нельзя: модель видела «write_file без content» и бросала правку,
+  /// хотя на самом деле не разобрались её же аргументы.
+  final bool argumentsBroken;
 }
 
 /// Ответ модели: либо текст, либо список вызовов инструментов.
@@ -544,6 +550,14 @@ class ForgeAgent {
             continue;
           }
           try {
+            if (call.argumentsBroken) {
+              throw ForgeException(
+                400,
+                'аргументы ${call.name} не разобрались (JSON обрезан или '
+                'невалиден). Повтори вызов короткими аргументами: для '
+                'write_file — ПОЛНЫЙ файл, один файл за шаг.',
+              );
+            }
             // Ветку заводим ТОЛЬКО под правку. Вопрос по коду читает базовую
             // ветку и не оставляет после себя ни ветки, ни PR.
             final branch = _isWrite(call.name)
@@ -564,6 +578,16 @@ class ForgeAgent {
           } on ForgeException catch (e) {
             ok = false;
             result = 'Ошибка: ${e.message}';
+          } catch (e) {
+            // Любой неожиданный сбой (сеть, формат, лимит) раньше вылетал из
+            // цикла и обрывал весь прогон — снаружи это выглядело как «ИИ не
+            // может писать файлы». Теперь сбой одного инструмента остаётся
+            // шагом с ошибкой, и модель продолжает работу.
+            ok = false;
+            result =
+                'Ошибка инструмента ${call.name}: '
+                '${e.toString().replaceFirst('Exception: ', '')}. '
+                'Исправь аргументы и повтори.';
           }
           final step_ = ForgeStep(
             tool: call.name,
@@ -770,9 +794,21 @@ class ForgeAgent {
         return '$header${slice.join('\n')}$tail';
       case 'write_file':
         final path = _requirePath(call);
-        final content = _str(call.arguments['content']);
-        if (content == null || content.trim().isEmpty) {
-          throw ForgeException(400, 'write_file без content');
+        final raw =
+            _str(call.arguments['content']) ??
+            _str(call.arguments['file_content']) ??
+            _str(call.arguments['new_content']) ??
+            _str(call.arguments['text']);
+        if (raw == null) {
+          throw ForgeException(
+            400,
+            'write_file без content (передай полное содержимое файла в поле '
+            'content)',
+          );
+        }
+        final content = _normalizeFileContent(raw);
+        if (content.trim().isEmpty) {
+          throw ForgeException(400, 'write_file с пустым content');
         }
         // Модель иногда присылает не файл целиком, а кусок диффа: запись
         // такого содержимого молча ломала файл в ветке. Отправляем ошибку
@@ -1307,11 +1343,13 @@ class FreePoolForgeChat implements ForgeChat {
         if (fn is! Map) continue;
         final name = fn['name'];
         if (name is! String) continue;
+        final decoded = _decodeArgs(fn['arguments']);
         calls.add(
           ForgeToolCall(
             id: (item['id'] as String?) ?? 'call_$i',
             name: name,
-            arguments: _decodeArgs(fn['arguments']),
+            arguments: decoded.args,
+            argumentsBroken: decoded.broken,
           ),
         );
       }
@@ -1323,6 +1361,41 @@ class FreePoolForgeChat implements ForgeChat {
       toolCalls: calls,
     );
   }
+}
+
+/// Содержимое, которое модель завернула в ```-забор или экранировала
+/// дважды (`\\n` вместо перевода строки), писалось в файл буквально.
+String _normalizeFileContent(String raw) {
+  var s = raw;
+  // Модель экранировала содержимое дважды: переводы строк пришли литералами
+  // `\n`. Раскрываем их, когда литералов заметно больше настоящих переводов
+  // (в нормальном коде бывает наоборот: строк много, а `\n` — раз-два), и
+  // никогда не трогаем файл, где настоящих переводов уже достаточно.
+  final realNl = '\n'.allMatches(s).length;
+  final literalNl = r'\n'.allMatches(s).length;
+  final doubleEscaped =
+      literalNl > 0 &&
+      (realNl == 0 || (literalNl >= 3 && realNl * 2 <= literalNl));
+  if (doubleEscaped) {
+    s = s
+        .replaceAll(r'\\n', '\n')
+        .replaceAll(r'\n', '\n')
+        .replaceAll(r'\\t', '\t')
+        .replaceAll(r'\t', '\t');
+  }
+  final trimmed = s.trim();
+  if (trimmed.startsWith('```')) {
+    final firstNl = trimmed.indexOf('\n');
+    if (firstNl >= 0) {
+      var body = trimmed.substring(firstNl + 1);
+      final end = body.trimRight();
+      if (end.endsWith('```')) {
+        body = end.substring(0, end.length - 3);
+      }
+      s = body;
+    }
+  }
+  return s;
 }
 
 class _FreeProvider {
@@ -1344,17 +1417,24 @@ class _FreeProvider {
 }
 
 /// Аргументы инструмента приходят строкой JSON (иногда невалидной).
-Map<String, dynamic> _decodeArgs(dynamic value) {
-  if (value is Map<String, dynamic>) return value;
-  if (value is String && value.trim().isNotEmpty) {
+/// [broken] — строка была, но не разобралась (обрезана по лимиту токенов).
+({Map<String, dynamic> args, bool broken}) _decodeArgs(dynamic value) {
+  if (value is Map<String, dynamic>) return (args: value, broken: false);
+  if (value == null) return (args: const {}, broken: false);
+  if (value is String) {
+    final raw = value.trim();
+    if (raw.isEmpty) return (args: const {}, broken: false);
     try {
-      final decoded = jsonDecode(value);
-      if (decoded is Map<String, dynamic>) return decoded;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return (args: decoded, broken: false);
+      }
+      return (args: const {}, broken: true);
     } catch (_) {
-      // Модель иногда отдаёт невалидный JSON — считаем, что аргументов нет.
+      return (args: const {}, broken: true);
     }
   }
-  return const {};
+  return (args: const {}, broken: false);
 }
 
 /// Сигнал остановки, который пролетел сквозь ожидание ответа модели.

@@ -61,6 +61,11 @@ class ForgeScreen extends StatefulWidget {
 class _ForgeScreenState extends State<ForgeScreen> {
   late final ForgeService _service = widget.service ?? ForgeService();
   final TextEditingController _tokenController = TextEditingController();
+
+  /// Сохранённый токен держим в памяти, а НЕ в контроллере поля. Иначе при
+  /// запуске кузницы поле на один кадр показывало ключ открытым текстом,
+  /// прежде чем переключиться на звёздочки.
+  String? _savedToken;
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _tokenFocus = FocusNode();
@@ -244,7 +249,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
       // Если пользователь успел что-то ввести, пока читалось хранилище,
       // его ввод важнее старого значения — не затираем.
       if (saved != null && _tokenController.text.isEmpty) {
-        _tokenController.text = saved;
+        _savedToken = saved;
       }
       // Пул таблетки сразу соответствует вставленному ключу: со своим
       // ключом появляются платные сильные модели, без него — бесплатные.
@@ -253,8 +258,14 @@ class _ForgeScreenState extends State<ForgeScreen> {
     if (saved != null) unawaited(_checkToken(silent: true));
   }
 
+  /// Токен, который сейчас действует: только что введённый или сохранённый.
+  String get _currentToken {
+    final typed = _tokenController.text.trim();
+    return typed.isNotEmpty ? typed : (_savedToken ?? '');
+  }
+
   Future<void> _checkToken({bool silent = false}) async {
-    final token = _tokenController.text.trim();
+    final token = _currentToken;
     if (token.isEmpty) {
       setState(() {
         _tokenError = Translations.t('forgeTokenEmpty', context);
@@ -354,6 +365,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
     if (!mounted) return;
     setState(() {
       _tokenController.clear();
+      _savedToken = null;
       _login = null;
       _tokenError = null;
       _forgettingToken = false;
@@ -420,7 +432,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
       );
       return;
     }
-    if (_tokenController.text.trim().isEmpty) {
+    if (_currentToken.isEmpty) {
       showBeautifulSnackBar(
         context,
         message: Translations.t('forgeTokenEmpty', context),
@@ -519,9 +531,17 @@ class _ForgeScreenState extends State<ForgeScreen> {
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
+      final pos = _scrollController.position;
+      final target = pos.maxScrollExtent;
+      // Далеко уехавшая лента сначала «подъезжает» к цели одним прыжком
+      // на 1.5 экрана, а оставшийся отрезок проходит плавно: чистый прыжок
+      // в самый низ читался как рывок.
+      if (target - pos.pixels > 1600) {
+        _scrollController.jumpTo(target - 1000);
+      }
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 260),
+        target,
+        duration: const Duration(milliseconds: 320),
         curve: Curves.easeOutCubic,
       );
     });
@@ -546,55 +566,85 @@ class _ForgeScreenState extends State<ForgeScreen> {
           centerTitle: true,
           backgroundColor: Colors.transparent,
           actions: [
-            // «Стоп» стоит рядом с очисткой и появляется/сворачивается
-            // плавно, не сдвигая корзину рывком.
+            // «Стоп» стоит рядом с очисткой. Вход и выход — один мягкий
+            // проход прозрачности и ширины (ширина ведёт AnimatedSize, а не
+            // подмена виджета кадром): на остановке кнопка именно гаснет, а
+            // не исчезает рывком.
             AnimatedSize(
-              duration: const Duration(milliseconds: 260),
+              duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
               alignment: Alignment.centerRight,
               clipBehavior: Clip.hardEdge,
-              child: _running
-                  ? Padding(
-                      padding: const EdgeInsets.only(right: 2),
-                      child: PressScale(
-                        pressedScale: 0.86,
-                        enableTilt: true,
-                        duration: const Duration(milliseconds: 130),
-                        releaseDuration: const Duration(milliseconds: 260),
-                        maxTiltAngle: 0.22,
-                        pressTint: cs.error,
-                        pressTintStrength: 0.12,
-                        pressTintRadius: BorderRadius.circular(999),
-                        child: IconButton(
-                          onPressed: _stopping ? null : _stopRun,
-                          icon: _stopping
-                              ? SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: cs.error,
+              child: AnimatedOpacity(
+                opacity: _running ? 1.0 : 0.0,
+                duration: Duration(milliseconds: _running ? 260 : 220),
+                curve: _running ? Curves.easeOutCubic : Curves.easeInCubic,
+                child: _running
+                    ? Padding(
+                        padding: const EdgeInsets.only(right: 2),
+                        child: PressScale(
+                          pressedScale: 0.9,
+                          enableTilt: true,
+                          duration: const Duration(milliseconds: 150),
+                          releaseDuration: const Duration(milliseconds: 300),
+                          maxTiltAngle: 0.14,
+                          pressTint: cs.error,
+                          pressTintStrength: 0.09,
+                          pressTintRadius: BorderRadius.circular(999),
+                          child: IconButton(
+                            onPressed: _stopping ? null : _stopRun,
+                            icon: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, anim) =>
+                                  FadeTransition(
+                                    opacity: anim,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: 0.86,
+                                        end: 1,
+                                      ).animate(anim),
+                                      child: child,
+                                    ),
                                   ),
-                                )
-                              : Semantics(
-                                  label: Translations.t(
-                                    'forgeStopRun',
-                                    context,
-                                    'Остановить',
-                                  ),
-                                  child: Icon(
-                                    Icons.stop_rounded,
-                                    color: cs.error,
-                                  ),
-                                ),
+                              child: _stopping
+                                  ? SizedBox(
+                                      key: const ValueKey('forge_stop_busy'),
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: cs.error,
+                                      ),
+                                    )
+                                  : Semantics(
+                                      key: const ValueKey('forge_stop_icon'),
+                                      label: Translations.t(
+                                        'forgeStopRun',
+                                        context,
+                                        'Остановить',
+                                      ),
+                                      child: Icon(
+                                        Icons.stop_rounded,
+                                        color: cs.error.withValues(alpha: 0.9),
+                                      ),
+                                    ),
+                            ),
+                          ),
                         ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
+                      )
+                    : const SizedBox(width: 0, height: 48),
+              ),
             ),
-            if (_messages.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
+            // Кнопка очистки постоянная: она не исчезает вместе с историей —
+            // «строка» в шапке не должна прыгать.
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                opacity: _messages.isEmpty ? 0.45 : 1.0,
                 child: PressScale(
                   pressedScale: 0.88,
                   enableTilt: true,
@@ -604,7 +654,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                   child: IconButton(
                     // Тултип убран: на телефоне он вылезал поверх чата.
                     // Подпись остаётся только для экранного диктора.
-                    onPressed: _running || _clearingChat
+                    onPressed: _running || _clearingChat || _messages.isEmpty
                         ? null
                         : () => unawaited(_clearChat()),
                     icon: Semantics(
@@ -614,6 +664,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                   ),
                 ),
               ),
+            ),
           ],
         ),
         body: SafeArea(
@@ -660,32 +711,46 @@ class _ForgeScreenState extends State<ForgeScreen> {
                               curve: _clearingChat
                                   ? Curves.easeInCubic
                                   : Curves.easeOutCubic,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  for (var i = 0; i < _messages.length; i++)
-                                    _bubble(
-                                      theme,
-                                      cs,
-                                      accent,
-                                      _messages[i],
-                                      // Ключ обязателен: без него при
-                                      // добавлении реплики Flutter отдаёт ей
-                                      // состояние «уже показанного» пузыря, и
-                                      // сообщение появляется рывком.
-                                      key: ValueKey(
-                                        'forge-msg-$i-${_messages[i].ts}',
+                              // Высота ленты меняется плавно: без этого
+                              // после гаснущей очистки список схлопывался
+                              // одним кадром и лента «прыгала» вверх.
+                              child: AnimatedSize(
+                                duration: const Duration(milliseconds: 280),
+                                curve: Curves.easeOutCubic,
+                                alignment: Alignment.topCenter,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    for (var i = 0; i < _messages.length; i++)
+                                      _bubble(
+                                        theme,
+                                        cs,
+                                        accent,
+                                        _messages[i],
+                                        // Ключ обязателен: без него при
+                                        // добавлении реплики Flutter отдаёт ей
+                                        // состояние «уже показанного» пузыря, и
+                                        // сообщение появляется рывком.
+                                        key: ValueKey(
+                                          'forge-msg-$i-${_messages[i].ts}',
+                                        ),
+                                        animate: i >= _animateFrom,
                                       ),
-                                      animate: i >= _animateFrom,
-                                    ),
-                                  if (_running)
-                                    _runningBubble(theme, cs, accent),
-                                  if (_runError != null) ...[
-                                    const SizedBox(height: 12),
-                                    _errorCard(theme, cs),
+                                    if (_running)
+                                      _BubbleReveal(
+                                        key: const ValueKey('forge_running'),
+                                        child: _runningBubble(
+                                          theme,
+                                          cs,
+                                          accent,
+                                        ),
+                                      ),
+                                    _errorSlot(theme, cs),
+                                    if (_messages.isNotEmpty)
+                                      _modelFootprint(cs),
                                   ],
-                                  if (_messages.isNotEmpty) _modelFootprint(cs),
-                                ],
+                                ),
                               ),
                             ),
                           ],
@@ -739,7 +804,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
               releaseDuration: const Duration(milliseconds: 280),
               maxTiltAngle: 0.18,
               pressTint: accent,
-              pressTintStrength: 0.10,
+              pressTintStrength: 0.06,
               pressTintRadius: BorderRadius.circular(999),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -751,21 +816,23 @@ class _ForgeScreenState extends State<ForgeScreen> {
                   padding: const EdgeInsets.fromLTRB(11, 0, 14, 0),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
+                    // Заливка выбранной таблетки полупрозрачнее: плотный
+                    // фон при переключении читался как «закрашивание».
                     color: selected
-                        ? accent.withValues(alpha: 0.14)
-                        : cs.surfaceContainerHighest.withValues(alpha: 0.28),
+                        ? accent.withValues(alpha: 0.05)
+                        : cs.surfaceContainerHighest.withValues(alpha: 0.20),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
                       color: selected
-                          ? accent.withValues(alpha: 0.55)
-                          : cs.outlineVariant.withValues(alpha: 0.38),
+                          ? accent.withValues(alpha: 0.40)
+                          : cs.outlineVariant.withValues(alpha: 0.34),
                     ),
                     boxShadow: selected
                         ? [
                             BoxShadow(
-                              color: accent.withValues(alpha: 0.20),
-                              blurRadius: 12,
-                              spreadRadius: -2,
+                              color: accent.withValues(alpha: 0.12),
+                              blurRadius: 10,
+                              spreadRadius: -3,
                             ),
                           ]
                         : const [],
@@ -832,10 +899,13 @@ class _ForgeScreenState extends State<ForgeScreen> {
                         curve: Curves.easeOutCubic,
                         style: TextStyle(
                           fontSize: 12.5,
-                          fontWeight: selected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: selected ? accent : cs.onSurfaceVariant,
+                          // Толщина одна на выбранную и нет: смена веса
+                          // меняла ширину таблетки, соседи переезжали — это
+                          // и читалось как «дёрнуло» при выборе.
+                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? accent.withValues(alpha: 0.95)
+                              : cs.onSurfaceVariant.withValues(alpha: 0.85),
                         ),
                         child: Text(
                           option.id.isEmpty ? option.name : option.label,
@@ -901,130 +971,143 @@ class _ForgeScreenState extends State<ForgeScreen> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 700),
-          child: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: cs.outlineVariant.withValues(alpha: 0.6),
+          // Поле ввода — тоже карточка: мягкая отдача и лёгкий 3D-наклон
+          // при касании, как у остальных плашек. Listener не забирает тап у
+          // TextField, поэтому ввод и выделение работают как раньше.
+          child: PressScale(
+            pressedScale: 0.99,
+            enableTilt: true,
+            duration: const Duration(milliseconds: 140),
+            releaseDuration: const Duration(milliseconds: 320),
+            maxTiltAngle: 0.06,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.6),
+                ),
               ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: SmoothCaret(
-                    builder: (context, caret) => SmoothTyping(
-                      controller: _inputController,
-                      builder: (typingStyle) => AnimatedSize(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                        alignment: Alignment.topCenter,
-                        clipBehavior: Clip.none,
-                        child: TextField(
-                          key: const ValueKey('forge_input_field'),
-                          controller: _inputController,
-                          scrollController: caret,
-                          focusNode: _inputFocus,
-                          style: typingStyle,
-                          minLines: 1,
-                          maxLines: 6,
-                          maxLength: 10000,
-                          enabled: !_running,
-                          textCapitalization: TextCapitalization.sentences,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          cursorOpacityAnimates: true,
-                          magnifierConfiguration:
-                              TextMagnifierConfiguration.disabled,
-                          contextMenuBuilder: minimalContextMenuBuilder,
-                          buildCounter: smoothCharCounterBuilder,
-                          inputFormatters: [WideDashFormatter()],
-                          decoration: InputDecoration(
-                            hintText: Translations.t('forgeTaskHint', context),
-                            alignLabelWithHint: true,
-                            isDense: true,
-                            counterText: '',
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 13,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              borderSide: BorderSide(
-                                color: accent.withValues(alpha: 0.55),
-                                width: 1.2,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: SmoothCaret(
+                      builder: (context, caret) => SmoothTyping(
+                        controller: _inputController,
+                        builder: (typingStyle) => AnimatedSize(
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOutCubic,
+                          alignment: Alignment.topCenter,
+                          clipBehavior: Clip.none,
+                          child: TextField(
+                            key: const ValueKey('forge_input_field'),
+                            controller: _inputController,
+                            scrollController: caret,
+                            focusNode: _inputFocus,
+                            style: typingStyle,
+                            minLines: 1,
+                            maxLines: 6,
+                            maxLength: 10000,
+                            enabled: !_running,
+                            textCapitalization: TextCapitalization.sentences,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            cursorOpacityAnimates: true,
+                            magnifierConfiguration:
+                                TextMagnifierConfiguration.disabled,
+                            contextMenuBuilder: minimalContextMenuBuilder,
+                            buildCounter: smoothCharCounterBuilder,
+                            inputFormatters: [WideDashFormatter()],
+                            decoration: InputDecoration(
+                              hintText: Translations.t(
+                                'forgeTaskHint',
+                                context,
                               ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                PressScale(
-                  pressedScale: 0.9,
-                  enableTilt: true,
-                  duration: const Duration(milliseconds: 130),
-                  releaseDuration: const Duration(milliseconds: 220),
-                  child: SizedBox(
-                    width: 46,
-                    height: 46,
-                    child: FilledButton(
-                      key: const ValueKey('forge_send'),
-                      onPressed: _running ? null : _send,
-                      style: FilledButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        backgroundColor: accent,
-                        foregroundColor: Colors.white,
-                        shape: const CircleBorder(),
-                      ),
-                      // Иконка и загрузка сменяют друг друга через
-                      // масштаб и растворение, а не подменой кадром.
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, anim) => FadeTransition(
-                          opacity: anim,
-                          child: ScaleTransition(
-                            scale: Tween<double>(
-                              begin: 0.72,
-                              end: 1.0,
-                            ).animate(anim),
-                            child: child,
-                          ),
-                        ),
-                        child: _running
-                            ? const SizedBox(
-                                key: ValueKey('forge_send_busy'),
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                              alignLabelWithHint: true,
+                              isDense: true,
+                              counterText: '',
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 13,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide(
+                                  color: accent.withValues(alpha: 0.55),
+                                  width: 1.2,
                                 ),
-                              )
-                            : const Icon(
-                                Icons.send_rounded,
-                                key: ValueKey('forge_send_icon'),
-                                size: 20,
                               ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 4),
+                  PressScale(
+                    pressedScale: 0.9,
+                    enableTilt: true,
+                    duration: const Duration(milliseconds: 130),
+                    releaseDuration: const Duration(milliseconds: 220),
+                    child: SizedBox(
+                      width: 46,
+                      height: 46,
+                      child: FilledButton(
+                        key: const ValueKey('forge_send'),
+                        onPressed: _running ? null : _send,
+                        style: FilledButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          backgroundColor: accent,
+                          foregroundColor: Colors.white,
+                          shape: const CircleBorder(),
+                        ),
+                        // Иконка и загрузка сменяют друг друга через
+                        // масштаб и растворение, а не подменой кадром.
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            child: ScaleTransition(
+                              scale: Tween<double>(
+                                begin: 0.72,
+                                end: 1.0,
+                              ).animate(anim),
+                              child: child,
+                            ),
+                          ),
+                          child: _running
+                              ? const SizedBox(
+                                  key: ValueKey('forge_send_busy'),
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.send_rounded,
+                                  key: ValueKey('forge_send_icon'),
+                                  size: 20,
+                                ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1116,7 +1199,11 @@ class _ForgeScreenState extends State<ForgeScreen> {
                             decoration: InputDecoration(
                               isDense: true,
                               counterText: '',
-                              hintText: 'ghp_… / github_pat_…',
+                              hintText:
+                                  _savedToken != null &&
+                                      _tokenController.text.isEmpty
+                                  ? 'Ключ сохранён ••••••••'
+                                  : 'ghp_… / github_pat_…',
                               filled: true,
                               fillColor: cs.surfaceContainerHighest.withValues(
                                 alpha: 0.45,
@@ -1573,6 +1660,38 @@ class _ForgeScreenState extends State<ForgeScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  /// Ошибка хода: появляется и исчезает вместе со своим местом, а не
+  /// подменяется кадром (раньше карточка вставлялась рывком и сдвигала
+  /// подпись модели).
+  Widget _errorSlot(ThemeData theme, ColorScheme cs) {
+    final error = _runError;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 280),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            alignment: Alignment.topCenter,
+            child: child,
+          ),
+        ),
+        child: error == null
+            ? const SizedBox.shrink(key: ValueKey('forge_error_none'))
+            : Padding(
+                key: ValueKey('forge_error_$error'),
+                padding: const EdgeInsets.only(top: 12),
+                child: _errorCard(theme, cs),
+              ),
+      ),
     );
   }
 

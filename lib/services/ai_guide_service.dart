@@ -61,11 +61,11 @@ class AiGuideService {
   }
 
   static void _markCooldown(String provider) {
-    // 3 минуты вместо 10: после «тотальной» недоступности (все хосты разом
-    // заблокированы/лимитированы) 10-минутный кулдаун превращал цепочку в
-    // мгновенную ошибку на каждом сообщении — «Ада перестала отвечать».
-    // С 3 минутами провайдеры возвращаются в строй заметно быстрее.
-    _cooldownUntil[provider] = DateTime.now().add(const Duration(minutes: 3));
+    // 40 секунд, а не 3 минуты. Долгий кулдаун складывался с обрывом всей
+    // цепочки по внешнему таймауту: все хосты помечались «мёртвыми» на три
+    // минуты, и каждое следующее сообщение мгновенно падало плашкой «все
+    // бесплатные каналы недоступны» — даже когда сеть уже работала.
+    _cooldownUntil[provider] = DateTime.now().add(const Duration(seconds: 40));
   }
 
   /// Запускает провайдера с жёстким бюджетом [seconds]. При ошибке, таймауте
@@ -174,6 +174,17 @@ class AiGuideService {
       return '\u043a\u043b\u044e\u0447 \u043e\u0442\u043a\u043b\u043e\u043d\u0451\u043d';
     }
     return '\u0441\u0435\u0442\u0435\u0432\u0430\u044f \u043e\u0448\u0438\u0431\u043a\u0430 \u0438\u043b\u0438 \u043e\u0448\u0438\u0431\u043a\u0430 \u043e\u0442\u0432\u0435\u0442\u0430';
+  }
+
+  /// Последняя попытка провайдера на ключе закончилась отказом ключа
+  /// (401/403) — тогда ошибка должна говорить про ключ, а не «вставь ключ».
+  static bool _traceHasKeyRejection(String provider) {
+    final trace = providerTrace.value;
+    for (final line in trace.reversed) {
+      if (!line.startsWith('$provider:')) continue;
+      return line.contains('ключ отклонён');
+    }
+    return false;
   }
 
   static void _recordProviderTrace(String entry) {
@@ -865,7 +876,7 @@ class AiGuideService {
             effectiveText,
             history,
             languageCode,
-          ).timeout(const Duration(seconds: 18));
+          ).timeout(const Duration(seconds: 26));
         } catch (_) {
           answer = '';
         }
@@ -875,7 +886,7 @@ class AiGuideService {
             userText,
             history,
             languageCode,
-          ).timeout(const Duration(seconds: 14));
+          ).timeout(const Duration(seconds: 24));
           webCtx = '';
         }
       } else {
@@ -883,7 +894,7 @@ class AiGuideService {
           effectiveText,
           history,
           languageCode,
-        ).timeout(const Duration(seconds: 18));
+        ).timeout(const Duration(seconds: 26));
       }
       // Источники не показываем: только вычищаем хвост, если модель
       // всё-таки дописала домены/ссылки сама.
@@ -911,7 +922,7 @@ class AiGuideService {
             // Не трогаем суточную квоту встроенной Ады: повтор идёт только
             // по бесплатным резервам (Kilo/OVHcloud/AI Horde).
             useHf: false,
-          ).timeout(const Duration(seconds: 20));
+          ).timeout(const Duration(seconds: 26));
           if (retried.trim().isNotEmpty && !_isMostlyEnglish(retried)) {
             answer = retried;
             if (useWebSearch && webCtx.isNotEmpty) {
@@ -1095,7 +1106,10 @@ class AiGuideService {
     // `.timeout(25s)` обрубал цепочку, и пользователь видел «ИИ на курорте»
     // вместо ответа (а с веб-поиском — тем более). Теперь каждый провайдер
     // получает не больше остатка бюджета, и цепочка честно завершается.
-    final deadline = DateTime.now().add(const Duration(seconds: 22));
+    // 20 секунд на ВСЮ цепочку: внешний таймаут (26 с) срабатывает позже,
+    // поэтому цепочка всегда успевает дойти до конца, сбросить кулдауны и не
+    // оставляет после себя «мёртвых» провайдеров.
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
     int budget(int want) {
       final left = deadline.difference(DateTime.now()).inMilliseconds;
       if (left <= 1200) return 0;
@@ -1112,7 +1126,28 @@ class AiGuideService {
         ? savedKey
         : await SettingsService.loadAgnesKey();
 
-    final poolsideBudget = budget(8);
+    // Сначала Agnes: это модель, которую владелец видит в статусе и ради
+    // которой вставлен ключ. Раньше первым шёл Poolside с долгим таймаутом и
+    // съедал бюджет — до Agnes дело доходило уже без времени.
+    var keyRejected = false;
+    final agnesBudget = budget(5);
+    if (userKey.isNotEmpty && agnesBudget > 0) {
+      final answer = await _tryProvider(
+        'Agnes AI',
+        () => _sendAgnes(userText, history, userKey, languageCode),
+        agnesBudget,
+      );
+      if (answer != null) {
+        // `_sendAgnes` уже заявил «Agnes • модель» — публикуем именно это.
+        commitStaged();
+        return answer;
+      }
+      keyRejected = keyRejected || _traceHasKeyRejection('Agnes AI');
+    } else {
+      _recordProviderTrace('Agnes AI: пропущен, ключ не задан');
+    }
+
+    final poolsideBudget = budget(6);
     if (userKey.isNotEmpty && poolsideBudget > 0) {
       final answer = await _tryProvider(
         'Poolside',
@@ -1125,24 +1160,9 @@ class AiGuideService {
         commitStaged();
         return answer;
       }
+      keyRejected = keyRejected || _traceHasKeyRejection('Poolside');
     } else {
       _recordProviderTrace('Poolside: пропущен, ключ не задан');
-    }
-
-    final agnesBudget = budget(6);
-    if (userKey.isNotEmpty && agnesBudget > 0) {
-      final answer = await _tryProvider(
-        'Agnes AI',
-        () => _sendAgnes(userText, history, userKey, languageCode),
-        agnesBudget,
-      );
-      if (answer != null) {
-        // `_sendAgnes` уже заявил «Agnes • модель» — публикуем именно это.
-        commitStaged();
-        return answer;
-      }
-    } else {
-      _recordProviderTrace('Agnes AI: пропущен, ключ не задан');
     }
 
     // Бесплатные провайдеры без ключа. Порядок — по живучести на сегодня:
@@ -1245,8 +1265,16 @@ class AiGuideService {
     }
 
     // Полностью высохшая цепочка: сбрасываем кулдауны, чтобы СЛЕДУЮЩЕЕ
-    // сообщение снова пошло по всей цепочке, а не упало в 0 секунд.
+    // сообщение снова пошло по всей цепочке, а не упало в 0 секунд. Это
+    // важно и при обрыве по таймауту: иначе телефон потом видит «все
+    // каналы недоступны» ещё несколько минут.
     _cooldownUntil.clear();
+    if (keyRejected) {
+      throw Exception(
+        'ключ отклонён: Agnes/Poolside не приняли ключ, бесплатные каналы '
+        'тоже не ответили',
+      );
+    }
     throw Exception('All configured AI providers failed');
   }
 

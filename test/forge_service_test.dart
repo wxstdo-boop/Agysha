@@ -81,14 +81,18 @@ class _FakeGitHub {
           base64.decode(payload['content'] as String),
         );
         commits[file] = payload['message'] as String;
-        return _json({'content': {'path': file}}, 201);
+        return _json({
+          'content': {'path': file},
+        }, 201);
       }
       if (request.method == 'DELETE') {
         final payload = jsonDecode(request.body) as Map<String, dynamic>;
         final target = (payload['branch'] as String?) ?? 'main';
         files(target).remove(file);
         deleted.add(file);
-        return _json({'commit': {'sha': 'del-sha'}}, 200);
+        return _json({
+          'commit': {'sha': 'del-sha'},
+        }, 200);
       }
     }
     if (path == '/search/code' && request.method == 'GET') {
@@ -103,8 +107,7 @@ class _FakeGitHub {
         ],
       });
     }
-    if (path == '/repos/wxstdo-boop/agysha/pulls' &&
-        request.method == 'POST') {
+    if (path == '/repos/wxstdo-boop/agysha/pulls' && request.method == 'POST') {
       final payload = jsonDecode(request.body) as Map<String, dynamic>;
       return _json({
         'html_url':
@@ -147,7 +150,11 @@ class _ScriptedChat implements ForgeChat {
 
 ForgeChatReply _call(String name, Map<String, dynamic> args) => ForgeChatReply(
   toolCalls: [
-    ForgeToolCall(id: 'call_${name}_${args.hashCode}', name: name, arguments: args),
+    ForgeToolCall(
+      id: 'call_${name}_${args.hashCode}',
+      name: name,
+      arguments: args,
+    ),
   ],
 );
 
@@ -202,7 +209,10 @@ void main() {
 
     test('canPush отражает право записи репозитория', () async {
       final writable = ForgeService(client: _FakeGitHub().client);
-      expect(await writable.canPush('wxstdo-boop', 'agysha', token: 'ghp_valid'), isTrue);
+      expect(
+        await writable.canPush('wxstdo-boop', 'agysha', token: 'ghp_valid'),
+        isTrue,
+      );
 
       final readOnly = ForgeService(client: _FakeGitHub(push: false).client);
       expect(
@@ -444,9 +454,51 @@ void main() {
       );
       // Модель получила содержимое реального файла, а не пустую строку.
       expect(
-        chat.seenMessages[1].any((m) => '${m['content']}'.contains('void main()')),
+        chat.seenMessages[1].any(
+          (m) => '${m['content']}'.contains('void main()'),
+        ),
         isTrue,
       );
+    });
+
+    test('экранированный и завёрнутый в ``` content пишется файлом', () async {
+      // Модель иногда присылает ПОЛНЫЙ файл, но с двойным экранированием
+      // переводов строк или в ```-заборе. Раньше такой content писался
+      // буквально (одна строка с «\\n») либо отклонялся как «дифф».
+      final fake = _FakeGitHub();
+      final chat = _ScriptedChat([
+        _call('read_file', {'path': 'lib/main.dart'}),
+        _call('write_file', {
+          'path': 'lib/main.dart',
+          'content':
+              '```dart\nimport \'package:x/x.dart\';\\n'
+              'void main() {\\n  runApp(App());\\n}\\n'
+              '// конец\\n```',
+          'message': 'Кузница: точка входа',
+        }),
+        _call('finish', {'summary': 'Готово'}),
+      ]);
+      final agent = ForgeAgent(
+        service: await _serviceWithToken(fake.client),
+        chat: chat,
+        owner: 'wxstdo-boop',
+        repo: 'agysha',
+      );
+
+      await agent.run(
+        task: 'поправь точку входа',
+        baseBranch: 'main',
+        onStep: (_) {},
+      );
+
+      final written = fake.branchFiles.values
+          .map((f) => f['lib/main.dart'] ?? '')
+          .firstWhere((text) => text.contains('runApp'));
+      expect(written.contains('\\n'), isFalse);
+      expect(written.contains('```'), isFalse);
+      expect(written, contains("import 'package:x/x.dart';\nvoid main() {"));
+      expect(written, contains('}'));
+      expect(written.trimRight(), endsWith('// конец'));
     });
 
     test('правки читаются из рабочей ветки, а не из main', () async {
@@ -515,10 +567,7 @@ void main() {
         fake.requests.any((r) => r.url.path.contains('key.properties')),
         isFalse,
       );
-      expect(
-        ForgeAgent.isBlockedPath('android/key.properties'),
-        isTrue,
-      );
+      expect(ForgeAgent.isBlockedPath('android/key.properties'), isTrue);
       expect(ForgeAgent.isBlockedPath('release.jks'), isTrue);
       expect(ForgeAgent.isBlockedPath('../../etc/passwd'), isTrue);
       expect(ForgeAgent.isBlockedPath('lib/main.dart'), isFalse);
@@ -527,10 +576,7 @@ void main() {
     test('выход за пределы каталога запрещён', () async {
       final fake = _FakeGitHub();
       final chat = _ScriptedChat([
-        _call('write_file', {
-          'path': '../outside.dart',
-          'content': 'x',
-        }),
+        _call('write_file', {'path': '../outside.dart', 'content': 'x'}),
         _call('finish', {'summary': 'нет'}),
       ]);
       final agent = ForgeAgent(
@@ -567,7 +613,9 @@ void main() {
       expect(turn.pullRequestUrl, isNull);
       // Вопрос — не повод заводить ветку и открывать PR.
       expect(
-        fake.requests.where((r) => r.method == 'POST' && r.url.path.endsWith('/git/refs')),
+        fake.requests.where(
+          (r) => r.method == 'POST' && r.url.path.endsWith('/git/refs'),
+        ),
         isEmpty,
       );
       expect(
@@ -674,9 +722,7 @@ void main() {
     });
 
     test('прогон без правок не открывает пустой PR', () async {
-      final chat = _ScriptedChat([
-        ForgeChatReply(text: 'Мне нечего менять.'),
-      ]);
+      final chat = _ScriptedChat([ForgeChatReply(text: 'Мне нечего менять.')]);
       final agent = ForgeAgent(
         service: await _serviceWithToken(_FakeGitHub().client),
         chat: chat,
@@ -694,10 +740,7 @@ void main() {
       // отклоняются, но прогон не падает — сделанное уходит в PR.
       final replies = <ForgeChatReply>[
         for (var i = 0; i < ForgeAgent.maxWrites + 3; i++)
-          _call('write_file', {
-            'path': 'lib/file$i.dart',
-            'content': '// $i',
-          }),
+          _call('write_file', {'path': 'lib/file$i.dart', 'content': '// $i'}),
         _call('finish', {'summary': 'готово'}),
       ];
       final fake = _FakeGitHub();

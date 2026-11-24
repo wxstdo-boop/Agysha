@@ -437,9 +437,29 @@ void main() {
     final field = tester.widget<TextField>(
       find.byKey(const ValueKey('forge_token_field')),
     );
-    expect(field.controller?.text, 'ghp_saved_token');
-    // Токен не показываем открытым текстом.
+    // Сохранённый ключ НЕ кладём в контроллер: иначе при запуске поле на
+    // кадр показывало его открытым текстом. Вместо ключа — подпись-маска.
+    expect(field.controller?.text, isEmpty);
     expect(field.obscureText, isTrue);
+    expect(field.decoration?.hintText, contains('Ключ сохранён'));
+  });
+
+  testWidgets('кнопка очистки чата постоянная, даже когда история пуста', (
+    tester,
+  ) async {
+    final service = ForgeService(
+      client: _okClient(),
+      store: InMemoryForgeTokenStore(),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        ForgeScreen(owner: 'wxstdo-boop', repo: 'agysha', service: service),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Раньше кнопка появлялась только с первым сообщением: шапка прыгала.
+    expect(find.byIcon(Icons.cleaning_services_rounded), findsOneWidget);
   });
 
   testWidgets('поле токена скрыто и без «глазка»', (tester) async {

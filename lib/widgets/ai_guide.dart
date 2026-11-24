@@ -1035,12 +1035,14 @@ class _AiChatBodyState extends State<_AiChatBody>
           // проезда через всю историю читались как «авто и неплавный
           // скролл». На короткой дистанции — мягкий проезд 260 мс.
           if (pos.pixels > 1400) {
-            _scrollCtrl.jumpTo(0);
-            return;
+            // Чистый прыжок в низ через всю историю — рывок. Сначала
+            // подходим к цели на экран, оставшийся отрезок проезжаем
+            // мягко: конец ленты «догоняется», а не телепортируется.
+            _scrollCtrl.jumpTo(pos.pixels - 900);
           }
           _scrollCtrl.animateTo(
             0,
-            duration: const Duration(milliseconds: 260),
+            duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
           );
         }
@@ -1066,7 +1068,12 @@ class _AiChatBodyState extends State<_AiChatBody>
         'Ада сейчас занята — я уже попробую другой бесплатный канал.',
       );
     }
-    if (raw.contains('все провайдеры') || raw.contains('unavailable')) {
+    // Один упавший канал — ещё не «все недоступны»: раньше строка
+    // `unavailable` от любого провайдера показывала плашку про все
+    // бесплатные каналы и пугала даже при рабочем ключе.
+    if (raw.contains('все провайдеры') ||
+        raw.contains('all providers') ||
+        raw.contains('all configured')) {
       return Translations.t(
         'aiErrorAllDown',
         context,
