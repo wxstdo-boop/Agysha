@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../l10n/translations.dart';
 import '../services/haptics.dart';
 import '../services/installer.dart';
+import '../services/settings_service.dart';
 import '../services/update_service.dart';
 import '../utils/design_tokens.dart';
 import '../utils/motion_prefs.dart';
@@ -73,6 +74,7 @@ class _UpdatePillState extends State<UpdatePill>
         abi: abi,
         currentVersionCode: info.versionCode,
         currentVersionName: info.versionName,
+        includePrereleases: SettingsService.testerModeEnabled.value,
       );
       if (!mounted) return;
       if (update == null) {

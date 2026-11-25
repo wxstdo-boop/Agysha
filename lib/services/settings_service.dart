@@ -29,6 +29,7 @@ class SettingsService {
   static const _keyPerfectionism = 'perfectionism_mode';
   static const _keyBerserk = 'berserk_mode';
   static const _keyTaskNotes = 'task_quick_notes_mode';
+  static const _keyTesterMode = 'tester_mode';
   static const _settingsFile = 'app_settings';
 
   /// Безопасное чтение bool из SharedPreferences: принимает true/false
@@ -363,6 +364,32 @@ class SettingsService {
     map[_keyPerfectionism] = value;
     await _saveSettings(map);
     perfectionismEnabled.value = value;
+  }
+
+  /// Режим тестера: человек соглашается на бета-канал — обновления
+  /// приходят в том числе из пре-релизов, а в «О приложении» рядом с
+  /// версией стоит отметка «тестер». Живой флаг, чтобы переключатель в
+  /// уголке разработчика и кнопка в настройках видели одно состояние.
+  static final ValueNotifier<bool> testerModeEnabled = ValueNotifier<bool>(
+    false,
+  );
+
+  static Future<bool> loadTesterMode() async {
+    final map = await _loadSettings();
+    // globalPrefs читаем только если в настройках ключа ещё нет: иначе
+    // ранний вызов (до initPrefs) падал LateInitializationError.
+    final value = map.containsKey(_keyTesterMode)
+        ? _bool(map[_keyTesterMode], false)
+        : (globalPrefs.getBool(_keyTesterMode) ?? false);
+    testerModeEnabled.value = value;
+    return value;
+  }
+
+  static Future<void> saveTesterMode(bool value) async {
+    final map = await _loadSettings();
+    map[_keyTesterMode] = value;
+    await _saveSettings(map);
+    testerModeEnabled.value = value;
   }
 
   /// Разблокированный режим BERSERK — общий живой флаг для настроек и FAB.

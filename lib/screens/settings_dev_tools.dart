@@ -286,10 +286,53 @@ extension _SettingsDevTools on _SettingsScreenState {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                leading: const RobotGlyph(
-                  size: 24,
-                  color: Color(0xFF8D6E63),
+                leading: const Icon(
+                  Icons.science_outlined,
+                  color: Color(0xFF64B5F6),
                 ),
+                title: Text(
+                  LocaleProvider.of(routeContext).languageCode == 'ru'
+                      ? 'Режим тестера'
+                      : 'Tester mode',
+                ),
+                subtitle: Text(
+                  LocaleProvider.of(routeContext).languageCode == 'ru'
+                      ? 'Бета-канал обновлений и отметка «тестер» рядом с версией.'
+                      : 'Beta update channel and a tester mark near the version.',
+                ),
+                trailing: ValueListenableBuilder<bool>(
+                  valueListenable: SettingsService.testerModeEnabled,
+                  builder: (context, value, _) => RepaintBoundary(
+                    child: VolumetricSwitch(
+                      value: value,
+                      onChanged: (next) async {
+                        try {
+                          await SettingsService.saveTesterMode(next);
+                        } catch (e) {
+                          if (routeContext.mounted) {
+                            showBeautifulSnackBar(
+                              routeContext,
+                              message: e.toString(),
+                            );
+                          }
+                        }
+                      },
+                      activeColor: const Color(0xFF64B5F6),
+                      semanticLabel: 'Tester mode',
+                      scale: 1.28,
+                    ),
+                  ),
+                ),
+                onTap: () => SettingsService.saveTesterMode(
+                  !SettingsService.testerModeEnabled.value,
+                ),
+              ),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                leading: const RobotGlyph(size: 24, color: Color(0xFF8D6E63)),
                 title: Text(
                   Translations.t('forgeTitle', routeContext, 'Кузница'),
                 ),

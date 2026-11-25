@@ -539,7 +539,11 @@ class _SettingsScreenState extends State<SettingsScreen>
             itemCount: settingsItems.length,
             itemBuilder: (context, index) => StaggerIn(
               index: index,
-              step: const Duration(milliseconds: 40),
+              step: const Duration(milliseconds: 46),
+              duration: const Duration(milliseconds: 430),
+              // Чуть позже старта: каскад идёт уже на видимом экране,
+              // а не «за шторкой» перехода.
+              extraDelay: const Duration(milliseconds: 60),
               child: _pressableCard(settingsItems[index]),
             ),
           ),

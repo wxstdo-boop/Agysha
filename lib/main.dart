@@ -911,6 +911,7 @@ Future<_StartupState> _loadStartupState() async {
   final modes = Future.wait<void>([
     SettingsService.loadPerfectionism(),
     SettingsService.loadBerserk(),
+    SettingsService.loadTesterMode(),
     SettingsService.loadHaptics().then((v) => Haptics.enabled = v),
     SettingsService.loadSounds().then((v) => Sounds.enabled = v),
     SettingsService.loadOptimize().then((v) => PerfPrefs.enabled.value = v),

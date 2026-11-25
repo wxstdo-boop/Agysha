@@ -84,27 +84,10 @@ class UpdateService {
     required String abi,
     required int currentVersionCode,
     String currentVersionName = '',
+    bool includePrereleases = false,
   }) async {
-    final uri = Uri.parse(
-      'https://api.github.com/repos/$kUpdateRepoOwner/$kUpdateRepoName/releases/latest',
-    );
-    final res = await http
-        .get(
-          uri,
-          headers: const {
-            // GitHub требует User-Agent, иначе отдаёт 403.
-            'User-Agent': 'Agysha',
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
-        )
-        // Таймаут обязателен: без него зависшая сеть держит кнопку «Проверить
-        // обновления» в состоянии загрузки бесконечно. Тот же подход, что и
-        // в запросах к ИИ-провайдерам (см. ai_guide_service.dart).
-        .timeout(const Duration(seconds: 14));
-    if (res.statusCode != 200) return null;
-
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    final json = await _releaseJson(beta: includePrereleases);
+    if (json == null) return null;
     final tag = (json['tag_name'] as String?) ?? '';
     // Тег релиза: `v1.6.46+37120` (versionName + versionCode).
     final match = RegExp(r'v?(\d+(?:\.\d+)*)\+(\d+)').firstMatch(tag);
@@ -152,6 +135,38 @@ class UpdateService {
       size: (apk['size'] as num?)?.toInt() ?? 0,
       notes: (json['body'] as String?) ?? '',
     );
+  }
+
+  static const Map<String, String> _ghHeaders = {
+    // GitHub требует User-Agent, иначе отдаёт 403.
+    'User-Agent': 'Agysha',
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
+  /// Тело релиза для нужного канала: стабильного (`releases/latest`) или
+  /// бета-канала тестеров — самый свежий не черновик из списка, пре-релизы
+  /// включены. Пусто — значит сети нет или GitHub отказал.
+  static Future<Map<String, dynamic>?> _releaseJson({
+    required bool beta,
+  }) async {
+    final path = beta ? 'releases?per_page=15' : 'releases/latest';
+    final uri = Uri.parse(
+      'https://api.github.com/repos/$kUpdateRepoOwner/$kUpdateRepoName/$path',
+    );
+    final res = await http
+        .get(uri, headers: _ghHeaders)
+        // Таймаут обязателен: без него зависшая сеть держит кнопку «Проверить
+        // обновления» в состоянии загрузки бесконечно.
+        .timeout(const Duration(seconds: 14));
+    if (res.statusCode != 200) return null;
+    final decoded = jsonDecode(res.body);
+    if (!beta) return decoded is Map<String, dynamic> ? decoded : null;
+    if (decoded is! List) return null;
+    for (final item in decoded) {
+      if (item is Map<String, dynamic> && item['draft'] != true) return item;
+    }
+    return null;
   }
 
   /// Релиз новее установленного?

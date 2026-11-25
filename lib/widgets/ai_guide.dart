@@ -348,7 +348,87 @@ class _AiChatSheet extends StatefulWidget {
   State<_AiChatSheet> createState() => _AiChatSheetState();
 }
 
-class _AiChatSheetState extends State<_AiChatSheet> {
+class _AiChatSheetState extends State<_AiChatSheet>
+    with SingleTickerProviderStateMixin {
+  /// Насколько лист уже сложен вниз, px. Ведётся пальцем за маркер и
+  /// доводится анимацией до 0 (вернулись) или до полной высоты (закрылись).
+  double _fold = 0;
+  bool _folding = false;
+  double _foldFrom = 0;
+  double _foldTo = 0;
+  Curve _foldCurve = Curves.easeOutCubic;
+  VoidCallback? _foldDone;
+  late final AnimationController _foldAnim = AnimationController(vsync: this)
+    ..addListener(_onFoldTick);
+
+  void _onFoldTick() {
+    if (!mounted) return;
+    final t = _foldCurve.transform(_foldAnim.value.clamp(0.0, 1.0));
+    setState(() => _fold = _foldFrom + (_foldTo - _foldFrom) * t);
+    if (_foldAnim.isCompleted) {
+      final done = _foldDone;
+      _foldDone = null;
+      done?.call();
+    }
+  }
+
+  void _animateFold(
+    double target, {
+    required Duration duration,
+    required Curve curve,
+    VoidCallback? onDone,
+  }) {
+    _foldFrom = _fold;
+    _foldTo = target;
+    _foldCurve = curve;
+    _foldDone = onDone;
+    _foldAnim
+      ..stop()
+      ..duration = duration
+      ..forward(from: 0);
+  }
+
+  void _onFoldStart(DragStartDetails _) {
+    _foldAnim.stop();
+    _foldDone = null;
+    setState(() => _folding = true);
+  }
+
+  void _onFoldUpdate(DragUpdateDetails details, double sheetHeight) {
+    setState(() {
+      _fold = (_fold + details.delta.dy).clamp(0.0, sheetHeight);
+    });
+  }
+
+  void _onFoldEnd(DragEndDetails details, double sheetHeight) {
+    final velocity = details.velocity.pixelsPerSecond.dy;
+    setState(() => _folding = false);
+    if (velocity > 620 || _fold > sheetHeight * 0.26) {
+      // Доводим до конца «в стол» и только потом снимаем лист: без
+      // двойного движения (своего и reverse-анимации роута) не видно.
+      _animateFold(
+        sheetHeight,
+        duration: const Duration(milliseconds: 190),
+        curve: Curves.easeInCubic,
+        onDone: () {
+          if (mounted) Navigator.of(context).pop();
+        },
+      );
+    } else {
+      _animateFold(
+        0,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _foldAnim.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -366,6 +446,11 @@ class _AiChatSheetState extends State<_AiChatSheet> {
     final sheetHeight = (usableH * 0.86)
         .clamp(math.min(300.0, maxH), maxH)
         .toDouble();
+    // Складка за маркер: лист укорачивается сверху и «уходит в стол».
+    final foldedHeight = (sheetHeight - _fold).clamp(0.0, sheetHeight);
+    final foldProgress = sheetHeight <= 0
+        ? 0.0
+        : (_fold / sheetHeight).clamp(0.0, 1.0);
 
     return PopScope(
       // Системная кнопка «назад» не закрывает чат: только крестик.
@@ -378,64 +463,101 @@ class _AiChatSheetState extends State<_AiChatSheet> {
         // кадре отставал: вход в чат с клавиатурой «дёргался».
         child: Padding(
           padding: EdgeInsets.fromLTRB(12, 0, 12, 8 + keyboard),
-          child: ClipRRect(
-            // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
-            borderRadius: BorderRadius.circular(32),
-            // БЕЗ BackdropFilter: размытие фона пересчитывалось на КАЖДОМ
-            // кадре выезда/ухода листа и было главной причиной «лаг при входе
-            // и выходе». Почти непрозрачная заливка с тонкой светлой кромкой
-            // читается тем же «стеклом», но кадр стоит как обычный контейнер.
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              height: sheetHeight,
-              decoration: BoxDecoration(
-                // Заметно прозрачнее: сквозь окно видно разметку экрана.
-                // Без BackdropFilter — кадр стоит как обычный контейнер.
-                color: theme.scaffoldBackgroundColor.withValues(
-                  alpha: isDark ? 0.80 : 0.88,
-                ),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    theme.scaffoldBackgroundColor.withValues(
-                      alpha: isDark ? 0.82 : 0.90,
-                    ),
-                    theme.colorScheme.surfaceContainerLow.withValues(
-                      alpha: isDark ? 0.76 : 0.88,
-                    ),
-                  ],
-                ),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.35),
-                  width: 1.0,
-                ),
-                borderRadius: BorderRadius.circular(32),
-              ),
-              child: MediaQuery.removeViewInsets(
-                context: context,
-                removeBottom: true,
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: aiCollapsing,
-                  builder: (context, collapsing, child) => AnimatedScale(
-                    // Уходим в пузырь тем же движением, каким он появляется:
-                    // сжатие к правому нижнему углу + затухание.
-                    scale: collapsing ? 0.86 : 1.0,
-                    alignment: Alignment.bottomRight,
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeInCubic,
-                    child: AnimatedOpacity(
-                      opacity: collapsing ? 0.0 : 1.0,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInCubic,
-                      child: child,
+          child: Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              Opacity(
+                // Ближе к концу складки лист тает: срез не «обрезает» текст.
+                opacity: (1 - foldProgress * 0.9).clamp(0.0, 1.0),
+                child: Transform.scale(
+                  scale: 1 - foldProgress * 0.04,
+                  alignment: Alignment.bottomCenter,
+                  child: ClipRRect(
+                    // Закругление со всех 4 сторон (и снизу тоже, чтобы при опускании срезов не было видно)
+                    borderRadius: BorderRadius.circular(32),
+                    // БЕЗ BackdropFilter: размытие фона пересчитывалось на КАЖДОМ
+                    // кадре выезда/ухода листа и было главной причиной «лаг при входе
+                    // и выходе». Почти непрозрачная заливка с тонкой светлой кромкой
+                    // читается тем же «стеклом», но кадр стоит как обычный контейнер.
+                    child: AnimatedContainer(
+                      // Пока палец ведёт маркер, высоту задаём покадрово сами.
+                      duration: _folding || _fold > 0
+                          ? Duration.zero
+                          : const Duration(milliseconds: 260),
+                      curve: Curves.easeOutCubic,
+                      height: foldedHeight,
+                      decoration: BoxDecoration(
+                        // Заметно прозрачнее: сквозь окно видно разметку экрана.
+                        // Без BackdropFilter — кадр стоит как обычный контейнер.
+                        color: theme.scaffoldBackgroundColor.withValues(
+                          alpha: isDark ? 0.80 : 0.88,
+                        ),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            theme.scaffoldBackgroundColor.withValues(
+                              alpha: isDark ? 0.82 : 0.90,
+                            ),
+                            theme.colorScheme.surfaceContainerLow.withValues(
+                              alpha: isDark ? 0.76 : 0.88,
+                            ),
+                          ],
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withValues(
+                            alpha: isDark ? 0.12 : 0.35,
+                          ),
+                          width: 1.0,
+                        ),
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                      child: MediaQuery.removeViewInsets(
+                        context: context,
+                        removeBottom: true,
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: aiCollapsing,
+                          builder: (context, collapsing, child) => AnimatedScale(
+                            // Уходим в пузырь тем же движением, каким он появляется:
+                            // сжатие к правому нижнему углу + затухание.
+                            scale: collapsing ? 0.86 : 1.0,
+                            alignment: Alignment.bottomRight,
+                            duration: const Duration(milliseconds: 260),
+                            curve: Curves.easeInCubic,
+                            child: AnimatedOpacity(
+                              opacity: collapsing ? 0.0 : 1.0,
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInCubic,
+                              child: child,
+                            ),
+                          ),
+                          child: const _AiChatBody(),
+                        ),
+                      ),
                     ),
                   ),
-                  child: const _AiChatBody(),
                 ),
               ),
-            ),
+              // Зона маркера: тащим вниз — лист складывается; отпустили
+              // выше порога — доезжает до низа и закрывается.
+              if (foldedHeight > 8)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onVerticalDragStart: _onFoldStart,
+                      onVerticalDragUpdate: (d) =>
+                          _onFoldUpdate(d, sheetHeight),
+                      onVerticalDragEnd: (d) => _onFoldEnd(d, sheetHeight),
+                      child: const SizedBox(width: 190, height: 30),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),

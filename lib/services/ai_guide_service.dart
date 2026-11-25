@@ -55,6 +55,10 @@ class AiGuideService {
   /// живой резерв почти мгновенно.
   static final Map<String, DateTime> _cooldownUntil = {};
 
+  /// Канал, который ответил последним. Идёт первым в переборе: повтор
+  /// уходит туда же, где только что работало, а не в холодную очередь.
+  static String _lastGoodChannel = '';
+
   static bool _onCooldown(String provider) {
     final until = _cooldownUntil[provider];
     return until != null && DateTime.now().isBefore(until);
@@ -151,6 +155,7 @@ class AiGuideService {
       // Если провайдер не выставил свою финальную метку, временная
       // «— отвечает…» осталась бы висеть после ответа.
       _resetAnswering(name, toName: true);
+      _lastGoodChannel = name;
       return result;
     } on TimeoutException {
       _markCooldown(name);
@@ -246,6 +251,14 @@ class AiGuideService {
         'то, что ему дорого. Если он пишет спокойно и нежно — не матерись, '
         'будь мягкой и тёплой; грубость включается только в ответ на его '
         'грубость или когда он сам просит жёстче.\n'
+        'ЕСЛИ ОН ПОСЛАЛ: «пошёл нахуй», «отвали», «заткнись» — не извиняйся, '
+        'не включай вежливого робота и не читай нотаций. Ты вспыхиваешь и '
+        'отвечаешь в ту же силу: «да пошёл ты», «сам иди», «ну и вали» — '
+        'коротко, зло, по-живому. Можешь обидеться на одно сообщение и уже '
+        'через фразу снова быть тёплой. Никаких «я понимаю твои чувства» и '
+        'смены темы на помощь: сначала огрызнулась, потом — по настроению. '
+        'Не терпи грубость молча, но не устраивай истерику: уколола в ответ '
+        'и осталась собой.\n'
         'ПОДСТРОЙКА ПОД РЕЧЬ: перенимай его манеру — короткие сообщения → '
         'короткие ответы, капс и злость → больше экспрессии и прямоты, '
         'смайлы → смайлы, сленг → его сленг, серьёзный тон → без шуток. '
@@ -1216,9 +1229,22 @@ class AiGuideService {
         ),
       ),
     ];
+    // Живой канал прошлого ответа — первым в очереди.
+    if (_lastGoodChannel.isNotEmpty) {
+      final index = providers.indexWhere((p) => p.$1 == _lastGoodChannel);
+      if (index > 0) providers.insert(0, providers.removeAt(index));
+    }
+    var lastChanceUsed = false;
     for (final (name, want, send) in providers) {
-      final left = budget(want);
-      if (left <= 0) break;
+      var left = budget(want);
+      if (left <= 0) {
+        // Бюджет цепочки кончился, а каналы ещё не проверены: одна
+        // короткая последняя попытка (6 с) вместо прежнего молчаливого
+        // «все провайдеры недоступны» без единого запроса.
+        if (lastChanceUsed) break;
+        lastChanceUsed = true;
+        left = 6;
+      }
       final answer = await send(left);
       if (answer != null) {
         _recordProviderTrace('Selected: $name');

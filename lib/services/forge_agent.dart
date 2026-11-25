@@ -613,7 +613,9 @@ class ForgeAgent {
                 ? await _ensureBranch(task, baseBranch)
                 : (_branch ?? baseBranch);
             result = await _execute(call, branch);
-            if (_isWrite(call.name)) {
+            // Перезапись тем же содержимым — не правка: иначе шаг и коммит
+            // тратятся впустую, а ветка не меняется.
+            if (_isWrite(call.name) && !result.startsWith('Без изменений:')) {
               writes++;
               final p = _str(call.arguments['path']);
               if (p != null) {
@@ -931,6 +933,27 @@ class ForgeAgent {
           );
         }
         final existing = await service.readFile(owner, repo, path, ref: branch);
+        if (existing != null && existing.content.trim() == content.trim()) {
+          // Модель иногда переписывает файл «тем же» содержимым: коммит
+          // пустой, шаг съедает бюджет, а ветка не меняется.
+          return 'Без изменений: $path уже содержит это. Не переписывай его.';
+        }
+        // Обрезанная запись — главная причина «агент сломал проект»: модель
+        // присылала только отредактированный хвост, и файл терял тело.
+        // Такую запись не пускаем, а возвращаем модель в русло edit_file.
+        if (existing != null &&
+            call.arguments['allow_shrink'] != true &&
+            existing.content.length > 400 &&
+            content.length * 3 < existing.content.length) {
+          throw ForgeException(
+            400,
+            'content короче файла $path более чем втрое '
+            '(${content.length} против ${existing.content.length} символов) — '
+            'похоже, пришла только часть файла. Правь точечно через '
+            'edit_file, а для полной замены пришли весь файл целиком '
+            '(allow_shrink: true — только если файл правда так сократился).',
+          );
+        }
         await service.writeFile(
           owner,
           repo,
@@ -1369,10 +1392,18 @@ class FreePoolForgeChat implements ForgeChat {
     List<Map<String, dynamic>> tools,
   ) async {
     final failures = <String>[];
+    // Общий бюджет перебора: пять площадок по 45 с — это почти четыре
+    // минуты ожидания. Каждой даём лишь остаток, но НЕ выбрасываем её из
+    // перебора: «все недоступны» раньше писались, даже не попробовав
+    // последние каналы.
+    final deadline = DateTime.now().add(const Duration(seconds: 80));
 
     for (final provider in _providers()) {
+      final left = deadline.difference(DateTime.now());
+      final limit = left <= Duration.zero ? const Duration(seconds: 6) : left;
       try {
-        final reply = await _ask(provider, messages, tools);
+        final reply = await _ask(provider, messages, tools, limit: limit);
+        _lastGoodId = provider.id;
         onProvider?.call(provider.label);
         return reply;
       } on ForgeException catch (e) {
@@ -1389,6 +1420,22 @@ class FreePoolForgeChat implements ForgeChat {
       'Бесплатные ИИ-провайдеры недоступны. Попробуй ещё раз позже.'
       '${failures.isEmpty ? '' : ' (${failures.join('; ')})'}',
     );
+  }
+
+  /// Провайдер, который ответил в прошлый раз. Повтор запроса почти всегда
+  /// уходит к нему же, поэтому он идёт первым — вместо честного перебора
+  /// «сверху вниз», где живой канал мог ждать очереди за двумя мёртвыми.
+  static String? _lastGoodId;
+
+  /// Разовый сбой шлюза (429/5xx/таймаут) — не приговор: пауза и один
+  /// повтор чаще возвращают ответ, чем следующий провайдер с нуля.
+  static bool _isTransient(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('429') ||
+        text.contains('http 5') ||
+        text.contains('timeout') ||
+        text.contains('timed out') ||
+        text.contains('socket');
   }
 
   List<_FreeProvider> _providers() {
@@ -1455,17 +1502,53 @@ class FreePoolForgeChat implements ForgeChat {
       ),
     ];
     final only = onlyModel;
-    if (only == null) return all;
-    final filtered = all.where((p) => p.id == only).toList(growable: false);
-    // Сохранённый выбор мог устареть (пропал ключ, сменился пул) — тогда
-    // лучше перебрать весь пул, чем остаться без ответа вовсе.
-    return filtered.isEmpty ? all : filtered;
+    if (only != null) {
+      final filtered = all.where((p) => p.id == only).toList(growable: false);
+      // Сохранённый выбор мог устареть (пропал ключ, сменился пул) — тогда
+      // лучше перебрать весь пул, чем остаться без ответа вовсе.
+      if (filtered.isNotEmpty) return filtered;
+    }
+    // Живой канал прошлого ответа — первым: иначе он ждал очереди за
+    // двумя мёртвыми, и пул писал «недоступны», не дойдя до рабочего.
+    final last = _lastGoodId;
+    final index = last == null ? -1 : all.indexWhere((p) => p.id == last);
+    if (index <= 0) return all;
+    return <_FreeProvider>[
+      all[index],
+      ...all.sublist(0, index),
+      ...all.sublist(index + 1),
+    ];
   }
 
+  /// Один запрос с таймаутом [limit] и одним повтором на разовый сбой.
   Future<ForgeChatReply> _ask(
     _FreeProvider provider,
     List<Map<String, dynamic>> messages,
+    List<Map<String, dynamic>> tools, {
+    required Duration limit,
+  }) async {
+    final timeout = limit > _timeout ? _timeout : limit;
+    try {
+      return await _sendOnce(provider, messages, tools, timeout);
+    } catch (error) {
+      if (!_isTransient(error) || timeout < const Duration(seconds: 3)) {
+        rethrow;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      return _sendOnce(
+        provider,
+        messages,
+        tools,
+        timeout - const Duration(milliseconds: 450),
+      );
+    }
+  }
+
+  Future<ForgeChatReply> _sendOnce(
+    _FreeProvider provider,
+    List<Map<String, dynamic>> messages,
     List<Map<String, dynamic>> tools,
+    Duration timeout,
   ) async {
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (provider.userAgent != null) {
@@ -1491,7 +1574,7 @@ class FreePoolForgeChat implements ForgeChat {
             'max_tokens': 12000,
           }),
         )
-        .timeout(_timeout);
+        .timeout(timeout);
 
     if (resp.statusCode != 200) {
       throw Exception('HTTP ${resp.statusCode}');
@@ -1505,9 +1588,6 @@ class FreePoolForgeChat implements ForgeChat {
     final decoded = jsonDecode(raw);
     if (decoded is! Map) throw Exception('не JSON-объект');
     final served = decoded['model'];
-    _lastModel = served is String && served.trim().isNotEmpty
-        ? '${provider.label} · ${served.trim()}'
-        : '${provider.label} · ${provider.model}';
     final choices = decoded['choices'];
     if (choices is! List || choices.isEmpty) throw Exception('пустой ответ');
     final first = choices.first;
@@ -1545,6 +1625,9 @@ class FreePoolForgeChat implements ForgeChat {
       }
     }
 
+    _lastModel = served is String && served.trim().isNotEmpty
+        ? '${provider.label} · ${served.trim()}'
+        : '${provider.label} · ${provider.model}';
     final text = message['content'];
     return ForgeChatReply(
       text: text is String && text.trim().isNotEmpty ? text : null,

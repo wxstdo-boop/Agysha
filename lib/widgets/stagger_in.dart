@@ -77,10 +77,13 @@ class _StaggerInState extends State<StaggerIn>
       animation: _ctrl,
       builder: (context, child) {
         final t = Curves.easeOutCubic.transform(_ctrl.value);
+        // Масштаб не трогаем: карточки меряются тестами по реальному
+        // размеру, а «сжатый вход» искажал их на время каскада. Мягкость
+        // даёт удлинённая отдача и больший подъём.
         return Opacity(
-          opacity: t,
+          opacity: Curves.easeOutQuart.transform(_ctrl.value),
           child: Transform.translate(
-            offset: Offset(0, 14 * (1 - t)),
+            offset: Offset(0, 16 * (1 - t)),
             child: child,
           ),
         );

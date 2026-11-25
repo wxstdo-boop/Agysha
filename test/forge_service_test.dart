@@ -393,8 +393,9 @@ void main() {
       expect(reply.toolCalls, hasLength(1));
       expect(reply.toolCalls.first.name, 'write_file');
       expect(reply.toolCalls.first.arguments['path'], 'a.txt');
-      // Kilo пробовали дважды (обе модели) и только потом ушли дальше.
-      expect(hits.where((h) => h.contains('kilo')).length, 2);
+      // Kilo пробовали дважды (обе модели), каждую — с одним повтором на
+      // разовый 5xx, и только потом ушли дальше.
+      expect(hits.where((h) => h.contains('kilo')).length, 4);
       expect(hits.last, contains('murakumo'));
     });
 
@@ -668,6 +669,80 @@ void main() {
       expect(written, contains("import 'package:x/x.dart';\nvoid main() {"));
       expect(written, contains('}'));
       expect(written.trimRight(), endsWith('// конец'));
+    });
+
+    test('write_file тем же содержимым не тратит коммит и шаг', () async {
+      // Модель иногда «переписывает» файл без единого изменения: коммит
+      // пустой, шаг бюджета съеден, а ветка та же. Такой вызов — не правка.
+      final fake = _FakeGitHub();
+      final chat = _ScriptedChat([
+        _call('write_file', {
+          'path': 'lib/main.dart',
+          'content': 'void main() {}',
+        }),
+        _call('finish', {'summary': 'Ничего менять не пришлось'}),
+      ]);
+      final agent = ForgeAgent(
+        service: await _serviceWithToken(fake.client),
+        chat: chat,
+        owner: 'wxstdo-boop',
+        repo: 'agysha',
+      );
+
+      final turn = await agent.respond(
+        history: const [],
+        task: 'проверь точку входа',
+        baseBranch: 'main',
+      );
+
+      expect(turn.madeChanges, isFalse);
+      expect(turn.filesChanged, 0);
+      expect(
+        fake.requests.where(
+          (r) => r.method == 'PUT' && r.url.path.contains('/contents/'),
+        ),
+        isEmpty,
+      );
+      expect(
+        chat.seenMessages
+            .expand((m) => m)
+            .where((m) => m['role'] == 'tool')
+            .any((m) => '${m['content']}'.contains('Без изменений')),
+        isTrue,
+      );
+    });
+
+    test('обрезанный write_file не затирает большой файл', () async {
+      // Главная причина «агент сломал проект»: вместо полного файла
+      // приходил хвост. Теперь такой вызов отклоняется с подсказкой.
+      final fake = _FakeGitHub();
+      final big = List<String>.generate(40, (i) => '// строка $i').join('\n');
+      fake.branchFiles['main']!['lib/big.dart'] = big;
+      final chat = _ScriptedChat([
+        _call('write_file', {'path': 'lib/big.dart', 'content': '// хвост'}),
+        _call('finish', {'summary': 'готово'}),
+      ]);
+      final agent = ForgeAgent(
+        service: await _serviceWithToken(fake.client),
+        chat: chat,
+        owner: 'wxstdo-boop',
+        repo: 'agysha',
+      );
+
+      final turn = await agent.respond(
+        history: const [],
+        task: 'поправь big.dart',
+        baseBranch: 'main',
+      );
+
+      expect(turn.madeChanges, isFalse);
+      expect(fake.branchFiles['main']!['lib/big.dart'], big);
+      final toolNotes = chat.seenMessages
+          .expand((m) => m)
+          .where((m) => m['role'] == 'tool')
+          .map((m) => '${m['content']}');
+      expect(toolNotes.any((t) => t.contains('втрое')), isTrue);
+      expect(toolNotes.any((t) => t.contains('edit_file')), isTrue);
     });
 
     test('правки читаются из рабочей ветки, а не из main', () async {

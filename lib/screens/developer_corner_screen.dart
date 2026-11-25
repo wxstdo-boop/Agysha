@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/translations.dart';
+import '../services/settings_service.dart';
 import '../utils/context_menu.dart';
 import '../utils/design_tokens.dart';
 import '../widgets/canary_icon.dart';
@@ -11,6 +12,7 @@ import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/stagger_in.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
+import '../utils/snackbar.dart';
 import '../utils/wide_dash_formatter.dart';
 import '../widgets/smooth_caret.dart';
 
@@ -689,6 +691,8 @@ class _DeveloperCornerScreenState extends State<DeveloperCornerScreen> {
                         ),
                       ),
                     const SizedBox(height: 22),
+                    DevTesterBadge(accent: widget.accent),
+                    const SizedBox(height: 22),
                     Align(
                       alignment: Alignment.center,
                       child: PressScale(
@@ -720,6 +724,83 @@ class _DeveloperCornerScreenState extends State<DeveloperCornerScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// «Бета-тестеры» внизу уголка разработчика.
+///
+/// Полупрозрачная надпись-кнопка в той же пластике, что кнопки Agysha в
+/// настройках: лёгкое зажатие, 3D-отклик и мягкий возврат. По нажатию
+/// включает бета-канал обновлений — пре-релизы приходят раньше стабильных.
+class DevTesterBadge extends StatelessWidget {
+  const DevTesterBadge({super.key, this.accent});
+
+  final Color? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final base = accent ?? theme.colorScheme.primary;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return ValueListenableBuilder<bool>(
+      valueListenable: SettingsService.testerModeEnabled,
+      builder: (context, enabled, _) {
+        final tint = enabled ? base : theme.colorScheme.onSurfaceVariant;
+        return PressScale(
+          pressedScale: 0.955,
+          enableTilt: true,
+          maxTiltAngle: 0.09,
+          duration: const Duration(milliseconds: 130),
+          releaseDuration: const Duration(milliseconds: 240),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () async {
+              final messenger = ScaffoldMessenger.maybeOf(context);
+              final next = !enabled;
+              await SettingsService.saveTesterMode(next);
+              if (!context.mounted) return;
+              messenger?.hideCurrentSnackBar();
+              showBeautifulSnackBar(
+                context,
+                message: next
+                    ? (ru
+                          ? 'Бета-канал включён — обновления придут раньше.'
+                          : 'Beta channel is on — updates arrive earlier.')
+                    : (ru ? 'Бета-канал выключен.' : 'Beta channel is off.'),
+                icon: Icons.science_outlined,
+                iconColor: tint,
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
+              child: ShaderMask(
+                blendMode: BlendMode.srcIn,
+                shaderCallback: (rect) => LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    tint.withValues(alpha: 0.62),
+                    tint.withValues(alpha: 0.30),
+                    tint.withValues(alpha: 0.62),
+                  ],
+                ).createShader(rect),
+                child: Text(
+                  ru ? 'Бета-тестеры' : 'Beta testers',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    // Цвет задаёт градиент через ShaderMask: сам текст
+                    // должен быть непрозрачным, иначе маска «выключит» его.
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2.4,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
