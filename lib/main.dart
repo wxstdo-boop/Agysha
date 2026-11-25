@@ -79,6 +79,7 @@ import 'services/installer.dart';
 import 'services/app_version.dart';
 export 'services/backup_service.dart';
 import 'services/backup_service.dart';
+import 'services/background_update_check.dart';
 import 'utils/avatar_image.dart';
 
 final NotificationService notificationService = NotificationService();
@@ -418,6 +419,26 @@ Future<void> _adoptBackgroundUpdate() async {
   try {
     await UpdateService.instance.adoptBackgroundDownload();
   } catch (_) {}
+}
+
+/// Кэширует версию и ABI для фонового изолята и ставит периодическую
+/// проверку релизов в WorkManager.
+///
+/// В фоне нет нативного канала `appInfo`, поэтому версия, имя и ABI
+/// записываются сюда при каждом запуске: после установки обновления они
+/// обновятся сами. Всё, кроме регистрации, не критично — ошибку глотаем,
+/// чтобы запуск приложения не зависел от планировщика.
+Future<void> _prepareBackgroundUpdateCheck() async {
+  try {
+    final info = await Installer.appInfo();
+    if (info == null) return;
+    await globalPrefs.setInt(kAppVersionCodeKey, info.versionCode);
+    await globalPrefs.setString(kAppVersionNameKey, info.versionName);
+    await globalPrefs.setString(kAppAbiKey, await Installer.supportedAbi());
+    await registerBackgroundUpdateCheck();
+  } catch (error) {
+    debugPrint('background update setup failed: $error');
+  }
 }
 
 /// Показывает итог, дожидаясь готовности дерева.
@@ -1107,6 +1128,9 @@ void main() async {
   // уведомлений, часовой пояс), и на Android их сумма платилась до первого
   // кадра: окно Android (аватарка Realme/белый экран) висело секундами.
   unawaited(_initBackgroundAudio());
+  // Диспетчер фоновых задач регистрируем до первого кадра: если Android
+  // поднял процесс ради проверки обновления, WorkManager ждёт именно его.
+  unawaited(initializeBackgroundUpdates());
   await _startApp(bootClock);
   unawaited(_wireBubbleLaunch());
 }
@@ -1413,6 +1437,7 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
     // он оставался на телефоне и копил мегабайты.
     unawaited(Installer.cleanupInstalledApk());
     unawaited(_adoptBackgroundUpdate());
+    unawaited(_prepareBackgroundUpdateCheck());
   }
   // Повторный edge-to-edge ПОСЛЕ первого кадра — на MIUI/HyperOS вызов  // до runApp не применяется (Flutter сбрасывает системный UI при старте).
   // Без него сверху остаётся чёрная квадратная полоса статус-бара, и
