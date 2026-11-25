@@ -1,1 +1,1 @@
-// placeholder to avoid broken file; will restore via git
+// This file was temporarily replaced - restoring from git
