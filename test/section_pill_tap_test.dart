@@ -71,10 +71,9 @@ void main() {
 
   // Подпись раздела состоит из двух слоёв (базовая и подсвеченная) ради
   // плавного кросс-фейда — для тапа берём первый, они точно совпадают.
-  Finder pillLabel(String text) => find.descendant(
-    of: find.byType(SectionPill),
-    matching: find.text(text),
-  ).first;
+  Finder pillLabel(String text) => find
+      .descendant(of: find.byType(SectionPill), matching: find.text(text))
+      .first;
 
   /// Кадры как в жизни: один pump(900ms) — это ОДИН кадр, и тикер пружины
   /// на нём ещё не успевает сдвинуться. Для реальной динамики нужны кадры.
@@ -98,11 +97,9 @@ void main() {
       seen.add(sectionCurrentIndex.value);
     }
 
-    expect(
-      seen,
-      <int>{target},
-      reason: 'подсветка не должна мигать промежуточными разделами',
-    );
+    expect(seen, <int>{
+      target,
+    }, reason: 'подсветка не должна мигать промежуточными разделами');
     expect(
       (sectionRailPage.value - target).abs(),
       lessThan(0.02),
@@ -147,6 +144,38 @@ void main() {
       sectionCurrentIndex.value,
       sectionRailPage.value.round(),
       reason: 'после свайпа подсветка следует за каруселью, а не за тапом',
+    );
+  });
+
+  testWidgets('частая долбёжка по таблетке не ломает её окончательно', (
+    tester,
+  ) async {
+    await boot(tester);
+    final labels = sectionLabels(tester.element(find.byType(SectionPill)));
+
+    // Пользователь «долбит» по разделам, не дожидаясь довода пружины.
+    // Раньше в такой ситуации таблетка переставала слушать тапы вообще,
+    // а фон раздела залипал растянутым.
+    for (var i = 0; i < 24; i++) {
+      final label = labels[1 + (i % 3)];
+      await tester.tapAt(tester.getCenter(pillLabel(label)));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await pumpFrames(tester, 80);
+
+    // После всей этой возни тап обязан работать как в первый раз.
+    await tester.tapAt(tester.getCenter(pillLabel(labels[2])));
+    await pumpFrames(tester, 80);
+
+    expect(
+      sectionCurrentIndex.value,
+      2,
+      reason: 'после частых тапов раздел выбирается снова',
+    );
+    expect(
+      (sectionRailPage.value - 2).abs(),
+      lessThan(0.02),
+      reason: 'карусель доезжает до выбранного после частых тапов',
     );
   });
 }

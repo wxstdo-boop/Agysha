@@ -90,17 +90,35 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// видно, и она успевает проявиться.
   static const double _dragStep = 64;
 
-  late final AnimationController _spin = AnimationController(
+  /// Довод барабана — не таймлайн с кривой, а настоящая пружина на
+  /// unbounded-контроллере: AnimationController.unbounded умеет
+  /// `animateWith`, и его value — это готовая позиция в каморах.
+  ///
+  /// Почему так: кривая с фиксированной длительностью сама решала, когда
+  /// остановиться, поэтому барабан не подхватывал скорость пальца. Отсюда
+  /// и «тормозной» довод: отпустил на лету — колесо будто натыкалось на
+  /// невидимую стену и ползло к цели. Пружина проезжает цель по инерции,
+  /// чуть отдаёт назад и мягко замирает — это читается как живое колесо.
+  late final AnimationController _spin = AnimationController.unbounded(
     vsync: this,
-    duration: const Duration(milliseconds: 520),
   );
-  Animation<double>? _spinAnim;
+
+  /// Скорость барабана в каморах в секунду (сглаженная по последним
+  /// движениям пальца). Передаётся в пружину в момент отпускания, чтобы
+  /// довод шёл в ту же сторону и с той же силой, что и рука.
+  double _velocity = 0;
+  Duration _lastMoveStamp = Duration.zero;
 
   /// Позиция барабана в каморах; целое значение — камора ровно под
   /// указателем, дробное — барабан между каморами.
   double _pos = 0;
   bool _dragging = false;
   int _spinToken = 0;
+
+  /// Цель текущего довода (в каморах) и нужно ли по его окончании ставить
+  /// тему. Нужны, чтобы закрыть довод, как только колесо визуально встало.
+  double? _spinTarget;
+  bool _commitOnSettle = false;
 
   /// Положение, с которого началось текущее перетаскивание. Нужно, чтобы
   /// дребезг в конце жеста не разворачивал довод назад.
@@ -161,6 +179,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _pos = _indexOfKey(widget.selectedKey).toDouble();
     _hapticIndex = _norm(_pos.round());
     _hubIndex = _hapticIndex;
+    _spin.value = _pos;
     _spin.addListener(_onSpinTick);
   }
 
@@ -179,35 +198,87 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _glideTo(target);
   }
 
-  /// Довод без осознанного выбора: анимируем позицию, тему не трогаем.
-  void _glideTo(int target) {
+  /// Одна пружина на все доводы: и пуск рукой, и программный доезд.
+  ///
+  /// [velocity] — камор в секунду; знак задаёт направление. Пружина слегка
+  /// некритически задемпфирована (отношение ~0.86): колесо проезжает цель
+  /// на волосок, отдаёт назад и замирает. Это и есть та «плавность», которой
+  /// не хватало линейному доводу — движение перестаёт выглядеть как
+  /// перемотка позиции.
+  void _springTo(double target, {double velocity = 0, bool commit = true}) {
     final token = ++_spinToken;
-    // Идём по короткой дуге: от каморы 9 к каморе 0 барабан проворачивается
-    // на одну позицию, а не на девять назад через весь круг.
-    final goal = _index.toDouble() + _shortestDelta(_index, target);
-    final dist = (goal - _pos).abs();
     _spin.stop();
-    if (dist < 0.02) {
+    // Мёртвая зона: цель уже под указателем — не гоняем пружину впустую.
+    if ((target - _pos).abs() < 0.015 && velocity.abs() < 0.05) {
+      _spinTarget = null;
+      _commitOnSettle = false;
       setState(() {
-        _pos = goal;
-        _hubIndex = _norm(goal.round());
+        _pos = target;
+        _hubIndex = _norm(target.round());
       });
+      if (commit) _onSpringSettled();
       return;
     }
-    _spinAnim = Tween<double>(
-      begin: _pos,
-      end: goal,
-    ).animate(CurvedAnimation(parent: _spin, curve: Curves.easeOutCubic));
-    _spin.duration = Duration(
-      milliseconds: (300 + 130 * dist).round().clamp(300, 640),
-    );
-    _spin.forward(from: 0).whenComplete(() {
-      if (!mounted || token != _spinToken) return;
-      setState(() {
-        _pos = goal;
-        _hubIndex = _norm(goal.round());
-      });
+    _spin
+        .animateWith(
+          SpringSimulation(
+            const SpringDescription(mass: 1, stiffness: 210, damping: 26),
+            _pos,
+            target,
+            // Быстрый флик не должен вылетать далеко за цель: пружина с
+            // огромной начальной скоростью проскакивала две каморы и
+            // возвращалась — читалось как «болтается».
+            velocity.clamp(-7.0, 7.0),
+          ),
+        )
+        .whenComplete(() {
+          if (!mounted || token != _spinToken) return;
+          _spinTarget = null;
+          _commitOnSettle = false;
+          setState(() {
+            _pos = target;
+            _hubIndex = _norm(target.round());
+          });
+          if (commit) _onSpringSettled();
+        });
+    _spinTarget = target;
+    _commitOnSettle = commit;
+  }
+
+  /// Ставит тему, когда барабан действительно встал.
+  void _onSpringSettled() {
+    widget.onCommit(widget.entries[_index]);
+  }
+
+  /// Останавливает довод, когда колесо уже стоит на каморе.
+  ///
+  /// Пружина асимптотически ползёт к цели: последние сотые каморы — это
+  /// десятые доли пикселя, глаз их не видит, а контроллер всё ещё считает
+  /// анимацию живой и держит тему невыставленной. Поэтому как только
+  /// колесо визуально встало, довод закрывается руками.
+  void _finishSpring() {
+    final target = _spinTarget;
+    if (target == null) return;
+    final commit = _commitOnSettle;
+    _spinTarget = null;
+    _commitOnSettle = false;
+    _spinToken++;
+    _spin.stop();
+    setState(() {
+      _pos = target;
+      _hubIndex = _norm(target.round());
     });
+    if (commit) _onSpringSettled();
+  }
+
+  /// Довод без осознанного выбора: ведём позицию, тему не трогаем.
+  void _glideTo(int target) {
+    // Идём по короткой дуге: от каморы 9 к каморе 0 барабан проворачивается
+    // на одну позицию, а не на девять назад через весь круг.
+    _springTo(
+      _index.toDouble() + _shortestDelta(_index, target),
+      commit: false,
+    );
   }
 
   int _indexOfKey(String key) {
@@ -216,12 +287,18 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   }
 
   void _onSpinTick() {
-    final anim = _spinAnim;
-    if (anim == null) return;
+    final target = _spinTarget;
+    if (!_dragging && target != null && (_spin.value - target).abs() < 0.008) {
+      _finishSpring();
+      return;
+    }
     setState(() {
-      _pos = anim.value;
+      _pos = _spin.value;
       _syncHub();
     });
+    // Щелчки вибрации и на доводе: колесо «щёлкает» камору за каморой,
+    // пока доезжает, а не только под пальцем.
+    if (!_dragging) _tickHaptics();
   }
 
   /// Щелчок вибрации на каждой пройденной каморе — так колесо «щёлкает».
@@ -241,40 +318,17 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   }
 
   void _settleTo(double goal) {
-    final target = goal.roundToDouble();
-    final token = ++_spinToken;
-    final dist = (target - _pos).abs();
-    if (dist < 0.02) {
-      // Барабан уже стоит на каморе: не крутим пустую анимацию, которая
-      // потом 200 мс «висит» у цели и читается как «не доводится».
-      setState(() {
-        _pos = target;
-        _hubIndex = _norm(target.round());
-      });
-      widget.onCommit(widget.entries[_index]);
-      return;
-    }
-    // easeOutCubic вместо quint: у quint длинный хвост, барабан почти
-    // доехал и надолго замирал в паре пикселей от каморы.
-    _spinAnim = Tween<double>(
-      begin: _pos,
-      end: target,
-    ).animate(CurvedAnimation(parent: _spin, curve: Curves.easeOutCubic));
-    _spin.duration = Duration(
-      milliseconds: (340 + 150 * dist).round().clamp(340, 780),
-    );
-    _spin.forward(from: 0).whenComplete(() {
-      if (!mounted || token != _spinToken) return;
-      setState(() {
-        _pos = target;
-        _hubIndex = _norm(target.round());
-      });
-      widget.onCommit(widget.entries[_index]);
-    });
+    // Начальная скорость пружины — скорость руки: колесо доезжает в ту же
+    // сторону, куда его толкнули, а не «натыкается» на цель.
+    _springTo(goal.roundToDouble(), velocity: _velocity);
   }
 
   void _onPointerDown(PointerDownEvent event) {
     if (_pointerId != null) return;
+    // Палец взял колесо — недоигранный довод больше не наш.
+    _spinTarget = null;
+    _commitOnSettle = false;
+    _spin.stop();
     _pointerId = event.pointer;
     _lastLocal = event.localPosition;
     final v = event.localPosition - Offset(_side / 2, _side / 2);
@@ -282,6 +336,8 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _lastAngle = math.atan2(v.dy, v.dx);
     _dragging = true;
     _dragStartPos = _pos;
+    _velocity = 0;
+    _lastMoveStamp = event.timeStamp;
     _hapticIndex = _index;
     _spin.stop();
     _spinToken++;
@@ -320,6 +376,15 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _lastLocal = local;
     _lastRadius = radius;
     _lastAngle = math.atan2(v.dy, v.dx);
+    // Скорость руки в каморах в секунду: из неё пружина берёт разгон на
+    // доводе. Сглаживаем, иначе один дребезжащий кадр задаёт всему доводу
+    // чужое направление. Старшие 35 % веса оставляем прошлому замеру.
+    final dt = (event.timeStamp - _lastMoveStamp).inMicroseconds / 1e6;
+    _lastMoveStamp = event.timeStamp;
+    if (dt > 0.004 && dt < 0.25) {
+      final inst = -delta / dt;
+      _velocity = (_velocity * 0.35 + inst * 0.65).clamp(-9.0, 9.0);
+    }
     if (delta == 0) return;
     setState(() {
       _pos -= delta;
@@ -342,6 +407,12 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// «останавливается и начинает крутиться в другую сторону».
   void _settleFromDrag() {
     final moved = _pos - _dragStartPos;
+    // Короткий, но резкий флик: палец почти не сдвинул колесо, зато толкнул
+    // его — доводим на камору в сторону толчка, как в настоящем барабане.
+    if (moved.abs() < 0.35 && _velocity.abs() > 1.1) {
+      _settleTo(_pos.roundToDouble() + _velocity.sign);
+      return;
+    }
     if (moved.abs() < 0.08) {
       // Ничего осмысленного не протянули — мягко встаём на ближайшую.
       _settleTo(_pos.roundToDouble());

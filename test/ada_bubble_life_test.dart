@@ -282,4 +282,26 @@ void main() {
     expect(src, contains('if (moved > _tapSlop) _rememberSettledPosition();'));
     expect(src, contains('_press.reverse();\n    _rememberSettledPosition();'));
   });
+
+  test('полный чат снимает режим пузыря ещё до открытия', () {
+    final src = read('lib/widgets/ai_guide.dart');
+    final start = src.indexOf('Future<void> showAiGuideChat(');
+    expect(start, greaterThan(-1), reason: 'не нашёл showAiGuideChat');
+    final reset = src.indexOf('aiFloating.value = false;', start);
+    final sheet = src.indexOf('showModalBottomSheet<void>(', start);
+    expect(reset, greaterThan(start), reason: 'режим пузыря не снимается');
+    expect(
+      reset,
+      lessThan(sheet),
+      reason:
+          'сброс обязан идти ДО открытия листа: иначе после возврата из '
+          'пузыря первый тап по «режим в пузыре» только снимал старую '
+          'метку и выглядел как неработающий',
+    );
+    expect(
+      src.contains("globalPrefs.setBool('ai_floating', false);"),
+      isTrue,
+      reason: 'после перезапуска режим пузыря тоже не должен включаться сам',
+    );
+  });
 }

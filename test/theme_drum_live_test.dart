@@ -69,6 +69,11 @@ void main() {
     final settle = body(src, 'void _settleTo(', 'void _onPointerDown(');
     expect(
       settle,
+      contains('_springTo('),
+      reason: 'довод обязан идти через пружину, а не через таймлайн кривой',
+    );
+    expect(
+      body(src, 'void _onSpringSettled(', 'void _glideTo('),
       contains('widget.onCommit(widget.entries[_index])'),
       reason: 'после остановки тема обязана примениться',
     );
@@ -110,6 +115,46 @@ void main() {
       src,
       contains('const Duration(milliseconds: 380)'),
       reason: 'на остановке значок должен проявиться двухфазным затуханием',
+    );
+  });
+
+  test('довод барабана — пружина и подхватывает скорость руки', () {
+    final src = read('lib/screens/settings_theme_carousel.dart');
+    expect(
+      src,
+      contains('AnimationController.unbounded('),
+      reason:
+          'на таймлайне с фиксированной длительностью барабан не может '
+          'подхватить скорость пальца и довод читается тормозным',
+    );
+    expect(
+      body(src, 'void _springTo(', 'void _onSpringSettled('),
+      contains('SpringSimulation('),
+      reason: 'довод должен считать пружину, а не проигрывать кривую',
+    );
+    expect(
+      body(src, 'void _settleTo(', 'void _onPointerDown('),
+      contains('velocity: _velocity'),
+      reason: 'скорость руки обязана уходить в пружину, иначе флик «гаснет»',
+    );
+    expect(
+      body(src, 'void _onPointerMove(', 'void _onPointerUp('),
+      contains('_velocity = (_velocity * 0.35 + inst * 0.65)'),
+      reason:
+          'скорость нужно сглаживать, иначе один кадр дребезга '
+          'разворачивает весь довод',
+    );
+    expect(
+      body(src, 'void _settleFromDrag()', 'void _tapChamber('),
+      contains('_velocity.abs() > 1.1'),
+      reason: 'короткий резкий флик обязан докручивать барабан на камору',
+    );
+    expect(
+      body(src, 'void _glideTo(', 'int _indexOfKey('),
+      contains('commit: false'),
+      reason:
+          'программный доезд к внешне выбранной теме не должен её '
+          'заново применять',
     );
   });
 

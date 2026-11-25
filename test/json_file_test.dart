@@ -255,4 +255,29 @@ void main() {
     );
     expect(await JsonFile.read('profile'), current);
   });
+
+  test('«поверх» перезаписывает без слияния — стёртое не воскресает', () async {
+    await JsonFile.writeReplacing('ai_chat_history', '["старое","ещё"]');
+    expect(await JsonFile.read('ai_chat_history'), '["старое","ещё"]');
+
+    // Второй движок успел дописать своё уже после того, как мы прочитали
+    // копию. Обычная запись слила бы списки и вернула бы стёртое.
+    await JsonFile.write('ai_chat_history', '["старое","ещё","из пузыря"]');
+    await JsonFile.writeReplacing('ai_chat_history', '[]');
+
+    expect(
+      await JsonFile.read('ai_chat_history'),
+      '[]',
+      reason: 'очистка чата обязана остаться очисткой, а не слиянием',
+    );
+  });
+
+  test('«поверх» не принимает битый JSON и не трогает файл', () async {
+    await JsonFile.writeReplacing('ai_chat_history', '["живое"]');
+    expect(
+      () => JsonFile.writeReplacing('ai_chat_history', '{битый'),
+      throwsA(isA<JsonFileException>()),
+    );
+    expect(await JsonFile.read('ai_chat_history'), '["живое"]');
+  });
 }

@@ -281,6 +281,14 @@ Future<void> showAiGuideChat(BuildContext context) {
   }
   _activeChats++;
   _chatBusy = true;
+  // Чат открыт на весь экран — пузыря больше нет. Без сброса после
+  // возврата из пузыря кнопка «режим в пузыре» оставалась в активном
+  // состоянии, и первый тап по ней только снимал старую метку: со стороны
+  // это выглядело как «первый тап не работает».
+  if (aiFloating.value) {
+    aiFloating.value = false;
+    globalPrefs.setBool('ai_floating', false);
+  }
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -1566,7 +1574,12 @@ class _AiChatBodyState extends State<_AiChatBody>
     // из соседнего тика успевал прочитать СТАРЫЙ файл и возвращал ленту.
     _historyEpoch++;
     AiGuideService.markChatCleared();
-    _clearCtrl.forward(from: 0).then((_) {
+    _clearCtrl.forward(from: 0).then((_) async {
+      if (!mounted) return;
+      // Метку очистки фиксируем ДО записи пустого файла: второй движок,
+      // который пишет историю параллельно, обязан её увидеть, иначе он
+      // вернул бы стёртые сообщения в ленту.
+      await AiGuideService.markChatCleared();
       if (!mounted) return;
       setState(() {
         _messages.clear();
@@ -1576,7 +1589,8 @@ class _AiChatBodyState extends State<_AiChatBody>
       _historyCache = <AiMessage>[];
       _freshTs.clear();
       _dotsCtrl.stop();
-      _clearHistory();
+      await _clearHistory();
+      if (!mounted) return;
       _clearCtrl.reset();
     });
   }

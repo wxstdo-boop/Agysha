@@ -463,6 +463,14 @@ class _HomeScreenState extends State<HomeScreen>
     // Если пружина ещё ведёт доводку карусели, не мешаем ей и не перезаписываем
     // состояние преждевременно: _onSpringSettled выполнит фиксацию точно в момент покоя.
     if (_pageSpring.isRunning || _dragSpring.isRunning) return false;
+    // Пружины уже стоят, а цель тапа всё ещё висит — значит, доводка
+    // закончилась без сигнала (карусель отцеплялась на ходу). Снимаем
+    // застрявшую цель здесь: иначе промежуточные страницы навсегда
+    // перестают обновлять подсветку раздела.
+    if (_tapTarget != null) {
+      _onSpringSettled();
+      return false;
+    }
     if (_pageController.hasClients &&
         _pageController.position.hasContentDimensions) {
       final page = _pageController.page;
@@ -492,6 +500,12 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _onTabTap(int index) {
+    if (!_pageController.hasClients) {
+      // Карусель ещё не отрисована: цель тапа держать некому, и она
+      // застряла бы навсегда, перекрывая подсветку следующих тапов.
+      _tapTarget = null;
+      return;
+    }
     final fromPage = _pageController.hasClients
         ? (_pageController.page ?? _currentIndex.value.toDouble())
         : _currentIndex.value.toDouble();

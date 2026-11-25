@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';

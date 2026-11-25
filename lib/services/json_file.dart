@@ -357,6 +357,31 @@ class JsonFile {
     }
   }
 
+  /// Запись «поверх» — без слияния с тем, что уже лежит на диске.
+  ///
+  /// Нужна только для осознанных удалений (например, «Очистить чат»).
+  /// Обычная запись сливает копии двух движков, а для удаления это неверно:
+  /// недостающий в локальной копии элемент считается удалением, и при
+  /// одновременной записи из второго движка слияние либо возвращало
+  /// стёртые сообщения, либо падало конфликтом — старый файл оставался на
+  /// диске, и чат после очистки «восстанавливался» сам.
+  static Future<String> writeReplacing(String key, String value) async {
+    try {
+      jsonDecode(value);
+    } catch (error) {
+      throw JsonFileException(
+        'Refusing to store invalid JSON for "$key"',
+        error,
+      );
+    }
+    return _withKeyLock(key, () async {
+      final current = await _readPlainLocked(key);
+      if (current != value) await _persistPlainLocked(key, value);
+      _observed[key] = value;
+      return value;
+    });
+  }
+
   static Future<String> _write(
     String key,
     String value, {

@@ -327,6 +327,26 @@ class _SectionPillState extends State<SectionPill>
         });
   }
 
+  /// Тап по подписи приходит в момент, когда жестовая арена могла уронить
+  /// тягу «на полпути» (быстрые тапы, отпускание над подписью): тогда камень
+  /// оставался растянутым, а [sectionDragPage] — висеть ненулевой, и Home
+  /// держал карусель «под пальцем». Внешне это и есть «фон заелся навсегда,
+  /// таблетки перестали работать». Тап — всегда точка «всё в покое».
+  void _settleForTap() {
+    if (!_dragging && sectionDragPage.value != null) {
+      sectionDragPage.value = null;
+    }
+    _edgePull = 0;
+    _releasePull = 0;
+    _lastWave = 0;
+    if (_edgePullNotifier.value != 0) _edgePullNotifier.value = 0;
+    if (_edgeSettle.value != 0) {
+      _edgeSettle
+        ..stop()
+        ..value = 0;
+    }
+  }
+
   @override
   void dispose() {
     RealityCheckService().removeListener(_onRcChanged);
@@ -737,6 +757,7 @@ class _SectionPillState extends State<SectionPill>
                             onTap: () {
                               if (!mounted) return;
                               Haptics.select();
+                              _settleForTap();
                               sectionCurrentIndex.value = i;
                               sectionTabTap.value++;
                             },

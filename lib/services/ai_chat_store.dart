@@ -108,8 +108,9 @@ class AiChatStore {
   /// [persist]: там пустой локальный список объединился бы с диском и
   /// вернул удалённое.
   static Future<void> clear() async {
-    final raw = await JsonFile.read(key);
-    await JsonFile.writeWithSnapshotRetrying(key, '[]', raw);
+    // Именно поверх, без слияния: иначе второй движок (пузырь, оверлей),
+    // писавший историю параллельно, возвращал стёртые сообщения.
+    await JsonFile.writeReplacing(key, '[]');
     final next = DateTime.now().millisecondsSinceEpoch;
     tick.value = next;
     await writeAdaSyncState(historyRev: next);
