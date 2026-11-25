@@ -28,9 +28,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const schedulerChannel = MethodChannel('com.wetcorp.agysha/alarm_scheduler');
-  const fullscreenChannel = MethodChannel(
-    'com.wetcorp.agysha/fullscreen',
-  );
+  const fullscreenChannel = MethodChannel('com.wetcorp.agysha/fullscreen');
   // Канал самого плагина уведомлений. В юнит-тестах плагин не
   // регистрируется (нет настоящего Android), а его платформа объявлена
   // `late` — без подстановки любое обращение к ней падает с
@@ -126,6 +124,19 @@ void main() {
 
   bool isAndroid() => defaultTargetPlatform == TargetPlatform.android;
 
+  test(
+    'баннер об обновлении не «удаётся», когда уведомления выключены',
+    () async {
+      // По этому признаку фоновая проверка решает, помечать ли выпуск как
+      // сообщённый. Если бы здесь возвращался true, единственный запуск с
+      // выключенными уведомлениями съедал бы новость о выпуске навсегда.
+      final service = NotificationService();
+      await service.setEnabled(false, requestPermission: false);
+      expect(await service.showUpdateAvailable('9.9.9+99999'), isFalse);
+      await service.setEnabled(true, requestPermission: false);
+    },
+  );
+
   Alarm makeAlarm({
     int hour = 7,
     int minute = 30,
@@ -183,11 +194,9 @@ void main() {
       isTrue,
       reason: 'отмена будильника должна глушить нативный звонок',
     );
-    expect(
-      stop.first.arguments,
-      {'id': 'alarm-test-1'.hashCode},
-      reason: 'глушится звонок именно этого будильника',
-    );
+    expect(stop.first.arguments, {
+      'id': 'alarm-test-1'.hashCode,
+    }, reason: 'глушится звонок именно этого будильника');
   });
 
   test('сбой нативного канала не пробрасывается наружу', () async {
@@ -287,36 +296,41 @@ void main() {
     );
   });
 
-  test('одноразовый будильник в запасном пути не повторяется ежедневно', () async {
-    // Нативный AlarmManager недоступен → идём запасным путём плагина
-    // (zonedSchedule). Именно здесь одноразовый будильник раньше получал
-    // повтор «каждый день» и превращался в ежедневный.
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(schedulerChannel, (call) async {
-          nativeCalls.add(call);
-          switch (call.method) {
-            case 'isAlarmClockApiAvailable':
-              return false;
-            case 'canScheduleExactAlarms':
-            case 'isIgnoringBatteryOptimizations':
-              return true;
-            case 'nextAlarmTime':
-              return 0;
-            default:
-              return true;
-          }
-        });
+  test(
+    'одноразовый будильник в запасном пути не повторяется ежедневно',
+    () async {
+      // Нативный AlarmManager недоступен → идём запасным путём плагина
+      // (zonedSchedule). Именно здесь одноразовый будильник раньше получал
+      // повтор «каждый день» и превращался в ежедневный.
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(schedulerChannel, (call) async {
+            nativeCalls.add(call);
+            switch (call.method) {
+              case 'isAlarmClockApiAvailable':
+                return false;
+              case 'canScheduleExactAlarms':
+              case 'isIgnoringBatteryOptimizations':
+                return true;
+              case 'nextAlarmTime':
+                return 0;
+              default:
+                return true;
+            }
+          });
 
-    final service = NotificationService();
-    await service.scheduleAlarm(makeAlarm(repeatDays: const []));
+      final service = NotificationService();
+      await service.scheduleAlarm(makeAlarm(repeatDays: const []));
 
-    if (!isAndroid()) return;
-    final zoned = pluginCalls.where((c) => c.method == 'zonedSchedule').toList();
-    expect(zoned, isNotEmpty, reason: 'Запасной путь не сработал');
-    final args = Map<Object?, Object?>.from(zoned.first.arguments as Map);
-    // Ключа повтора нет вовсе — будильник сработает ровно один раз.
-    expect(args.containsKey('matchDateTimeComponents'), isFalse);
-  });
+      if (!isAndroid()) return;
+      final zoned = pluginCalls
+          .where((c) => c.method == 'zonedSchedule')
+          .toList();
+      expect(zoned, isNotEmpty, reason: 'Запасной путь не сработал');
+      final args = Map<Object?, Object?>.from(zoned.first.arguments as Map);
+      // Ключа повтора нет вовсе — будильник сработает ровно один раз.
+      expect(args.containsKey('matchDateTimeComponents'), isFalse);
+    },
+  );
 
   test('повторяющийся будильник в запасном пути повторяется по дням', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -339,7 +353,9 @@ void main() {
     await service.scheduleAlarm(makeAlarm(repeatDays: const [1, 2, 3, 4, 5]));
 
     if (!isAndroid()) return;
-    final zoned = pluginCalls.where((c) => c.method == 'zonedSchedule').toList();
+    final zoned = pluginCalls
+        .where((c) => c.method == 'zonedSchedule')
+        .toList();
     expect(zoned, isNotEmpty, reason: 'Запасной путь не сработал');
     final args = Map<Object?, Object?>.from(zoned.first.arguments as Map);
     // dayOfWeekAndTime — повтор по конкретным дням недели.

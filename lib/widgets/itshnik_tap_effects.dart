@@ -6,16 +6,19 @@ import 'package:flutter/scheduler.dart';
 
 import '../theme/itshnik_theme.dart';
 import '../utils/motion_prefs.dart';
-import 'itshnik_mita.dart';
 
-/// Эффекты нажатий темы «IT-шник»: в точке тапа вспыхивает круглая волна,
-/// выпрыгивает маленькая чиби-Мита и разлетаются пиксели.
+/// Эффекты нажатий темы «IT-шник»: в точке тапа вспыхивает волна, вокруг
+/// разлетаются пиксели, расходятся HUD-скобки, проскакивает глитч-линия и
+/// на миг появляется пиксельная звезда.
 ///
 /// Слой ничего не перехватывает: [Listener] с translucent получает событие
 /// и пропускает его дальше по дереву, а весь рисунок лежит в
 /// [IgnorePointer]. Один тикер на всё приложение, частицы живут 0.9 с.
 class ItshnikTapEffects extends StatefulWidget {
-  const ItshnikTapEffects({super.key});
+  const ItshnikTapEffects({super.key, this.variant = ItshnikVariant.phosphor});
+
+  /// Вариант палитры: эффект красится в акценты выбранного вида.
+  final ItshnikVariant variant;
 
   @override
   State<ItshnikTapEffects> createState() => _ItshnikTapEffectsState();
@@ -59,20 +62,10 @@ class _ItshnikTapEffectsState extends State<ItshnikTapEffects>
         pos: event.localPosition,
         born: _seconds,
         seed: _rng.nextInt(1 << 30),
-        mood: _moodFor(),
       ),
     );
     if (_bursts.length > _maxBursts) _bursts.removeAt(0);
     if (!_ticker.isActive) _ticker.start();
-  }
-
-  MitaMood _moodFor() {
-    // Подмигивание и «безумная» — редко, чтобы не приедались.
-    final roll = _rng.nextInt(10);
-    if (roll == 0) return MitaMood.crazy;
-    if (roll < 3) return MitaMood.wink;
-    if (roll == 7) return MitaMood.glitch;
-    return MitaMood.happy;
   }
 
   @override
@@ -94,7 +87,11 @@ class _ItshnikTapEffectsState extends State<ItshnikTapEffects>
         child: IgnorePointer(
           child: RepaintBoundary(
             child: CustomPaint(
-              painter: _ItshnikTapPainter(bursts: _bursts, now: _now),
+              painter: _ItshnikTapPainter(
+                bursts: _bursts,
+                now: _now,
+                variant: widget.variant,
+              ),
             ),
           ),
         ),
@@ -107,24 +104,24 @@ class _Burst {
   final Offset pos;
   final double born;
   final int seed;
-  final MitaMood mood;
 
-  const _Burst({
-    required this.pos,
-    required this.born,
-    required this.seed,
-    required this.mood,
-  });
+  const _Burst({required this.pos, required this.born, required this.seed});
 }
 
 class _ItshnikTapPainter extends CustomPainter {
   final List<_Burst> bursts;
   final ValueListenable<double> now;
+  final ItshnikVariant variant;
 
-  _ItshnikTapPainter({required this.bursts, required this.now})
-    : super(repaint: now);
+  _ItshnikTapPainter({
+    required this.bursts,
+    required this.now,
+    this.variant = ItshnikVariant.phosphor,
+  }) : super(repaint: now);
 
   static const double _life = 0.9;
+
+  ItshnikSkin get skin => ItshnikSkin.of(variant);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -134,8 +131,10 @@ class _ItshnikTapPainter extends CustomPainter {
       if (age < 0 || age > _life) continue;
       final p = (age / _life).clamp(0.0, 1.0);
       _paintRing(canvas, b, p);
+      _paintBrackets(canvas, b, p);
       _paintSparkles(canvas, b, p);
-      _paintMita(canvas, b, p);
+      _paintGlitch(canvas, b, p);
+      _paintStar(canvas, b, p);
     }
   }
 
@@ -145,7 +144,7 @@ class _ItshnikTapPainter extends CustomPainter {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5 + 2.5 * (1 - p)
-      ..color = ItshnikPalette.phosphor.withValues(alpha: 0.45 * fade);
+      ..color = skin.accent.withValues(alpha: 0.45 * fade);
     canvas.drawCircle(b.pos, radius, paint);
     canvas.drawCircle(
       b.pos,
@@ -153,7 +152,7 @@ class _ItshnikTapPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0
-        ..color = ItshnikPalette.pink.withValues(alpha: 0.3 * fade),
+        ..color = skin.accentAlt.withValues(alpha: 0.3 * fade),
     );
   }
 
@@ -161,14 +160,14 @@ class _ItshnikTapPainter extends CustomPainter {
     final rng = math.Random(b.seed);
     final distance = 18 + 34 * Curves.easeOut.transform(p);
     final fade = (1 - p).clamp(0.0, 1.0);
-    for (var i = 0; i < 6; i++) {
+    for (var i = 0; i < 10; i++) {
       final angle = rng.nextDouble() * math.pi * 2;
       final offset = distance * (0.55 + rng.nextDouble() * 0.75);
       final point = b.pos + Offset(math.cos(angle), math.sin(angle)) * offset;
       final side = 2.0 + rng.nextDouble() * 2.6;
       final color = rng.nextBool()
-          ? ItshnikPalette.pink.withValues(alpha: 0.8 * fade)
-          : ItshnikPalette.phosphor.withValues(alpha: 0.7 * fade);
+          ? skin.accentAlt.withValues(alpha: 0.8 * fade)
+          : skin.accent.withValues(alpha: 0.7 * fade);
       canvas.save();
       canvas.translate(point.dx, point.dy);
       canvas.rotate(angle + p * 2.4);
@@ -180,37 +179,75 @@ class _ItshnikTapPainter extends CustomPainter {
     }
     // Один «плюсик» — как крестик на пиксельном экране.
     final plus = Paint()
-      ..color = ItshnikPalette.phosphor.withValues(alpha: 0.5 * fade)
+      ..color = skin.accent.withValues(alpha: 0.5 * fade)
       ..strokeWidth = 1.2;
     final c = b.pos.translate(0, -26 * (1 - p));
     canvas.drawLine(c.translate(-4, 0), c.translate(4, 0), plus);
     canvas.drawLine(c.translate(0, -4), c.translate(0, 4), plus);
   }
 
-  void _paintMita(Canvas canvas, _Burst b, double p) {
-    // Появление с небольшим перелётом, затем подъём и растворение.
-    final pop = p < 0.28
-        ? Curves.easeOutBack.transform(p / 0.28)
-        : 1.0 - 0.12 * Curves.easeInOut.transform((p - 0.28) / 0.72);
-    final face = 30.0 + 20.0 * pop;
-    final lift = -14.0 * Curves.easeOutQuad.transform(p);
-    final fade = p < 0.72 ? 1.0 : (1 - (p - 0.72) / 0.28).clamp(0.0, 1.0);
-    canvas.save();
-    canvas.translate(b.pos.dx, b.pos.dy - 20 + lift);
-    canvas.rotate(math.sin(p * math.pi * 2 + b.seed) * 0.06);
-    final glow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          ItshnikPalette.pink.withValues(alpha: 0.35 * fade),
-          ItshnikPalette.pink.withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromCircle(center: Offset.zero, radius: face * 0.85));
-    canvas.drawCircle(Offset.zero, face * 0.8, glow);
-    // paintMitaFace рисует квадрат 100×100 от левого верхнего угла, поэтому
-    // сдвигаем на полразмера — лицо должно быть по центру вспышки.
-    canvas.translate(-face / 2, -face / 2);
-    paintMitaFace(canvas, Size(face, face), mood: b.mood, opacity: fade);
-    canvas.restore();
+  /// HUD-скобки по четырём углам: расходятся от точки тапа и тают.
+  void _paintBrackets(Canvas canvas, _Burst b, double p) {
+    final grow = Curves.easeOutCubic.transform(p);
+    final half = 14 + 26 * grow;
+    final arm = 7 * (1 - 0.5 * grow);
+    final fade = (1 - p) * (1 - p);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.square
+      ..color = skin.accent.withValues(alpha: 0.55 * fade);
+    for (final sx in const [-1.0, 1.0]) {
+      for (final sy in const [-1.0, 1.0]) {
+        final corner = b.pos.translate(sx * half, sy * half);
+        canvas.drawLine(corner, corner.translate(-sx * arm, 0), paint);
+        canvas.drawLine(corner, corner.translate(0, -sy * arm), paint);
+      }
+    }
+  }
+
+  /// Глитч-линия: тонкая полоса проскакивает от точки вбок и гаснет —
+  /// тот же «сбой синхронизации», что у фона, но короткий и локальный.
+  void _paintGlitch(Canvas canvas, _Burst b, double p) {
+    if (p > 0.5) return;
+    final rng = math.Random(b.seed);
+    final fade = 1 - p / 0.5;
+    final dir = rng.nextBool() ? 1.0 : -1.0;
+    final length = 40 + 70 * Curves.easeOut.transform(p);
+    final paint = Paint()
+      ..strokeWidth = 1.4
+      ..color = skin.accentAlt.withValues(alpha: 0.5 * fade);
+    final y = b.pos.dy + (rng.nextDouble() - 0.5) * 12;
+    canvas.drawLine(
+      Offset(b.pos.dx - dir * length * 0.35, y),
+      Offset(b.pos.dx + dir * length, y),
+      paint,
+    );
+  }
+
+  /// Пиксельная звезда в точке тапа: быстро вспыхивает и сжимается.
+  void _paintStar(Canvas canvas, _Burst b, double p) {
+    final grow = Curves.easeOutBack.transform((p / 0.45).clamp(0.0, 1.0));
+    final fade = (1 - p / 0.6).clamp(0.0, 1.0);
+    if (fade <= 0) return;
+    final reach = 6 + 12 * grow;
+    final paint = Paint()
+      ..color = skin.snow.withValues(alpha: 0.75 * fade)
+      ..strokeWidth = 2;
+    canvas.drawLine(
+      b.pos.translate(-reach, 0),
+      b.pos.translate(reach, 0),
+      paint,
+    );
+    canvas.drawLine(
+      b.pos.translate(0, -reach),
+      b.pos.translate(0, reach),
+      paint,
+    );
+    canvas.drawRect(
+      Rect.fromCenter(center: b.pos, width: 3 * (1 - p), height: 3 * (1 - p)),
+      Paint()..color = skin.accent.withValues(alpha: 0.9 * fade),
+    );
   }
 
   @override

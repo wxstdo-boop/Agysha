@@ -15,14 +15,23 @@ import 'update_service.dart';
 /// релиз с установленной версией и кладёт баннер в шторку — без запуска UI.
 const String kBackgroundUpdateTask = 'agysha.update_check';
 
-/// Уникальное имя периодической задачи. Повторная регистрация с `keep`
-/// не плодит дубликаты.
+/// Уникальное имя периодической задачи. Регистрируется с политикой `update`:
+/// повторная регистрация переписывает расписание, а не оставляет старую
+/// частоту навсегда.
 const String kBackgroundUpdateUniqueName = 'agysha.update_check.periodic';
 
-/// Как часто Android проверяет релизы. Минимум WorkManager — 15 минут, но
-/// GitHub без токена отдаёт 60 запросов в час на IP, поэтому 6 часов:
-/// достаточно, чтобы узнать о выпуске в тот же день, и не упираться в лимит.
-const Duration kBackgroundUpdateInterval = Duration(hours: 6);
+/// Разовый «догоняющий» прогон после запуска приложения: периодическая задача
+/// может ждать ещё час, а новость о выпуске нужна сразу.
+const String kBackgroundUpdateCatchUpName = 'agysha.update_check.catch_up';
+
+/// Как часто Android проверяет релизы. Минимум WorkManager — 15 минут;
+/// час — компромисс: новость о выпуске приходит в тот же час, а анонимный
+/// лимит GitHub (60 запросов в час на IP) не выбирается одной установкой.
+const Duration kBackgroundUpdateInterval = Duration(hours: 1);
+
+/// Задержка разового прогона: приложению нужно успеть сохранить версию и ABI
+/// в prefs, иначе проверке нечем сравнивать.
+const Duration kBackgroundUpdateCatchUpDelay = Duration(minutes: 10);
 
 /// Ключи, которые основной изолят кладёт в prefs для фонового работника:
 /// в фоне нет доступа к нативному каналу `appInfo`, поэтому версия и ABI
@@ -47,13 +56,7 @@ void backgroundUpdateDispatcher() {
     try {
       DartPluginRegistrant.ensureInitialized();
       await initPrefs();
-      final info = await findBackgroundUpdate();
-      if (info == null) return true;
-      if (globalPrefs.getString(kNotifiedVersionKey) == info.versionName) {
-        return true;
-      }
-      await NotificationService().showUpdateAvailable(info.versionName);
-      await globalPrefs.setString(kNotifiedVersionKey, info.versionName);
+      await runBackgroundUpdateCheck();
     } catch (error, stack) {
       // Фоновая задача не должна падать: WorkManager считает провал поводом
       // для повторов и в конце концов снимает задачу с расписания.
@@ -63,14 +66,39 @@ void backgroundUpdateDispatcher() {
   });
 }
 
+/// Один прогон проверки: сравнить релиз с установленной версией и, если
+/// выпуск новее, поставить баннер в шторку.
+///
+/// Возвращает `true`, если баннер действительно поставлен. Отметку «уже
+/// сообщили» пишем ТОЛЬКО тогда: при запрещённых уведомлениях или сбое
+/// плагина выпуск остаётся неотмеченным и дойдёт в следующий раз.
+@visibleForTesting
+Future<bool> runBackgroundUpdateCheck() async {
+  final info = await findBackgroundUpdate();
+  if (info == null) return false;
+  if (globalPrefs.getString(kNotifiedVersionKey) == info.versionName) {
+    return false;
+  }
+  final shown = await NotificationService().showUpdateAvailable(
+    info.versionName,
+  );
+  if (shown) {
+    await globalPrefs.setString(kNotifiedVersionKey, info.versionName);
+  }
+  return shown;
+}
+
 /// Сверяет последний релиз GitHub с версией, сохранённой при запуске.
 /// Возвращает null, если обновления нет или данных для сравнения не хватает.
 @visibleForTesting
 Future<UpdateInfo?> findBackgroundUpdate() async {
   final code = globalPrefs.getInt(kAppVersionCodeKey);
   final name = globalPrefs.getString(kAppVersionNameKey);
-  final abi = globalPrefs.getString(kAppAbiKey);
-  if (code == null || name == null || abi == null) return null;
+  // ABI не обязателен: без него `check` возьмёт первый APK релиза, а для
+  // баннера в шторку важно только «версия новее». Требовать ABI значило бы
+  // молча никогда не уведомлять, если он не сохранился.
+  final abi = globalPrefs.getString(kAppAbiKey) ?? '';
+  if (code == null || name == null) return null;
   return UpdateService.instance.check(
     abi: abi,
     currentVersionCode: code,
@@ -108,7 +136,19 @@ Future<void> registerBackgroundUpdateCheck() async {
       kBackgroundUpdateTask,
       frequency: kBackgroundUpdateInterval,
       constraints: Constraints(networkType: NetworkType.connected),
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+      // `update`, а не `keep`: при `keep` уже стоящая задача навсегда
+      // сохраняет старую частоту, и смена интервала не доезжает до тех, кто
+      // обновился с прежней версии.
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
+    );
+    await Workmanager().registerOneOffTask(
+      kBackgroundUpdateCatchUpName,
+      kBackgroundUpdateTask,
+      initialDelay: kBackgroundUpdateCatchUpDelay,
+      constraints: Constraints(networkType: NetworkType.connected),
+      // Каждый запуск переставляет догоняющую проверку на «сейчас + 10 мин»:
+      // она не копится и не висит с прошлой недели.
+      existingWorkPolicy: ExistingWorkPolicy.replace,
     );
   } catch (error) {
     debugPrint('background update registration failed: $error');

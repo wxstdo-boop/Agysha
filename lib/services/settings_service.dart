@@ -136,6 +136,84 @@ class SettingsService {
     return _themeWrites;
   }
 
+  static const _keyItshnikVariant = 'itshnik_variant';
+  static const _keyItshnikFont = 'itshnik_font';
+  static const _keyItshnikWallpaper = 'itshnik_wallpaper';
+  static const _keyItshnikWallpaperVideo = 'itshnik_wallpaper_is_video';
+
+  /// Вариант «IT-шника»: 'phosphor' | 'magenta' | 'frost' | 'new_year'.
+  static Future<String> loadItshnikVariant() async {
+    final map = await _loadSettings();
+    final value =
+        map[_keyItshnikVariant] as String? ??
+        globalPrefs.getString(_keyItshnikVariant);
+    switch (value) {
+      case 'magenta':
+      case 'frost':
+      case 'new_year':
+        return value!;
+      default:
+        return 'phosphor';
+    }
+  }
+
+  static Future<void> saveItshnikVariant(String key) async {
+    final map = await _loadSettings();
+    map[_keyItshnikVariant] = key;
+    await _saveSettings(map);
+  }
+
+  /// Шрифт «IT-шника»: 'pixel' | 'digits' | 'dash'.
+  static Future<String> loadItshnikFont() async {
+    final map = await _loadSettings();
+    final value =
+        map[_keyItshnikFont] as String? ??
+        globalPrefs.getString(_keyItshnikFont);
+    switch (value) {
+      case 'digits':
+      case 'dash':
+        return value!;
+      default:
+        return 'pixel';
+    }
+  }
+
+  static Future<void> saveItshnikFont(String key) async {
+    final map = await _loadSettings();
+    map[_keyItshnikFont] = key;
+    await _saveSettings(map);
+  }
+
+  /// Обои «IT-шника»: путь к скопированному файлу и признак видео.
+  static Future<({String path, bool isVideo})?> loadItshnikWallpaper() async {
+    final map = await _loadSettings();
+    final path =
+        map[_keyItshnikWallpaper] as String? ??
+        globalPrefs.getString(_keyItshnikWallpaper);
+    if (path == null || path.isEmpty) return null;
+    final video =
+        map[_keyItshnikWallpaperVideo] as bool? ??
+        globalPrefs.getBool(_keyItshnikWallpaperVideo) ??
+        false;
+    return (path: path, isVideo: video);
+  }
+
+  /// `null` очищает обои — фон снова рисуется процедурно.
+  static Future<void> saveItshnikWallpaper(
+    String? path, {
+    bool isVideo = false,
+  }) async {
+    final map = await _loadSettings();
+    if (path == null || path.isEmpty) {
+      map.remove(_keyItshnikWallpaper);
+      map.remove(_keyItshnikWallpaperVideo);
+    } else {
+      map[_keyItshnikWallpaper] = path;
+      map[_keyItshnikWallpaperVideo] = isVideo;
+    }
+    await _saveSettings(map);
+  }
+
   static Future<String> loadFontFamily() async {
     final map = await _loadSettings();
     final value =

@@ -214,7 +214,7 @@ class PremiumEmptyState extends StatelessWidget {
 
 /// Единая обёртка пустого состояния раздела — привычки, задачи, будильники
 /// используют именно её, поэтому карточка во всех трёх стоит в одном и том
-/// же месте: тот же слот под таблетку разделов, тот же отступ до карточки.
+/// же месте: по центру свободной области под слотом таблетки разделов.
 /// Скролл нужен для pull-to-refresh и для низких экранов, где карточка выше
 /// свободного места.
 class SectionEmptyState extends StatelessWidget {
@@ -224,11 +224,23 @@ class SectionEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      key: const ValueKey('empty_state'),
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(top: kSectionPillSlotHeight + 8),
-      child: child,
+    // Верхний отступ — слот под таблетку разделов, чтобы карточка не уезжала
+    // под неё. Остаток высоты отдаём Center: пустой раздел должен стоять
+    // посередине экрана, а не прилипать к верхнему краю.
+    const top = kSectionPillSlotHeight + 8;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final free = constraints.maxHeight - top;
+        return SingleChildScrollView(
+          key: const ValueKey('empty_state'),
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(top: top),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: free > 0 ? free : 0),
+            child: Center(child: child),
+          ),
+        );
+      },
     );
   }
 }

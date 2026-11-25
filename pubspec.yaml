@@ -65,6 +65,8 @@ dependencies:
     path: third_party/flutter_keyboard_visibility
   http: ^1.2.0
   workmanager: ^0.10.10
+  # Обои «IT-шника»: свой кадр из галереи/камеры и видео-обои.
+  video_player: ^2.9.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -105,3 +107,11 @@ flutter:
     - family: ItsDigits
       fonts:
         - asset: assets/fonts/Handjet.ttf
+    # Третий шрифт «IT-шника» (Roboto с широким тире): нужен, когда текст
+    # темы не пиксельный, а «штриховой».
+    - family: ItsDash
+      fonts:
+        - asset: assets/fonts/RobotoDash-400.ttf
+          weight: 400
+        - asset: assets/fonts/RobotoDash-700.ttf
+          weight: 700

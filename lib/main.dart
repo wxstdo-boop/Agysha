@@ -430,16 +430,25 @@ Future<void> _adoptBackgroundUpdate() async {
 /// обновятся сами. Всё, кроме регистрации, не критично — ошибку глотаем,
 /// чтобы запуск приложения не зависел от планировщика.
 Future<void> _prepareBackgroundUpdateCheck() async {
+  // Регистрацию задачи ставим независимо от того, прочиталась ли версия:
+  // без версии проверка промолчит, но расписание уже будет стоять и начнёт
+  // работать со следующего запуска. Раньше любой сбой чтения appInfo/ABI
+  // уносил с собой и саму регистрацию — тихо, до самого переустановления.
   try {
     final info = await Installer.appInfo();
-    if (info == null) return;
-    await globalPrefs.setInt(kAppVersionCodeKey, info.versionCode);
-    await globalPrefs.setString(kAppVersionNameKey, info.versionName);
-    await globalPrefs.setString(kAppAbiKey, await Installer.supportedAbi());
-    await registerBackgroundUpdateCheck();
+    if (info != null) {
+      await globalPrefs.setInt(kAppVersionCodeKey, info.versionCode);
+      await globalPrefs.setString(kAppVersionNameKey, info.versionName);
+    }
   } catch (error) {
-    debugPrint('background update setup failed: $error');
+    debugPrint('background update version cache failed: $error');
   }
+  try {
+    await globalPrefs.setString(kAppAbiKey, await Installer.supportedAbi());
+  } catch (error) {
+    debugPrint('background update abi cache failed: $error');
+  }
+  await registerBackgroundUpdateCheck();
 }
 
 /// Показывает итог, дожидаясь готовности дерева.
@@ -601,6 +610,10 @@ Future<void> _rescheduleRealityChecks() async {
 
 /// Перепланировка на старте: будильники/проверки + ежедневные отчёты Ады
 /// (утро 08:00, вечер 21:00) со свежим содержанием.
+/// Версия приложения, на которой уже спрашивали системное разрешение на
+/// уведомления: диалог показывается один раз на выпуск, а не каждый запуск.
+const String _notifAskVersionKey = 'notif_permission_asked_version';
+
 Future<void> _rescheduleAllOnStart() async {
   // После переустановки APK prefs живут (auto-backup), а ОС-разрешение на
   // уведомления — нет: _enabled сбрасывается в false и scheduleAlarm МОЛЧА
@@ -608,11 +621,34 @@ Future<void> _rescheduleAllOnStart() async {
   // Восстанавливаем по НАМЕРЕНИЮ пользователя (pref), а не по Ada-трекингу.
   final wantNotifs = globalPrefs.getBool('notifications_enabled') ?? true;
   if (wantNotifs && !notificationService.enabled) {
+    // Намерение пользователя («уведомления включены») есть, а ОС-разрешения
+    // нет — типично после переустановки APK: prefs приезжают из auto-backup,
+    // а POST_NOTIFICATIONS система сбрасывает. Раньше здесь включали флаг
+    // вслепую, приложение считало уведомления рабочими, и они молча не
+    // приходили. Теперь спрашиваем систему — один раз на версию приложения,
+    // чтобы диалог не всплывал при каждом запуске.
+    var osGranted = false;
     try {
-      // Восстанавливаем намерение пользователя БЕЗ системного диалога:
-      // запрос разрешения уведомлений показывается только по явному
-      // действию в настройках (кнопка «Выдать»), а не при каждом запуске.
-      await notificationService.setEnabled(true, requestPermission: false);
+      osGranted = await notificationService.areNotificationsEnabled();
+    } catch (_) {
+      osGranted = true;
+    }
+    if (!osGranted) {
+      final version = globalPrefs.getString(kAppVersionNameKey) ?? '';
+      final askedFor = globalPrefs.getString(_notifAskVersionKey);
+      if (version.isNotEmpty && askedFor != version) {
+        await globalPrefs.setString(_notifAskVersionKey, version);
+        try {
+          osGranted = await notificationService.ensureNotificationPermission();
+        } catch (_) {}
+      }
+    }
+    try {
+      // Флаг включаем только при реально выданном разрешении: иначе экран
+      // настроек честно покажет «разрешение не выдано» и кнопку «Выдать».
+      if (osGranted) {
+        await notificationService.setEnabled(true, requestPermission: false);
+      }
     } catch (_) {}
   }
   await rescheduleAllNotifications();
@@ -842,12 +878,22 @@ class _StartupState {
     required this.fontFamily,
     required this.launchedByNotification,
     required this.notificationPayload,
+    this.itshnikVariant = 'phosphor',
+    this.itshnikFont = 'pixel',
+    this.itshnikWallpaper,
+    this.itshnikWallpaperIsVideo = false,
   });
 
   final bool hasPin;
   final String theme;
   final String lang;
   final String fontFamily;
+
+  /// Вид эксклюзивной темы «IT-шник» — переживает перезапуск.
+  final String itshnikVariant;
+  final String itshnikFont;
+  final String? itshnikWallpaper;
+  final bool itshnikWallpaperIsVideo;
 
   /// Запуск тапом по уведомлению будильника — сам обработчик навешивается
   /// ПОСЛЕ runApp (там уже есть дерево виджетов), сюда кладём только факт.
@@ -964,6 +1010,9 @@ Future<_StartupState> _loadStartupState() async {
   final theme = SettingsService.loadThemeMode();
   final lang = SettingsService.loadLanguageCode();
   final fontFamily = SettingsService.loadFontFamily();
+  final itshnikVariant = SettingsService.loadItshnikVariant();
+  final itshnikFont = SettingsService.loadItshnikFont();
+  final itshnikWallpaper = SettingsService.loadItshnikWallpaper();
   // Прогреваем живые флаги режимов до первого Home-кадра:
   // кнопка BERSERK и карточки не ждут открытия настроек.
   // Вибрация, звуки и «Оптимизация» тоже читаются ДО первого кадра:
@@ -992,6 +1041,9 @@ Future<_StartupState> _loadStartupState() async {
       theme,
       lang,
       fontFamily,
+      itshnikVariant,
+      itshnikFont,
+      itshnikWallpaper,
       modes,
     ]),
     const Duration(seconds: 3),
@@ -1012,6 +1064,10 @@ Future<_StartupState> _loadStartupState() async {
     fontFamily: await fontFamily,
     launchedByNotification: details?.didNotificationLaunchApp == true,
     notificationPayload: details?.notificationResponse?.payload,
+    itshnikVariant: await itshnikVariant,
+    itshnikFont: await itshnikFont,
+    itshnikWallpaper: (await itshnikWallpaper)?.path,
+    itshnikWallpaperIsVideo: (await itshnikWallpaper)?.isVideo ?? false,
   );
 }
 
@@ -1100,6 +1156,10 @@ Future<void> _restoreStartupBackup(Map<String, dynamic> backup) async {
       initialTheme: startup.theme,
       initialLanguageCode: startup.lang,
       initialFontFamily: startup.fontFamily,
+      initialItshnikVariant: startup.itshnikVariant,
+      initialItshnikFont: startup.itshnikFont,
+      initialItshnikWallpaper: startup.itshnikWallpaper,
+      initialItshnikWallpaperIsVideo: startup.itshnikWallpaperIsVideo,
       alarmBootPayload: _alarmBootPayload,
     ),
   );
@@ -1488,6 +1548,10 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
       initialTheme: ready.theme,
       initialLanguageCode: ready.lang,
       initialFontFamily: ready.fontFamily,
+      initialItshnikVariant: ready.itshnikVariant,
+      initialItshnikFont: ready.itshnikFont,
+      initialItshnikWallpaper: ready.itshnikWallpaper,
+      initialItshnikWallpaperIsVideo: ready.itshnikWallpaperIsVideo,
       alarmBootPayload: _alarmBootPayload,
     ),
   );
@@ -1664,6 +1728,14 @@ class AgyshaApp extends StatefulWidget {
   final String initialLanguageCode;
   final String initialFontFamily;
 
+  /// Вид «IT-шника»: палитра, шрифт и обои живут в тех же настройках, что и
+  /// тема, и читаются на старте — иначе после перезапуска тема встретила бы
+  /// человека исходным фосфором и сброшенными обоями.
+  final String initialItshnikVariant;
+  final String initialItshnikFont;
+  final String? initialItshnikWallpaper;
+  final bool initialItshnikWallpaperIsVideo;
+
   /// Не-null, если приложение открыто срабатыванием будильника (холодный
   /// старт по full-screen intent или по тапу на уведомление).
   final String? alarmBootPayload;
@@ -1674,6 +1746,10 @@ class AgyshaApp extends StatefulWidget {
     this.initialTheme = 'light',
     this.initialLanguageCode = 'system',
     this.initialFontFamily = 'ordinary',
+    this.initialItshnikVariant = 'phosphor',
+    this.initialItshnikFont = 'pixel',
+    this.initialItshnikWallpaper,
+    this.initialItshnikWallpaperIsVideo = false,
     this.alarmBootPayload,
   });
 
@@ -1690,6 +1766,10 @@ class AgyshaAppState extends State<AgyshaApp>
   late String _themeKey;
   late String _languageCode;
   late String _fontFamily;
+  late ItshnikVariant _itshnikVariant;
+  late ItshnikFont _itshnikFont;
+  String? _itshnikWallpaper;
+  bool _itshnikWallpaperIsVideo = false;
   Key _appKey = UniqueKey();
   bool _locked = false;
 
@@ -1854,6 +1934,40 @@ class AgyshaAppState extends State<AgyshaApp>
     SettingsService.saveThemeMode(key);
     // Тема перетекает сама — MaterialApp анимирует ThemeData (AnimatedTheme),
     // без своих затемнений и вспышек.
+  }
+
+  ItshnikVariant get itshnikVariant => _itshnikVariant;
+
+  ItshnikFont get itshnikFont => _itshnikFont;
+
+  /// Путь к своим обоям «IT-шника» (уже скопированным в папку приложения)
+  /// либо null — тогда фон рисуется процедурно.
+  String? get itshnikWallpaper => _itshnikWallpaper;
+
+  bool get itshnikWallpaperIsVideo => _itshnikWallpaperIsVideo;
+
+  void setItshnikVariant(ItshnikVariant variant) {
+    if (variant == _itshnikVariant) return;
+    setState(() => _itshnikVariant = variant);
+    SettingsService.saveItshnikVariant(variant.key);
+  }
+
+  void setItshnikFont(ItshnikFont font) {
+    if (font == _itshnikFont) return;
+    setState(() => _itshnikFont = font);
+    SettingsService.saveItshnikFont(font.key);
+  }
+
+  /// Вызывается кнопками обоев: файл уже лежит в папке приложения.
+  void setItshnikWallpaper(String? path, {bool isVideo = false}) {
+    if (path == _itshnikWallpaper && isVideo == _itshnikWallpaperIsVideo) {
+      return;
+    }
+    setState(() {
+      _itshnikWallpaper = path;
+      _itshnikWallpaperIsVideo = path != null && isVideo;
+    });
+    SettingsService.saveItshnikWallpaper(path, isVideo: isVideo);
   }
 
   void setLanguageCode(String code) {
@@ -2023,6 +2137,10 @@ class AgyshaAppState extends State<AgyshaApp>
     _themeKey = widget.initialTheme;
     _languageCode = widget.initialLanguageCode;
     _fontFamily = widget.initialFontFamily == 'caveat' ? 'caveat' : 'ordinary';
+    _itshnikVariant = ItshnikVariant.fromKey(widget.initialItshnikVariant);
+    _itshnikFont = ItshnikFont.fromKey(widget.initialItshnikFont);
+    _itshnikWallpaper = widget.initialItshnikWallpaper;
+    _itshnikWallpaperIsVideo = widget.initialItshnikWallpaperIsVideo;
     _locked = widget.initialLocked;
     aiLockScreenVisible.value = _locked;
     WidgetsBinding.instance.addObserver(this);
@@ -2264,7 +2382,9 @@ class AgyshaAppState extends State<AgyshaApp>
     // cacheKey включает _fontFamily, чтобы при переключении шрифта тема
     // пересобиралась с новым шрифтом (иначе остаётся закэшированная тема
     // со старым шрифтом — Caveat не переключался).
-    final cacheKey = '${scheme.hashCode}|$isGrokStyle|$_fontFamily|$_themeKey';
+    final cacheKey =
+        '${scheme.hashCode}|$isGrokStyle|$_fontFamily|$_themeKey'
+        '|${_itshnikFont.key}|${_itshnikVariant.key}';
     final cached = isDark ? _darkThemeCache : _lightThemeCache;
     final cachedKey = isDark ? _darkThemeCacheKey : _lightThemeCacheKey;
     if (cached != null && cachedKey == cacheKey) return cached;
@@ -2275,6 +2395,7 @@ class AgyshaAppState extends State<AgyshaApp>
       isGrokStyle: isGrokStyle,
       fontFamily: _fontFamily,
       themeKey: _themeKey,
+      itshnikFont: _itshnikFont,
     );
     if (isDark) {
       _darkThemeCache = built;
@@ -2485,7 +2606,7 @@ class AgyshaAppState extends State<AgyshaApp>
                 // «IT-шник» — палитра живёт в ItshnikPalette, чтобы фон и
                 // эффекты нажатий брали ровно те же цвета.
                 if (_themeKey == ItshnikPalette.key) {
-                  return ItshnikPalette.scheme;
+                  return ItshnikPalette.schemeFor(_itshnikVariant);
                 }
                 if (_themeKey == 'oled') {
                   return const ColorScheme.dark(
@@ -2750,9 +2871,12 @@ class AgyshaAppState extends State<AgyshaApp>
                         // интерфейс. Держим его вне AnimatedSwitcher: он
                         // непрозрачный и не должен перекрывать контент.
                         if (_themeKey == ItshnikPalette.key)
-                          const ItshnikBackdrop(
-                            key: ValueKey('itshnik_backdrop'),
-                            child: SizedBox.expand(),
+                          ItshnikBackdrop(
+                            key: const ValueKey('itshnik_backdrop'),
+                            variant: _itshnikVariant,
+                            wallpaper: _itshnikWallpaper,
+                            wallpaperIsVideo: _itshnikWallpaperIsVideo,
+                            child: const SizedBox.expand(),
                           ),
                         // Контент (Navigator) — всегда ОДИН слой, без анимации:
                         // раньше AnimatedSwitcher оборачивал и контент, и пятна,
@@ -2764,8 +2888,9 @@ class AgyshaAppState extends State<AgyshaApp>
                         // translucent + IgnorePointer) и живёт только при
                         // включённой теме.
                         if (_themeKey == ItshnikPalette.key)
-                          const ItshnikTapEffects(
-                            key: ValueKey('itshnik_tap_effects'),
+                          ItshnikTapEffects(
+                            key: const ValueKey('itshnik_tap_effects'),
+                            variant: _itshnikVariant,
                           ),
                         // Пятна крови темы MUTILATED — ОТДЕЛЬНЫЙ слой поверх
                         // Navigator (включая drag-прокси при перетаскивании).

@@ -65,6 +65,7 @@ part 'settings_language_font.dart';
 part 'settings_transfer.dart';
 part 'settings_theme_carousel.dart';
 part 'settings_itshnik_button.dart';
+part 'settings_itshnik_style.dart';
 part 'settings_dev_tools.dart';
 part 'settings_links.dart';
 part 'settings_section_top.dart';

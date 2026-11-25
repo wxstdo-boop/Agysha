@@ -36,6 +36,10 @@ extension _SettingsSectionTop on _SettingsScreenState {
               _buildThemeCarousel(context),
             const SizedBox(height: 14),
             _buildItshnikButton(context, appState),
+            if (appState.themeKey == ItshnikPalette.key) ...[
+              const SizedBox(height: 14),
+              _buildItshnikStylePanel(context, appState),
+            ],
           ],
         ),
       ),

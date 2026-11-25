@@ -55,12 +55,220 @@ class ItshnikPalette {
     shadow: Color(0xFF00FFB2),
     scrim: Color(0xFF000000),
   );
+
+  /// Палитра варианта. «Фосфор» — исходный вид темы.
+  static ColorScheme schemeFor(ItshnikVariant variant) {
+    if (variant == ItshnikVariant.phosphor) return scheme;
+    final skin = skinFor(variant);
+    final ink = skin.ink;
+    return ColorScheme.dark(
+      primary: skin.accent,
+      onPrimary: const Color(0xFF00140C),
+      primaryContainer: Color.alphaBlend(
+        skin.accent.withValues(alpha: 0.20),
+        ink,
+      ),
+      onPrimaryContainer: skin.accentSoft,
+      secondary: skin.accentAlt,
+      onSecondary: const Color(0xFF1A0010),
+      secondaryContainer: Color.alphaBlend(
+        skin.accentAlt.withValues(alpha: 0.24),
+        ink,
+      ),
+      onSecondaryContainer: skin.accentAltSoft,
+      tertiary: skin.glow,
+      onTertiary: const Color(0xFF05000F),
+      tertiaryContainer: Color.alphaBlend(
+        skin.glow.withValues(alpha: 0.22),
+        ink,
+      ),
+      onTertiaryContainer: const Color(0xFFE6E0FF),
+      error: const Color(0xFFFF6B6B),
+      onError: const Color(0xFF2B0000),
+      errorContainer: const Color(0xFF4A0A0A),
+      onErrorContainer: const Color(0xFFFFD6D6),
+      surface: ink,
+      surfaceContainerLowest: Color.alphaBlend(
+        Colors.black.withValues(alpha: 0.35),
+        ink,
+      ),
+      surfaceContainerLow: Color.alphaBlend(
+        skin.accent.withValues(alpha: 0.05),
+        ink,
+      ),
+      surfaceContainer: Color.alphaBlend(
+        skin.accent.withValues(alpha: 0.08),
+        ink,
+      ),
+      surfaceContainerHigh: Color.alphaBlend(
+        skin.accent.withValues(alpha: 0.12),
+        ink,
+      ),
+      surfaceContainerHighest: Color.alphaBlend(
+        skin.accent.withValues(alpha: 0.17),
+        ink,
+      ),
+      onSurface: const Color(0xFFE9FFF6),
+      onSurfaceVariant: skin.accentDim,
+      outline: skin.grid,
+      outlineVariant: Color.alphaBlend(skin.grid.withValues(alpha: 0.55), ink),
+      shadow: skin.glow,
+      scrim: const Color(0xFF000000),
+    );
+  }
+
+  static ItshnikSkin skinFor(ItshnikVariant variant) => ItshnikSkin.of(variant);
+}
+
+/// Вариант оформления «IT-шника» — своя палитра и свой характер фона.
+/// Хранится в настройках ключом [key], чтобы после перезапуска вернулся
+/// тот же вид.
+enum ItshnikVariant {
+  /// Исходный зелёный терминал.
+  phosphor('phosphor'),
+
+  /// Магента и фиолет — «неоновая капсула».
+  magenta('magenta'),
+
+  /// Ледяной бирюзово-голубой CRT.
+  frost('frost'),
+
+  /// Новый год: ёлочная зелень, золото и снег поверх неона.
+  newYear('new_year');
+
+  const ItshnikVariant(this.key);
+
+  final String key;
+
+  static ItshnikVariant fromKey(String? key) {
+    for (final v in values) {
+      if (v.key == key) return v;
+    }
+    return phosphor;
+  }
+}
+
+/// Набор цветов одного варианта. Фон, сетка, акценты и эффекты нажатий
+/// берут цвета ОТСЮДА, поэтому смена варианта перекрашивает всё разом.
+class ItshnikSkin {
+  const ItshnikSkin({
+    required this.accent,
+    required this.accentSoft,
+    required this.accentDim,
+    required this.accentAlt,
+    required this.accentAltSoft,
+    required this.glow,
+    required this.ink,
+    required this.inkTop,
+    required this.grid,
+    required this.snow,
+  });
+
+  final Color accent;
+  final Color accentSoft;
+  final Color accentDim;
+  final Color accentAlt;
+  final Color accentAltSoft;
+  final Color glow;
+  final Color ink;
+  final Color inkTop;
+  final Color grid;
+
+  /// Цвет «снега»/искр в эффектах и на фоне новогоднего варианта.
+  final Color snow;
+
+  static const ItshnikSkin phosphor = ItshnikSkin(
+    accent: ItshnikPalette.phosphor,
+    accentSoft: Color(0xFFA8FFD8),
+    accentDim: ItshnikPalette.phosphorDim,
+    accentAlt: ItshnikPalette.pink,
+    accentAltSoft: Color(0xFFFFD3E6),
+    glow: ItshnikPalette.violet,
+    ink: ItshnikPalette.ink,
+    inkTop: Color(0xFF071A17),
+    grid: ItshnikPalette.grid,
+    snow: Color(0xFFD9FFF1),
+  );
+
+  static const ItshnikSkin magenta = ItshnikSkin(
+    accent: Color(0xFFFF5FD2),
+    accentSoft: Color(0xFFFFD1F2),
+    accentDim: Color(0xFFC9A6C6),
+    accentAlt: Color(0xFF8C7BFF),
+    accentAltSoft: Color(0xFFDDD7FF),
+    glow: Color(0xFF4DE1FF),
+    ink: Color(0xFF0A0510),
+    inkTop: Color(0xFF1A0A22),
+    grid: Color(0xFF4A2C55),
+    snow: Color(0xFFFFE4F7),
+  );
+
+  static const ItshnikSkin frost = ItshnikSkin(
+    accent: Color(0xFF5FD8FF),
+    accentSoft: Color(0xFFD6F6FF),
+    accentDim: Color(0xFF9FB8C6),
+    accentAlt: Color(0xFFB9A8FF),
+    accentAltSoft: Color(0xFFEAE4FF),
+    glow: Color(0xFF59FFE0),
+    ink: Color(0xFF040A10),
+    inkTop: Color(0xFF0A1B28),
+    grid: Color(0xFF274456),
+    snow: Color(0xFFEAFBFF),
+  );
+
+  static const ItshnikSkin newYear = ItshnikSkin(
+    accent: Color(0xFF63F5A5),
+    accentSoft: Color(0xFFCFFFE4),
+    accentDim: Color(0xFFA5C9B4),
+    accentAlt: Color(0xFFFF5A5A),
+    accentAltSoft: Color(0xFFFFD4D4),
+    glow: Color(0xFFFFD24B),
+    ink: Color(0xFF04100C),
+    inkTop: Color(0xFF0E2318),
+    grid: Color(0xFF2E5540),
+    snow: Color(0xFFFFFFFF),
+  );
+
+  static ItshnikSkin of(ItshnikVariant variant) => switch (variant) {
+    ItshnikVariant.phosphor => phosphor,
+    ItshnikVariant.magenta => magenta,
+    ItshnikVariant.frost => frost,
+    ItshnikVariant.newYear => newYear,
+  };
+}
+
+/// Набор шрифтов «IT-шника», который переключается только для этой темы.
+enum ItshnikFont {
+  /// Пиксельный Pixelify Sans для текста, Handjet для цифр.
+  pixel('pixel', 'ItsPixel', 'ItsDigits'),
+
+  /// Только Handjet: узкий дисплейный «терминал».
+  digits('digits', 'ItsDigits', 'ItsDigits'),
+
+  /// Робот-«штрих» (RobotoDash) для текста, Handjet для цифр.
+  dash('dash', 'ItsDash', 'ItsDigits');
+
+  const ItshnikFont(this.key, this.text, this.numerals);
+
+  final String key;
+  final String text;
+  final String numerals;
+
+  static ItshnikFont fromKey(String? key) {
+    for (final f in values) {
+      if (f.key == key) return f;
+    }
+    return pixel;
+  }
 }
 
 /// Оформление поверх базовой темы: пиксельная типографика, углы без
 /// скруглений (как у окон старого терминала), свечение акцента и
 /// «блочный» плеск на нажатии.
-ThemeData applyItshnikTheme(ThemeData base) {
+ThemeData applyItshnikTheme(
+  ThemeData base, {
+  ItshnikFont font = ItshnikFont.pixel,
+}) {
   final scheme = base.colorScheme;
   final radius = BorderRadius.circular(8);
 
@@ -72,7 +280,7 @@ ThemeData applyItshnikTheme(ThemeData base) {
     double? spacing,
   }) {
     return (from ?? const TextStyle()).copyWith(
-      fontFamily: 'ItsPixel',
+      fontFamily: font.text,
       fontSize: size,
       fontWeight: weight,
       height: height,
@@ -86,7 +294,7 @@ ThemeData applyItshnikTheme(ThemeData base) {
     FontWeight weight = FontWeight.w600,
   }) {
     return (from ?? const TextStyle()).copyWith(
-      fontFamily: 'ItsDigits',
+      fontFamily: font.numerals,
       fontSize: size,
       fontWeight: weight,
       letterSpacing: 1.2,
@@ -207,13 +415,13 @@ ThemeData applyItshnikTheme(ThemeData base) {
     ),
     scrollbarTheme: base.scrollbarTheme.copyWith(
       thumbColor: WidgetStatePropertyAll(
-        ItshnikPalette.phosphor.withValues(alpha: 0.65),
+        scheme.primary.withValues(alpha: 0.65),
       ),
     ),
     textSelectionTheme: TextSelectionThemeData(
-      cursorColor: ItshnikPalette.phosphor,
-      selectionColor: ItshnikPalette.phosphor.withValues(alpha: 0.28),
-      selectionHandleColor: ItshnikPalette.phosphor,
+      cursorColor: scheme.primary,
+      selectionColor: scheme.primary.withValues(alpha: 0.28),
+      selectionHandleColor: scheme.primary,
     ),
   );
 }

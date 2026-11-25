@@ -58,10 +58,21 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
   List<ChangelogEntry>? _entries;
   bool _loading = true;
 
+  /// Каскадный вход — только для плиток первого кадра. Дальше список строит
+  /// карточки по мере прокрутки, и они обязаны появляться сразу: иначе
+  /// `StaggerIn` ждёт index * 55 мс (до 600 мс) и дорисовывает ещё 380 мс
+  /// фейда, а человек на скорости листания видит пустые места — список
+  /// читался как «сломанный».
+  bool _entranceDone = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _entranceDone = true);
+    });
   }
 
   Future<void> _load({bool force = false}) async {
@@ -138,6 +149,9 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                     // мягко, а не возникает одним кадром.
                     return StaggerIn(
                       index: card,
+                      // В ленивом списке анимировать можно только первый
+                      // кадр — см. [_entranceDone].
+                      animate: !_entranceDone,
                       child: _buildCard(
                         theme,
                         entries[card],

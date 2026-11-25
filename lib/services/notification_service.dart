@@ -175,7 +175,15 @@ class NotificationService extends ChangeNotifier {
     // clear the alarm-asked timestamp so the alarm settings screen is
     // re-prompted on the next launch.
     if (_supported) {
-      final osEnabled = await areNotificationsEnabled();
+      bool osEnabled;
+      try {
+        osEnabled = await areNotificationsEnabled();
+      } catch (_) {
+        // Фоновый изолят WorkManager живёт без Activity: часть запросов к
+        // плагину там не отвечает. Инициализацию всё равно доводим до конца,
+        // иначе баннер об обновлении не поставить никогда.
+        osEnabled = _enabled;
+      }
       if (_enabled && !osEnabled) {
         // Разрешение на уведомления пропало (типично после переустановки
         // APK: prefs живут через auto-backup, а OS-разрешение сброшено).
@@ -680,14 +688,18 @@ class NotificationService extends ChangeNotifier {
   ///
   /// Тап открывает приложение, где [UpdateNotice] показывает плашку с
   /// кнопкой установки (payload `update:<версия>` разбирает main.dart).
-  Future<void> showUpdateAvailable(String version) async {
-    if (!_enabled) return;
+  /// Возвращает `true`, только если баннер действительно поставлен: по этому
+  /// признаку вызывающий решает, помечать ли выпуск как «уже сообщённый».
+  /// Иначе один сбой (нет разрешения, плагин не поднялся в фоновом изоляте)
+  /// навсегда глушил бы уведомления об этом выпуске.
+  Future<bool> showUpdateAvailable(String version) async {
+    if (!_enabled) return false;
     if (!_initialized) {
       try {
         await init();
       } catch (_) {}
     }
-    if (!_enabled || !_initialized || !_supported) return;
+    if (!_enabled || !_initialized || !_supported) return false;
     final lang = globalPrefs.getString('setting_locale') ?? 'ru';
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
@@ -722,9 +734,11 @@ class NotificationService extends ChangeNotifier {
         notificationDetails: details,
         payload: 'update:$version',
       );
+      return true;
     } catch (_) {
       // Баннер — приятный бонус к плашке в приложении: его сбой не должен
       // ломать саму проверку обновлений.
+      return false;
     }
   }
 

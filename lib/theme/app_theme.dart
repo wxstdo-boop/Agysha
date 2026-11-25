@@ -65,10 +65,11 @@ ThemeData buildAgyshaTheme(
   required bool isGrokStyle,
   String? fontFamily,
   String? themeKey,
+  ItshnikFont itshnikFont = ItshnikFont.pixel,
 }) {
   final isItshnik = themeKey == ItshnikPalette.key;
   final appFontFamily = isItshnik
-      ? 'ItsPixel'
+      ? itshnikFont.text
       : (fontFamily == 'caveat' ? 'Caveat' : null);
   final base = ThemeData(
     useMaterial3: true,
@@ -278,5 +279,5 @@ ThemeData buildAgyshaTheme(
   // Эксклюзивная тема «IT-шник» донашивает общий каркас и меняет только то,
   // что делает её собой: пиксельные шрифты, жёсткие углы, свечение и
   // блочный плеск нажатия.
-  return isItshnik ? applyItshnikTheme(base) : base;
+  return isItshnik ? applyItshnikTheme(base, font: itshnikFont) : base;
 }

@@ -49,10 +49,16 @@ List<ChangelogEntry> digestChangelog(
 bool _isTechnicalNote(String text) {
   final t = text.trim().toLowerCase();
   if (t.isEmpty) return true;
+  // Фраза, обрезанная до многоточия или висящей запятой/точки с запятой, —
+  // это остаток генерации тела релиза, а не мысль для человека.
+  if (RegExp(r'(…|\.\.\.|;|,)$').hasMatch(t)) return true;
+  // Ни одной кириллической буквы — значит это английский заголовок коммита
+  // («Checkpoint — before debug modes»), он в релиз попадать не должен.
+  if (!RegExp(r'[а-яё]').hasMatch(t)) return true;
   return RegExp(
     r'^(форматирование|рефакторинг|тесты|тест\b|линт|линтер|сборка|сборочн|'
     r'анализатор|зависимост|внутренност|документац|комментари|скрипт|'
-    r'пайплайн|ci\b|workflow|github actions|readme|'
+    r'пайплайн|ci\b|workflow|github actions|readme|checkpoint|патчноут|git\b|'
     r'прибрался|прибрал|мелкие правки кода|убран мусор)',
     caseSensitive: false,
   ).hasMatch(t);

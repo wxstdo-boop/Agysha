@@ -61,10 +61,19 @@ class UpdateNotice {
     if (!shouldNotifyShade(info.versionName)) return;
     if (_shadeQueued == info.versionName) return;
     _shadeQueued = info.versionName;
-    unawaited(globalPrefs.setString(notifiedVersionKey, info.versionName));
-    // Не ждём плагин уведомлений: плашка в приложении важнее и не должна
-    // зависеть от шторки. Ошибки внутри showUpdateAvailable уже погашены.
-    unawaited(NotificationService().showUpdateAvailable(info.versionName));
+    // Отметку «баннер уже был» пишем только после того, как он реально
+    // встал в шторку: иначе единственный сбой (нет разрешения, плагин ещё
+    // не готов) навсегда глушил бы уведомления об этом выпуске.
+    unawaited(() async {
+      final shown = await NotificationService().showUpdateAvailable(
+        info.versionName,
+      );
+      if (shown) {
+        await globalPrefs.setString(notifiedVersionKey, info.versionName);
+      } else {
+        _shadeQueued = null;
+      }
+    }());
   }
 
   /// Показывает плашку, если в [info] есть версия новее и о ней ещё не

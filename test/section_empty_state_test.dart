@@ -30,5 +30,15 @@ void main() {
     );
     expect(scroll.physics, isA<AlwaysScrollableScrollPhysics>());
     expect(find.byKey(const ValueKey('empty_child')), findsOneWidget);
+
+    // Карточка стоит ПО ЦЕНТРУ свободной области под слотом таблетки, а не
+    // прилипает к верхнему краю. Экран теста — 800x600.
+    final view = tester.view;
+    final width = view.physicalSize.width / view.devicePixelRatio;
+    final height = view.physicalSize.height / view.devicePixelRatio;
+    final top = kSectionPillSlotHeight + 8;
+    final rect = tester.getRect(find.byKey(const ValueKey('empty_child')));
+    expect(rect.center.dy, closeTo(top + (height - top) / 2, 1.0));
+    expect(rect.center.dx, closeTo(width / 2, 1.0));
   });
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/itshnik_theme.dart';
 import '../utils/motion_prefs.dart';
+import 'itshnik_wallpaper.dart';
 
 /// Фон эксклюзивной темы «IT-шник»: тёмный терминал в духе MiSide.
 ///
@@ -25,7 +26,22 @@ import '../utils/motion_prefs.dart';
 class ItshnikBackdrop extends StatefulWidget {
   final Widget child;
 
-  const ItshnikBackdrop({super.key, required this.child});
+  /// Вариант палитры: «фосфор», магента, «мороз» или Новый год.
+  final ItshnikVariant variant;
+
+  /// Свои обои (картинка или видео). Пока они есть, процедурный градиент
+  /// уступает место файлу, а сетка/дождь/снег остаются поверх — тема должна
+  /// узнаваться и на своих обоях.
+  final String? wallpaper;
+  final bool wallpaperIsVideo;
+
+  const ItshnikBackdrop({
+    super.key,
+    required this.child,
+    this.variant = ItshnikVariant.phosphor,
+    this.wallpaper,
+    this.wallpaperIsVideo = false,
+  });
 
   @override
   State<ItshnikBackdrop> createState() => _ItshnikBackdropState();
@@ -58,6 +74,16 @@ class _ItshnikBackdropState extends State<ItshnikBackdrop>
         offset: rng.nextDouble(),
         length: 5 + rng.nextInt(9),
         pink: rng.nextDouble() < 0.16,
+      );
+    });
+    _cache.snow = List.generate(46, (_) {
+      return _Snow(
+        x: rng.nextDouble(),
+        y: rng.nextDouble(),
+        size: 1.4 + rng.nextDouble() * 2.6,
+        speed: 0.012 + rng.nextDouble() * 0.035,
+        sway: rng.nextDouble() * math.pi * 2,
+        alpha: 0.10 + rng.nextDouble() * 0.30,
       );
     });
     _cache.hearts = List.generate(9, (_) {
@@ -101,10 +127,20 @@ class _ItshnikBackdropState extends State<ItshnikBackdrop>
     return Stack(
       fit: StackFit.expand,
       children: [
+        if (widget.wallpaper != null)
+          ItshnikWallpaper(
+            path: widget.wallpaper!,
+            isVideo: widget.wallpaperIsVideo,
+          ),
         IgnorePointer(
           child: RepaintBoundary(
             child: CustomPaint(
-              painter: _ItshnikPainter(cache: _cache, phase: _phase),
+              painter: _ItshnikPainter(
+                cache: _cache,
+                phase: _phase,
+                variant: widget.variant,
+                hasWallpaper: widget.wallpaper != null,
+              ),
             ),
           ),
         ),
@@ -148,6 +184,26 @@ class _CodeColumn {
   });
 }
 
+/// Снежинка: мелкий квадрат, падающий сверху с покачиванием. Нужна
+/// «морозу» и новогоднему варианту — тот самый снег поверх неона.
+class _Snow {
+  final double x;
+  final double y;
+  final double size;
+  final double speed;
+  final double sway;
+  final double alpha;
+
+  const _Snow({
+    required this.x,
+    required this.y,
+    required this.size,
+    required this.speed,
+    required this.sway,
+    required this.alpha,
+  });
+}
+
 /// Всплывающее пиксельное сердечко.
 class _HeartBit {
   final double x;
@@ -173,27 +229,47 @@ class _ItshnikCache {
   List<_Bit>? bits;
   List<_CodeColumn>? rain;
   List<_HeartBit>? hearts;
+  List<_Snow>? snow;
   Size? _size;
+  ItshnikVariant _variant = ItshnikVariant.phosphor;
+  bool _hasWallpaper = false;
   Paint? _background;
   Paint? _vignette;
   Paint? _glowTop;
   Paint? _glowBottom;
 
-  void prepare(Size size) {
-    if (_size == size) return;
+  void prepare(
+    Size size, {
+    ItshnikVariant variant = ItshnikVariant.phosphor,
+    bool hasWallpaper = false,
+  }) {
+    if (_size == size && _variant == variant && _hasWallpaper == hasWallpaper) {
+      return;
+    }
     _size = size;
+    _variant = variant;
+    _hasWallpaper = hasWallpaper;
+    final skin = ItshnikSkin.of(variant);
+    // Поверх своих обоев фон не рисуем градиентом — вместо него затемнение,
+    // чтобы сетка, дождь и текст оставались читаемыми на любом кадре.
     _background = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFF04080A),
-          Color(0xFF06100F),
-          Color(0xFF08191A),
-          Color(0xFF050B0C),
-        ],
-        stops: [0.0, 0.42, 0.72, 1.0],
-      ).createShader(Offset.zero & size);
+      ..shader = hasWallpaper
+          ? const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x99000000), Color(0xB3050B0C)],
+            ).createShader(Offset.zero & size)
+          : LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                skin.ink,
+                Color.alphaBlend(skin.accent.withValues(alpha: 0.06), skin.ink),
+                skin.inkTop,
+                skin.ink,
+              ],
+              stops: const [0.0, 0.42, 0.72, 1.0],
+            ).createShader(Offset.zero & size);
 
     _vignette = Paint()
       ..shader = RadialGradient(
@@ -211,8 +287,8 @@ class _ItshnikCache {
       ..shader =
           RadialGradient(
             colors: [
-              ItshnikPalette.phosphor.withValues(alpha: 0.16),
-              ItshnikPalette.phosphor.withValues(alpha: 0.0),
+              skin.accent.withValues(alpha: hasWallpaper ? 0.10 : 0.16),
+              skin.accent.withValues(alpha: 0.0),
             ],
           ).createShader(
             Rect.fromCircle(
@@ -225,8 +301,8 @@ class _ItshnikCache {
       ..shader =
           RadialGradient(
             colors: [
-              ItshnikPalette.pink.withValues(alpha: 0.13),
-              ItshnikPalette.pink.withValues(alpha: 0.0),
+              skin.accentAlt.withValues(alpha: 0.13),
+              skin.accentAlt.withValues(alpha: 0.0),
             ],
           ).createShader(
             Rect.fromCircle(
@@ -238,6 +314,7 @@ class _ItshnikCache {
 
   void dispose() {
     _size = null;
+    snow = null;
     _background = null;
     _vignette = null;
     _glowTop = null;
@@ -248,16 +325,27 @@ class _ItshnikCache {
 class _ItshnikPainter extends CustomPainter {
   final _ItshnikCache cache;
   final ValueListenable<double> phase;
+  final ItshnikVariant variant;
+  final bool hasWallpaper;
 
-  _ItshnikPainter({required this.cache, required this.phase})
-    : super(repaint: phase);
+  _ItshnikPainter({
+    required this.cache,
+    required this.phase,
+    this.variant = ItshnikVariant.phosphor,
+    this.hasWallpaper = false,
+  }) : super(repaint: phase);
+
+  ItshnikSkin get skin => ItshnikSkin.of(variant);
+
+  bool get _winter =>
+      variant == ItshnikVariant.frost || variant == ItshnikVariant.newYear;
 
   /// Ширина «пикселя»: у темы всё нарисовано крупными клетками.
   static const double _pixel = 3.0;
 
   @override
   void paint(Canvas canvas, Size size) {
-    cache.prepare(size);
+    cache.prepare(size, variant: variant, hasWallpaper: hasWallpaper);
     final t = phase.value;
 
     canvas.drawRect(Offset.zero & size, cache._background!);
@@ -265,9 +353,11 @@ class _ItshnikPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, cache._glowBottom!);
 
     _paintGrid(canvas, size, t);
+    if (_winter) _paintSnow(canvas, size, t);
     _paintCodeRain(canvas, size, t);
     _paintBits(canvas, size, t);
     _paintHearts(canvas, size, t);
+    if (variant == ItshnikVariant.newYear) _paintGarland(canvas, size, t);
     _paintScanlines(canvas, size, t);
     _paintGlitch(canvas, size, t);
     _paintBreath(canvas, size, t);
@@ -281,7 +371,7 @@ class _ItshnikPainter extends CustomPainter {
     final gridPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = ItshnikPalette.grid.withValues(alpha: 0.55);
+      ..color = skin.grid.withValues(alpha: 0.55);
 
     // Вертикальные лучи: 16 линий, сходящихся в точке схода. Ниже горизонта
     // они «расходятся» к краям — эффект пола.
@@ -289,7 +379,7 @@ class _ItshnikPainter extends CustomPainter {
     for (var i = 0; i <= rays; i++) {
       final fx = i / rays;
       final xAtBottom = (fx - 0.5) * size.width * 2.4 + size.width * 0.5;
-      gridPaint.color = ItshnikPalette.grid.withValues(
+      gridPaint.color = skin.grid.withValues(
         alpha: 0.20 + 0.30 * (1 - (fx - 0.5).abs() * 2),
       );
       canvas.drawLine(vanish, Offset(xAtBottom, size.height), gridPaint);
@@ -307,16 +397,14 @@ class _ItshnikPainter extends CustomPainter {
       final spread = 0.08 + k * 1.06;
       final x0 = vanish.dx - size.width * 0.5 * spread - size.width * 1.4 * k;
       final x1 = vanish.dx + size.width * 0.5 * spread + size.width * 1.4 * k;
-      gridPaint.color = ItshnikPalette.phosphor.withValues(
-        alpha: 0.05 + 0.20 * fade,
-      );
+      gridPaint.color = skin.accent.withValues(alpha: 0.05 + 0.20 * fade);
       canvas.drawLine(Offset(x0, y), Offset(x1, y), gridPaint);
     }
 
     // Горизонт: тонкая светящаяся линия-разделитель «неба» и «пола».
     final horizonPaint = Paint()
       ..strokeWidth = 1.4
-      ..color = ItshnikPalette.phosphor.withValues(alpha: 0.28);
+      ..color = skin.accent.withValues(alpha: 0.28);
     canvas.drawLine(
       Offset(0, horizon),
       Offset(size.width, horizon),
@@ -330,8 +418,9 @@ class _ItshnikPainter extends CustomPainter {
     final paint = Paint();
     for (final b in bits) {
       final y = ((b.y - t * b.speed * 6) % 1.0 + 1.0) % 1.0;
-      paint.color = (b.pink ? ItshnikPalette.pink : ItshnikPalette.phosphor)
-          .withValues(alpha: b.alpha);
+      paint.color = (b.pink ? skin.accentAlt : skin.accent).withValues(
+        alpha: b.alpha,
+      );
       // Все «биты» выровнены по пиксельной сетке — иначе тема перестаёт
       // выглядеть терминалом.
       final x = (b.x * size.width / _pixel).floorToDouble() * _pixel;
@@ -354,8 +443,9 @@ class _ItshnikPainter extends CustomPainter {
         final y = head - i * 7.0;
         if (y < -8 || y > size.height + 8) continue;
         final fade = (1 - i / c.length) * 0.32;
-        paint.color = (c.pink ? ItshnikPalette.pink : ItshnikPalette.phosphor)
-            .withValues(alpha: fade);
+        paint.color = (c.pink ? skin.accentAlt : skin.accent).withValues(
+          alpha: fade,
+        );
         // Голова столбца ярче, хвост растворяется.
         final width = i == 0 ? _pixel * 2 : _pixel;
         canvas.drawRect(Rect.fromLTWH(x, y, width, _pixel * 1.4), paint);
@@ -371,7 +461,7 @@ class _ItshnikPainter extends CustomPainter {
       final y = ((h.y - t * h.speed * 8) % 1.0 + 1.0) % 1.0;
       final sway = math.sin(t * math.pi * 2 + h.sway) * 10;
       final x = h.x * size.width + sway;
-      paint.color = ItshnikPalette.pink.withValues(alpha: h.alpha);
+      paint.color = skin.accentAlt.withValues(alpha: h.alpha);
       final s = h.size;
       // Два кружка и треугольник — пиксельное сердце Миты.
       canvas.drawCircle(Offset(x - s * 0.24, y * size.height), s * 0.30, paint);
@@ -392,8 +482,8 @@ class _ItshnikPainter extends CustomPainter {
       ..shader =
           RadialGradient(
             colors: [
-              ItshnikPalette.phosphor.withValues(alpha: 0.02 + 0.035 * pulse),
-              ItshnikPalette.phosphor.withValues(alpha: 0.0),
+              skin.accent.withValues(alpha: 0.02 + 0.035 * pulse),
+              skin.accent.withValues(alpha: 0.0),
             ],
           ).createShader(
             Rect.fromCircle(
@@ -420,9 +510,9 @@ class _ItshnikPainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            ItshnikPalette.phosphor.withValues(alpha: 0.0),
-            ItshnikPalette.phosphor.withValues(alpha: 0.055),
-            ItshnikPalette.phosphor.withValues(alpha: 0.0),
+            skin.accent.withValues(alpha: 0.0),
+            skin.accent.withValues(alpha: 0.055),
+            skin.accent.withValues(alpha: 0.0),
           ],
         ).createShader(band);
       canvas.drawRect(band, paint);
@@ -445,19 +535,67 @@ class _ItshnikPainter extends CustomPainter {
       canvas.drawRect(
         rect,
         Paint()
-          ..color = (i.isEven ? ItshnikPalette.pink : ItshnikPalette.phosphor)
-              .withValues(alpha: 0.10 * intensity),
+          ..color = (i.isEven ? skin.accentAlt : skin.accent).withValues(
+            alpha: 0.10 * intensity,
+          ),
       );
     }
     // Общий «толчок» яркости на пике глитча.
     canvas.drawRect(
       Offset.zero & size,
-      Paint()
-        ..color = ItshnikPalette.phosphor.withValues(alpha: 0.02 * intensity),
+      Paint()..color = skin.accent.withValues(alpha: 0.02 * intensity),
     );
+  }
+
+  /// Падающий снег: у «мороза» редкий, у Нового года гуще и ярче.
+  void _paintSnow(Canvas canvas, Size size, double t) {
+    final flakes = cache.snow;
+    if (flakes == null) return;
+    final heavy = variant == ItshnikVariant.newYear;
+    final paint = Paint();
+    for (final f in flakes) {
+      final y = ((f.y + t * f.speed * 6) % 1.0) * size.height;
+      final sway = math.sin(t * math.pi * 2 + f.sway) * (heavy ? 14 : 8);
+      final x = ((f.x * size.width + sway) / _pixel).floorToDouble() * _pixel;
+      final s = f.size * (heavy ? 1.15 : 1.0);
+      paint.color = skin.snow.withValues(alpha: f.alpha * (heavy ? 1.0 : 0.8));
+      canvas.drawRect(Rect.fromLTWH(x, y, s, s), paint);
+    }
+  }
+
+  /// Новогодняя гирлянда: цепочка огоньков по верхней кромке, которая
+  /// переливается зелёным, красным и золотом.
+  void _paintGarland(Canvas canvas, Size size, double t) {
+    final y = size.height * 0.045;
+    final step = 26.0;
+    final paint = Paint();
+    final glow = Paint();
+    for (var x = step * 0.5; x < size.width; x += step) {
+      final k = (x / step).round();
+      final wave = 0.5 + 0.5 * math.sin(t * math.pi * 2 * 1.6 + k * 0.7);
+      final color = switch (k % 3) {
+        0 => skin.accent,
+        1 => skin.accentAlt,
+        _ => skin.glow,
+      };
+      paint.color = color.withValues(alpha: 0.35 + 0.55 * wave);
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(x, y + math.sin(k * 0.6) * 6),
+          width: 4,
+          height: 4,
+        ),
+        paint,
+      );
+      glow.color = color.withValues(alpha: 0.10 + 0.18 * wave);
+      canvas.drawCircle(Offset(x, y + math.sin(k * 0.6) * 6), 7, glow);
+    }
   }
 
   @override
   bool shouldRepaint(covariant _ItshnikPainter oldDelegate) =>
-      oldDelegate.cache != cache || oldDelegate.phase != phase;
+      oldDelegate.cache != cache ||
+      oldDelegate.phase != phase ||
+      oldDelegate.variant != variant ||
+      oldDelegate.hasWallpaper != hasWallpaper;
 }
