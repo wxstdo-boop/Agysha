@@ -358,6 +358,77 @@ void main() {
     expect(runner.finished!.text, 'Готово');
   });
 
+  testWidgets('уход приложения в фон не обрывает прогон агента', (
+    tester,
+  ) async {
+    // Телефон блокируют или уходят в другое приложение посреди хода:
+    // прогон живёт в ForgeRunner, а не в жизненном цикле экрана.
+    _tallSurface(tester);
+    final runner = ForgeRunner();
+    final store = InMemoryForgeTokenStore();
+    await store.write('ghp_saved_token');
+    final service = ForgeService(client: _okClient(), store: store);
+
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        _wrap(
+          ForgeScreen(
+            owner: 'wxstdo-boop',
+            repo: 'agysha',
+            service: service,
+            runner: runner,
+            chatFactory: (apiKey) =>
+                _SlowScriptedChat([_write('a.txt'), _finish]),
+          ),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_input_field')),
+      'создай a.txt',
+    );
+    final sendButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('forge_send')),
+    );
+    await tester.runAsync(() async {
+      sendButton.onPressed!();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+
+    // Полная цепочка переходов: framework не принимает resumed сразу после
+    // paused, а в реальной жизни экран проходит inactive → hidden → paused.
+    for (final state in const [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      for (var i = 0; i < 300 && runner.running; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    });
+
+    for (final state in const [
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pump();
+
+    expect(runner.running, isFalse);
+    // Экран открыт, поэтому готовый ответ он уже забрал в чат.
+    expect(_chatTextContaining('pull/1'), findsOneWidget);
+  });
+
   testWidgets('вопрос без правок не создаёт ветку и PR', (tester) async {
     _tallSurface(tester);
     // Раньше любой запуск сразу заводил ветку и требовал finish. Теперь

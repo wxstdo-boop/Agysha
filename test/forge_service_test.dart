@@ -671,6 +671,65 @@ void main() {
       expect(written.trimRight(), endsWith('// конец'));
     });
 
+    test('на задачу «сделай» агент не заканчивает планом', () async {
+      // Жалоба: «ии не доводит дело до конца». Модель отвечала красивым
+      // планом и останавливалась. Теперь такой ход один раз получает
+      // требование продолжать и доходит до правки и PR.
+      final fake = _FakeGitHub();
+      final chat = _ScriptedChat([
+        const ForgeChatReply(text: 'Сейчас посмотрю файлы и всё поправлю.'),
+        _call('write_file', {
+          'path': 'lib/a.dart',
+          'content': '// a',
+          'message': 'Кузница: a.dart',
+        }),
+        _call('finish', {'summary': 'Добавил a.dart'}),
+      ]);
+      final agent = ForgeAgent(
+        service: await _serviceWithToken(fake.client),
+        chat: chat,
+        owner: 'wxstdo-boop',
+        repo: 'agysha',
+      );
+
+      final turn = await agent.respond(
+        history: const [],
+        task: 'добавь a.dart',
+        baseBranch: 'main',
+      );
+
+      expect(turn.madeChanges, isTrue);
+      expect(turn.pullRequestUrl, contains('/pull/1'));
+      expect(
+        chat.seenMessages.any(
+          (m) =>
+              m.any((msg) => '${msg['content']}'.contains('ничего не изменил')),
+        ),
+        isTrue,
+      );
+    });
+
+    test('на вопрос агент отвечает сразу, без требования править', () async {
+      final chat = _ScriptedChat([
+        const ForgeChatReply(text: 'Точка входа — lib/main.dart.'),
+      ]);
+      final agent = ForgeAgent(
+        service: await _serviceWithToken(_FakeGitHub().client),
+        chat: chat,
+        owner: 'wxstdo-boop',
+        repo: 'agysha',
+      );
+
+      final turn = await agent.respond(
+        history: const [],
+        task: 'где точка входа?',
+        baseBranch: 'main',
+      );
+
+      expect(turn.text, 'Точка входа — lib/main.dart.');
+      expect(chat.seenMessages, hasLength(1));
+    });
+
     test('write_file тем же содержимым не тратит коммит и шаг', () async {
       // Модель иногда «переписывает» файл без единого изменения: коммит
       // пустой, шаг бюджета съеден, а ветка та же. Такой вызов — не правка.

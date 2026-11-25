@@ -502,6 +502,9 @@ class ForgeAgent {
     final written = <String>{};
     final deleted = <String>{};
     String? lastText;
+    // Один «толчок» за ход: модель иногда отвечает планом вместо правки.
+    // Без него задача «сделай» заканчивалась красивым текстом и без коммита.
+    var nudged = false;
 
     try {
       for (var step = 0; step < maxSteps; step++) {
@@ -521,6 +524,25 @@ class ForgeAgent {
         }
 
         if (reply.toolCalls.isEmpty) {
+          // Модель ответила планом на задачу «сделай» и не тронула ни одного
+          // файла. Один раз просим довести дело до конца, а не обещать.
+          if (!nudged &&
+              steps.isEmpty &&
+              written.isEmpty &&
+              deleted.isEmpty &&
+              wantsAction(task)) {
+            nudged = true;
+            messages.add({'role': 'assistant', 'content': reply.text ?? ''});
+            messages.add({
+              'role': 'user',
+              'content':
+                  'Ты ответил словами, но ничего не изменил, а задача — '
+                  'сделать. Продолжай: найди файлы, правь их через '
+                  'edit_file/write_file и закончи вызовом finish. Если это '
+                  'и правда только вопрос — ответь коротко, без планов.',
+            });
+            continue;
+          }
           // Модель ответила текстом. Без правок это обычный ответ в чате —
           // никаких веток и PR. С правками — доводим работу до PR.
           return await _conclude(
@@ -1188,6 +1210,36 @@ class ForgeAgent {
       'подписи. Держись стиля проекта: комментарии по-русски, без лишних '
       'слов. Пиши по делу и коротко.\n'
       'Отвечай на языке: ${languageCode == 'ru' ? 'русском' : languageCode}.';
+
+  /// Просьба «сделай»: такие задачи нельзя заканчивать планом в прозе.
+  /// Список намеренно короткий — «почему», «где», «что думаешь» сюда не
+  /// попадают, иначе на обычный вопрос агент начинал бы править файлы.
+  static bool wantsAction(String task) {
+    final t = task.toLowerCase();
+    const verbs = [
+      'сделай',
+      'сделать',
+      'поправь',
+      'исправь',
+      'почини',
+      'добавь',
+      'убери',
+      'удали',
+      'создай',
+      'реализуй',
+      'переделай',
+      'доработай',
+      'обнови',
+      'замени',
+      'внедри',
+      'настрой',
+      'fix ',
+      'add ',
+      'implement',
+      'refactor',
+    ];
+    return verbs.any(t.contains);
+  }
 
   String _prTitle(String task) {
     final oneLine = task.replaceAll(RegExp(r'\s+'), ' ').trim();
