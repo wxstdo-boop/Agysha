@@ -612,6 +612,33 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   }
 }
 
+/// Готовая подложка отдачи для [PressScale.pressOverlay] на карточках со
+/// СВОЕЙ непрозрачной заливкой (Card, Material с цветом).
+///
+/// [PressScale.pressTint] рисуется ПОД содержимым, поэтому на сплошной
+/// заливке его не видно — владелец читал это как «кнопка глотает отдачу
+/// фона»: карточка сжималась, а фон под пальцем не темнел. Здесь тот же
+/// тон, но слоем ПОВЕРХ содержимого (внутри вдавливания и наклона), со
+/// скруглением самой карточки.
+Widget Function(BuildContext context, double progress) pressTintOverlay(
+  BorderRadius radius, {
+  Color? color,
+  double strength = 0.08,
+}) {
+  return (context, progress) {
+    if (progress <= 0) return const SizedBox.shrink();
+    final tint = color ?? Theme.of(context).colorScheme.primary;
+    return IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: tint.withValues(alpha: (strength * progress).clamp(0.0, 1.0)),
+          borderRadius: radius,
+        ),
+      ),
+    );
+  };
+}
+
 /// Готовый блик для [PressScale.pressOverlay]: узкая световая полоска у
 /// ВЕРХНЕГО края, гаснущая книзу, — «мокрое стекло» под пальцем.
 ///

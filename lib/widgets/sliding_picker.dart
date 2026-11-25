@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../widgets/item_reveal.dart';
 import '../widgets/page_spring.dart';
 import '../widgets/press_scale.dart';
@@ -263,59 +264,137 @@ class _SlidingPickerState<T> extends State<SlidingPicker<T>>
           // порога в 20 px): «зажал и повёл» работает как ожидается —
           // можно протащить категории через все пункты, не отпуская.
           dragStartBehavior: DragStartBehavior.down,
-          itemBuilder: (context, i) {
-            final item = widget.items[i];
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _selectPage(i),
-              child: AnimatedBuilder(
-                animation: _ctrl,
-                builder: (context, _) {
-                  // Масштаб/прозрачность по мере приближения к центру.
-                  final pos = _ctrl.hasClients ? (_ctrl.page ?? 0) : 0.0;
-                  final delta = (i - pos).abs().clamp(0.0, 1.0);
-                  final scale = 1.0 - 0.12 * delta;
-                  final opacity = 1.0 - 0.35 * delta;
-                  // Подсветка РОВНО ОДНА. Если карусель едет к намеченному
-                  // тапом пункту — подсвечен только он (сразу, не дожидаясь,
-                  // пока доедет). Раньше «центральный» вид одновременно
-                  // получали и намеченный пункт, и тот, что стоял в центре, —
-                  // при быстрых тапах туда-сюда подсветка дёргалась между
-                  // двумя таблетками. Без намеченного — живая подсветка
-                  // пункта, к которому карусель привязана сейчас (при
-                  // перетаскивании пальцем).
-                  final liveSelected = _pendingSelect != null
-                      ? i == _pendingSelect
-                      : (i - pos).abs() < 0.5;
-                  return Opacity(
-                    opacity: opacity,
-                    child: Transform.scale(
-                      scale: scale,
-                      child: PressScale(
-                        pressedScale: 0.96,
-                        duration: const Duration(milliseconds: 200),
-                        child: ItemReveal(
-                          key: ValueKey<Object>('picker_cell_$item'),
-                          // Проявляем заново только сразу после смены состава
-                          // пунктов: таблетки, приехавшие во время обычного
-                          // свайпа, появляются мгновенно, без лишнего мигания.
-                          animate:
-                              DateTime.now().difference(_itemsChangedAt) <
-                              _revealWindow,
-                          child: widget.itemBuilder(
-                            context,
-                            item,
-                            liveSelected,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            );
-          },
+          itemBuilder: (context, i) => _PickerCell<T>(
+            index: i,
+            item: widget.items[i],
+            controller: _ctrl,
+            pendingSelect: _pendingSelect,
+            // Проявляем заново только сразу после смены состава
+            // пунктов: таблетки, приехавшие во время обычного
+            // свайпа, появляются мгновенно, без лишнего мигания.
+            animate: DateTime.now().difference(_itemsChangedAt) < _revealWindow,
+            itemBuilder: widget.itemBuilder,
+            onTap: () => _selectPage(i),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Одна таблетка карусели.
+///
+/// Кадровые масштаб и прозрачность считаются здесь, а СОДЕРЖИМОЕ
+/// (itemBuilder → PressScale → ItemReveal) отдаётся builder'у готовым
+/// `child`: оно пересобирается только когда меняется сама подсветка, а
+/// не каждый кадр прокрутки. Раньше itemBuilder вызывался на каждом тике
+/// карусели — на экране звуков это была перекладка текста и AnimatedContainer
+/// у всех видимых карточек сразу (владелец: «при листании лагает»).
+class _PickerCell<T> extends StatefulWidget {
+  const _PickerCell({
+    required this.index,
+    required this.item,
+    required this.controller,
+    required this.pendingSelect,
+    required this.animate,
+    required this.itemBuilder,
+    required this.onTap,
+  });
+
+  final int index;
+  final T item;
+  final PageController controller;
+  final int? pendingSelect;
+  final bool animate;
+  final Widget Function(BuildContext context, T item, bool selected)
+  itemBuilder;
+  final VoidCallback onTap;
+
+  @override
+  State<_PickerCell<T>> createState() => _PickerCellState<T>();
+}
+
+class _PickerCellState<T> extends State<_PickerCell<T>> {
+  bool _selected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_syncSelection);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PickerCell<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_syncSelection);
+      widget.controller.addListener(_syncSelection);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_syncSelection);
+    super.dispose();
+  }
+
+  bool _computeSelected() {
+    final pos = widget.controller.hasClients
+        ? (widget.controller.page ?? 0.0)
+        : 0.0;
+    final pending = widget.pendingSelect;
+    return pending != null
+        ? widget.index == pending
+        : (widget.index - pos).abs() < 0.5;
+  }
+
+  void _syncSelection() {
+    if (!mounted) return;
+    if (_computeSelected() == _selected) return;
+    // Контроллер уведомляет и из фазы раскладки: setState там запрещён,
+    // поэтому пересборку откладываем на конец кадра.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _computeSelected() != _selected) setState(() {});
+      });
+      return;
+    }
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Пересчитываем и здесь: родитель мог сменить pendingSelect/состав.
+    _selected = _computeSelected();
+    final content = PressScale(
+      pressedScale: 0.96,
+      duration: const Duration(milliseconds: 200),
+      child: ItemReveal(
+        key: ValueKey<Object>('picker_cell_${widget.item}'),
+        animate: widget.animate,
+        child: widget.itemBuilder(context, widget.item, _selected),
+      ),
+    );
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      child: AnimatedBuilder(
+        animation: widget.controller,
+        child: content,
+        builder: (context, child) {
+          // Масштаб/прозрачность по мере приближения к центру.
+          final pos = widget.controller.hasClients
+              ? (widget.controller.page ?? 0.0)
+              : 0.0;
+          final delta = (widget.index - pos).abs().clamp(0.0, 1.0);
+          final scale = 1.0 - 0.12 * delta;
+          final opacity = 1.0 - 0.35 * delta;
+          return Opacity(
+            opacity: opacity,
+            child: Transform.scale(scale: scale, child: child),
+          );
+        },
       ),
     );
   }

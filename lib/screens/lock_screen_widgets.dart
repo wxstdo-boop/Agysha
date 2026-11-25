@@ -1405,8 +1405,14 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
   }
 }
 
-/// Пятно от нажатия: блин с рваным краем, стекающей вниз гранью и несколькими
-/// брызгами-спутниками, которые вылетают чуть позже самого пятна.
+/// Отклик клавиши на нажатие: не клякса, а «жидкое стекло».
+///
+/// Раньше под цифрой расползалось рваное пятно с каплей вниз и брызгами —
+/// на зажатии это читалось как грязь на стекле. Теперь вместо него три
+/// спокойных слоя: мягкое цветное свечение под клавишей, ДВЕ тонкие волны,
+/// расходящиеся из центра (вторая отстаёт — появляется глубина), и узкий
+/// блик по верхней дуге, который делает клавишу стеклянной. Ни одного
+/// рваного контура, ни одной капли — только свет и цвет темы.
 class _SplatHighlightPainter extends CustomPainter {
   /// Яркость: 0 → 1 на подъёме, 1 → 0 на высыхании.
   final double t;
@@ -1424,98 +1430,67 @@ class _SplatHighlightPainter extends CustomPainter {
     required this.seed,
   });
 
-  /// Единичное пятно (центр 0,0, радиус 1) на заданный seed.
-  ///
-  /// Геометрия `_blob` линейна по радиусу: точка = центр + r·f(угол, seed),
-  /// поэтому путь достаточно построить ОДИН раз на seed, а дальше гонять его
-  /// через `Path.transform` (один вызов вместо 45 moveTo/lineTo и 9 пар
-  /// sin/cos на каждый кадр). Раньше пересборка шла ≈96 раз за одно зажатие
-  /// клавиши, и вместе со свечением через MaskFilter это давало ощутимые
-  /// просадки именно в момент нажатия — на слабом Adreno 610.
-  ///
-  /// Масштаб берём из path, а НЕ из CTM канваса: `MaskFilter.blur` задан в
-  /// пикселях устройства, и трансформация канваса по-разному трактуется
-  /// движками, а пиксельный результат обязан остаться прежним.
-  static final Map<double, Path> _unitBlobs = {};
-
-  static Path _unitBlob(double phase) {
-    final cached = _unitBlobs[phase];
-    if (cached != null) return cached;
-    final path = Path();
-    const n = 44;
-    for (var i = 0; i <= n; i++) {
-      final a = i / n * math.pi * 2;
-      final w =
-          1 +
-          0.14 * math.sin(a * 3 + phase) +
-          0.09 * math.sin(a * 5 + phase * 1.7) +
-          0.05 * math.sin(a * 9 + phase * 0.6);
-      final drip = math.max(0.0, math.sin(a)) * 0.18;
-      final x = math.cos(a) * w;
-      final y = math.sin(a) * (w * 0.9 + drip);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    path.close();
-    // Ключей реально 10 штук (по числу клавиш), потолок — на вырост.
-    if (_unitBlobs.length > 32) _unitBlobs.clear();
-    _unitBlobs[phase] = path;
-    return path;
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
     if (t <= 0.004) return;
     final c = Offset(size.width / 2, size.height / 2);
-    final r = size.width * (0.30 + 0.13 * spread);
-    // Тот же контур, что и раньше: единичный путь, растянутый на r и
-    // перенесённый в центр клавиши. Матрица записана столбцами напрямую
-    // (X-базис, Y-базис, Z-базис, перенос) — так же, как делает Matrix4, но
-    // без его deprecated-метода scale.
-    final blob = _unitBlob(seed).transform(
-      Float64List.fromList(<double>[
-        r, 0, 0, 0, //
-        0, r, 0, 0, //
-        0, 0, 1, 0, //
-        c.dx, c.dy, 0, 1, //
-      ]),
-    );
-    // Сначала — свечение тем же цветом (эффект = цвет + свет, а не размер),
-    // поверх него уже сам пигмент с рваным краем.
-    canvas.drawPath(
-      blob,
-      Paint()
-        ..color = color.withValues(alpha: 0.26 * t)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.34),
-    );
-    final paint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          color.withValues(alpha: 0.62 * t),
-          color.withValues(alpha: 0.44 * t),
-          color.withValues(alpha: 0.16 * t),
-        ],
-        stops: const [0.0, 0.62, 1.0],
-      ).createShader(Rect.fromCircle(center: c, radius: r * 1.3));
-    canvas.drawPath(blob, paint);
+    final w = size.width;
+    // У каждой клавиши свой лёгкий сдвиг рисунка: волны не выглядят
+    // штампом, но разница остаётся в пределах пары процентов.
+    final jitter = ((seed % 7) - 3) * 0.012;
+    // Свечение держится внутри клавиши: оно подсвечивает стекло изнутри,
+    // а не вылезает пятном за скругление.
+    final glowR = w * (0.34 + 0.10 * spread + jitter);
 
-    // Брызги-спутники: стартуют с задержкой, поэтому нажатие читается как
-    // удар капли, а не как появление лужи.
-    for (var k = 0; k < 3; k++) {
-      final tk = ((t - 0.22 - 0.14 * k) / 0.62).clamp(0.0, 1.0);
-      if (tk <= 0) continue;
-      final a = seed * 1.3 + k * 2.2;
-      final d = r * (1.12 + 0.16 * k);
-      final p = Offset(c.dx + math.cos(a) * d, c.dy + math.sin(a) * d * 0.82);
+    // 1. Мягкое цветное свечение: ядро под цифрой, к краю — в ноль.
+    canvas.drawCircle(
+      c,
+      glowR,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            color.withValues(alpha: 0.30 * t),
+            color.withValues(alpha: 0.12 * t),
+            color.withValues(alpha: 0),
+          ],
+          stops: const [0.0, 0.55, 1.0],
+        ).createShader(Rect.fromCircle(center: c, radius: glowR)),
+    );
+
+    // 2. Две тонкие волны из центра. Первая идёт от нажатия, вторая
+    // отстаёт и гаснет быстрее — вместе читается как рябь по стеклу, а не
+    // как сплошная заливка. Немного разный старт по seed: у каждой клавиши
+    // волна своя, но рисунок остаётся спокойным.
+    for (var i = 0; i < 2; i++) {
+      final ph = (spread * (1.05 + 0.06 * i) - 0.22 * i).clamp(0.0, 1.0);
+      if (ph <= 0.001) continue;
+      final rr = w * (0.22 + 0.44 * ph + jitter);
+      final fade = 1 - ph;
+      final alpha = (i == 0 ? 0.34 : 0.17) * t * (0.30 + 0.70 * fade * fade);
       canvas.drawCircle(
-        p,
-        size.width * (0.028 + 0.022 * k % 2) * tk,
-        Paint()..color = color.withValues(alpha: 0.44 * tk),
+        c,
+        rr,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = i == 0 ? 1.8 : 1.1
+          ..color = color.withValues(alpha: alpha),
       );
     }
+
+    // 3. Узкий блик по верхней дуге — «мокрое стекло». Цвет мягко подмешан
+    // к белому, чтобы на светлых палитрах читался свет, а не грязная полоса.
+    final sheen = Color.lerp(color, Colors.white, 0.72)!;
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: w * 0.285),
+      math.pi * 1.12,
+      math.pi * 0.62,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.7
+        ..strokeCap = StrokeCap.round
+        ..color = sheen.withValues(alpha: 0.34 * t),
+    );
   }
 
   @override

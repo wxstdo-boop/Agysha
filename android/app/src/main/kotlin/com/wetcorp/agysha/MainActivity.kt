@@ -74,7 +74,34 @@ class MainActivity : AudioServiceActivity() {
 
     private fun readRendererMode(): String =
         getSharedPreferences(RENDER_PREFS, Context.MODE_PRIVATE)
-            .getString(RENDER_KEY, "skia") ?: "skia"
+            .getString(RENDER_KEY, null) ?: autoRendererMode()
+
+    /**
+     * Движок по умолчанию — по GPU телефона, а не «Skia для всех».
+     *
+     * На Mali (MediaTek/Exynos/Tensor) Impeller считает размытия, тени и
+     * сохранение слоёв заметно дешевле Skia — именно Realme 14 5G (Mali-G57)
+     * и страдал от подтормаживаний на дефолтном Skia. На Adreno (Qualcomm)
+     * Impeller, наоборот, медленнее и рисует курсив с зазорами, поэтому там
+     * остаётся Skia. Вид интерфейса одинаков в обоих случаях; выбор в уголке
+     * разработчика по-прежнему перекрывает этот дефолт.
+     */
+    private fun autoRendererMode(): String {
+        val soc = try {
+            if (Build.VERSION.SDK_INT >= 31) {
+                "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}"
+            } else {
+                "${Build.HARDWARE} ${Build.BOARD} ${Build.MANUFACTURER}"
+            }
+        } catch (_: Throwable) {
+            ""
+        }.lowercase()
+        val mali = soc.contains("mediatek") || soc.contains("mt") ||
+            soc.contains("exynos") || soc.contains("tensor") ||
+            soc.contains("mali") || soc.contains("unisoc") ||
+            soc.contains("spreadtrum")
+        return if (mali) "impeller" else "skia"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

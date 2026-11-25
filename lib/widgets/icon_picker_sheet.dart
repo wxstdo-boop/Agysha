@@ -10,6 +10,9 @@ class IconPickerSheet extends StatelessWidget {
   static Future<int?> show(BuildContext context, int currentCodePoint) {
     return showModalBottomSheet<int>(
       context: context,
+      // Высоту задаём САМИ и заранее: сетка иконок обязана оставаться
+      // ленивой (см. ниже). Без этого шторка ужималась под содержимое.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -23,7 +26,12 @@ class IconPickerSheet extends StatelessWidget {
       // Закрываем фокус и НЕ вызываем requestFocus после выбора —
       // иначе системная клавиатура всплывает над списком, куда пользователь
       // вернулся (раньше это «дёргало» глаза после подбора иконки).
-      builder: (ctx) => IconPickerSheet(selectedCodePoint: currentCodePoint),
+      builder: (ctx) => SizedBox(
+        // Прежняя максимальная высота обычной шторки (9/16 экрана) — вид
+        // не меняется, но теперь у сетки есть ограниченная высота.
+        height: MediaQuery.sizeOf(ctx).height * 0.5625,
+        child: IconPickerSheet(selectedCodePoint: currentCodePoint),
+      ),
     );
   }
 
@@ -54,8 +62,15 @@ class IconPickerSheet extends StatelessWidget {
           const SizedBox(height: 16),
           Flexible(
             child: GridView.builder(
-              shrinkWrap: true,
+              // НЕ shrinkWrap: он заставлял сетку строить ВСЕ 488 плиток при
+              // открытии шторки, чтобы измерить себя. Отсюда «лаги при
+              // листании»: каждая прокрутка пересобирала/перекладывала
+              // сотни плиток. Высота задана шторкой (см. show), поэтому
+              // builder остаётся ленивым — живут только видимые плитки.
+              shrinkWrap: false,
+              padding: EdgeInsets.zero,
               physics: const AlwaysScrollableScrollPhysics(),
+              addAutomaticKeepAlives: false,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 8,
                 mainAxisSpacing: 6,
@@ -113,8 +128,11 @@ class _IconTileState extends State<_IconTile> {
         scale: _pressed ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 130),
         curve: Curves.easeOutCubic,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
+        // Обычный Container, а не AnimatedContainer: заливка/рамка тут не
+        // анимируются (выделение видно только до закрытия шторки), а 488
+        // неявных анимаций на открытом пикере — лишние контроллеры и
+        // перестройки на каждом кадре прокрутки.
+        child: Container(
           decoration: BoxDecoration(
             color: widget.selected
                 ? theme.colorScheme.primary.withValues(alpha: 0.2)

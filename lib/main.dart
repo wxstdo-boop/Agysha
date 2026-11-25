@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -1124,6 +1124,20 @@ void main() async {
   // (см. [AgyshaApp.splashElapsedMs]) и двойного ожидания не будет.
   final bootClock = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
+  // Ни одна сломанная сборка не должна оставлять ПУСТОЕ белое окно:
+  // в release ошибка в build рисует пустоту, и приложение выглядит как
+  // «запустилось и зависло». Свой обработчик показывает короткое понятное
+  // сообщение вместо этой пустоты.
+  ErrorWidget.builder = (details) {
+    if (kReleaseMode) return const BootErrorView();
+    return ErrorWidget(details.exception);
+  };
+  // Необработанные асинхронные ошибки логируем, но НЕ роняем главный
+  // изолят: падение изолята тоже читается как вечный белый экран.
+  ui.PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Uncaught async error: $error\n$stack');
+    return true;
+  };
   // Фоновый аудиоплагин и стартовое состояние не зависят друг от друга —
   // раньше они шли ЦЕПОЧКОЙ (init аудио → затем prefs, ключ, плагин
   // уведомлений, часовой пояс), и на Android их сумма платилась до первого
@@ -1312,6 +1326,63 @@ class _BootBackdrop extends StatelessWidget {
     return ColoredBox(
       color: brightness == Brightness.dark ? _dark : _light,
       child: const SizedBox.expand(),
+    );
+  }
+}
+
+/// Что видит человек, если кадр не собрался (release).
+///
+/// Своя минимальная вёрстка без MaterialApp/темы/локализации: этот виджет
+/// подставляется ВМЕСТО упавшего поддерева, поэтому он не имеет права
+/// зависеть от того, что могло не построиться. Никаких ассетов и шрифтов —
+/// только цвета и текст.
+class BootErrorView extends StatelessWidget {
+  const BootErrorView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark =
+        View.of(context).platformDispatcher.platformBrightness ==
+        Brightness.dark;
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: ColoredBox(
+        color: dark ? kBootBackdropDark : kBootBackdropLight,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Agysha',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: dark ? Colors.white : const Color(0xFF2A1B21),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Что-то пошло не так на этом экране.\n'
+                  'Вернитесь назад — данные не потеряны.\n\n'
+                  'Something went wrong on this screen.\n'
+                  'Go back — your data is safe.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.45,
+                    color: dark
+                        ? Colors.white.withValues(alpha: 0.72)
+                        : const Color(0xFF2A1B21).withValues(alpha: 0.68),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1626,6 +1697,23 @@ class AgyshaAppState extends State<AgyshaApp>
   /// если [_goHome] вызван и сплэшем, и решением будильника.
   bool _homeScheduled = false;
 
+  /// Поколение запланированного выхода на Home. Страховочный таймер и
+  /// повторный [_goHome] повышают его, чтобы отложенный `whenComplete`
+  /// не запушил Home второй раз поверх уже показанного.
+  int _homeToken = 0;
+
+  /// Home уже стоит на экране. По нему страховочный [_bootWatchdog] решает,
+  /// надо ли досрочно выводить человека с заставки.
+  bool _homePushed = false;
+
+  /// Сколько раз [_goHome] повторяли поиск навигатора в следующих кадрах.
+  int _homeRetries = 0;
+
+  /// Последняя страховка старта: если через 6 секунд Home так и не встал,
+  /// а PIN не запрашивается и будильник не звонит — показываем Home.
+  /// Без неё любой потерянный сигнал от сплэша оставлял заставку навсегда.
+  Timer? _bootWatchdog;
+
   /// Приложение ушло в фон (экран погас / свёрнуто) — при возврате нужно
   /// снова спросить PIN. Не ставим, если уходили в системный диалог/настройки
   /// ([systemUiActive]) или на экране будильника ([_wakeScreenShowing]):
@@ -1797,13 +1885,28 @@ class AgyshaAppState extends State<AgyshaApp>
     if (_wakeScreenShowing) return;
     aiLockScreenVisible.value = false;
     final nav = navigatorKey.currentState;
-    if (nav == null) return;
+    if (nav == null) {
+      // Навигатор мог ещё не подняться, если сплэш позвал onDone в первом
+      // же кадре. Раньше здесь стоял тихий `return` — и приложение
+      // оставалось на заставке навсегда (читается как «вечный белый экран»).
+      // Повторяем в следующем кадре, но не бесконечно: страховку на совсем
+      // потерянный навигатор держит таймер в initState.
+      if (_homeRetries < 20) {
+        _homeRetries++;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _goHome();
+        });
+      }
+      return;
+    }
+    _homeRetries = 0;
     // Ждём готовности данных, чтобы Home смонтировался сразу со списками:
     // на слабом железе сплэш заканчивался раньше загрузки, и разделы
     // мелькали пустым состоянием до прихода данных (те самые «флики»).
     // Сплэш уже погасил тяжёлую левитацию, так что ожидание почти незаметно.
     final ready = _dataReady;
     if (ready == null) {
+      _homeToken++;
       _pushHome(nav);
       return;
     }
@@ -1811,6 +1914,7 @@ class AgyshaAppState extends State<AgyshaApp>
     // не должен запушить Home дважды.
     if (_homeScheduled) return;
     _homeScheduled = true;
+    final token = ++_homeToken;
     // Ждём данные, но НЕ вечно: девять файлов читаются с диска и
     // расшифровываются. Если чтение зависло (битый Keystore, диск занят
     // индексацией), `whenComplete` не срабатывал никогда — сплэш гас, а
@@ -1824,6 +1928,8 @@ class AgyshaAppState extends State<AgyshaApp>
             swallow('startup data', error, stack);
           })
           .whenComplete(() {
+            // Страховочный таймер уже вывел Home — не пушим второй раз.
+            if (token != _homeToken) return;
             _homeScheduled = false;
             if (!mounted) return;
             _pushHome(nav);
@@ -1832,6 +1938,8 @@ class AgyshaAppState extends State<AgyshaApp>
   }
 
   void _pushHome(NavigatorState nav) {
+    _homePushed = true;
+    _bootWatchdog?.cancel();
     // Лёгкий кросс-фейд (без slide+scale на весь 4-экранный дом):
     // тяжёлый [slideUpRoute] на большом PageView давал «подтормоз» на
     // первом кадре после сплэша.
@@ -1942,6 +2050,19 @@ class AgyshaAppState extends State<AgyshaApp>
     // сразу, а не только при следующем запуске/возврате из фона.
     SettingsService.aiTracking.addListener(_onAiTrackingChanged);
     _armAdaTrackingTimer();
+    // Страховка старта: сплэш отдаёт управление через 1.95 с, но если этот
+    // сигнал потерян (навигатор не поднялся, Home упал на первом кадре),
+    // раньше человек навсегда оставался на заставке. Здесь выходим на Home
+    // принудительно. PIN и звонок будильника не перебиваем — они и есть
+    // правильный экран.
+    _bootWatchdog = Timer(const Duration(seconds: 6), () {
+      if (!mounted || _homePushed || _wakeScreenShowing || _locked) return;
+      final nav = navigatorKey.currentState;
+      if (nav == null) return;
+      _homeToken++;
+      _homeScheduled = false;
+      _pushHome(nav);
+    });
   }
 
   void _onAiTrackingChanged() {
@@ -2016,6 +2137,7 @@ class AgyshaAppState extends State<AgyshaApp>
 
   @override
   void dispose() {
+    _bootWatchdog?.cancel();
     _stopOverlayCheck();
     _adaTrackTimer?.cancel();
     aiFloating.removeListener(_onAiFloatingChanged);

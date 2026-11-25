@@ -838,6 +838,14 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                   pressedScale: 0.94,
                   duration: const Duration(milliseconds: 140),
                   releaseDuration: const Duration(milliseconds: 220),
+                  // Card ниже залит непрозрачной поверхностью, поэтому
+                  // pressTint под содержимым не виден. Отдача фона — слоем
+                  // ПОВЕРХ карточки: под пальцем она темнеет красноватым,
+                  // а не только сжимается.
+                  pressOverlay: pressTintOverlay(
+                    BorderRadius.circular(20),
+                    strength: 0.07,
+                  ),
                   child: Card(
                     clipBehavior: Clip.antiAlias,
                     shape: RoundedRectangleBorder(
@@ -911,6 +919,12 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                             items: _availableSounds,
                             selected: _soundName,
                             height: 84,
+                            // Карточки звуков были заметно уже карточки
+                            // настроек и выглядели «скукоженными»: при 0.6
+                            // в ячейку помещалось меньше половины полосы.
+                            // 0.72 возвращает им прежнюю ровную ширину, а
+                            // крайние соседи по-прежнему выглядывают.
+                            viewportFraction: 0.72,
                             onChanged: (s) => setState(() => _soundName = s),
                             itemBuilder: (context, s, selected) {
                               final isCustom = s == 'Custom';

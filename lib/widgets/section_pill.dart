@@ -76,16 +76,29 @@ final ValueNotifier<int> sectionTabTap = ValueNotifier<int>(0);
 /// связи, что уже используют [sectionCurrentIndex] и [sectionRailPage].
 final ValueNotifier<double?> sectionDragPage = ValueNotifier<double?>(null);
 
+/// Мостик «раздел проверок уезжает».
+///
+/// Когда проверки выключают, четвёртый раздел не может исчезнуть в том же
+/// кадре: PageView тогда клампит 3-ю страницу на 2-ю скачком, подпись
+/// «Проверки» пропадает мгновенно, и таблетка «перескакивает» на ширину
+/// ячейки. Поэтому сначала Home мягко доводит карусель на «Задачи» и лишь
+/// потом снимает этот флаг — только тогда раздел убирается из списка.
+final ValueNotifier<bool> sectionRcLeaving = ValueNotifier<bool>(false);
+
+/// Показывается ли раздел проверок сейчас (включён или ещё уезжает).
+bool sectionRcTabShown() =>
+    RealityCheckService().enabled || sectionRcLeaving.value;
+
 /// Значки разделов: у каждого своя геометрическая фигура.
-final List<
-  Widget Function(
-    BuildContext context, {
-    double size,
-    Color? color,
-    double? strokeWidth,
-  })
->
-sectionIconBuilders = [
+typedef SectionIconBuilder =
+    Widget Function(
+      BuildContext context, {
+      double size,
+      Color? color,
+      double? strokeWidth,
+    });
+
+final List<SectionIconBuilder> sectionIconBuilders = [
   (context, {size = 17, color, strokeWidth}) => AgAlarmIcon(
     size: size,
     color: color,
@@ -115,7 +128,7 @@ sectionIconBuilders = [
 /// аббревиатура из двух букв выглядела заметно короче соседей и ломала
 /// ровный ритм четырёх разделов.
 List<String> sectionLabels(BuildContext context) {
-  final rcOn = RealityCheckService().enabled;
+  final rcOn = sectionRcTabShown();
   return [
     Translations.alarmsOf(context),
     Translations.habitsOf(context),
@@ -125,16 +138,10 @@ List<String> sectionLabels(BuildContext context) {
 }
 
 /// Значки разделов с учётом настроек: при выключенных проверках реальности
-/// РП-раздел (и его значок) не должен быть виден вообще.
-List<
-  Widget Function(
-    BuildContext context, {
-    double size,
-    Color? color,
-    double? strokeWidth,
-  })
->
-sectionIconsFor(BuildContext context) {
+/// РП-раздел (и его значок) не должен быть виден вообще — но пока раздел
+/// «уезжает» ([sectionRcLeaving]), его значок ещё на месте, чтобы набор
+/// разделов не сжимался в том же кадре, что и позиция карусели.
+List<SectionIconBuilder> sectionIconsFor(BuildContext context) {
   final count = sectionLabels(context).length;
   return sectionIconBuilders.sublist(0, count);
 }
@@ -236,6 +243,11 @@ class _SectionPillState extends State<SectionPill>
     if (mounted) setState(() {});
   }
 
+  /// Флаг «раздел проверок уезжает» тоже меняет состав подписей.
+  void _onRcLeavingChanged() {
+    if (mounted) setState(() {});
+  }
+
   /// Внутренняя ширина капсулы: 304 минус набивка 4 слева и справа. Ровно
   /// столько же занимает жест-дорожка: она лежит в `Stack(StackFit.expand)`.
   /// По этой ширине палец переводится в долю карусели — камень едет ровно
@@ -254,10 +266,6 @@ class _SectionPillState extends State<SectionPill>
   /// «Расслабление» после отпускания: один контроллер, 220 мс, easeOut.
   /// Никаких Timer'ов и второго setState.
   late final AnimationController _edgeSettle;
-
-  /// Плавный довод камня на отпускании (landing): устраняет любой скачок.
-  late final AnimationController _landingCtrl;
-  double _landingFrom = 0.0;
 
   /// Куда палец увёл камень (дробная страница).
   double _dragPage = 0;
@@ -291,10 +299,7 @@ class _SectionPillState extends State<SectionPill>
     super.initState();
     // Четвёртый раздел «Проверки» появляется/исчезает сразу по тумблеру.
     RealityCheckService().addListener(_onRcChanged);
-    _landingCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-    );
+    sectionRcLeaving.addListener(_onRcLeavingChanged);
     _edgeSettle =
         AnimationController(
           vsync: this,
@@ -335,7 +340,7 @@ class _SectionPillState extends State<SectionPill>
   @override
   void dispose() {
     RealityCheckService().removeListener(_onRcChanged);
-    _landingCtrl.dispose();
+    sectionRcLeaving.removeListener(_onRcLeavingChanged);
     _edgeSettle.dispose();
     _edgePullNotifier.dispose();
     // Экран мог закрыться прямо во время тяги — не оставляем Home с
@@ -347,7 +352,6 @@ class _SectionPillState extends State<SectionPill>
   void _dragStart(DragStartDetails details, int count) {
     if (count < 2) return;
     _dragging = true;
-    _landingCtrl.stop();
     // Новый жест отменяет «расслабление» предыдущего: камень, ещё
     // растянутый старой тягой, не должен прыгать в ноль по-своему.
     _edgeSettle.stop();
@@ -375,6 +379,9 @@ class _SectionPillState extends State<SectionPill>
     _dragFingerX = details.localPosition.dx + _dragGrabOffset;
     _dragNearest = _dragPage.round();
     sectionDragPage.value = _dragPage;
+    // Отдача ячеек на время тяги выключается (enabled: !_dragging); раньше
+    // это приходило из пересборки на каждом тике sectionDragPage.
+    if (mounted) setState(() {});
   }
 
   void _dragUpdate(DragUpdateDetails details, int count) {
@@ -455,14 +462,12 @@ class _SectionPillState extends State<SectionPill>
   void _dragEnd(int count) {
     if (!_dragging) return;
     _dragging = false;
+    if (mounted) setState(() {});
     // Волна НЕ фиксируется: она и так считается из живой позиции карусели,
     // поэтому при отпускании камень продолжает форму плавно, без рывка в
     // растянутое положение. Гасим только захваченную тягу за край.
     _startEdgeSettle();
     final target = _dragNearest.clamp(0, count - 1);
-    _landingFrom = _dragPage;
-    // Запускаем мягкий довод
-    _landingCtrl.forward(from: 0.0);
     // Сначала фиксируем целевой раздел, чтобы подписчики sectionDragPage.value = null
     // мягко довели карусель пружиной Home.
     sectionCurrentIndex.value = target;
@@ -472,6 +477,7 @@ class _SectionPillState extends State<SectionPill>
   void _dragCancel() {
     if (!_dragging) return;
     _dragging = false;
+    if (mounted) setState(() {});
     // Отмена (палец ушёл не по сценарию): то же гашение захваченной тяги.
     _startEdgeSettle();
     final count = sectionIconsFor(context).length;
@@ -479,8 +485,6 @@ class _SectionPillState extends State<SectionPill>
       final target = sectionRailPage.value.round().clamp(0, count - 1);
       sectionCurrentIndex.value = target;
     }
-    _landingFrom = _dragPage;
-    _landingCtrl.forward(from: 0.0);
     sectionDragPage.value = null;
   }
 
@@ -507,6 +511,7 @@ class _SectionPillState extends State<SectionPill>
     final iconBuilders = sectionIconsFor(context);
     final count = iconBuilders.length;
     if (count == 0) return const SizedBox.shrink();
+    final dark = Theme.of(context).brightness == Brightness.dark;
 
     // Таблетка разделов без фонов: полупрозрачные тексты разделов
     // и плавно скользящая яркая красная плашка-индикатор выбранного раздела.
@@ -531,43 +536,20 @@ class _SectionPillState extends State<SectionPill>
                   clipBehavior: Clip.antiAlias,
                   borderRadius: BorderRadius.circular(21),
                   child: AnimatedBuilder(
-                    // ЕДИНЫЙ слушатель на все каналы изменения таблетки:
-                    // устраняет вложенный AnimatedBuilder, исключая двойную пересборку
-                    // дерева на каждый тик (нет микрофризов и дёрганий).
+                    // ЕДИНЫЙ слушатель на смену выбранного раздела и на
+                    // исчезновение «Проверок». Позицию карусели таблетка
+                    // больше не читает: каждое слово само следит за
+                    // sectionRailPage и перекрашивается кросс-фейдом внутри
+                    // себя (см. _PillLabel), поэтому листание не пересобирает
+                    // всю строку и не пере-раскладывает все подписи.
                     animation: Listenable.merge([
-                      _edgeSettle,
-                      _landingCtrl,
-                      _edgePullNotifier,
                       sectionCurrentIndex,
-                      sectionDragPage,
-                      sectionRailPage,
+                      sectionRcLeaving,
                     ]),
                     builder: (context, _) {
-                      final current = sectionCurrentIndex.value;
-                      final dragPage = sectionDragPage.value;
-                      final page = sectionRailPage.value;
-                      final cs = Theme.of(context).colorScheme;
-                      final dark =
-                          Theme.of(context).brightness == Brightness.dark;
-                      double rawPage;
-                      if (_dragging && dragPage != null) {
-                        rawPage = dragPage.clamp(0.0, (count - 1).toDouble());
-                      } else if (_landingCtrl.isAnimating) {
-                        final t = Curves.easeOutCubic.transform(
-                          _landingCtrl.value,
-                        );
-                        final base = page.isFinite ? page : current.toDouble();
-                        rawPage = _landingFrom + (base - _landingFrom) * t;
-                      } else {
-                        // Непрерывное следование за каруселью без ступенчатых мертвых зон
-                        rawPage = page.isFinite ? page : current.toDouble();
-                      }
                       return _buildStoneRow(
                         context: context,
-                        cs: cs,
                         dark: dark,
-                        current: current,
-                        rawPage: rawPage,
                         count: count,
                         icons: iconBuilders,
                         labels: labels,
@@ -585,24 +567,19 @@ class _SectionPillState extends State<SectionPill>
 
   Widget _buildStoneRow({
     required BuildContext context,
-    required ColorScheme cs,
     required bool dark,
-    required int current,
-    required double rawPage,
     required int count,
-    required List<
-      Widget Function(
-        BuildContext context, {
-        double size,
-        Color? color,
-        double? strokeWidth,
-      })
-    >
-    icons,
+    required List<SectionIconBuilder> icons,
     required List<String> labels,
   }) {
-    final p = rawPage.clamp(0.0, (count - 1).toDouble());
-    final selectedIndex = p.round().clamp(0, count - 1);
+    // Выбранный раздел — тот, куда переключились. Дробную позицию карусели
+    // строка больше не читает: она приходила каждый кадр листания и гнала
+    // полную пересборку Row со всеми подписями (на этом и подтормаживало
+    // в конце доводки). Теперь каждое слово само кросс-фейдит свой тон.
+    final selectedIndex = sectionCurrentIndex.value.clamp(0, count - 1);
+    // Раздел проверок, который уже выключен, но ещё уезжает: он гаснет
+    // прозрачностью, а не пропадает кадром.
+    final rcFading = !RealityCheckService().enabled && sectionRcLeaving.value;
 
     // Постоянной подложки-камня здесь БОЛЬШЕ НЕТ: разделы живут обычным
     // полупрозрачным текстом, а плашка вспыхивает только под пальцем
@@ -633,9 +610,9 @@ class _SectionPillState extends State<SectionPill>
               return Row(
                 children: List.generate(count, (i) {
                   final label = i < labels.length ? labels[i] : '';
-                  final proximity = (1.0 - (p - i).abs()).clamp(0.0, 1.0);
                   final isSelected = selectedIndex == i;
-                  final badgeT = (proximity * 48).round() / 48;
+                  final fading =
+                      rcFading && i == sectionIconBuilders.length - 1;
                   // Обычный текст — заметно полупрозрачный, чтобы читался как
                   // тихий фон, а не как конкурирующие с контентом подписи.
                   // Выделение — мягкий красный той же «тихой» насыщенности:
@@ -651,7 +628,7 @@ class _SectionPillState extends State<SectionPill>
                       // InkWell + подложка отдачи), а не только буквы. Раньше
                       // фон оставался на месте и нажатие читалось «наполовину».
                       child: PressScale(
-                        enabled: !_dragging,
+                        enabled: !_dragging && !fading,
                         pressedScale: 0.94,
                         // Отдача под пальцем: мягкая красная плашка на всю
                         // ячейку раздела. Она живёт ТОЛЬКО пока палец лежит
@@ -684,13 +661,15 @@ class _SectionPillState extends State<SectionPill>
                             borderRadius: BorderRadius.circular(18),
                             splashColor: Colors.transparent,
                             highlightColor: Colors.transparent,
-                            onTap: () {
-                              if (!mounted) return;
-                              Haptics.select();
-                              _settleForTap();
-                              sectionCurrentIndex.value = i;
-                              sectionTabTap.value++;
-                            },
+                            onTap: fading
+                                ? null
+                                : () {
+                                    if (!mounted) return;
+                                    Haptics.select();
+                                    _settleForTap();
+                                    sectionCurrentIndex.value = i;
+                                    sectionTabTap.value++;
+                                  },
                             child: Center(
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -699,7 +678,10 @@ class _SectionPillState extends State<SectionPill>
                                 ),
                                 child: _PillLabel(
                                   label: label,
-                                  glow: badgeT,
+                                  index: i,
+                                  count: count,
+                                  icon: i < icons.length ? icons[i] : null,
+                                  fading: fading,
                                   dark: dark,
                                   fontSize: fontSize,
                                 ),
@@ -727,7 +709,9 @@ class _SectionPillState extends State<SectionPill>
     // Внутри ячейки ещё по 4 px отступа слева и справа (padding у подписи),
     // и раньше они вычитались ОДИН раз на всю строку — при четырёх разделах
     // самой длинной подписи не хватало пары пикселей, и она уходила в «…».
-    final cell = width / count - 8;
+    // Минус 8 px на набивку ячейки и ещё ~15 px на значок с зазором:
+    // подпись делит ячейку со маленьким значком раздела.
+    final cell = width / count - 8 - 15;
     for (final size in const [
       14.0,
       13.5,
@@ -766,21 +750,29 @@ class _SectionPillState extends State<SectionPill>
   }
 }
 
-/// Подпись раздела с ПОЗДНИМ выделением.
+/// Подпись раздела с ПОЗДНИМ выделением и своим значком слева.
 ///
-/// Раньше красноватый тон считался прямо из позиции карусели и менялся тем
-/// же кадром, что и палец: при быстрых тапах подсветка «щёлкала» с раздела
-/// на раздел. Здесь каждое слово само тянется к новой яркости 480 мс —
-/// выделение приходит СЛЕДОМ за выбором и не мигает при серии тапов.
+/// Раньше красноватый тон считался прямо из позиции карусели в родителе и
+/// менялся тем же кадром, что и палец, а строка разделов пересобиралась на
+/// каждом тике листания. Теперь каждое слово само слушает [sectionRailPage]
+/// и тянется к новой яркости кросс-фейдом (см. _ctrl): выделение приходит
+/// СЛЕДОМ за выбором, не мигает при серии тапов, и листание не пере-раскладывает
+/// остальные подписи.
 class _PillLabel extends StatefulWidget {
   final String label;
-  final double glow;
+  final int index;
+  final int count;
+  final SectionIconBuilder? icon;
+  final bool fading;
   final bool dark;
   final double fontSize;
 
   const _PillLabel({
     required this.label,
-    required this.glow,
+    required this.index,
+    required this.count,
+    required this.icon,
+    required this.fading,
     required this.dark,
     required this.fontSize,
   });
@@ -799,28 +791,50 @@ class _PillLabelState extends State<_PillLabel>
     duration: const Duration(milliseconds: 300),
     value: 1,
   );
-  late double _from = widget.glow;
-  late double _to = widget.glow;
+  late double _from = _target();
+  late double _to = _target();
+
+  /// Насколько слово «своё» для текущей позиции карусели: 1 — по центру,
+  /// 0 — соседнее. Квантование 1/48 повторяет прежний родительский шаг и
+  /// глушит дребезг мелких подшагов, чтобы цвет не дрожал.
+  double _target() {
+    if (widget.count <= 1) return 1;
+    final raw = sectionDragPage.value ?? sectionRailPage.value;
+    final page = raw.isFinite ? raw.toDouble() : 0.0;
+    final proximity = (1.0 - (page - widget.index).abs()).clamp(0.0, 1.0);
+    return (proximity * 48).round() / 48;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    sectionRailPage.addListener(_syncGlow);
+    sectionDragPage.addListener(_syncGlow);
+  }
 
   @override
   void didUpdateWidget(covariant _PillLabel old) {
     super.didUpdateWidget(old);
-    // Порог 0.02: при драге glow приходит каждый кадр, и раньше каждая
-    // такая мелочь перезапускала анимацию — цвет «дрожал» и догонял
-    // рывками. Теперь стартуем только на заметном шаге.
-    // Цель обновляем ВСЕГДА: раньше мелкие шаги (<0.02) игнорировались
-    // вместе с целью, и при серии быстрых переключений _to «застревал» на
-    // старом значении — выбранная подпись оставалась красной навсегда.
-    if ((old.glow - widget.glow).abs() < 0.02) {
+    if (old.index != widget.index || old.count != widget.count) _syncGlow();
+  }
+
+  /// Порог 0.02: при драге цель приходит каждый кадр, и раньше каждая
+  /// такая мелочь перезапускала анимацию — цвет «дрожал» и догонял рывками.
+  /// Цель обновляем ВСЕГДА, иначе при серии быстрых переключений _to
+  /// «застревал» и выбранная подпись оставалась красной навсегда.
+  void _syncGlow() {
+    if (!mounted) return;
+    final target = _target();
+    if ((target - _to).abs() < 0.02) {
       if (!_ctrl.isAnimating) {
-        _from = widget.glow;
-        _to = widget.glow;
+        _from = target;
+        _to = target;
       }
       return;
     }
     _from = _value;
-    _to = widget.glow;
-    // Длительность НЕ трогаем: смена её на каждом кадре драга постоянно
+    _to = target;
+    // Длительность НЕ трогаем: смена её на каждом кадре постоянно
     // перезапускала контроллер, и цвет подписи шёл рваными шагами.
     _ctrl.forward(from: 0);
   }
@@ -832,8 +846,32 @@ class _PillLabelState extends State<_PillLabel>
 
   @override
   void dispose() {
+    sectionRailPage.removeListener(_syncGlow);
+    sectionDragPage.removeListener(_syncGlow);
     _ctrl.dispose();
     super.dispose();
+  }
+
+  /// Значок слева от подписи: маленький, полупрозрачно-красный, у каждого
+  /// раздела свой (см. [sectionIconBuilders]). У выбранного раздела он
+  /// краснеет вместе с текстом — тем же кросс-фейдом, поэтому значок и
+  /// подпись всегда «одного цвета».
+  Widget _buildIcon(BuildContext context) {
+    final builder = widget.icon;
+    if (builder == null) return const SizedBox.shrink();
+    final idle = const Color(
+      0xFFFF453A,
+    ).withValues(alpha: widget.dark ? 0.34 : 0.38);
+    final active = const Color(0xFFFF453A).withValues(alpha: 0.72);
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) => builder(
+        context,
+        size: 11.5,
+        color: Color.lerp(idle, active, _value.clamp(0.0, 1.0)),
+        strokeWidth: 1.2,
+      ),
+    );
   }
 
   @override
@@ -854,37 +892,52 @@ class _PillLabelState extends State<_PillLabel>
     final activeStyle = baseStyle.copyWith(
       color: const Color(0xFFFF453A).withValues(alpha: 0.66),
     );
-    return RepaintBoundary(
-      // Страховка кегля: если подпись всё-таки на пару пикселей шире ячейки
-      // (крупный системный шрифт, узкий экран), она мягко уменьшается ЦЕЛИКОМ,
-      // а не превращается в «Будиль…». Оба слоя — одна и та же строка, так
-      // что масштаб у них общий и кросс-фейд не «прыгает».
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Text(
-              widget.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: baseStyle,
-            ),
-            AnimatedBuilder(
-              animation: _ctrl,
-              builder: (context, _) => Opacity(
-                opacity: _value.clamp(0.0, 1.0),
-                child: Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: activeStyle,
-                ),
+    return AnimatedOpacity(
+      // Раздел проверок, который только что выключили, гаснет на месте:
+      // список при этом ещё прежний, поэтому подпись не выдёргивается
+      // кадром и соседи не прыгают.
+      opacity: widget.fading ? 0.0 : 1.0,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      child: RepaintBoundary(
+        // Страховка кегля: если подпись всё-таки на пару пикселей шире ячейки
+        // (крупный системный шрифт, узкий экран), она мягко уменьшается ЦЕЛИКОМ,
+        // а не превращается в «Будиль…». Оба слоя — одна и та же строка, так
+        // что масштаб у них общий и кросс-фейд не «прыгает».
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildIcon(context),
+              if (widget.icon != null) const SizedBox(width: 3.5),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: baseStyle,
+                  ),
+                  AnimatedBuilder(
+                    animation: _ctrl,
+                    builder: (context, _) => Opacity(
+                      opacity: _value.clamp(0.0, 1.0),
+                      child: Text(
+                        widget.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: activeStyle,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

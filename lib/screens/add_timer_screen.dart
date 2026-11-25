@@ -481,6 +481,12 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
                 maxTiltAngle: 0.12,
                 duration: const Duration(milliseconds: 180),
                 releaseDuration: const Duration(milliseconds: 300),
+                // Непрозрачная Card перекрывает pressTint — отдача фона
+                // слоем поверх, иначе нажатие читалось «без фона».
+                pressOverlay: pressTintOverlay(
+                  BorderRadius.circular(20),
+                  strength: 0.07,
+                ),
                 child: Card(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),

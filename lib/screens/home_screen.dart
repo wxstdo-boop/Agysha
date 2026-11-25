@@ -166,6 +166,9 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _showWelcomeOnce());
   }
 
+  /// Досрочно снимает «уезжающий» раздел проверок (см. _onRcChanged).
+  Timer? _rcLeaveTimer;
+
   void _onPillSnapTarget() {
     final target = sectionPillSnapTarget.value;
     if (target == null) {
@@ -187,15 +190,51 @@ class _HomeScreenState extends State<HomeScreen>
   void _onRcChanged() {
     if (!mounted) return;
     final on = RealityCheckService().enabled;
+    if (on) {
+      // Включили: раздел появляется в этом же кадре (его мягко проявляет
+      // _SectionReveal), флаг «уезжает» снимаем на случай гонки.
+      if (sectionRcLeaving.value) sectionRcLeaving.value = false;
+      setState(() {});
+      return;
+    }
+    if (sectionRcLeaving.value) return;
+    // Выключили РП, а раздел ещё в карусели. Раньше setState выдёргивал его
+    // тем же кадром: PageView клампил страницу 3→2 скачком, подпись
+    // «Проверки» пропадала мгновенно, а таблетка прыгала на ширину ячейки.
+    // Теперь сначала подпись гаснет и карусель мягко уезжает на «Задачи»
+    // (флаг sectionRcLeaving держит раздел в списке и в таблетке), и только
+    // по прибытии четвёртый раздел убирается.
+    sectionRcLeaving.value = true;
     setState(() {});
-    // Выключили РП, стоя на его разделе: раздел исчез из карусели, и без
-    // переезда Home остался бы «между» страницами. Мягко уезжаем на
-    // «Задачи» — визуально раздел уходит так же плавно, как появляется.
-    if (!on && _currentIndex.value >= 3) {
+    _rcLeaveTimer?.cancel();
+    // «Проверки» — последняя страница карусели; живая цель после них — «Задачи».
+    final lastAlive = _pagesCount - 2;
+    final page = _pageController.hasClients
+        ? (_pageController.page ?? _currentIndex.value.toDouble())
+        : _currentIndex.value.toDouble();
+    final wasOnRc = page > (_pagesCount - 1.5);
+    if (wasOnRc && lastAlive > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _pagesCount > 0) _onTabTap(_pagesCount - 1);
+        if (mounted) {
+          _onTabTap(lastAlive);
+        }
       });
     }
+    // 240 мс гаснет подпись. Если уезжали — раздел держим, пока карусель не
+    // встанет на живую страницу (страховочный таймер на случай, если пружина
+    // не дошла); иначе просто даём подписи погаснуть.
+    _rcLeaveTimer = Timer(
+      Duration(milliseconds: wasOnRc ? 900 : 240),
+      _finishRcLeaving,
+    );
+  }
+
+  /// Раздел проверок погас и карусель доехала — убираем его по-настоящему.
+  void _finishRcLeaving() {
+    if (!mounted) return;
+    if (RealityCheckService().enabled) return;
+    if (sectionRcLeaving.value) sectionRcLeaving.value = false;
+    setState(() {});
   }
 
   /// Тап по разделу в таблетке (она внутри скролл-контента экранов).
@@ -236,6 +275,7 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     _dragHold?.cancel();
     _tapWatchdog?.cancel();
+    _rcLeaveTimer?.cancel();
     _dragHold = null;
     WidgetsBinding.instance.removeObserver(this);
     sectionPillSnapTarget.removeListener(_onPillSnapTarget);
@@ -588,11 +628,15 @@ class _HomeScreenState extends State<HomeScreen>
     final rcOn = rcSvc.enabled;
     // When user disables Reality Checks in Settings, the 'Rb' tile is
     // hidden from Home -- both the top chip and the PageView entry.
+    // Раздел проверок держим в списке и пока он «уезжает»: иначе счётчик
+    // здесь съезжал бы на единицу раньше карусели и страж ниже уводил бы
+    // её на первую страницу скачком вместо мягкого отъезда на «Задачи».
+    final rcTab = rcOn || sectionRcLeaving.value;
     final tabs = <String>[
       Translations.alarmsOf(context),
       Translations.habitsOf(context),
       Translations.tasksOf(context),
-      if (rcOn) Translations.rcOf(context),
+      if (rcTab) Translations.rcOf(context),
     ];
 
     // If user is on the 'Rb' tab and toggles it off in Settings (so the
@@ -603,9 +647,12 @@ class _HomeScreenState extends State<HomeScreen>
     if (_currentIndex.value >= tabs.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
+          // Уводим на ПОСЛЕДНЮЮ живую страницу, а не на первую: прыжок
+          // «0-я страница» читался как сброс приложения.
+          final last = tabs.length - 1;
           _pageSpring.stop();
-          _pageController.jumpToPage(0);
-          _currentIndex.value = 0;
+          _pageController.jumpToPage(last);
+          _currentIndex.value = last;
         }
       });
     }
@@ -632,7 +679,7 @@ class _HomeScreenState extends State<HomeScreen>
           child: TasksScreen(scrollOffset: sectionScrollOffset, pillIndex: 2),
         ),
       ),
-      if (rcOn)
+      if (rcOn || sectionRcLeaving.value)
         _PageTickerGate(
           index: 3,
           page: _railPage,
