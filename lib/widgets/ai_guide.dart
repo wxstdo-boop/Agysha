@@ -31,7 +31,6 @@ import '../widgets/beautiful_selection.dart';
 import '../widgets/smooth_tooltip.dart';
 import '../widgets/smooth_typing.dart';
 import 'agysha_confirm_dialog.dart';
-import 'inline_keyboard.dart';
 import '../utils/design_tokens.dart';
 import '../widgets/smooth_caret.dart';
 
@@ -442,7 +441,7 @@ class _AiChatSheetState extends State<_AiChatSheet>
     final usableH = math.max(mq.size.height - keyboard, 240.0);
     final maxH = math.max(usableH - 12, 200.0);
     // 0.86 вместо 0.94: окно не «долбит» в верхний и нижний край экрана,
-    // остаётся воздух вокруг, а встроенная клавиатура влезает целиком.
+    // остаётся воздух вокруг, а системная клавиатура влезает целиком.
     final sheetHeight = (usableH * 0.86)
         .clamp(math.min(300.0, maxH), maxH)
         .toDouble();
@@ -1504,47 +1503,6 @@ class _AiChatBodyState extends State<_AiChatBody>
     );
   }
 
-  void _insertChar(String ch) {
-    final t = _inputCtrl.text;
-    final sel = _inputCtrl.selection;
-    if (sel.isValid && sel.start >= 0 && sel.end >= sel.start) {
-      final newText = t.replaceRange(sel.start, sel.end, ch);
-      _inputCtrl.text = newText;
-      _inputCtrl.selection = TextSelection.collapsed(
-        offset: sel.start + ch.length,
-      );
-    } else {
-      _inputCtrl.text = t + ch;
-      _inputCtrl.selection = TextSelection.collapsed(
-        offset: _inputCtrl.text.length,
-      );
-    }
-  }
-
-  void _backspace() {
-    final t = _inputCtrl.text;
-    if (t.isEmpty) return;
-    final sel = _inputCtrl.selection;
-    if (sel.isValid && sel.start >= 0 && sel.end > sel.start) {
-      final newText = t.replaceRange(sel.start, sel.end, '');
-      _inputCtrl.text = newText;
-      _inputCtrl.selection = TextSelection.collapsed(offset: sel.start);
-    } else if (sel.isValid && sel.start > 0) {
-      final newText = t.replaceRange(sel.start - 1, sel.start, '');
-      _inputCtrl.text = newText;
-      _inputCtrl.selection = TextSelection.collapsed(offset: sel.start - 1);
-    } else {
-      _inputCtrl.text = t.substring(0, t.length - 1);
-      _inputCtrl.selection = TextSelection.collapsed(
-        offset: _inputCtrl.text.length,
-      );
-    }
-  }
-
-  void _space() {
-    _insertChar(' ');
-  }
-
   /// [keepUserBubble] — true при повторной отправке с плашки «ИИ на курорте»:
   /// сообщение уже на экране, дубликат не добавляем.
   Future<void> _send({String? text, bool keepUserBubble = false}) async {
@@ -1554,11 +1512,9 @@ class _AiChatBodyState extends State<_AiChatBody>
     // ответ не попадёт в пустой чат.
     final gen = adaChatGeneration;
     Haptics.light();
-    // Снимаем фокус ДО очистки: на очистке текста у сфокусированного поля
-    // IME снова показывает клавиатуру, и снятый после этого фокус уже не
-    // спасал — клавиатура успевала выехать.
-    _inputFocus.unfocus();
-    FocusManager.instance.primaryFocus?.unfocus();
+    // Фокус НЕ снимаем: с системной клавиатурой она остаётся открытой,
+    // и следующее сообщение можно писать сразу. Поле чистим — IME просто
+    // покажет пустую строку.
     _inputCtrl.clear();
     // Горячий стрик: первое сообщение нового дня растит счётчик. Строку
     // вставляем сами тем же кадром, что и сообщение, — без перечитывания
@@ -2472,8 +2428,8 @@ class _AiChatBodyState extends State<_AiChatBody>
                         children: [
                           // Каждую букву рисует SmoothTyping: она проявляется
                           // из пустоты и плавно гаснет при стирании. Само поле
-                          // ниже — прозрачное, оно отвечает за каретку,
-                          // выделение и клавиатуру.
+                          // ниже — обычный редактор системной клавиатуры: оно
+                          // отвечает за каретку, выделение и ввод.
                           SmoothTyping(
                             controller: _inputCtrl,
                             cursorColor: cs.primary,
@@ -2486,8 +2442,6 @@ class _AiChatBodyState extends State<_AiChatBody>
                               builder: (context, caret) => TextField(
                                 scrollController: caret,
                                 style: style,
-                                readOnly: true,
-                                showCursor: true,
                                 magnifierConfiguration:
                                     TextMagnifierConfiguration.disabled,
                                 controller: _inputCtrl,
@@ -2560,22 +2514,9 @@ class _AiChatBodyState extends State<_AiChatBody>
             ),
           ),
         ),
-        // Встроенная клавиатура под тему приложения: исключает скачки IME и дерганья.
-        // Снизу — запас до скруглённых углов листа: раньше нижний ряд
-        // прилипал к углам и «заедал» при наборе.
-        Padding(
-          // Бока клавиатуры не упираются в скруглённые края листа, но и не
-          // отъедают у клавиш лишние сантиметры: 8 px от края окна хватает,
-          // чтобы крайние клавиши не резались о стенку, а сами шляпки стали
-          // шире — по ним снова легко попадать.
-          padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-          child: InlineKeyboard(
-            keyHeight: 46,
-            onChar: _insertChar,
-            onBackspace: _backspace,
-            onSpace: _space,
-          ),
-        ),
+        // Ввод идёт системной клавиатурой Android: лист поднимается над
+        // ней на её высоту (см. Padding с viewInsets в build _AiChatSheet),
+        // а поле и кнопка отправки остаются над панелью.
       ],
     );
   }

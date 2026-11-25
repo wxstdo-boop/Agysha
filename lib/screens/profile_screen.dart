@@ -29,7 +29,6 @@ import '../utils/snackbar.dart';
 import '../widgets/audio_spectrum_ring.dart';
 import '../widgets/auto_save_on_exit.dart';
 import '../widgets/gift_card_3d.dart';
-import '../widgets/inline_keyboard.dart';
 import '../widgets/music_pulse_ring.dart';
 import '../widgets/online_dot.dart';
 import '../widgets/press_scale.dart';
@@ -1736,8 +1735,8 @@ class _ProfileScreenState extends State<ProfileScreen>
       builder: (ctx) =>
           _AddFriendSheet(onPickImage: _copyPickedImageToPrivateDir),
     );
-    // Лист «Добавить друга» несёт собственную клавиатуру; после его закрытия
-    // снимаем фокус, иначе система поднимет системную панель в профиле.
+    // После закрытия листа снимаем фокус, чтобы системная клавиатура не
+    // осталась висеть поверх профиля.
     _dropFocus();
     if (result == null) return;
     final ok = await _service.addFriend(

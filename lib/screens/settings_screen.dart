@@ -47,6 +47,8 @@ import 'perf_panel_screen.dart';
 import 'lock_screen.dart';
 import 'developer_corner_screen.dart';
 import 'debug_menu_screen.dart';
+import 'action_log_screen.dart';
+import 'tester_mode_screen.dart';
 import '../services/update_service.dart';
 import 'forge_screen.dart';
 import '../utils/page_transitions.dart';

@@ -36,6 +36,19 @@ class DebugService {
 
   static bool checkCode(String input) => input.trim() == kDebugAccessCode;
 
+  /// Нужен ли код, чтобы открыть проверки функционала.
+  ///
+  /// Вход по коду сам включает режим отладки, поэтому пока его не выключили
+  /// вручную, следующий заход в «режим тестера» идёт без пароля. Выключили
+  /// отладку — код снова спрашивается.
+  static bool get testerNeedsCode => !debugEnabled.value;
+
+  /// Вход в служебные экраны: код засчитывается и сразу включает отладку,
+  /// чтобы не спрашивать его каждый раз.
+  static Future<void> rememberUnlock() async {
+    if (!debugEnabled.value) await setDebugEnabled(true);
+  }
+
   static Future<void> setDebugEnabled(bool value) async {
     debugEnabled.value = value;
     await globalPrefs.setBool(_keyDebugMode, value);

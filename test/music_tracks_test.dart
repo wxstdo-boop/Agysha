@@ -10,9 +10,8 @@ import 'package:agysha/screens/profile_screen.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/profile_service.dart';
-import 'package:agysha/widgets/inline_keyboard.dart';
 
-/// Тесты подборки музыки и кнопки в клавиатуре листа друга.
+/// Тесты подборки музыки.
 void main() {
   late Directory tmpDir;
 
@@ -71,46 +70,6 @@ void main() {
 
     await svc.removeTrack(id);
     expect(svc.tracks, isEmpty);
-  });
-
-  testWidgets('кнопка-действие живёт в клавиатуре и зовёт обработчик', (
-    tester,
-  ) async {
-    var taps = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: InlineKeyboard(
-            onChar: (_) {},
-            onBackspace: () {},
-            onSpace: () {},
-            actionLabel: 'Добавить',
-            onAction: () => taps++,
-          ),
-        ),
-      ),
-    );
-    expect(find.text('Добавить'), findsOneWidget);
-    await tester.tap(find.text('Добавить'));
-    await tester.pump();
-    expect(taps, 1);
-  });
-
-  testWidgets('без actionLabel клавиатура не рисует лишней кнопки', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: InlineKeyboard(
-            onChar: (_) {},
-            onBackspace: () {},
-            onSpace: () {},
-          ),
-        ),
-      ),
-    );
-    expect(find.text('Добавить'), findsNothing);
   });
 
   testWidgets('карточка музыки показывает пустое состояние и «Добавить»', (

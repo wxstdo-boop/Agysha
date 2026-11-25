@@ -77,11 +77,36 @@ extension _SettingsDevTools on _SettingsScreenState {
   /// экран для проверки функционала и журнала действий. Код только
   /// прикрывает случайные нажатия, данные он не защищает.
   Future<void> _showDebugModeDialog() async {
-    var openMenuAfterClose = false;
+    final unlocked = await _askServiceCode(
+      title: Translations.t('debugMenuTitle', context, 'Debug'),
+      prompt: Translations.t(
+        'debugModePrompt',
+        context,
+        'Enter the debug menu access code',
+      ),
+    );
+    if (!unlocked || !mounted) return;
+    ActionLog.record('отладка', 'меню открыто по коду');
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const DebugMenuScreen()));
+    // Меню можно и просто закрыть: режим отладки сам по себе не остаётся
+    // включённым навсегда — его состояние живёт в переключателе меню.
+  }
+
+  /// Спрашивает код служебных экранов и включает режим отладки при успехе.
+  ///
+  /// Код нужен только пока отладка выключена: засчитанный вход её включает,
+  /// и следующий заход идёт без пароля, пока её не выключат вручную.
+  Future<bool> _askServiceCode({
+    required String title,
+    required String prompt,
+  }) async {
+    var unlocked = false;
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: Translations.t('debugMenuTitle', context, 'Debug'),
+      barrierLabel: title,
       barrierColor: Colors.black.withValues(alpha: 0.62),
       transitionDuration: const Duration(milliseconds: 460),
       pageBuilder: (ctx, _, _) => MediaQuery.removeViewInsets(
@@ -90,12 +115,8 @@ extension _SettingsDevTools on _SettingsScreenState {
         child: SafeArea(
           child: Center(
             child: DeveloperModePasswordDialog(
-              title: Translations.t('debugMenuTitle', ctx, 'Debug'),
-              prompt: Translations.t(
-                'debugModePrompt',
-                ctx,
-                'Enter the debug menu access code',
-              ),
+              title: title,
+              prompt: prompt,
               invalidCode: Translations.t(
                 'devModeInvalidCode',
                 ctx,
@@ -106,10 +127,9 @@ extension _SettingsDevTools on _SettingsScreenState {
               code: kDebugAccessCode,
               onCancel: () => Navigator.of(ctx).pop(),
               onUnlock: () async {
-                await DebugService.setDebugEnabled(true);
-                ActionLog.record('отладка', 'меню открыто по коду');
-                if (!mounted || !ctx.mounted) return;
-                openMenuAfterClose = true;
+                await DebugService.rememberUnlock();
+                if (!ctx.mounted) return;
+                unlocked = true;
                 Navigator.of(ctx).pop();
               },
             ),
@@ -137,13 +157,26 @@ extension _SettingsDevTools on _SettingsScreenState {
         );
       },
     );
-    if (openMenuAfterClose && mounted) {
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const DebugMenuScreen()));
-      // Меню можно и просто закрыть: режим отладки сам по себе не остаётся
-      // включённым навсегда — его состояние живёт в переключателе меню.
+    return unlocked;
+  }
+
+  /// Вход в проверки функционала из уголка разработчика.
+  Future<void> _showTesterMode() async {
+    if (DebugService.testerNeedsCode) {
+      final unlocked = await _askServiceCode(
+        title: Translations.t('testerChecksTitle', context, 'Проверки'),
+        prompt: Translations.t(
+          'debugModePrompt',
+          context,
+          'Enter the debug menu access code',
+        ),
+      );
+      if (!unlocked || !mounted) return;
+      ActionLog.record('тестер', 'проверки открыты по коду');
     }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const TesterModeScreen()),
+    );
   }
 
   Future<void> _showDevToolsScreen() async {
@@ -458,6 +491,156 @@ extension _SettingsDevTools on _SettingsScreenState {
                         }),
                   );
                 },
+              ),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                leading: const Icon(
+                  Icons.bug_report_outlined,
+                  color: Color(0xFFFFB74D),
+                ),
+                title: Text(
+                  Translations.t('debugModeTitle', routeContext, 'Отладка'),
+                ),
+                subtitle: Text(
+                  Translations.t(
+                    'debugModeEntryHint',
+                    routeContext,
+                    'Пока включён, код проверок не спрашивается',
+                  ),
+                ),
+                trailing: ValueListenableBuilder<bool>(
+                  valueListenable: DebugService.debugEnabled,
+                  builder: (context, value, _) => RepaintBoundary(
+                    child: VolumetricSwitch(
+                      value: value,
+                      onChanged: (next) async {
+                        await DebugService.setDebugEnabled(next);
+                        ActionLog.record(
+                          'отладка',
+                          next
+                              ? 'режим отладки включён из уголка'
+                              : 'режим отладки выключен из уголка',
+                        );
+                      },
+                      activeColor: const Color(0xFFFFB74D),
+                      semanticLabel: Translations.t(
+                        'debugModeTitle',
+                        routeContext,
+                        'Отладка',
+                      ),
+                      scale: 1.28,
+                    ),
+                  ),
+                ),
+                onTap: () => DebugService.setDebugEnabled(
+                  !DebugService.debugEnabled.value,
+                ),
+              ),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                leading: const Icon(
+                  Icons.fact_check_outlined,
+                  color: Color(0xFF4DB6AC),
+                ),
+                title: Text(
+                  Translations.t(
+                    'testerChecksTitle',
+                    routeContext,
+                    'Проверка функционала',
+                  ),
+                ),
+                subtitle: Text(
+                  Translations.t('testerChecksSubtitle', routeContext),
+                ),
+                trailing: ValueListenableBuilder<bool>(
+                  valueListenable: DebugService.debugEnabled,
+                  builder: (context, unlocked, _) => Icon(
+                    unlocked
+                        ? Icons.arrow_forward_ios_rounded
+                        : Icons.lock_outline_rounded,
+                    size: 16,
+                  ),
+                ),
+                onTap: _showTesterMode,
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: ActionLog.enabled,
+                builder: (context, logging, _) => ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                  leading: const Icon(
+                    Icons.receipt_long_outlined,
+                    color: Color(0xFF90A4AE),
+                  ),
+                  title: Text(
+                    Translations.t(
+                      'actionLogTitle',
+                      routeContext,
+                      'Логирование действий',
+                    ),
+                  ),
+                  subtitle: Text(
+                    Translations.t('actionLogSubtitle', routeContext),
+                  ),
+                  trailing: RepaintBoundary(
+                    child: VolumetricSwitch(
+                      value: logging,
+                      onChanged: (next) async {
+                        await ActionLog.setEnabled(next);
+                      },
+                      activeColor: const Color(0xFF90A4AE),
+                      semanticLabel: Translations.t(
+                        'actionLogTitle',
+                        routeContext,
+                        'Логирование действий',
+                      ),
+                      scale: 1.28,
+                    ),
+                  ),
+                  onTap: () async {
+                    await ActionLog.setEnabled(!ActionLog.enabled.value);
+                  },
+                ),
+              ),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                leading: const Icon(
+                  Icons.article_outlined,
+                  color: Color(0xFF90A4AE),
+                ),
+                title: Text(
+                  Translations.t('actionLogOpen', routeContext, 'Журнал'),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ValueListenableBuilder<int>(
+                      valueListenable: ActionLog.revision,
+                      builder: (context, _, _) => Text(
+                        '${ActionLog.entries.length}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  ],
+                ),
+                onTap: () => Navigator.of(routeContext).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ActionLogScreen(),
+                  ),
+                ),
               ),
               const _RenderEngineTile(),
             ],

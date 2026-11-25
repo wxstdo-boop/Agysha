@@ -5,14 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:agysha/l10n/locale_provider.dart';
 import 'package:agysha/screens/stats_screen.dart';
-import 'package:agysha/widgets/inline_keyboard.dart';
 import 'package:agysha/widgets/profile_avatar.dart';
 
 /// Регрессы полировки восьмого круга:
 ///  * шапка графика в статистике не переполняется даже на узком экране —
 ///    раньше строка уезжала на 19 px и резала последнюю цифру суммы;
-///  * кольцо своей аватарки на тёмной теме приглушено (раньше слепило);
-///  * встроенная клавиатура повторяет «стереть» при удержании.
+///  * кольцо своей аватарки на тёмной теме приглушено (раньше слепило).
 void main() {
   late Directory tmpDir;
   late File imgFile;
@@ -90,36 +88,5 @@ void main() {
       lessThan(0.5),
       reason: 'белое кольцо 0.82 на тёмной теме слепило',
     );
-  });
-
-  testWidgets('клавиатура: возврат повторяется при удержании', (tester) async {
-    var count = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: InlineKeyboard(
-            onChar: (_) {},
-            onBackspace: () => count++,
-            onSpace: () {},
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    final backspace = find.byIcon(Icons.backspace_outlined).first;
-    final g = await tester.startGesture(tester.getCenter(backspace));
-    // Пережидаем задержку до первого повтора и несколько шагов повтора.
-    await tester.pump(const Duration(milliseconds: 420));
-    await tester.pump(const Duration(milliseconds: 300));
-    await g.up();
-    await tester.pump();
-
-    expect(
-      count,
-      greaterThan(1),
-      reason: 'удержание «стереть» должно повторять удаление',
-    );
-    expect(tester.takeException(), isNull);
   });
 }

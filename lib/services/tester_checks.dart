@@ -2,12 +2,19 @@ import 'package:flutter/foundation.dart';
 
 import '../l10n/translations.dart';
 import 'action_log.dart';
+import 'alarm_health.dart';
+import 'alarm_service.dart';
 import 'app_version.dart';
 import 'habit_service.dart';
+import 'installer.dart';
 import 'json_file.dart';
 import 'notification_service.dart';
+import 'nutrition_service.dart';
 import 'pin_service.dart';
 import 'prefs.dart';
+import 'profile_service.dart';
+import 'score_service.dart';
+import 'settings_service.dart';
 import 'task_service.dart';
 import 'update_service.dart';
 
@@ -63,6 +70,16 @@ class TesterChecks {
     _updatesCheck,
     _clockCheck,
     _actionLogCheck,
+    _alarmsCheck,
+    _alarmPermissionsCheck,
+    _nutritionCheck,
+    _scoreCheck,
+    _profileCheck,
+    _installerCheck,
+    _notificationPermissionCheck,
+    _settingsCheck,
+    _aiKeysCheck,
+    _backupCheck,
   ];
 
   static TesterCheckResult _result(
@@ -258,5 +275,207 @@ class TesterChecks {
     } catch (error) {
       return _result('log', 'Журнал действий', false, '$error');
     }
+  }
+
+  static Future<TesterCheckResult> _alarmsCheck() async {
+    try {
+      final service = AlarmService();
+      final loaded = service.isLoaded;
+      final alarms = service.alarms;
+      final on = alarms.where((a) => a.enabled).length;
+      return _result(
+        'alarms',
+        'Будильники',
+        loaded,
+        loaded
+            ? '${alarms.length} будильников, включено $on'
+            : 'данные ещё не загружены',
+        skipped: !loaded,
+      );
+    } catch (error) {
+      return _result('alarms', 'Будильники', false, '$error');
+    }
+  }
+
+  static Future<TesterCheckResult> _alarmPermissionsCheck() async {
+    try {
+      final snapshot = await AlarmHealth.probe(NotificationService());
+      final denied = <String>[
+        if (!snapshot.notifications) 'уведомления',
+        if (!snapshot.exactAlarm) 'точный будильник',
+        if (!snapshot.batteryUnrestricted) 'батарея',
+        if (!snapshot.fullScreen) 'полный экран',
+        if (!snapshot.overlay) 'поверх окон',
+      ];
+      return _result(
+        'alarm_permissions',
+        'Разрешения будильников',
+        snapshot.allGranted,
+        snapshot.allGranted
+            ? 'все выданы'
+            : 'не выдано: ${denied.join(', ')}',
+      );
+    } catch (error) {
+      return _result('alarm_permissions', 'Разрешения будильников', false, '$error');
+    }
+  }
+
+  static Future<TesterCheckResult> _nutritionCheck() async {
+    try {
+      final meals = NutritionService().meals;
+      return _result(
+        'nutrition',
+        'Питание',
+        true,
+        '${meals.length} приёмов пищи в истории',
+      );
+    } catch (error) {
+      return _result('nutrition', 'Питание', false, '$error');
+    }
+  }
+
+  static Future<TesterCheckResult> _scoreCheck() async {
+    try {
+      final service = ScoreService();
+      final loaded = service.loaded;
+      return _result(
+        'score',
+        'Очки',
+        loaded,
+        loaded ? 'итого ${service.total}' : 'данные ещё не загружены',
+        skipped: !loaded,
+      );
+    } catch (error) {
+      return _result('score', 'Очки', false, '$error');
+    }
+  }
+
+  static Future<TesterCheckResult> _profileCheck() async {
+    try {
+      final service = ProfileService();
+      final loaded = service.loaded;
+      return _result(
+        'profile',
+        'Профиль',
+        loaded,
+        loaded
+            ? '${service.friends.length} друзей, ${service.tracks.length} треков'
+            : 'данные ещё не загружены',
+        skipped: !loaded,
+      );
+    } catch (error) {
+      return _result('profile', 'Профиль', false, '$error');
+    }
+  }
+
+  static Future<TesterCheckResult> _installerCheck() async {
+    try {
+      final allowed = await Installer.canInstall();
+      return _result(
+        'installer',
+        'Установка обновлений',
+        allowed,
+        allowed
+            ? 'приложение может ставить APK'
+            : 'установка из этого источника запрещена',
+      );
+    } catch (error) {
+      return _result('installer', 'Установка обновлений', false, '$error');
+    }
+  }
+
+  static Future<TesterCheckResult> _notificationPermissionCheck() async {
+    try {
+      final service = NotificationService();
+      if (!service.isInitialized) {
+        return _result(
+          'notif_permission',
+          'Разрешение уведомлений',
+          false,
+          'служба уведомлений ещё не поднялась',
+          skipped: true,
+        );
+      }
+      final granted = await service.areNotificationsEnabled();
+      return _result(
+        'notif_permission',
+        'Разрешение уведомлений',
+        granted,
+        granted ? 'Android разрешает показ' : 'запрещено в системе',
+      );
+    } catch (error) {
+      return _result('notif_permission', 'Разрешение уведомлений', false, '$error');
+    }
+  }
+
+  static Future<TesterCheckResult> _settingsCheck() async {
+    try {
+      final theme = await SettingsService.loadThemeMode();
+      final font = await SettingsService.loadFontFamily();
+      final language = await SettingsService.loadLanguageCode();
+      const themes = {'system', 'light', 'dark', 'peach', 'peachDark'};
+      final known = themes.contains(theme) || theme.isNotEmpty;
+      return _result(
+        'settings',
+        'Настройки оформления',
+        known && font.isNotEmpty && language.isNotEmpty,
+        'тема «$theme», шрифт «$font», язык «$language»',
+      );
+    } catch (error) {
+      return _result('settings', 'Настройки оформления', false, '$error');
+    }
+  }
+
+  static Future<TesterCheckResult> _aiKeysCheck() async {
+    try {
+      final key = await SettingsService.loadProviderKey();
+      final model = await SettingsService.loadForgeModel();
+      final configured = key.trim().isNotEmpty;
+      return _result(
+        'ai_keys',
+        'Ключи ИИ',
+        true,
+        configured
+            ? 'провайдер настроен, модель «$model»'
+            : 'провайдер не настроен',
+      );
+    } catch (error) {
+      return _result('ai_keys', 'Ключи ИИ', false, '$error');
+    }
+  }
+
+  static Future<TesterCheckResult> _backupCheck() async {
+    try {
+      final enabled = SettingsService.autoSaveEnabled.value;
+      final last = SettingsService.autoSaveLastOk.value;
+      return _result(
+        'backup',
+        'Автосохранение',
+        true,
+        enabled
+            ? (last == null
+                  ? 'включено, сохранений ещё не было'
+                  : 'включено, последнее ${last.toIso8601String()}')
+            : 'выключено',
+      );
+    } catch (error) {
+      return _result('backup', 'Автосохранение', false, '$error');
+    }
+  }
+
+  /// Отчёт о прогоне для буфера обмена: одна строка на проверку.
+  static String report(List<TesterCheckResult> results) {
+    final buffer = StringBuffer()
+      ..writeln('Agysha v$kAppVersion — проверка функционала')
+      ..writeln(DateTime.now().toIso8601String());
+    for (final result in results) {
+      final mark = switch (result.status) {
+        TesterStatus.pass => 'OK',
+        TesterStatus.fail => 'ОШИБКА',
+        TesterStatus.skip => 'ПРОПУСК',
+      };
+      buffer.writeln('[$mark] ${result.title}: ${result.detail}');
+    }
+    return buffer.toString();
   }
 }

@@ -179,6 +179,72 @@ void main() {
     },
   );
 
+  test(
+    'проверки спрашивают код только при выключенной отладке',
+    () async {
+      expect(
+        DebugService.testerNeedsCode,
+        isTrue,
+        reason: 'по умолчанию отладка выключена',
+      );
+
+      await DebugService.rememberUnlock();
+      expect(DebugService.debugEnabled.value, isTrue, reason: 'первый вход');
+      expect(DebugService.testerNeedsCode, isFalse, reason: 'кода больше нет');
+
+      // Настройка переживает «перезапуск»: состояние читается из prefs.
+      DebugService.resetForTesting();
+      DebugService.init();
+      expect(DebugService.debugEnabled.value, isTrue);
+      expect(DebugService.testerNeedsCode, isFalse);
+
+      await DebugService.setDebugEnabled(false);
+      expect(DebugService.testerNeedsCode, isTrue, reason: 'выключили — код снова нужен');
+    },
+  );
+
+  test('отчёт тестера перечисляет проверки без секретов', () {
+    final report = TesterChecks.report(const [
+      TesterCheckResult(
+        id: 'storage',
+        title: 'Хранилище',
+        status: TesterStatus.pass,
+        detail: 'запись и чтение в порядке',
+      ),
+      TesterCheckResult(
+        id: 'pin',
+        title: 'PIN',
+        status: TesterStatus.fail,
+        detail: 'не настроен',
+      ),
+      TesterCheckResult(
+        id: 'alarms',
+        title: 'Будильники',
+        status: TesterStatus.skip,
+        detail: 'данные ещё не загружены',
+      ),
+    ]);
+
+    expect(report, contains('Хранилище: запись и чтение в порядке'));
+    expect(report, contains('[ОШИБКА] PIN: не настроен'));
+    expect(report, contains('ПРОПУСК'));
+    expect(report, contains('проверка функционала'));
+    expect(report, isNot(contains('0625')));
+    expect(report.split('\n').where((l) => l.startsWith('[')).length, 3);
+  });
+
+  testWidgets('у тестера есть свои функции: отчёт, уведомление, журнал', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(const TesterModeScreen()));
+    await tester.pump();
+
+    expect(find.text('Ещё функции'), findsOneWidget);
+    expect(find.text('Отчёт в буфер'), findsOneWidget);
+    expect(find.text('Тестовое уведомление'), findsOneWidget);
+    expect(find.text('Журнал действий'), findsOneWidget);
+  });
+
   testWidgets('журнал показывает записи и подсказку, когда выключен', (
     tester,
   ) async {

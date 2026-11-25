@@ -11,12 +11,10 @@ import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/profile_service.dart';
 import 'package:agysha/utils/animated_delete.dart';
-import 'package:agysha/widgets/inline_keyboard.dart';
 import 'package:agysha/widgets/profile_avatar.dart';
 
 /// Регрессы полировки десятого круга:
 ///  * фон свайп-удаления — ПОЛУПРОЗРАЧНО-красный, а не глухая заливка;
-///  * клавиатура — полупрозрачная панель с красным отливом темы;
 ///  * у сгенерированной аватарки (без своей картинки) размытие реально
 ///    применяется — раньше оно работало только для своей фотографии;
 ///  * карточка музыки меняет состояние ОДНИМ механизмом (AnimatedCrossFade),
@@ -81,29 +79,6 @@ void main() {
       expect(c.a, lessThan(1.0));
       expect(c.a, greaterThan(0.0));
     }
-  });
-
-  testWidgets('клавиатура — полупрозрачная панель с красным отливом', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE0192F)),
-        ),
-        home: Scaffold(
-          body: InlineKeyboard(onChar: (_) {}, onBackspace: () {}, onSpace: () {}),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    final panel = tester.widget<Container>(find.byType(Container).first);
-    final color = (panel.decoration! as BoxDecoration).color!;
-    expect(color.a, lessThan(1.0), reason: 'панель должна быть полупрозрачной');
-    // Красный отлив: красного канала заметно больше зелёного.
-    expect(color.r, greaterThan(color.g));
   });
 
   testWidgets('размытие работает и у сгенерированной аватарки', (tester) async {

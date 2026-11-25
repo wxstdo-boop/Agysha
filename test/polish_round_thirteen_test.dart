@@ -11,21 +11,18 @@ import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/profile_service.dart';
 import 'package:agysha/widgets/ada_avatars.dart';
-import 'package:agysha/widgets/inline_keyboard.dart';
 import 'package:agysha/widgets/music_pulse_ring.dart';
 import 'package:agysha/widgets/press_splat.dart' show GlassFabTile;
 import 'source_scope.dart';
 
-/// Регресс-тест круга 13: жалобы на канты, «квадратное» свечение, серую
-/// клавиатуру, тормозные переходы и щёлкающие очки.
+/// Регресс-тест круга 13: жалобы на канты, «квадратное» свечение, тормозные
+/// переходы и щёлкающие очки.
 ///
 /// Проверяем инварианты кода, каждый из которых закрывал конкретную жалобу:
 ///  * окно обновления — кант с четырьмя опорными точками (кромка не гаснет
 ///    в середине периметра);
 ///  * у кольца музыки ОТКЛЮЧЁН клип `Stack`: иначе размытое свечение
 ///    обрезалось по прямоугольнику и читалось «светящимся квадратом»;
-///  * клавиатура берёт КРАСНЫЙ бренда, а не `primary` темы (на дефолтной
-///    палитре primary сиреневый — панель серела);
 ///  * лист над другом — ОДИН маршрут на оба шага: второе затемнение не
 ///    складывается в «двойной тёмный фон» за окном очков;
 ///  * строки «Очки/Удалить» — `InkWell` со скруглением, а не `ListTile`
@@ -77,7 +74,7 @@ void main() {
     return readLibrary(path);
   }
 
-  test('кант окна обновления — красный бренда, как у клавиатуры', () {
+  test('кант окна обновления — красный бренда, а не primary темы', () {
     final src = read('lib/widgets/update_pill.dart');
     expect(
       RegExp(r'BrandColors\.red\.withValues').hasMatch(src),
@@ -121,47 +118,6 @@ void main() {
       stack.clipBehavior,
       Clip.none,
       reason: '`Clip.hardEdge` резал блюр по краям — квадратное свечение',
-    );
-  });
-
-  testWidgets('клавиатура красная на сиреневой теме по умолчанию', (
-    tester,
-  ) async {
-    // Тема как в приложении по умолчанию: primary сиреневый. Раньше отлив
-    // брался из него, и панель выходила серой.
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFF6750A4),
-            surfaceContainer: Color(0xFFEDF5F7),
-            surfaceContainerHighest: Color(0xFFDFEBEF),
-          ),
-        ),
-        home: Scaffold(
-          body: InlineKeyboard(
-            onChar: (_) {},
-            onBackspace: () {},
-            onSpace: () {},
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    final panel = tester.widget<Container>(find.byType(Container).first);
-    final color = (panel.decoration! as BoxDecoration).color!;
-    expect(color.a, lessThan(1.0), reason: 'панель должна быть полупрозрачной');
-    expect(
-      color.r,
-      greaterThan(color.b),
-      reason: 'отлив КРАСНЫЙ, не сиреневый',
-    );
-    expect(
-      color.r,
-      greaterThan(color.g),
-      reason: 'отлив КРАСНЫЙ, не сиреневый',
     );
   });
 
