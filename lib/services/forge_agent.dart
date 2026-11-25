@@ -1132,6 +1132,18 @@ class FreePoolForgeChat implements ForgeChat {
     final hasKey = key.isNotEmpty;
     final openRouter = key.startsWith('sk-or-');
     final all = <ForgeModelOption>[
+      // Свой ключ может быть ключом Agnes — в настройках это одно поле
+      // «Ключ провайдера». Сначала Agnes: раньше такой ключ уходил на
+      // Poolside, получал отказ, и отвечал бесплатный Kilo — владелец
+      // видел «Kilo», хотя платит за Agnes.
+      if (hasKey && !openRouter)
+        const ForgeModelOption(
+          id: 'agnes-3.0-flash',
+          name: 'Agnes 3.0 Flash',
+          vendor: 'Agnes AI',
+          power: 104,
+          needsKey: true,
+        ),
       if (hasKey && !openRouter)
         const ForgeModelOption(
           id: 'poolside-laguna',
@@ -1201,6 +1213,8 @@ class FreePoolForgeChat implements ForgeChat {
 
   static const _poolsideUrl =
       'https://inference.poolside.ai/v1/chat/completions';
+  static const _agnesUrl = 'https://apihub.agnes-ai.com/v1/chat/completions';
+  static const _agnesModel = 'agnes-3.0-flash';
   static const _openrouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
   static const _poolsideModel = 'poolside/laguna-s-2.1';
   static const _openrouterModel = 'poolside/laguna-s-2.1:free';
@@ -1251,7 +1265,17 @@ class FreePoolForgeChat implements ForgeChat {
             model: _openrouterModel,
             apiKey: apiKey,
           )
-        else
+        else ...[
+          // Ключ Agnes пробуем ДО Poolside: одно поле «Ключ провайдера» на
+          // два сервиса, и ключ Agnes на Poolside получал отказ — разговор
+          // продолжал бесплатный Kilo, хотя владелец вставил свой ключ.
+          _FreeProvider(
+            id: 'agnes-3.0-flash',
+            label: 'Agnes AI',
+            url: _agnesUrl,
+            model: _agnesModel,
+            apiKey: apiKey,
+          ),
           _FreeProvider(
             id: 'poolside-laguna',
             label: 'Poolside',
@@ -1259,6 +1283,7 @@ class FreePoolForgeChat implements ForgeChat {
             model: _poolsideModel,
             apiKey: apiKey,
           ),
+        ],
       // Основной: анонимно до 200 запросов/час на IP, отвечает сильной
       // бесплатной моделью и держит целые файлы (проверено: 300 строк без
       // обрезки при max_tokens 8000).

@@ -391,6 +391,53 @@ void main() {
     expect(_chatTextContaining('pull/'), findsNothing);
   });
 
+  testWidgets('после отправки поле отпускает клавиатуру', (tester) async {
+    // Жалоба: «ввод закрыл, а клавиатура снова вылезает». Фокус оставался
+    // в поле, и после очистки текста IME поднимался обратно.
+    _tallSurface(tester);
+    final store = InMemoryForgeTokenStore();
+    await store.write('ghp_saved_token');
+    final service = ForgeService(client: _okClient(), store: store);
+    await tester.pumpWidget(
+      _wrap(
+        ForgeScreen(
+          owner: 'wxstdo-boop',
+          repo: 'agysha',
+          service: service,
+          runner: ForgeRunner(),
+          chatFactory: (_) => _ScriptedChat([
+            const ForgeChatReply(text: 'Привет.'),
+          ]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('forge_input_field')),
+      'привет',
+    );
+    await tester.pump();
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('forge_input_field')),
+    );
+    expect(field.focusNode?.hasFocus, isTrue);
+
+    await tester.runAsync(() async {
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('forge_send')))
+          .onPressed!();
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    });
+    await tester.pump();
+
+    expect(
+      field.focusNode?.hasFocus,
+      isFalse,
+      reason: 'после отправки клавиатура не должна выезжать обратно',
+    );
+  });
+
   testWidgets('история чата восстанавливается из хранилища', (tester) async {
     // Разговор хранится в зашифрованном файле: здесь он уже записан, а
     // экран должен его показать. Чтение файла — настоящий ввод-вывод,
@@ -717,12 +764,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Без ключа и без настроек доступен бесплатный пул, а первой идёт
-    // «Авто» — перебор всего пула, как было до таблетки.
-    expect(find.text('Авто · весь пул'), findsOneWidget);
+    // Без ключа и без настроек таблетка одна и подписана выбранной
+    // моделью: «Модель • «Авто · весь пул»». Раньше здесь стояла лента из
+    // всех моделей пула, и над заголовком читался список чипов.
+    const pill = 'Модель • «Авто · весь пул»';
+    expect(find.text(pill), findsOneWidget);
     final pool = FreePoolForgeChat.catalogFor('');
     expect(pool, isNotEmpty);
-    expect(find.text(pool.first.label), findsWidgets);
+    // Список моделей живёт в листе по нажатию, а не строкой под заголовком.
+    expect(find.text(pool.first.label), findsNothing);
 
     // Сила убывает: первая модель пула не слабее последней.
     for (var i = 1; i < pool.length; i++) {
@@ -746,13 +796,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.longPress(find.text('Авто · весь пул'));
+    await tester.longPress(find.text('Модель • «Авто · весь пул»'));
     await tester.pumpAndSettle();
 
     expect(find.text('Модели для кодинга'), findsOneWidget);
     final pool = FreePoolForgeChat.catalogFor('');
     expect(pool, isNotEmpty);
-    // Последнее вхождение — строка листа (в таблетке та же подпись).
+    // В листе есть и «Авто», и первая модель пула.
+    expect(find.text('Авто · весь пул'), findsOneWidget);
     expect(find.text(pool.first.label), findsWidgets);
 
     await tester.tap(find.text(pool.first.label).last);

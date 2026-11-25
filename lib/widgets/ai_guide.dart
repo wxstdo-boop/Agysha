@@ -1402,6 +1402,11 @@ class _AiChatBodyState extends State<_AiChatBody>
     // ответ не попадёт в пустой чат.
     final gen = adaChatGeneration;
     Haptics.light();
+    // Снимаем фокус ДО очистки: на очистке текста у сфокусированного поля
+    // IME снова показывает клавиатуру, и снятый после этого фокус уже не
+    // спасал — клавиатура успевала выехать.
+    _inputFocus.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     _inputCtrl.clear();
     // Горячий стрик: первое сообщение нового дня растит счётчик. Строку
     // вставляем сами тем же кадром, что и сообщение, — без перечитывания

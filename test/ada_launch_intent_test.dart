@@ -86,4 +86,36 @@ void main() {
   test('холодный старт без метки ничего не открывает', () async {
     expect(await consumePendingOpenAdaChat(), isFalse);
   });
+
+  test('обычный запуск НЕ открывает чат из остаточной метки', () async {
+    // Метка в prefs осталась с прошлого тапа по пузырю, а intent чистый —
+    // это обычный запуск приложения. Раньше метка доживала до первого
+    // resume, и чат Ады всплывал поверх каждого старта.
+    globalPrefs.setBool('pending_open_ada_chat', true);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async => false);
+
+    expect(
+      await shouldOpenAdaChatOnLaunch(),
+      isFalse,
+      reason: 'остаточная метка не повод показывать ИИ при запуске',
+    );
+    expect(
+      globalPrefs.getBool('pending_open_ada_chat'),
+      isNot(true),
+      reason: 'остаточную метку надо гасить, иначе она сработает на resume',
+    );
+  });
+
+  test('запуск тапом по пузырю всё-таки открывает чат', () async {
+    globalPrefs.setBool('pending_open_ada_chat', true);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async => true);
+
+    expect(
+      await shouldOpenAdaChatOnLaunch(),
+      isTrue,
+      reason: 'подтверждённый тап по пузырю обязан открыть чат',
+    );
+  });
 }

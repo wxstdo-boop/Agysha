@@ -220,8 +220,13 @@ void main() {
     expect(kotlin.contains('consumeOpenAdaChat'), isTrue);
     final main = read('lib/main.dart');
     expect(main.contains('listenOpenAdaChat'), isTrue);
-    expect(main.contains('consumeOpenAdaChat'), isTrue);
-    expect(read(launch).contains("com.wetcorp.agysha/launch"), isTrue);
+    // Холодный старт решается в `launch_intent`: там метка из intent'а
+    // проверяется ДО остаточной метки в prefs (иначе чат всплывал при
+    // каждом обычном запуске).
+    expect(main.contains('shouldOpenAdaChatOnLaunch'), isTrue);
+    final launchSrc = read(launch);
+    expect(launchSrc.contains('consumeOpenAdaChat'), isTrue);
+    expect(launchSrc.contains("com.wetcorp.agysha/launch"), isTrue);
   });
 
   test('тап по пузырю не теряется, даже если прошивка не поднимает задачу', () {

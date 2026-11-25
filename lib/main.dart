@@ -60,7 +60,7 @@ import 'overlay/ada_overlay.dart'
         AdaOverlayApp;
 import 'overlay/overlay_bridge.dart';
 import 'overlay/launch_intent.dart'
-    show listenOpenAdaChat, consumeOpenAdaChat, consumePendingOpenAdaChat;
+    show listenOpenAdaChat, consumePendingOpenAdaChat, shouldOpenAdaChatOnLaunch;
 import 'widgets/ada_avatars.dart';
 import 'widgets/ai_guide.dart';
 import 'utils/page_transitions.dart';
@@ -1072,7 +1072,9 @@ Future<void> _wireBubbleLaunch() async {
   _bubbleResumeListener ??= AppLifecycleListener(
     onResume: () => unawaited(_openAdaIfPending()),
   );
-  if (await consumeOpenAdaChat()) _openAdaFromBubble();
+  // Холодный старт именно тапом по пузырю открывает чат один раз; обычный
+  // запуск молча гасит остаточную метку (см. `shouldOpenAdaChatOnLaunch`).
+  if (await shouldOpenAdaChatOnLaunch()) _openAdaFromBubble();
 }
 
 /// Подписка на возврат в приложение: держим ссылку, иначе сборщик мусора

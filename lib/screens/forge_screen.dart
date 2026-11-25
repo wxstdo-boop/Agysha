@@ -309,12 +309,18 @@ class _ForgeScreenState extends State<ForgeScreen> {
                       final selected = option.id == _modelId;
                       final color = _modelColor(option, cs, accent);
                       return PressScale(
-                        pressedScale: 0.975,
+                        // Строка листа — как таблетки: заметная 3D-отдача и
+                        // мягкое закруглённое затемнение под пальцем. Плоский
+                        // квадратный отклик читался как «кнопка из 2014-го».
+                        pressedScale: 0.955,
                         enableTilt: true,
-                        duration: const Duration(milliseconds: 130),
-                        releaseDuration: const Duration(milliseconds: 280),
-                        maxTiltAngle: 0.10,
-                        pressTint: Colors.transparent,
+                        duration: const Duration(milliseconds: 150),
+                        releaseDuration: const Duration(milliseconds: 380),
+                        curve: Curves.easeOutCubic,
+                        maxTiltAngle: 0.18,
+                        pressTint: color,
+                        pressTintStrength: 0.09,
+                        pressTintRadius: BorderRadius.circular(16),
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () {
@@ -326,6 +332,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 300),
                             curve: Curves.easeOutCubic,
+                            clipBehavior: Clip.antiAlias,
                             padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
                             decoration: BoxDecoration(
                               color: selected
@@ -660,6 +667,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
     if (!mounted) return;
 
     final history = List<ForgeChatMessage>.from(_messages);
+    // Фокус снимаем ДО очистки: у сфокусированного поля очистка текста
+    // снова поднимает IME, и клавиатура выезжала поверх ленты ответа.
+    _inputFocus.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     _inputController.clear();
     setState(() {
       _running = true;
@@ -1011,166 +1022,141 @@ class _ForgeScreenState extends State<ForgeScreen> {
     );
   }
 
-  /// Ультраплавная таблетка выбора модели под заголовком «Кузницы».
+  /// Модель, выбранная в таблетке: `null` — «Авто», перебор всего пула.
+  ForgeModelOption? get _selectedOption {
+    if (_modelId.isEmpty) return null;
+    for (final option in _models) {
+      if (option.id == _modelId) return option;
+    }
+    return null;
+  }
+
+  /// Одна таблетка под «Кузницей» — «Модель • «имя»».
   ///
-  /// В списке только те модели, которые правда доступны: пул для текущего
-  /// ключа (или для работы без ключа), отсортированный по силе — сильнейшие
-  /// слева. Слева всегда «Авто»: пул перебирается целиком, как раньше.
-  /// Выбор запоминается между запусками приложения.
+  /// Раньше это была лента из всех моделей: она мигала при запуске, съедала
+  /// ширину и путала — какую же модель выберет агент. Теперь на виду ровно
+  /// одна строка с текущим выбором; по нажатию открывается лист, где модели
+  /// разложены по силе. Выбор запоминается между запусками приложения.
   Widget _modelPill(ThemeData theme, ColorScheme cs, Color accent) {
-    final options = <ForgeModelOption>[
-      const ForgeModelOption(
-        id: '',
-        name: 'Авто · весь пул',
-        vendor: 'Пул',
-        power: 1000,
-      ),
-      ..._models,
-    ];
+    final selected = _selectedOption;
+    final color = selected == null ? accent : _modelColor(selected, cs, accent);
+    final label = selected?.label ?? 'Авто · весь пул';
     return AnimatedSize(
-      duration: const Duration(milliseconds: 280),
+      duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
       alignment: Alignment.topCenter,
       child: AnimatedOpacity(
-        // Один общий проход прозрачности на появление пула: таблетки
-        // въезжают вместе, а не прыгают по одной при каждом setState.
+        // Пул приходит из настроек: таблетка не появляется рывком, а мягко
+        // проявляется уже с готовым списком моделей.
         opacity: _modelsReady ? 1 : 0,
         duration: const Duration(milliseconds: 420),
         curve: Curves.easeOutCubic,
-        child: SizedBox(
-          height: 42,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-            itemCount: options.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final option = options[index];
-              final selected = option.id == _modelId;
-              return PressScale(
-                pressedScale: 0.9,
-                enableTilt: true,
-                duration: const Duration(milliseconds: 130),
-                releaseDuration: const Duration(milliseconds: 280),
-                maxTiltAngle: 0.18,
-                // Без цветной вспышки от нажатия: она накладывалась на
-                // анимируемую заливку, и казалось, что фон «заедает».
-                pressTint: Colors.transparent,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => unawaited(
-                    _selectModel(option.id.isEmpty ? null : option),
-                  ),
-                  // Долгое нажатие — один лист со всеми моделями.
-                  onLongPress: () => unawaited(_openModelSheet(cs, accent)),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 420),
-                    curve: Curves.easeOutCubic,
-                    padding: const EdgeInsets.fromLTRB(11, 0, 14, 0),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      // Заливка выбранной таблетки полупрозрачнее: плотный
-                      // фон при переключении читался как «закрашивание».
-                      color: selected
-                          ? accent.withValues(alpha: 0.05)
-                          : cs.surfaceContainerHighest.withValues(alpha: 0.20),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: selected
-                            ? accent.withValues(alpha: 0.40)
-                            : cs.outlineVariant.withValues(alpha: 0.34),
-                      ),
-                      boxShadow: selected
-                          ? [
-                              BoxShadow(
-                                color: accent.withValues(alpha: 0.12),
-                                blurRadius: 10,
-                                spreadRadius: -3,
-                              ),
-                            ]
-                          : const [],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 2, 20, 2),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: PressScale(
+              pressedScale: 0.965,
+              enableTilt: true,
+              duration: const Duration(milliseconds: 150),
+              releaseDuration: const Duration(milliseconds: 420),
+              curve: Curves.easeOutCubic,
+              maxTiltAngle: 0.22,
+              pressTint: color,
+              pressTintStrength: 0.07,
+              pressTintRadius: BorderRadius.circular(999),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => unawaited(_openModelSheet(cs, accent)),
+                onLongPress: () => unawaited(_openModelSheet(cs, accent)),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 420),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.fromLTRB(9, 5, 14, 5),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: color.withValues(alpha: 0.34),
+                      width: 1,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Значок в цветном медальоне: у каждой семьи свой
-                        // цвет, поэтому таблетки различаются боковым зрением,
-                        // а не только подписью.
-                        AnimatedScale(
-                          duration: const Duration(milliseconds: 420),
-                          curve: Curves.easeOutCubic,
-                          scale: selected ? 1.08 : 1.0,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 420),
-                            curve: Curves.easeOutCubic,
-                            width: 23,
-                            height: 23,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _modelColor(
-                                option,
-                                cs,
-                                accent,
-                              ).withValues(alpha: selected ? 0.26 : 0.12),
-                              border: Border.all(
-                                color: _modelColor(
-                                  option,
-                                  cs,
-                                  accent,
-                                ).withValues(alpha: selected ? 0.70 : 0.28),
-                              ),
-                              boxShadow: selected
-                                  ? [
-                                      BoxShadow(
-                                        color: _modelColor(
-                                          option,
-                                          cs,
-                                          accent,
-                                        ).withValues(alpha: 0.35),
-                                        blurRadius: 9,
-                                        spreadRadius: -1,
-                                      ),
-                                    ]
-                                  : const [],
-                            ),
-                            child: Icon(
-                              _modelIcon(option),
-                              size: 14,
-                              color: selected
-                                  ? _modelColor(option, cs, accent)
-                                  : _modelColor(
-                                      option,
-                                      cs,
-                                      accent,
-                                    ).withValues(alpha: 0.75),
-                            ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.10),
+                        blurRadius: 10,
+                        spreadRadius: -3,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 420),
+                        curve: Curves.easeOutCubic,
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color.withValues(alpha: 0.18),
+                          border: Border.all(
+                            color: color.withValues(alpha: 0.55),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 420),
-                          curve: Curves.easeOutCubic,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 320),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          child: Icon(
+                            selected == null
+                                ? Icons.all_inclusive_rounded
+                                : _modelIcon(selected),
+                            key: ValueKey('forge_pill_icon_$label'),
+                            size: 13,
+                            color: color,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Смена подписи — кросс-фейд с мягким подъёмом, без
+                      // прыжка ширины: текст едет вместе с таблеткой.
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 380),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        layoutBuilder: (current, previous) => Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [...previous, ?current],
+                        ),
+                        transitionBuilder: (child, anim) => FadeTransition(
+                          opacity: anim,
+                          child: SlideTransition(
+                            position:
+                                Tween<Offset>(
+                                  begin: const Offset(0, 0.18),
+                                  end: Offset.zero,
+                                ).animate(anim),
+                            child: child,
+                          ),
+                        ),
+                        child: Text(
+                          'Модель • «$label»',
+                          key: ValueKey('forge_pill_$label'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 12.5,
-                            // Толщина одна на выбранную и нет: смена веса
-                            // меняла ширину таблетки, соседи переезжали — это
-                            // и читалось как «дёрнуло» при выборе.
                             fontWeight: FontWeight.w600,
-                            color: selected
-                                ? accent.withValues(alpha: 0.95)
-                                : cs.onSurfaceVariant.withValues(alpha: 0.85),
-                          ),
-                          child: Text(
-                            option.id.isEmpty ? option.name : option.label,
-                            maxLines: 1,
+                            letterSpacing: 0.1,
+                            color: cs.onSurface.withValues(alpha: 0.88),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           ),
         ),
       ),
@@ -1185,6 +1171,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
   ) {
     if (option.id.isEmpty) return accent;
     switch (option.vendor) {
+      case 'Agnes AI':
+        return const Color(0xFFE0699B);
       case 'Poolside':
         return const Color(0xFF34B6FF);
       case 'OpenRouter':
@@ -1205,6 +1193,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
     // Значки в одном штриховом ключе (rounded/outlined, без заливок) и
     // разные у каждой семьи: таблетки различаются боковым зрением.
     switch (option.vendor) {
+      case 'Agnes AI':
+        return Icons.local_fire_department_outlined;
       case 'Poolside':
         return Icons.waves_rounded;
       case 'OpenRouter':
@@ -1721,14 +1711,22 @@ class _ForgeScreenState extends State<ForgeScreen> {
       animate: animate,
       child: Align(
         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-        // Пузырь не сжимается (иначе текст выделялся мимо слова), но
-        // отзывается лёгким 3D-наклоном — как остальные карточки.
+        // Отдача у пузыря: заметный 3D-наклон (0.20 — как у карточек
+        // привычек) и еле заметное сжатие, которого хватает, чтобы палец
+        // почувствовал ответ. Подложка отдачи скруглена по форме пузыря —
+        // раньше она была прямоугольной и читалась как «квадрат под
+        // текстом». Сжимаем всего на 1.5%: выделение текста при этом не
+        // сбивается на соседние слова.
         child: PressScale(
-          pressedScale: 1.0,
+          pressedScale: 0.985,
           enableTilt: true,
-          maxTiltAngle: 0.08,
-          duration: const Duration(milliseconds: 160),
-          releaseDuration: const Duration(milliseconds: 380),
+          maxTiltAngle: 0.20,
+          duration: const Duration(milliseconds: 170),
+          releaseDuration: const Duration(milliseconds: 440),
+          curve: Curves.easeOutCubic,
+          pressTint: isUser ? accent : cs.primary,
+          pressTintStrength: 0.05,
+          pressTintRadius: BorderRadius.circular(16),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 560),
             margin: const EdgeInsets.symmetric(vertical: 5),
@@ -1849,13 +1847,46 @@ class _ForgeScreenState extends State<ForgeScreen> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    _activeProvider == null
-                        ? Translations.t('forgeThinking', context)
-                        : '${Translations.t('forgeThinking', context)} · '
-                              '$_activeProvider',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
+                  // Провайдер подставляется, как только агент выбрал канал:
+                  // подпись сменяется кросс-фейдом, а не подменой кадра —
+                  // раньше строка статуса «прыгала» на новом имени.
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 420),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder: (current, previous) => Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        ...previous.map(
+                          (child) => Positioned.fill(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: child,
+                            ),
+                          ),
+                        ),
+                        ?current,
+                      ],
+                    ),
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.22),
+                          end: Offset.zero,
+                        ).animate(anim),
+                        child: child,
+                      ),
+                    ),
+                    child: Text(
+                      _activeProvider == null
+                          ? Translations.t('forgeThinking', context)
+                          : '${Translations.t('forgeThinking', context)} · '
+                                '$_activeProvider',
+                      key: ValueKey('forge_status_${_activeProvider ?? ''}'),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),

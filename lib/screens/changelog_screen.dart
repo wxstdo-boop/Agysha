@@ -185,7 +185,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
             ),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onPrimaryContainer.withValues(
-                alpha: 0.72,
+                alpha: 0.86,
               ),
               fontStyle: FontStyle.italic,
             ),
@@ -253,7 +253,9 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                     Text(
                       stamp,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.85,
+                        ),
                       ),
                     ),
                 ],
@@ -277,10 +279,19 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                       // Текст заметки — курсивом: пункты читаются как живая
                       // заметка автора, а не как протокол официального отчёта.
                       Expanded(
+                        // Заметка — главный текст карточки, поэтому она
+                        // крупнее и плотнее обычного bodyMedium и держит
+                        // почти полный контраст: раньше сероватый мелкий
+                        // курсив читался как «блеклый список».
                         child: Text(
                           entry.changes[j],
                           style: theme.textTheme.bodyMedium?.copyWith(
+                            fontSize: 14,
+                            height: 1.45,
                             fontStyle: FontStyle.italic,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.94,
+                            ),
                           ),
                         ),
                       ),
