@@ -698,6 +698,9 @@ const Map<String, String> _fr = {
   'hapticsDesc': 'Courte vibration lors des appuis et bascules',
   'sounds': 'Sons',
   'soundsDesc': 'Cliquetis système discret lors des confirmations',
+  'yandexMusicFeature': 'Yandex Music',
+  'yandexMusicFeatureDesc':
+      'Affiche la carte Yandex Music dans le profil : connexion et tous les titres favoris',
   'reduceMotion': 'Optimisation',
   'reduceMotionDesc':
       'Graphismes plus légers : les animations restent, l’app est plus fluide',
@@ -1226,4 +1229,29 @@ const Map<String, String> _fr = {
   'giftDesc_samurai_visor':
       'Visière protectrice des gardiens nocturnes de Night City, elle bloque la procrastination.',
   'giftBuff_samurai_visor': '+7 % de volonté inflexible',
+  'yandexMusicTitle': 'Yandex Musique',
+  'yandexMusicLinkTitle': 'Associer Yandex Musique',
+  'yandexMusicLinkBody':
+      "Nous afficherons tout ce que vous avez marqué « j'aime ». L'application n'a pas besoin de mot de passe, seulement d'un jeton.",
+  'yandexMusicStep1':
+      'Connectez-vous à votre compte Yandex et ouvrez la page du jeton.',
+  'yandexMusicStep2': "Autorisez l'accès à la musique et copiez le jeton.",
+  'yandexMusicStep3': 'Collez le jeton ci-dessous et appuyez sur « Associer ».',
+  'yandexMusicTokenLabel': 'Jeton',
+  'yandexMusicTokenHint': 'Collez le jeton depuis le presse-papiers',
+  'yandexMusicLink': 'Associer',
+  'yandexMusicLinking': 'Association…',
+  'yandexMusicLinkedAs': 'Associé',
+  'yandexMusicAccount': 'Compte Yandex',
+  'yandexMusicUnlink': 'Dissocier',
+  'yandexMusicUnlinkTitle': 'Dissocier Yandex Musique ?',
+  'yandexMusicUnlinkBody':
+      "Le jeton sera supprimé de l'appareil. Vos titres aimés restent dans le compte.",
+  'yandexMusicFavorites': 'Titres aimés',
+  'yandexMusicEmpty': "Vous n'avez encore rien aimé",
+  'yandexMusicRetry': 'Réessayer',
+  'yandexMusicStreamReady': 'Le lien du titre est prêt',
+  'yandexMusicNoStream': "Impossible d'obtenir un lien pour ce titre",
+  'yandexMusicErrorGeneric': 'Impossible de charger les données. Réessayez.',
+  'yandexMusicProfileSubtitle': 'Vos titres aimés du compte',
 };

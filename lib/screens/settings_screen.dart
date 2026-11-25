@@ -23,6 +23,7 @@ import '../services/alarm_service.dart';
 import '../services/app_version.dart';
 import '../services/renderer_service.dart';
 import '../services/settings_service.dart';
+import '../theme/cyber_theme.dart';
 import '../theme/itshnik_theme.dart';
 import '../utils/design_tokens.dart';
 import '../services/action_log.dart';
@@ -167,6 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _haptics = true;
   bool _sounds = false;
   bool _optimize = false;
+  bool _yandexMusic = false;
   bool _permissionWarningDismissed = false;
   bool _grantPressed = false; // Состояние зажатия кнопки «Выдать»
   bool? _notificationsEnabled; // Кэш статуса уведомлений
@@ -249,6 +251,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _loadHaptics(),
       _loadSounds(),
       _loadOptimize(),
+      _loadYandexMusic(),
       _checkPermissionWarning(),
       _checkNotificationsEnabled(),
       _checkFullScreenGrant(),
@@ -423,6 +426,19 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _loadOptimize() async {
     _optimize = await SettingsService.loadOptimize();
     PerfPrefs.enabled.value = _optimize;
+  }
+
+  Future<void> _loadYandexMusic() async {
+    _yandexMusic = await SettingsService.loadYandexMusicEnabled();
+  }
+
+  Future<void> _setYandexMusic(bool value) async {
+    if (mounted) setState(() => _yandexMusic = value);
+    try {
+      await SettingsService.saveYandexMusicEnabled(value);
+    } catch (_) {
+      if (mounted) setState(() => _yandexMusic = !value);
+    }
   }
 
   Future<void> _setOptimize(bool value) async {

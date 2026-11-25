@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../services/haptics.dart';
+import '../theme/cyber_theme.dart';
 import '../theme/itshnik_theme.dart';
 import '../theme/resident_theme.dart';
 import '../utils/design_tokens.dart';
@@ -72,13 +73,28 @@ class ExclusiveThemesRow extends StatelessWidget {
               onTap: () => onSelect(ResidentPalette.key),
             ),
           ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ExclusiveThemeTile(
+              key: const ValueKey('exclusive_tile_cyber'),
+              title: 'CYBER PSYCHOS',
+              subtitle: 'Night City · неон',
+              active: activeKey == CyberPalette.key,
+              accent: CyberPalette.acid,
+              accentAlt: CyberPalette.cyan,
+              gradient: const [Color(0xFF0A0614), Color(0xFF1A0C2E)],
+              glyph: const _CyberGlyph(),
+              texture: _TileTexture.grid,
+              onTap: () => onSelect(CyberPalette.key),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-enum _TileTexture { scanlines, hex }
+enum _TileTexture { scanlines, hex, grid }
 
 class _ExclusiveThemeTile extends StatefulWidget {
   const _ExclusiveThemeTile({
@@ -144,6 +160,14 @@ class _ExclusiveThemeTileState extends State<_ExclusiveThemeTile>
     Haptics.select();
     widget.onTap();
   }
+
+  /// Шрифт плитки: у каждой темы свой характер — пиксели у терминала
+  /// MiSide, широкий неоновый дисплей у «Cyber psychos».
+  String? get _titleFont => switch (widget.texture) {
+    _TileTexture.scanlines => 'ItsPixel',
+    _TileTexture.grid => 'CyberDisplay',
+    _TileTexture.hex => null,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -217,11 +241,21 @@ class _ExclusiveThemeTileState extends State<_ExclusiveThemeTile>
                           Row(
                             children: [
                               SizedBox(
-                                width: 30,
-                                height: 30,
+                                width: 26,
+                                height: 26,
                                 child: widget.glyph,
                               ),
-                              const Spacer(),
+                              const SizedBox(width: 4),
+                              // Три плитки в строке: плашка ужимается, а не
+                              // вылезает за край на узких экранах.
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: _ExclusivePlaque(color: widget.accent),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
                               _StateDot(active: active, color: accent),
                             ],
                           ),
@@ -233,10 +267,7 @@ class _ExclusiveThemeTileState extends State<_ExclusiveThemeTile>
                               widget.title,
                               maxLines: 1,
                               style: TextStyle(
-                                fontFamily:
-                                    widget.texture == _TileTexture.scanlines
-                                    ? 'ItsPixel'
-                                    : null,
+                                fontFamily: _titleFont,
                                 fontSize: 15,
                                 height: 1.1,
                                 letterSpacing: 1.1,
@@ -255,10 +286,7 @@ class _ExclusiveThemeTileState extends State<_ExclusiveThemeTile>
                               widget.subtitle,
                               maxLines: 1,
                               style: TextStyle(
-                                fontFamily:
-                                    widget.texture == _TileTexture.scanlines
-                                    ? 'ItsPixel'
-                                    : null,
+                                fontFamily: _titleFont,
                                 fontSize: 11,
                                 height: 1.2,
                                 color: accent.withValues(alpha: 0.55),
@@ -273,6 +301,37 @@ class _ExclusiveThemeTileState extends State<_ExclusiveThemeTile>
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Плашка «EXCLUSIVE»: эксклюзивные темы помечены на самой плитке, чтобы
+/// сразу было видно — это не ещё одна краска из барабана, а отдельный режим.
+class _ExclusivePlaque extends StatelessWidget {
+  const _ExclusivePlaque({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: color.withValues(alpha: 0.45), width: 0.8),
+      ),
+      child: Text(
+        'EXCLUSIVE',
+        maxLines: 1,
+        style: TextStyle(
+          fontSize: 6.5,
+          height: 1.1,
+          letterSpacing: 0.6,
+          fontWeight: FontWeight.w700,
+          color: color.withValues(alpha: 0.92),
         ),
       ),
     );
@@ -397,6 +456,85 @@ class _AdaGlyphPainter extends CustomPainter {
   bool shouldRepaint(covariant _AdaGlyphPainter oldDelegate) => false;
 }
 
+/// Мини-визор «Cyber psychos»: тёмный шлем с кислотным визором и циановой
+/// полосой сканирования — как маска из Night City.
+class _CyberGlyph extends StatelessWidget {
+  const _CyberGlyph();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0614),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: CyberPalette.acid.withValues(alpha: 0.45)),
+        boxShadow: [
+          BoxShadow(
+            color: CyberPalette.cyan.withValues(alpha: 0.22),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      child: const Center(
+        child: CustomPaint(size: Size(24, 26), painter: _CyberGlyphPainter()),
+      ),
+    );
+  }
+}
+
+class _CyberGlyphPainter extends CustomPainter {
+  const _CyberGlyphPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.shortestSide / 24.0;
+    canvas.translate((size.width - 24 * s) / 2, (size.height - 26 * s) / 2);
+    canvas.scale(s);
+
+    // Шлем: скруглённый силуэт головы.
+    canvas.drawPath(
+      Path()
+        ..moveTo(5, 24)
+        ..quadraticBezierTo(3.2, 12, 12, 3.4)
+        ..quadraticBezierTo(20.8, 12, 19, 24)
+        ..close(),
+      Paint()..color = const Color(0xFF17102A),
+    );
+    // Визор: два угловатых глаза, соединённых мостом.
+    canvas.drawPath(
+      Path()
+        ..moveTo(6.4, 12.6)
+        ..lineTo(11.2, 11.4)
+        ..lineTo(11.2, 14.6)
+        ..lineTo(6.9, 15.4)
+        ..close(),
+      Paint()..color = CyberPalette.acid,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(17.6, 12.6)
+        ..lineTo(12.8, 11.4)
+        ..lineTo(12.8, 14.6)
+        ..lineTo(17.1, 15.4)
+        ..close(),
+      Paint()..color = CyberPalette.acid,
+    );
+    // Циановая полоса-имплант на виске.
+    canvas.drawRect(
+      const Rect.fromLTWH(15.4, 6.6, 3.6, 0.9),
+      Paint()..color = CyberPalette.cyan,
+    );
+    // Маджентовый шов на подбородке.
+    canvas.drawRect(
+      const Rect.fromLTWH(11.4, 17.6, 1.2, 4.2),
+      Paint()..color = CyberPalette.magenta.withValues(alpha: 0.85),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CyberGlyphPainter oldDelegate) => false;
+}
+
 /// Фактура плитки: сканлайны терминала либо гексагональная сетка.
 class _TileTexturePainter extends CustomPainter {
   const _TileTexturePainter({required this.texture, required this.accent});
@@ -410,6 +548,24 @@ class _TileTexturePainter extends CustomPainter {
       final paint = Paint()..color = accent.withValues(alpha: 0.05);
       for (double y = 0; y < size.height; y += 6) {
         canvas.drawRect(Rect.fromLTWH(0, y, size.width, 1), paint);
+      }
+      return;
+    }
+    if (texture == _TileTexture.grid) {
+      // Перспективная неоновая сетка: редкие вертикали и горизонтали,
+      // гаснущие к верхнему краю, — как пол Найт-Сити.
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.6;
+      for (double x = 0; x < size.width + 8; x += 12) {
+        paint.color = accent.withValues(alpha: 0.10);
+        canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+      }
+      for (double y = 0; y < size.height + 8; y += 12) {
+        paint.color = accent.withValues(
+          alpha: 0.04 + 0.09 * (y / size.height).clamp(0.0, 1.0),
+        );
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
       }
       return;
     }

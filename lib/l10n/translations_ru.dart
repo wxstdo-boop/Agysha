@@ -692,6 +692,9 @@ const Map<String, String> _ru = {
   'hapticsDesc': 'Короткая вибрация при нажатиях и переключениях',
   'sounds': 'Звуки',
   'soundsDesc': 'Мягкий системный щелчок на подтверждениях',
+  'yandexMusicFeature': 'Яндекс Музыка',
+  'yandexMusicFeatureDesc':
+      'Показывает карточку Яндекс Музыки в профиле: привязка и вся избранная музыка',
   'reduceMotion': 'Оптимизация',
   'reduceMotionDesc':
       'Меньше нагрузки на графику: анимации остаются, но приложение плавнее',
@@ -1177,4 +1180,29 @@ const Map<String, String> _ru = {
   'giftDesc_samurai_visor':
       'Защитный визор ночных стражей Найт-Сити, блокирующий прокрастинацию.',
   'giftBuff_samurai_visor': '+7% к несгибаемой воле',
+  'yandexMusicTitle': 'Яндекс Музыка',
+  'yandexMusicLinkTitle': 'Привязать Яндекс Музыку',
+  'yandexMusicLinkBody':
+      'Покажем всё, что вы отметили «мне нравится». Пароль приложению не нужен: только токен.',
+  'yandexMusicStep1':
+      'Войдите в аккаунт Яндекс и откройте страницу выдачи токена.',
+  'yandexMusicStep2': 'Разрешите доступ к музыке и скопируйте токен.',
+  'yandexMusicStep3': 'Вставьте токен в поле ниже и нажмите «Привязать».',
+  'yandexMusicTokenLabel': 'Токен',
+  'yandexMusicTokenHint': 'Вставьте токен из буфера',
+  'yandexMusicLink': 'Привязать',
+  'yandexMusicLinking': 'Привязываем…',
+  'yandexMusicLinkedAs': 'Привязано',
+  'yandexMusicAccount': 'Аккаунт Яндекс',
+  'yandexMusicUnlink': 'Отвязать',
+  'yandexMusicUnlinkTitle': 'Отвязать Яндекс Музыку?',
+  'yandexMusicUnlinkBody':
+      'Токен будет удалён с устройства. Избранное останется в аккаунте.',
+  'yandexMusicFavorites': 'Избранные треки',
+  'yandexMusicEmpty': 'В избранном пока пусто',
+  'yandexMusicRetry': 'Повторить',
+  'yandexMusicStreamReady': 'Ссылка на трек готова',
+  'yandexMusicNoStream': 'Не удалось получить ссылку на этот трек',
+  'yandexMusicErrorGeneric': 'Не удалось получить данные. Попробуйте ещё раз.',
+  'yandexMusicProfileSubtitle': 'Избранное из вашего аккаунта',
 };

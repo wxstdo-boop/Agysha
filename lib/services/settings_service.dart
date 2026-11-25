@@ -31,6 +31,7 @@ class SettingsService {
   static const _keyBerserk = 'berserk_mode';
   static const _keyTaskNotes = 'task_quick_notes_mode';
   static const _keyTesterMode = 'tester_mode';
+  static const _keyYandexMusic = 'setting_yandex_music';
   static const _settingsFile = 'app_settings';
 
   /// Безопасное чтение bool из SharedPreferences: принимает true/false
@@ -95,6 +96,10 @@ class SettingsService {
       // на системную.
       case 'resident':
         return 'resident';
+      // «Cyber psychos» — третья эксклюзивная тема, тоже отдельной кнопкой.
+      // Без ветки после перезапуска она откатывалась бы на системную.
+      case 'cyber':
+        return 'cyber';
       default:
         // Без явного выбора — СИСТЕМНАЯ тема (обои/Material You), а не Grok:
         // у Grok primary почти чёрный, и таблетка/переключатели выглядели
@@ -108,7 +113,11 @@ class SettingsService {
   static String _themeBeforeKey(String themeKey) => 'theme_before_$themeKey';
 
   /// Ключи эксклюзивных тем: их нельзя запоминать как «прежнюю тему».
-  static const Set<String> exclusiveThemeKeys = {'itshnik', 'resident'};
+  static const Set<String> exclusiveThemeKeys = {
+    'itshnik',
+    'resident',
+    'cyber',
+  };
 
   /// Тема, которая стояла до включения эксклюзивной темы: выключили её —
   /// человек возвращается туда, откуда пришёл, а не в случайную «тёмную».
@@ -394,6 +403,21 @@ class SettingsService {
   static Future<void> saveSounds(bool value) async {
     final map = await _loadSettings();
     map[_keySounds] = value;
+    await _saveSettings(map);
+  }
+
+  /// Привязка Яндекс Музыки в профиле — отдельная функция, и по умолчанию
+  /// она ВЫКЛЮЧЕНА: карточка в профиле не появляется, пока человек сам не
+  /// включит её в настройках. Ключ читается и пишется тем же путём, что и
+  /// остальные переключатели.
+  static Future<bool> loadYandexMusicEnabled() async {
+    final map = await _loadSettings();
+    return _bool(map[_keyYandexMusic], false);
+  }
+
+  static Future<void> saveYandexMusicEnabled(bool value) async {
+    final map = await _loadSettings();
+    map[_keyYandexMusic] = value;
     await _saveSettings(map);
   }
 

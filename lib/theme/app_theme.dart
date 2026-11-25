@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/haptics.dart';
 import '../utils/design_tokens.dart';
+import 'cyber_theme.dart';
 import 'itshnik_theme.dart';
 import 'resident_theme.dart';
 
@@ -70,8 +71,11 @@ ThemeData buildAgyshaTheme(
 }) {
   final isItshnik = themeKey == ItshnikPalette.key;
   final isResident = themeKey == ResidentPalette.key;
+  final isCyber = themeKey == CyberPalette.key;
   final appFontFamily = isItshnik
       ? itshnikFont.text
+      : isCyber
+      ? 'CyberText'
       : (fontFamily == 'caveat' ? 'Caveat' : null);
   final base = ThemeData(
     useMaterial3: true,
@@ -282,6 +286,9 @@ ThemeData buildAgyshaTheme(
   // что делает её собой: пиксельные шрифты, жёсткие углы, свечение и
   // блочный плеск нажатия.
   if (isItshnik) return applyItshnikTheme(base, font: itshnikFont);
+  // «Cyber psychos» — неоновая ночь Найт-Сити: кислотный жёлтый, циан и
+  // маджента, прямые углы, широкий дисплейный шрифт и глитч-плеск.
+  if (isCyber) return applyCyberTheme(base);
   // «Резидент» донашивает тот же каркас: меняются углы, рамки, типографика
   // HUD и плеск нажатия, палитра приходит из ResidentPalette.scheme.
   if (isResident) return applyResidentTheme(base);

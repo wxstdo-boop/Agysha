@@ -63,11 +63,22 @@ class _ItshnikCarouselPause extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resident = themeKey == ResidentPalette.key;
-    final accent = resident ? ResidentPalette.blood : ItshnikPalette.phosphor;
+    final cyber = themeKey == CyberPalette.key;
+    final accent = resident
+        ? ResidentPalette.blood
+        : cyber
+        ? CyberPalette.acid
+        : ItshnikPalette.phosphor;
     final background = resident
         ? const Color(0xFF0F0709)
+        : cyber
+        ? const Color(0xFF0A0614)
         : const Color(0xFF050D0B);
-    final title = resident ? '«Резидент»' : '«IT-шник»';
+    final title = resident
+        ? '«Резидент»'
+        : cyber
+        ? '«Cyber psychos»'
+        : '«IT-шник»';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
@@ -93,7 +104,11 @@ class _ItshnikCarouselPause extends StatelessWidget {
                     'Выключите её плиткой ниже, чтобы вернуться к выбору.',
               ),
               style: TextStyle(
-                fontFamily: resident ? null : 'ItsPixel',
+                fontFamily: resident
+                    ? null
+                    : cyber
+                    ? 'CyberText'
+                    : 'ItsPixel',
                 fontSize: 12.5,
                 height: 1.3,
                 letterSpacing: resident ? 0.6 : 0,

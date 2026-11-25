@@ -107,6 +107,24 @@ flutter:
     - family: ItsDigits
       fonts:
         - asset: assets/fonts/Handjet.ttf
+    # Эксклюзивные шрифты темы «Резидент»: сжатый гротеск для служебных
+    # подписей (Oswald) и строгий антиквенный для заголовков (Cormorant).
+    # Оба — SIL OFL 1.1 (лицензии рядом: assets/fonts/OFL-Resident*.txt),
+    # кириллица есть.
+    - family: ResidentSans
+      fonts:
+        - asset: assets/fonts/ResidentSans.ttf
+    - family: ResidentSerif
+      fonts:
+        - asset: assets/fonts/ResidentSerif.ttf
+    # Эксклюзивные шрифты темы «Cyber psychos»: широкий техно-дисплей
+    # (Russo One) и геометрический текст (Jura). SIL OFL 1.1, кириллица есть.
+    - family: CyberDisplay
+      fonts:
+        - asset: assets/fonts/CyberDisplay.ttf
+    - family: CyberText
+      fonts:
+        - asset: assets/fonts/CyberText.ttf
     # Третий шрифт «IT-шника» (Roboto с широким тире): нужен, когда текст
     # темы не пиксельный, а «штриховой».
     - family: ItsDash

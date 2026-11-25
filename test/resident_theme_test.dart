@@ -14,6 +14,7 @@ import 'package:agysha/theme/app_theme.dart';
 import 'package:agysha/theme/itshnik_theme.dart';
 import 'package:agysha/theme/resident_theme.dart';
 import 'package:agysha/widgets/exclusive_theme_tiles.dart';
+import 'package:agysha/widgets/resident_dossier.dart';
 import 'package:agysha/widgets/resident_overlay.dart';
 import 'package:agysha/widgets/resident_tap_effects.dart';
 
@@ -135,7 +136,9 @@ void main() {
     testWidgets('две плитки равной ширины на одной высоте, без переполнения', (
       tester,
     ) async {
-      tester.view.physicalSize = const Size(360, 780);
+      // Строка теперь может содержать и другие эксклюзивные темы; проверяем
+      // именно пару IT-шник / Резидент и их посадку в один ряд.
+      tester.view.physicalSize = const Size(560, 780);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
@@ -155,29 +158,31 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      final tiles = find.byType(InkWell);
-      expect(tiles, findsNWidgets(2));
+      final itTile = find.byKey(const ValueKey('exclusive_tile_itshnik'));
+      final reTile = find.byKey(const ValueKey('exclusive_tile_resident'));
+      expect(itTile, findsOneWidget);
+      expect(reTile, findsOneWidget);
 
-      final first = tester.getRect(tiles.at(0));
-      final second = tester.getRect(tiles.at(1));
+      final first = tester.getRect(itTile);
+      final second = tester.getRect(reTile);
       // Одна строка: верх и высота совпадают.
       expect(first.top, second.top);
       expect(first.height, second.height);
       expect(first.width, moreOrLessEquals(second.width, epsilon: 0.5));
-      // Обе влезли в экран 360 — ничего не уехало за край.
-      expect(second.right, lessThanOrEqualTo(360));
+      // Обе влезли в экран — ничего не уехало за край.
+      expect(second.right, lessThanOrEqualTo(560));
       expect(tester.takeException(), isNull);
 
-      await tester.tap(tiles.at(1));
+      await tester.tap(reTile);
       await tester.pump();
       expect(selected, ResidentPalette.key);
-      await tester.tap(tiles.at(0));
+      await tester.tap(itTile);
       await tester.pump();
       expect(selected, ItshnikPalette.key);
     });
 
     testWidgets('активная плитка отмечается как выбранная', (tester) async {
-      tester.view.physicalSize = const Size(411, 891);
+      tester.view.physicalSize = const Size(560, 891);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
@@ -229,11 +234,68 @@ void main() {
     });
   });
 
+  group('шрифты и досье', () {
+    test('тема ставит ResidentSans на текст и ResidentSerif на заголовки', () {
+      final themed = applyResidentTheme(ThemeData.dark());
+      expect(themed.textTheme.bodyMedium?.fontFamily, 'ResidentSans');
+      expect(themed.textTheme.titleLarge?.fontFamily, 'ResidentSerif');
+      expect(themed.textTheme.displayLarge?.fontFamily, 'ResidentSerif');
+      expect(ResidentPalette.sansFamily, 'ResidentSans');
+      expect(ResidentPalette.serifFamily, 'ResidentSerif');
+      expect(ResidentPalette.blood, const Color(0xFFE01B2C));
+      expect(ResidentPalette.brass, const Color(0xFFE8BC5A));
+    });
+
+    testWidgets('досье рисует штамп, серийный номер, печать и содержимое', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              padding: EdgeInsets.all(16),
+              child: ResidentDossier(child: Text('Запись 0117')),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 80));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('CLASSIFIED'), findsOneWidget);
+      expect(find.text('UMB-AD-0117'), findsOneWidget);
+      expect(find.text('АДА ВОНГ'), findsOneWidget);
+      expect(find.text('Запись 0117'), findsOneWidget);
+      expect(find.byType(ResidentSigil), findsOneWidget);
+    });
+
+    testWidgets('печать рисуется отдельно и держит заданный размер', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: Center(child: ResidentSigil(size: 90))),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 60));
+
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(ResidentSigil)), const Size.square(90));
+      expect(
+        find.descendant(
+          of: find.byType(ResidentSigil),
+          matching: find.byType(CustomPaint),
+        ),
+        findsWidgets,
+      );
+    });
+  });
+
   testWidgets('настройки: обе эксклюзивные плитки стоят в одной строке', (
     tester,
   ) async {
     // Высокий вьюпорт: строка плиток должна быть видна целиком.
-    tester.view.physicalSize = const Size(420, 1600);
+    tester.view.physicalSize = const Size(560, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 

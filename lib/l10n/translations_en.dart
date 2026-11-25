@@ -683,6 +683,9 @@ const Map<String, String> _en = {
   'hapticsDesc': 'Short vibration on taps and switches',
   'sounds': 'Sounds',
   'soundsDesc': 'Soft system click on confirmations',
+  'yandexMusicFeature': 'Yandex Music',
+  'yandexMusicFeatureDesc':
+      'Shows the Yandex Music card in your profile: link your account and see all favourite tracks',
   'reduceMotion': 'Optimization',
   'reduceMotionDesc':
       'Lighter graphics: animations stay, the app runs smoother',
@@ -1172,4 +1175,28 @@ const Map<String, String> _en = {
   'giftDesc_samurai_visor':
       "A protective visor of Night City's night watch that blocks procrastination.",
   'giftBuff_samurai_visor': '+7% unbreakable will',
+  'yandexMusicTitle': 'Yandex Music',
+  'yandexMusicLinkTitle': 'Link Yandex Music',
+  'yandexMusicLinkBody':
+      'We will show everything you marked as liked. The app needs no password, only a token.',
+  'yandexMusicStep1': 'Sign in to your Yandex account and open the token page.',
+  'yandexMusicStep2': 'Allow access to music and copy the token.',
+  'yandexMusicStep3': 'Paste the token below and tap "Link".',
+  'yandexMusicTokenLabel': 'Token',
+  'yandexMusicTokenHint': 'Paste the token from the clipboard',
+  'yandexMusicLink': 'Link',
+  'yandexMusicLinking': 'Linking…',
+  'yandexMusicLinkedAs': 'Linked',
+  'yandexMusicAccount': 'Yandex account',
+  'yandexMusicUnlink': 'Unlink',
+  'yandexMusicUnlinkTitle': 'Unlink Yandex Music?',
+  'yandexMusicUnlinkBody':
+      'The token will be removed from this device. Your liked tracks stay in the account.',
+  'yandexMusicFavorites': 'Liked tracks',
+  'yandexMusicEmpty': 'Nothing liked yet',
+  'yandexMusicRetry': 'Retry',
+  'yandexMusicStreamReady': 'Track link is ready',
+  'yandexMusicNoStream': 'Could not get a link for this track',
+  'yandexMusicErrorGeneric': 'Could not load the data. Please try again.',
+  'yandexMusicProfileSubtitle': 'Liked tracks from your account',
 };

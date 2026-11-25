@@ -20,6 +20,9 @@ import 'widgets/itshnik_overlay.dart';
 import 'widgets/itshnik_tap_effects.dart';
 import 'widgets/resident_overlay.dart';
 import 'widgets/resident_tap_effects.dart';
+import 'widgets/cyber_overlay.dart';
+import 'widgets/cyber_tap_effects.dart';
+import 'theme/cyber_theme.dart';
 import 'theme/itshnik_theme.dart';
 import 'theme/resident_theme.dart';
 import 'l10n/locale_provider.dart';
@@ -1881,7 +1884,9 @@ class AgyshaAppState extends State<AgyshaApp>
         return ThemeMode.light;
       case ItshnikPalette.key:
       case ResidentPalette.key:
-        // Эксклюзивные темы («IT-шник», «Резидент») всегда тёмные.
+      case CyberPalette.key:
+        // Эксклюзивные темы («IT-шник», «Резидент», «Cyber psychos») всегда
+        // тёмные: их фон и неон рассчитаны на ночь.
         return ThemeMode.dark;
       default:
         return ThemeMode.system;
@@ -2615,6 +2620,11 @@ class AgyshaAppState extends State<AgyshaApp>
                 if (_themeKey == ResidentPalette.key) {
                   return ResidentPalette.scheme;
                 }
+                // «Cyber psychos» — палитра темы: фон, неон и эффекты берут
+                // ровно те же цвета, что и оформление экранов.
+                if (_themeKey == CyberPalette.key) {
+                  return CyberPalette.scheme;
+                }
                 if (_themeKey == 'oled') {
                   return const ColorScheme.dark(
                     primary: Color(0xFFFF5252),
@@ -2893,6 +2903,13 @@ class AgyshaAppState extends State<AgyshaApp>
                             key: ValueKey('resident_backdrop'),
                             child: SizedBox.expand(),
                           ),
+                        // Фон «Cyber psychos»: ночной город, неоновая сетка,
+                        // дождь и скан-линии под прозрачными экранами темы.
+                        if (_themeKey == CyberPalette.key)
+                          const CyberBackdrop(
+                            key: ValueKey('cyber_backdrop'),
+                            child: SizedBox.expand(),
+                          ),
                         // Контент (Navigator) — всегда ОДИН слой, без анимации:
                         // раньше AnimatedSwitcher оборачивал и контент, и пятна,
                         // поэтому при смене темы ВЕСЬ экран «вспыхивал» (fade
@@ -2912,6 +2929,12 @@ class AgyshaAppState extends State<AgyshaApp>
                         if (_themeKey == ResidentPalette.key)
                           const ResidentTapEffects(
                             key: ValueKey('resident_tap_effects'),
+                          ),
+                        // Глитч и неоновые кольца «Cyber psychos» в точке
+                        // нажатия: слой не перехватывает жесты.
+                        if (_themeKey == CyberPalette.key)
+                          const CyberTapEffects(
+                            key: ValueKey('cyber_tap_effects'),
                           ),
                         // Пятна крови темы MUTILATED — ОТДЕЛЬНЫЙ слой поверх
                         // Navigator (включая drag-прокси при перетаскивании).

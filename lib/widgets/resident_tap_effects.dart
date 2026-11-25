@@ -117,6 +117,7 @@ class _ResidentTapPainter extends CustomPainter {
       final p = (age / _life).clamp(0.0, 1.0);
       _paintHexRing(canvas, b, p);
       _paintTicks(canvas, b, p);
+      _paintStreaks(canvas, b, p);
       _paintEmbers(canvas, b, p);
       _paintLock(canvas, b, p);
     }
@@ -137,6 +138,23 @@ class _ResidentTapPainter extends CustomPainter {
         ..strokeWidth = 1.0
         ..color = ResidentPalette.brass.withValues(alpha: 0.34 * fade),
     );
+
+    // Вращающийся пунктирный гексагон: прицел «ищет» и фиксирует цель.
+    final orbit = 18 + 52 * Curves.easeOut.transform(p);
+    final spin = p * math.pi * 1.4 + (b.seed % 7) * 0.3;
+    final segment = Paint()
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round
+      ..color = ResidentPalette.brass.withValues(alpha: 0.30 * fade);
+    for (var i = 0; i < 6; i++) {
+      final a0 = spin + i * math.pi / 3;
+      final a1 = a0 + 0.42;
+      canvas.drawLine(
+        b.pos + Offset(math.cos(a0), math.sin(a0)) * orbit,
+        b.pos + Offset(math.cos(a1), math.sin(a1)) * orbit,
+        segment,
+      );
+    }
   }
 
   void _paintTicks(Canvas canvas, _Burst b, double p) {
@@ -176,6 +194,28 @@ class _ResidentTapPainter extends CustomPainter {
     }
   }
 
+  /// Короткий росчерк-брызги: несколько алых штрихов в стороны от удара.
+  void _paintStreaks(Canvas canvas, _Burst b, double p) {
+    final rng = math.Random(b.seed ^ 0x5F3759DF);
+    final reach = 18 + 48 * Curves.easeOutCubic.transform(p);
+    final fade = (1 - p).clamp(0.0, 1.0);
+    for (var i = 0; i < 6; i++) {
+      final angle = rng.nextDouble() * math.pi * 2;
+      final dir = Offset(math.cos(angle), math.sin(angle));
+      final start = b.pos + dir * reach * (0.30 + rng.nextDouble() * 0.40);
+      final len = (6 + rng.nextDouble() * 16) * (1 - p * 0.6);
+      canvas.drawLine(
+        start,
+        start + dir * len,
+        Paint()
+          ..strokeWidth = 0.9 + rng.nextDouble() * 1.1
+          ..strokeCap = StrokeCap.round
+          ..color = (i.isEven ? ResidentPalette.blood : ResidentPalette.brass)
+              .withValues(alpha: 0.42 * fade),
+      );
+    }
+  }
+
   void _paintLock(Canvas canvas, _Burst b, double p) {
     // «Захват цели»: квадрат сжимается к точке и гаснет.
     final size = 26 * (1 - Curves.easeOut.transform(p)) + 6;
@@ -186,6 +226,31 @@ class _ResidentTapPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2
         ..color = ResidentPalette.blood.withValues(alpha: 0.55 * fade),
+    );
+
+    // Четыре сходящихся штриха и ромб в центре — фиксация цели.
+    final gap = 3 + 16 * (1 - p);
+    final arm = Paint()
+      ..strokeWidth = 1.1
+      ..strokeCap = StrokeCap.round
+      ..color = ResidentPalette.brass.withValues(alpha: 0.45 * fade);
+    for (final dir in const <Offset>[
+      Offset(1, 0),
+      Offset(-1, 0),
+      Offset(0, 1),
+      Offset(0, -1),
+    ]) {
+      canvas.drawLine(b.pos + dir * gap, b.pos + dir * (gap + 5), arm);
+    }
+    final diamond = Path()
+      ..moveTo(b.pos.dx, b.pos.dy - 3.4)
+      ..lineTo(b.pos.dx + 3.4, b.pos.dy)
+      ..lineTo(b.pos.dx, b.pos.dy + 3.4)
+      ..lineTo(b.pos.dx - 3.4, b.pos.dy)
+      ..close();
+    canvas.drawPath(
+      diamond,
+      Paint()..color = ResidentPalette.blood.withValues(alpha: 0.8 * fade),
     );
   }
 
