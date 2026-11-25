@@ -193,7 +193,10 @@ jobs:
           # Заголовки коммитов плюс их тело: в теле мы пишем, что именно
           # поменялось для человека, и раньше эти пункты до релиза не доезжали.
           NOTES="$( { git log --no-merges --pretty=format:'- %s' "$RANGE"; echo
-            git log --no-merges --pretty=format:'%b' "$RANGE" | grep -E '^- [^ ]'
+            git log --no-merges --pretty=format:'%b' "$RANGE" | awk '
+              /^- /{if (b != "") print b; b = $0; next}
+              /^[[:space:]]+[^[:space:]]/{sub(/^[[:space:]]+/, "", $0); b = b " " $0}
+              END{if (b != "") print b}'
           } | bash tool/release_notes.sh --sections || true)"
           if [ -z "${NOTES//[[:space:]]/}" ]; then
             NOTES="- ✨ Обновление и мелкие улучшения"
