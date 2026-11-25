@@ -1062,6 +1062,10 @@ const Map<String, String> _ru = {
   'notNow': 'Не сейчас',
   'notifAdaChannel': 'Напоминания Ады',
   'notifAdaChannelDesc': 'Утренний отчёт и вечерний разбор',
+  'notifUpdateChannel': 'Обновления Agysha',
+  'notifUpdateChannelDesc': 'Сообщение о вышедшей новой версии',
+  'notifUpdateTitle': 'Доступно обновление Agysha',
+  'notifUpdateBody': 'Версия {v} уже вышла. Нажмите, чтобы обновить.',
   'notifHabitChannel': 'Напоминания привычек',
   'notifHabitChannelDesc': 'Напоминание «Вспомнить всё» о привычках',
   'screenAwareBody':

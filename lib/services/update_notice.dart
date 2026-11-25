@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../l10n/translations.dart';
 import '../main.dart' show navigatorKey;
 import '../utils/snackbar.dart';
+import 'notification_service.dart';
 import 'prefs.dart';
 import 'update_service.dart';
 
@@ -24,25 +25,63 @@ class UpdateNotice {
   @visibleForTesting
   static const String shownVersionKey = 'update_notice_version';
 
+  /// Версия, о которой уже приходил баннер в шторке. Отдельный ключ: баннер
+  /// и плашка в приложении живут своей жизнью — плашку могли показать раньше
+  /// (например, до появления баннеров), и тогда выпуск всё равно должен один
+  /// раз дойти до шторки.
+  @visibleForTesting
+  static const String notifiedVersionKey = 'update_notification_version';
+
   static const Duration _contextWait = Duration(seconds: 10);
   static const Duration _contextPoll = Duration(milliseconds: 250);
 
   bool _announcing = false;
 
+  /// Версия, о которой баннер уже поставлен в очередь: защищает от двух
+  /// баннеров, если проверки совпадут по времени.
+  static String? _shadeQueued;
+
   /// Сообщать ли о версии [version] (о ней ещё не сообщали).
   @visibleForTesting
   static bool shouldAnnounce(String version) =>
+      version.isNotEmpty && globalPrefs.getString(shownVersionKey) != version;
+
+  /// Показывать ли баннер в шторке для версии [version].
+  @visibleForTesting
+  static bool shouldNotifyShade(String version) =>
       version.isNotEmpty &&
-      globalPrefs.getString(shownVersionKey) != version;
+      globalPrefs.getString(notifiedVersionKey) != version;
+
+  /// Баннер в системной шторке — один раз на выпуск.
+  ///
+  /// Плашку внутри приложения видно, только когда оно на экране; баннер
+  /// остаётся в шторке и после сворачивания, поэтому о выпуске узнаёшь,
+  /// даже если не смотрел на приложение в момент проверки.
+  void _notifyShade(UpdateInfo info) {
+    if (!shouldNotifyShade(info.versionName)) return;
+    if (_shadeQueued == info.versionName) return;
+    _shadeQueued = info.versionName;
+    unawaited(globalPrefs.setString(notifiedVersionKey, info.versionName));
+    // Не ждём плагин уведомлений: плашка в приложении важнее и не должна
+    // зависеть от шторки. Ошибки внутри showUpdateAvailable уже погашены.
+    unawaited(NotificationService().showUpdateAvailable(info.versionName));
+  }
 
   /// Показывает плашку, если в [info] есть версия новее и о ней ещё не
   /// сообщали. Возвращает true, если плашка действительно показана.
   ///
   /// [context] нужен тестам; в приложении его берём из [navigatorKey].
-  Future<bool> announce(UpdateInfo? info, {BuildContext? context}) async {
+  /// [force] показывает плашку и для уже объявленной версии — так тап по
+  /// баннеру в шторке снова предлагает установку.
+  Future<bool> announce(
+    UpdateInfo? info, {
+    BuildContext? context,
+    bool force = false,
+  }) async {
     if (info == null || !kSelfUpdateEnabled) return false;
+    _notifyShade(info);
     if (_announcing) return false;
-    if (!shouldAnnounce(info.versionName)) return false;
+    if (!force && !shouldAnnounce(info.versionName)) return false;
     // Старт приложения: проверка обновлений стартует сразу после runApp, и
     // первый кадр ещё может не дать контекста для оверлея. Ждём его
     // ограниченно, а не бросаем уведомление.

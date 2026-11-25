@@ -35,38 +35,37 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
+          // Шапка по центральной оси — так же, как на экране проверок:
+          // оба служебных экрана читаются одинаково.
           Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.bug_report_outlined, color: colors.primary),
-                      const SizedBox(width: 8),
-                      Text(
-                        Translations.t(
-                          'debugModeTitle',
-                          context,
-                          'Режим отладки',
-                        ),
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: colors.primary,
-                        ),
-                      ),
-                    ],
+                  Icon(
+                    Icons.bug_report_outlined,
+                    color: colors.primary,
+                    size: 28,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 10),
+                  Text(
+                    Translations.t('debugModeTitle', context, 'Режим отладки'),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: colors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   Text(
                     Translations.t(
                       'debugModeSubtitle',
                       context,
                       'Служебные режимы приложения. Видны только отсюда.',
                     ),
+                    textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colors.onSurfaceVariant,
                     ),

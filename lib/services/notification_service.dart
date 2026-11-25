@@ -390,6 +390,17 @@ class NotificationService extends ChangeNotifier {
         description: 'App notifications',
         importance: Importance.high,
       ),
+      AndroidNotificationChannel(
+        'agysha_updates',
+        Translations.tFor(lang, 'notifUpdateChannel', 'Обновления Agysha'),
+        description: Translations.tFor(
+          lang,
+          'notifUpdateChannelDesc',
+          'Сообщение о вышедшей новой версии',
+        ),
+        importance: Importance.high,
+        enableVibration: true,
+      ),
       // Каналы, которые плагин создаёт сам при показе. Если их нет до
       // первого zonedSchedule, Android отдаёт уведомление дефолтному
       // каналу с defaultImportance — тихая строка в шторке вместо
@@ -631,7 +642,12 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
-  Future<void> showInstant(int id, String title, String body) async {
+  Future<void> showInstant(
+    int id,
+    String title,
+    String body, {
+    String? payload,
+  }) async {
     if (!_enabled || !_initialized || !_supported) return;
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
@@ -650,7 +666,66 @@ class NotificationService extends ChangeNotifier {
       title: title,
       body: body,
       notificationDetails: details,
+      payload: payload,
     );
+  }
+
+  /// Идентификатор баннера «вышла новая версия».
+  ///
+  /// Один и тот же id на все выпуски: новая версия заменяет старый баннер,
+  /// а не копит строки в шторке.
+  static const int updateNotificationId = 4242;
+
+  /// Баннер в шторке о новой версии.
+  ///
+  /// Тап открывает приложение, где [UpdateNotice] показывает плашку с
+  /// кнопкой установки (payload `update:<версия>` разбирает main.dart).
+  Future<void> showUpdateAvailable(String version) async {
+    if (!_enabled) return;
+    if (!_initialized) {
+      try {
+        await init();
+      } catch (_) {}
+    }
+    if (!_enabled || !_initialized || !_supported) return;
+    final lang = globalPrefs.getString('setting_locale') ?? 'ru';
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'agysha_updates',
+        Translations.tFor(lang, 'notifUpdateChannel', 'Обновления Agysha'),
+        channelDescription: Translations.tFor(
+          lang,
+          'notifUpdateChannelDesc',
+          'Сообщение о вышедшей новой версии',
+        ),
+        importance: Importance.high,
+        priority: Priority.high,
+        colorized: true,
+        color: _lightBg,
+        largeIcon: const DrawableResourceAndroidBitmap('ic_notification_large'),
+      ),
+    );
+    final body = Translations.tFor(
+      lang,
+      'notifUpdateBody',
+      'Версия {v} уже вышла. Нажмите, чтобы обновить.',
+    ).replaceAll('{v}', version);
+    try {
+      await _plugin.show(
+        id: updateNotificationId,
+        title: Translations.tFor(
+          lang,
+          'notifUpdateTitle',
+          'Доступно обновление Agysha',
+        ),
+        body: body,
+        notificationDetails: details,
+        payload: 'update:$version',
+      );
+    } catch (_) {
+      // Баннер — приятный бонус к плашке в приложении: его сбой не должен
+      // ломать саму проверку обновлений.
+    }
   }
 
   Future<bool> scheduleAlarm(Alarm alarm) async {
@@ -735,9 +810,14 @@ class NotificationService extends ChangeNotifier {
     // Названия задач короткие («Решить пример»), для тела уведомления их
     // мало: человек должен сразу понять, что от него хотят, поэтому
     // добавляем «Задача: …» на языке интерфейса.
-    final taskPrefix = Translations.tFor(lang, 'wakeTaskBodyPrefix', 'Задача: ');
+    final taskPrefix = Translations.tFor(
+      lang,
+      'wakeTaskBodyPrefix',
+      'Задача: ',
+    );
     if (alarm.taskType == WakeUpTask.math) {
-      body = '$taskPrefix${Translations.tFor(lang, 'taskMath', 'Решить пример')}';
+      body =
+          '$taskPrefix${Translations.tFor(lang, 'taskMath', 'Решить пример')}';
     } else if (alarm.taskType == WakeUpTask.pattern) {
       body =
           '$taskPrefix${Translations.tFor(lang, 'taskPattern', 'Запомнить паттерн')}';

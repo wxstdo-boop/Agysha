@@ -75,18 +75,22 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
+          // Шапка по центральной оси: иконка, итог, кнопка запуска — всё
+          // столбиком, чтобы экран читался симметрично. Список результатов
+          // ниже идёт слева направо, как и строки списков в остальном
+          // приложении.
           Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Column(
                 children: [
                   if (_running)
                     const SizedBox(
-                      width: 22,
-                      height: 22,
+                      width: 28,
+                      height: 28,
                       child: CircularProgressIndicator(strokeWidth: 2.4),
                     )
                   else
@@ -95,34 +99,38 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
                           ? Icons.check_circle_outline_rounded
                           : Icons.error_outline_rounded,
                       color: failed == 0 ? colors.primary : colors.error,
+                      size: 28,
                     ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      _running
-                          ? Translations.t(
-                              'testerRunning',
-                              context,
-                              'Проверяю…',
-                            )
-                          : done
-                          ? (failed == 0
-                                ? Translations.t(
-                                    'testerAllPassed',
-                                    context,
-                                    'Все проверки пройдены',
-                                  )
-                                : Translations.t(
-                                    'testerSomeFailed',
-                                    context,
-                                    'Есть ошибки: {n}',
-                                  ).replaceAll('{n}', '$failed'))
-                          : Translations.t(
-                              'testerNotRun',
-                              context,
-                              'Проверки ещё не запускались',
-                            ),
-                      style: theme.textTheme.titleSmall,
+                  const SizedBox(height: 10),
+                  Text(
+                    _running
+                        ? Translations.t('testerRunning', context, 'Проверяю…')
+                        : done
+                        ? (failed == 0
+                              ? Translations.t(
+                                  'testerAllPassed',
+                                  context,
+                                  'Все проверки пройдены',
+                                )
+                              : Translations.t(
+                                  'testerSomeFailed',
+                                  context,
+                                  'Есть ошибки: {n}',
+                                ).replaceAll('{n}', '$failed'))
+                        : Translations.t(
+                            'testerNotRun',
+                            context,
+                            'Проверки ещё не запускались',
+                          ),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton.tonalIcon(
+                    onPressed: _running ? null : _run,
+                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                    label: Text(
+                      Translations.t('testerRunAll', context, 'Проверить всё'),
                     ),
                   ),
                 ],
@@ -131,16 +139,6 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
           ),
           const SizedBox(height: 12),
           ..._results.map((result) => _TesterRow(result: result)),
-          const SizedBox(height: 20),
-          Center(
-            child: FilledButton.tonalIcon(
-              onPressed: _running ? null : _run,
-              icon: const Icon(Icons.play_arrow_rounded, size: 18),
-              label: Text(
-                Translations.t('testerRunAll', context, 'Проверить всё'),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -162,7 +160,7 @@ class _TesterRow extends StatelessWidget {
       TesterStatus.skip => (Icons.remove_rounded, colors.onSurfaceVariant),
     };
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ListTile(

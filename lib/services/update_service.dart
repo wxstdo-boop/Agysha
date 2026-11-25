@@ -67,7 +67,11 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
-  static const Duration _minInterval = Duration(hours: 24);
+  /// Как часто проверяем релизы. Раньше было раз в сутки, но баннер в шторке
+  /// должен приходить «как только вышла новая версия», а не через день:
+  /// проверка идёт только на старте и при возврате из фона, поэтому час —
+  /// это потолок частоты, а не расписание в сети.
+  static const Duration _minInterval = Duration(hours: 1);
   static const String _lastCheckKey = 'update_last_check_ms';
 
   /// Проверяет последний релиз на GitHub. Возвращает [UpdateInfo], только
@@ -677,8 +681,9 @@ class UpdateService {
     }
   }
 
-  /// Тихая проверка раз в сутки при старте: БЕЗ диалогов, только наполняет
-  /// [pendingUpdate], чтобы таблетка в Настройках сразу знала про обновление.
+  /// Тихая проверка при старте и возврате из фона: БЕЗ диалогов, только
+  /// наполняет [pendingUpdate], чтобы таблетка в Настройках сразу знала про
+  /// обновление, а [UpdateNotice] показал плашку и баннер в шторке.
   Future<void> silentDailyCheck() async {
     try {
       final now = DateTime.now().millisecondsSinceEpoch;

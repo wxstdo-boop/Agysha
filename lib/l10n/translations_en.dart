@@ -1057,6 +1057,10 @@ const Map<String, String> _en = {
   'notNow': 'Not now',
   'notifAdaChannel': 'Ada reminders',
   'notifAdaChannelDesc': 'Morning report and evening review',
+  'notifUpdateChannel': 'Agysha updates',
+  'notifUpdateChannelDesc': 'Notice about a released new version',
+  'notifUpdateTitle': 'Agysha update available',
+  'notifUpdateBody': 'Version {v} is out. Tap to update.',
   'notifHabitChannel': 'Habit reminders',
   'notifHabitChannelDesc': '“Remember everything” habit reminder',
   'screenAwareBody':

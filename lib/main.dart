@@ -483,6 +483,20 @@ final MethodChannel _alarmPayloadChannel = const MethodChannel(
 
 Future<void> _handleNotificationTap(String? payload) async {
   if (payload == null) return;
+  if (payload.startsWith('update:')) {
+    // Баннер «вышла новая версия» в шторке: плашку с кнопкой установки
+    // показываем принудительно — о версии уже могли сообщить раньше.
+    if (pendingUpdate.value != null) {
+      await UpdateNotice.instance.announce(pendingUpdate.value, force: true);
+    } else {
+      // Приложение убили с момента релиза: сначала узнаём версию,
+      // потом всё равно показываем плашку — иначе тап по баннеру
+      // упирался в «о версии уже сообщали» и не делал ничего.
+      await UpdateService.instance.silentDailyCheck();
+      await UpdateNotice.instance.announce(pendingUpdate.value, force: true);
+    }
+    return;
+  }
   if (payload.startsWith('ada:')) {
     // Уведомление Ада-трекинга (утренний отчёт / вечерний разбор) —
     // открываем мини-чат с Адой, чтобы можно было продолжить диалог.

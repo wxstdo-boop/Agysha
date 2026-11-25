@@ -108,39 +108,55 @@ class ActionLogScreen extends StatelessWidget {
                   separatorBuilder: (_, _) => const SizedBox(height: 6),
                   itemBuilder: (context, index) {
                     final entry = entries[index];
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 62,
-                          child: Text(
-                            entry.timeLabel,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
+                    // Карточка на запись — та же форма, что у строк на экране
+                    // проверок: время слева, текст и категория справа.
+                    return Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
                         ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                entry.message,
-                                style: theme.textTheme.bodySmall,
-                              ),
-                              Text(
-                                entry.category,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: colors.primary.withValues(alpha: 0.7),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 56,
+                              child: Text(
+                                entry.timeLabel,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    entry.message,
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    entry.category,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: colors.primary.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     );
                   },
                 ),

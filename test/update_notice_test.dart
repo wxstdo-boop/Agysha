@@ -35,6 +35,20 @@ void main() {
     expect(UpdateNotice.shouldAnnounce(''), isFalse);
   });
 
+  test('баннер в шторке — один раз на версию, отдельно от плашки', () async {
+    expect(UpdateNotice.shouldNotifyShade(info.versionName), isTrue);
+    await globalPrefs.setString(
+      UpdateNotice.notifiedVersionKey,
+      info.versionName,
+    );
+    expect(UpdateNotice.shouldNotifyShade(info.versionName), isFalse);
+    expect(UpdateNotice.shouldNotifyShade('1.6.355'), isTrue);
+    expect(UpdateNotice.shouldNotifyShade(''), isFalse);
+    // Ключи разные: плашка и баннер не блокируют друг друга.
+    expect(UpdateNotice.shownVersionKey, isNot(UpdateNotice.notifiedVersionKey));
+    expect(UpdateNotice.shouldAnnounce(info.versionName), isTrue);
+  });
+
   testWidgets('плашка показывает версию и кнопку, второй раз не всплывает', (
     tester,
   ) async {
