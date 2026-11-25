@@ -38,6 +38,7 @@ import '../widgets/new_year_event_banner.dart';
 import '../widgets/smooth_tooltip.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/volumetric_switch.dart';
+import '../widgets/windowed_column.dart';
 
 // Экран разбит на part-файлы по подсистемам: сам экран остаётся здесь,
 // а события, друзья, музыкальные дорожки, талисманы и каталог фонка лежат

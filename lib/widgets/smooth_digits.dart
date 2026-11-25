@@ -40,11 +40,22 @@ class _SmoothDigitsState extends State<SmoothDigits> {
   static const Duration _fade = Duration(milliseconds: 220);
 
   double _width(TextStyle style) {
+    // [sample] держит разрядность, но НЕ имеет права быть короче самого
+    // числа: раньше при «99 → 100» (и у очков на больших значениях) строка
+    // влезала в коробку, рассчитанную на опорные нули, и переполняла её.
+    // Берём более длинную из двух строк — ширина растёт вместе с числом.
+    final value = '${widget.value}';
+    final sample = widget.sample;
+    final text = sample == null || sample.length < value.length
+        ? value
+        : sample;
     final tp = TextPainter(
-      text: TextSpan(text: widget.sample ?? '${widget.value}', style: style),
+      text: TextSpan(text: text, style: style),
       textDirection: TextDirection.ltr,
     )..layout();
-    return tp.width;
+    // Метрики одной строки и сумма метрик её разрядов сходятся лишь до
+    // микрона: округление вверх убирает переполнение на 0.000002 px.
+    return tp.width.ceilToDouble();
   }
 
   Alignment _align() {

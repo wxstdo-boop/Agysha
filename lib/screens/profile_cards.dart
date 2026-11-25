@@ -835,7 +835,14 @@ extension _ProfileCards on _ProfileScreenState {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _emptyMusicHint(theme, visible: tracks.isEmpty),
-                for (final t in tracks) _trackRow(theme, t),
+                // Строки строятся окном вокруг экрана: подборка бывает в
+                // сотни треков, и строить их все сразу — это десятки тысяч
+                // виджетов на каждый rebuild профиля (главный источник лагов).
+                WindowedColumn(
+                  itemCount: tracks.length,
+                  itemHeight: _trackRowHeight,
+                  itemBuilder: (context, i) => _trackRow(theme, tracks[i]),
+                ),
               ],
             ),
           ),
@@ -978,6 +985,12 @@ extension _ProfileCards on _ProfileScreenState {
     );
   }
 
+  /// Высота одной строки трека: кнопка проигрывания 48 px задаёт её целиком.
+  /// [WindowedColumn] держит пустые проставки ровно этой высоты вне экрана,
+  /// поэтому константа обязана совпадать с настоящей строкой (её проверяет
+  /// `test/profile_music_window_test.dart`).
+  static const double _trackRowHeight = 48;
+
   /// Одна строка трека: появление «врастает» из нуля, удаление схлопывается.
   /// Длительность и кривая те же, что у [AnimatedSize] над блоком, поэтому
   /// соседи подаются вверх ОДНОЙ анимацией, а не двумя спорящими.
@@ -990,7 +1003,13 @@ extension _ProfileCards on _ProfileScreenState {
         : _ProfileScreenState._trackCollapse;
     return TweenAnimationBuilder<double>(
       key: ValueKey('track_${track.id}'),
-      tween: Tween(begin: 0.0, end: removing ? 0.0 : 1.0),
+      // Строки строятся окном: у тех, что появляются при прокрутке, нет
+      // «появления» — они сразу нормальной высоты, иначе список дёргался бы
+      // под пальцем. Из нуля растёт только новый трек и схлопывается удалённый.
+      tween: Tween(
+        begin: isNew || removing ? 0.0 : 1.0,
+        end: removing ? 0.0 : 1.0,
+      ),
       duration: dur,
       curve: Curves.easeInOutCubic,
       builder: (context, v, child) => ClipRect(

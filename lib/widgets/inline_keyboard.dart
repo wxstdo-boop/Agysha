@@ -44,10 +44,6 @@ class InlineKeyboard extends StatefulWidget {
   /// Если не задана, панель выглядит как раньше — без ручки.
   final VoidCallback? onCollapse;
 
-  /// Красный бренда: отлив клавиатуры не должен зависеть от роли темы
-  /// (`primary` на дефолтной палитре — сиреневый, и панель серела).
-  static const Color _brandRed = BrandColors.red;
-
   /// Высота одной клавиши.
   final double keyHeight;
 
@@ -230,21 +226,20 @@ class _InlineKeyboardState extends State<InlineKeyboard>
       // попадать пальцем (владелец: «кнопки на клавиатуре расширь»).
       padding: EdgeInsets.fromLTRB(3, widget.onCollapse == null ? 8 : 0, 3, 10),
       decoration: BoxDecoration(
-        // Полупрозрачная панель с ЯВНЫМ КРАСНЫМ отливом: сквозь клавиатуру
-        // просвечивает лист, а алый тон привязывает её к остальным
-        // «стеклянным» плашкам. Раньше отлив брался из `cs.primary`, а на
-        // теме по умолчанию primary — сиреневый, и панель читалась просто
-        // СЕРОЙ плитой. Красный задаём константой бренда, а не ролью темы.
+        // Панель — нейтральное стекло: сквозь неё просвечивает лист, и
+        // клавиатура читается его частью, а не чужой красной вставкой.
+        // Оттенок берём из текста темы (onSurface), поэтому панель одинаково
+        // спокойно выглядит на любой палитре — и светлой, и тёмной.
         color: Color.alphaBlend(
-          InlineKeyboard._brandRed.withValues(alpha: 0.16),
-          theme.colorScheme.surfaceContainer.withValues(alpha: 0.22),
+          theme.colorScheme.onSurface.withValues(alpha: 0.06),
+          theme.colorScheme.surfaceContainer.withValues(alpha: 0.30),
         ),
         // Скруглены ВСЕ углы: панель сидит внутри листа, и нижние углы
         // раньше обрезались о скругление окна.
         borderRadius: BorderRadius.circular(Radii.xl),
         border: Border(
           top: BorderSide(
-            color: InlineKeyboard._brandRed.withValues(alpha: 0.24),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.10),
           ),
         ),
       ),
@@ -504,7 +499,9 @@ class _CollapseHandleState extends State<_CollapseHandle> {
             width: 46,
             height: 4,
             decoration: BoxDecoration(
-              color: InlineKeyboard._brandRed.withValues(alpha: 0.55),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -541,12 +538,12 @@ class InlineKeyboardHandle extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: Color.alphaBlend(
-            InlineKeyboard._brandRed.withValues(alpha: 0.10),
-            theme.colorScheme.surfaceContainer.withValues(alpha: 0.30),
+            theme.colorScheme.onSurface.withValues(alpha: 0.05),
+            theme.colorScheme.surfaceContainer.withValues(alpha: 0.34),
           ),
           borderRadius: BorderRadius.circular(Radii.lg),
           border: Border.all(
-            color: InlineKeyboard._brandRed.withValues(alpha: 0.24),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.10),
           ),
         ),
         child: Row(
@@ -555,7 +552,7 @@ class InlineKeyboardHandle extends StatelessWidget {
             Icon(
               Icons.keyboard_alt_outlined,
               size: 18,
-              color: InlineKeyboard._brandRed,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 8),
             Text(
@@ -646,17 +643,17 @@ class _KeyState extends State<_Key> {
   Widget build(BuildContext context) {
     final theme = widget.theme;
     final cs = theme.colorScheme;
-    // Полупрозрачные КРАСНЫЕ клавиши: тон бренда, сильно разбавленный, —
-    // кнопки читаются «стеклянно-красными» на любом фоне. Цвет берём из
-    // константы, а не из `cs.primary`: на дефолтной теме primary сиреневый,
-    // и клавиши выходили серо-фиолетовыми вместо красных.
+    // Клавиши — стекло темы: обычная шляпка чуть светлее панели, нажатая
+    // (регистр) и кнопка-действие залиты акцентом палитры. Красного в
+    // клавиатуре нет: она должна читаться частью листа, а не отдельной
+    // яркой вставкой.
     final keyColor = widget.emphasized
-        ? InlineKeyboard._brandRed.withValues(alpha: 0.92)
+        ? cs.primary.withValues(alpha: 0.92)
         : widget.active
-        ? InlineKeyboard._brandRed.withValues(alpha: 0.72)
+        ? cs.primary.withValues(alpha: 0.72)
         : Color.alphaBlend(
-            InlineKeyboard._brandRed.withValues(alpha: 0.10),
-            cs.surfaceContainerHighest.withValues(alpha: 0.24),
+            cs.onSurface.withValues(alpha: 0.06),
+            cs.surfaceContainerHighest.withValues(alpha: 0.30),
           );
     return Padding(
       // Полпикселя по бокам вместо пикселя: зазор между клавишами остаётся
@@ -688,9 +685,15 @@ class _KeyState extends State<_Key> {
               color: keyColor,
               borderRadius: BorderRadius.circular(Radii.md),
               border: Border.all(
-                color: InlineKeyboard._brandRed.withValues(
-                  alpha: widget.active || widget.emphasized ? 0.6 : 0.30,
-                ),
+                color:
+                    (widget.active || widget.emphasized
+                            ? cs.primary
+                            : cs.onSurface)
+                        .withValues(
+                          alpha: widget.active || widget.emphasized
+                              ? 0.55
+                              : 0.10,
+                        ),
               ),
             ),
             child: Container(
@@ -700,9 +703,7 @@ class _KeyState extends State<_Key> {
                   ? Icon(
                       widget.icon,
                       size: 20,
-                      color: widget.active
-                          ? Colors.white
-                          : InlineKeyboard._brandRed,
+                      color: widget.active ? Colors.white : cs.onSurfaceVariant,
                     )
                   : Text(
                       widget.label!,
@@ -757,12 +758,12 @@ class _CaseGlyph extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: Color.alphaBlend(
-              InlineKeyboard._brandRed.withValues(alpha: 0.10),
-              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.24),
+              theme.colorScheme.onSurface.withValues(alpha: 0.06),
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.30),
             ),
             borderRadius: BorderRadius.circular(Radii.md),
             border: Border.all(
-              color: InlineKeyboard._brandRed.withValues(alpha: 0.24),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.10),
             ),
           ),
           child: SizedBox(
