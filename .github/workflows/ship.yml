@@ -192,7 +192,7 @@ jobs:
           # символам и любой заголовок съедает пункт.
           # Заголовки коммитов плюс их тело: в теле мы пишем, что именно
           # поменялось для человека, и раньше эти пункты до релиза не доезжали.
-          NOTES="$( { git log --no-merges --pretty=format:'- %s' "$RANGE"
+          NOTES="$( { git log --no-merges --pretty=format:'- %s' "$RANGE"; echo
             git log --no-merges --pretty=format:'%b' "$RANGE" | grep -E '^- [^ ]'
           } | bash tool/release_notes.sh --sections || true)"
           if [ -z "${NOTES//[[:space:]]/}" ]; then
