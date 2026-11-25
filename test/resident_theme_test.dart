@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:agysha/main.dart';
+import 'package:agysha/screens/settings_screen.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/settings_service.dart';
@@ -225,5 +227,64 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(IgnorePointer), findsWidgets);
     });
+  });
+
+  testWidgets('настройки: обе эксклюзивные плитки стоят в одной строке', (
+    tester,
+  ) async {
+    // Высокий вьюпорт: строка плиток должна быть видна целиком.
+    tester.view.physicalSize = const Size(420, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const AgyshaApp(initialLanguageCode: 'ru'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 600));
+    navigatorKey.currentState!.push(
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final row = find.byType(ExclusiveThemesRow);
+    await tester.ensureVisible(row);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.byKey(const ValueKey('exclusive_tile_itshnik')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('exclusive_tile_resident')),
+      findsOneWidget,
+    );
+    // Одна строка: обе плитки на одной высоте и в одном Row.
+    final itRect = tester.getRect(
+      find.byKey(const ValueKey('exclusive_tile_itshnik')),
+    );
+    final reRect = tester.getRect(
+      find.byKey(const ValueKey('exclusive_tile_resident')),
+    );
+    expect(reRect.top, moreOrLessEquals(itRect.top, epsilon: 0.5));
+    expect(reRect.left, greaterThan(itRect.right));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('тап по плитке отдаёт ключ темы', (tester) async {
+    String? picked;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ExclusiveThemesRow(
+            activeKey: null,
+            onSelect: (key) => picked = key,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.byKey(const ValueKey('exclusive_tile_resident')));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(picked, ResidentPalette.key);
   });
 }
