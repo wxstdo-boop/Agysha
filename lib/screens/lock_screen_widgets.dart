@@ -61,7 +61,9 @@ class _PinSlot extends StatelessWidget {
       curve: Curves.easeInOutCubic,
       builder: (context, progress, _) {
         return CustomPaint(
-          size: const Size.square(30),
+          // 34 вместо 30: вокруг фигуры цифры теперь есть круглая обводка,
+          // и ей нужно место, чтобы не срезаться о край полотна.
+          size: const Size.square(34),
           painter: _PinShapePainter(
             shape: shape,
             progress: progress,
@@ -91,12 +93,25 @@ class _PinShapePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final c = size.width / 2;
-    final r = size.width * 0.44;
+    final r = size.width * 0.38;
     final path = _pathFor(shape, c, r);
     final pr = progress.clamp(0.0, 1.0);
     // Tween уже выдаёт сглаженный прогресс. Повторное easeOut здесь
     // ускоряло начало заполнения и делало появление резким.
     final fill = pr;
+
+    // Круглая обводка вокруг фигуры цифры — та же «стеклянная» рамка, что
+    // у клавиш нумпада, только тише: цифры читаются как отдельные «медальки»
+    // и не сливаются в ряд. Полупрозрачность снимается по мере заливки,
+    // чтобы залитая фигура не «двоила» контур.
+    canvas.drawCircle(
+      Offset(c, c),
+      size.width * 0.455,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = ghost.withValues(alpha: 0.26 * (1 - fill * 0.55)),
+    );
 
     // Пустой контур: виден, пока фигура не залита; растворяется вместе
     // с наполнением, чтобы не «двойнить» линии.
@@ -1302,7 +1317,7 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
       cs.outlineVariant,
       cs.primary,
       isDark ? 0.30 : 0.22,
-    )!.withValues(alpha: isDark ? 0.62 : 0.50);
+    )!.withValues(alpha: isDark ? 0.42 : 0.34);
     return Listener(
       onPointerDown: _down,
       onPointerMove: (e) => _aim(e.localPosition),
@@ -1361,7 +1376,7 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(26),
-                      border: Border.all(color: outline, width: 1.4),
+                      border: Border.all(color: outline, width: 1.2),
                       boxShadow: [
                         // Мягкий подъём под обводкой: клавиша «стеклянная», а
                         // не плоский квадрат. Тень статична (без blur-фильтра

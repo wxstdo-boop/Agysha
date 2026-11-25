@@ -129,6 +129,100 @@ String _freshSongTitle(
   return _songTitleAt(start, context);
 }
 
+/// Вставка символа в поле с учётом выделения и лимита длины.
+///
+/// Своя клавиатура пишет в контроллер напрямую, а не через IME, поэтому
+/// `inputFormatters` поля здесь не работают — лимит и фильтр проверяем сами.
+void _kbInsert(TextEditingController c, String ch, {required int maxLength}) {
+  final text = c.text;
+  final sel = c.selection;
+  final start = sel.isValid ? sel.start.clamp(0, text.length) : text.length;
+  final end = sel.isValid ? sel.end.clamp(0, text.length) : text.length;
+  final next = text.replaceRange(start, end, ch);
+  if (next.length > maxLength) return;
+  c.value = TextEditingValue(
+    text: next,
+    selection: TextSelection.collapsed(offset: start + ch.length),
+  );
+}
+
+void _kbBackspace(TextEditingController c) {
+  final text = c.text;
+  if (text.isEmpty) return;
+  final sel = c.selection;
+  if (sel.isValid && sel.end > sel.start) {
+    c.value = TextEditingValue(
+      text: text.replaceRange(sel.start, sel.end, ''),
+      selection: TextSelection.collapsed(offset: sel.start),
+    );
+    return;
+  }
+  final at = sel.isValid ? sel.start.clamp(1, text.length) : text.length;
+  c.value = TextEditingValue(
+    text: text.replaceRange(at - 1, at, ''),
+    selection: TextSelection.collapsed(offset: at - 1),
+  );
+}
+
+/// Встроенная клавиатура листов друга: ТА ЖЕ панель, что в чате Ады
+/// (`InlineKeyboard`), с ручкой и плавным сворачиванием в узкую полоску.
+/// Системная клавиатура в этих листах больше не поднимается: поля
+/// `readOnly`, панель живёт внутри листа и подчиняется теме.
+Widget _friendsKeyboard({
+  required bool open,
+  required VoidCallback onOpen,
+  required VoidCallback onClose,
+  required ValueChanged<String> onChar,
+  required VoidCallback onBackspace,
+  required VoidCallback onSpace,
+  required VoidCallback onSubmit,
+  String? actionLabel,
+}) {
+  return AnimatedSize(
+    duration: const Duration(milliseconds: 300),
+    curve: Curves.easeInOutCubic,
+    alignment: Alignment.topCenter,
+    child: AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (current, previous) => Stack(
+        alignment: Alignment.topCenter,
+        children: [...previous, if (current != null) current],
+      ),
+      transitionBuilder: (child, animation) {
+        final t = Curves.easeOutCubic.transform(animation.value);
+        return FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: AlwaysStoppedAnimation(t),
+            axisAlignment: -1,
+            child: child,
+          ),
+        );
+      },
+      child: open
+          ? Padding(
+              key: const ValueKey('friends_kb_open'),
+              padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
+              child: InlineKeyboard(
+                keyHeight: 46,
+                onChar: onChar,
+                onBackspace: onBackspace,
+                onSpace: onSpace,
+                onAction: onSubmit,
+                actionLabel: actionLabel,
+                onCollapse: onClose,
+              ),
+            )
+          : InlineKeyboardHandle(
+              key: const ValueKey('friends_kb_handle'),
+              onExpand: onOpen,
+            ),
+    ),
+  );
+}
+
 /// Добавление друга: имя, аватарка, стартовые очки.
 class _AddFriendSheet extends StatefulWidget {
   /// Выбор своей картинки из галереи. Лист сам системный пикер не открывает
@@ -157,6 +251,13 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
   final _nameFocus = FocusNode();
   final _scoreFocus = FocusNode();
 
+  /// Своя клавиатура развёрнута. Системный IME здесь не поднимается:
+  /// поля `readOnly`, вся панель живёт внутри листа.
+  bool _kbOpen = false;
+
+  /// Куда писать символ: в имя или в очки. Определяется тапом по полю.
+  bool _kbScore = false;
+
   @override
   void initState() {
     super.initState();
@@ -171,6 +272,23 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
     _ctrl.dispose();
     _scoreCtrl.dispose();
     super.dispose();
+  }
+
+  void _kbChar(String ch) {
+    if (_kbScore) {
+      if (!RegExp(r'^[0-9]$').hasMatch(ch)) return;
+      _kbInsert(_scoreCtrl, ch, maxLength: _kFriendScoreMax);
+    } else {
+      _kbInsert(_ctrl, ch, maxLength: _kFriendNameMax);
+    }
+  }
+
+  void _kbSpace() {
+    if (!_kbScore) _kbInsert(_ctrl, ' ', maxLength: _kFriendNameMax);
+  }
+
+  void _kbDelete() {
+    _kbBackspace(_kbScore ? _scoreCtrl : _ctrl);
   }
 
   void _submit() {
@@ -207,269 +325,318 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
         ),
         child: SafeArea(
           top: false,
-          // Когда клавиатура поднята, низ экрана уже занят ею: нижний
-          // системный отступ здесь добавил бы лишнюю щель между листом и
-          // клавиатурой, и лист «стоял бы» на воздухе.
+          // Когда системная клавиатура поднята, низ экрана уже занят ею:
+          // без этого условия между листом и панелью была бы лишняя щель.
           bottom: MediaQuery.viewInsetsOf(context).bottom == 0,
-          // Системная клавиатура: лист поднимается над ней на её высоту,
-          // а содержимое прокручивается, чтобы поля и кнопка не прятались
-          // под панелью.
-          child: Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(context).bottom,
+          // Своя клавиатура внизу листа: он не выше 88% экрана, поэтому панель
+          // с ручкой и кнопка действия всегда остаются в экране.
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
             ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      Spacing.md,
-                      Spacing.md,
-                      Spacing.md,
-                      Spacing.sm,
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: SingleChildScrollView(
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          Translations.t(
-                            'profileAddFriend',
-                            context,
-                            'Добавить друга',
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            Spacing.md,
+                            Spacing.md,
+                            Spacing.md,
+                            Spacing.sm,
                           ),
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: Weights.bold,
-                          ),
-                        ),
-                        const SizedBox(height: Spacing.md),
-                        Row(
-                          children: [
-                            // Крупная аватарка — сама по себе кнопка «своя из
-                            // галереи»: тап открывает пикер, выбранная картинка
-                            // встаёт на место градиента кроссфейдом. Значок
-                            // камеры подсказывает, что кружок нажимается.
-                            PressScale(
-                              pressedScale: 0.9,
-                              duration: const Duration(milliseconds: 240),
-                              releaseDuration: const Duration(
-                                milliseconds: 460,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                Translations.t(
+                                  'profileAddFriend',
+                                  context,
+                                  'Добавить друга',
+                                ),
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: Weights.bold,
+                                ),
                               ),
-                              child: GestureDetector(
-                                onTap: _pickImage,
-                                behavior: HitTestBehavior.opaque,
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    ProfileAvatar(
-                                      index: _avatar,
-                                      size: 52,
-                                      imagePath: _imagePath,
-                                      showIcon: _imagePath == null,
+                              const SizedBox(height: Spacing.md),
+                              Row(
+                                children: [
+                                  // Крупная аватарка — сама по себе кнопка «своя из
+                                  // галереи»: тап открывает пикер, выбранная картинка
+                                  // встаёт на место градиента кроссфейдом. Значок
+                                  // камеры подсказывает, что кружок нажимается.
+                                  PressScale(
+                                    pressedScale: 0.9,
+                                    duration: const Duration(milliseconds: 240),
+                                    releaseDuration: const Duration(
+                                      milliseconds: 460,
                                     ),
-                                    Positioned(
-                                      right: -2,
-                                      bottom: -2,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(3),
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: theme.colorScheme.surface,
-                                          border: Border.all(
-                                            color: theme.colorScheme.primary
-                                                .withValues(alpha: 0.45),
+                                    child: GestureDetector(
+                                      onTap: _pickImage,
+                                      behavior: HitTestBehavior.opaque,
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          ProfileAvatar(
+                                            index: _avatar,
+                                            size: 52,
+                                            imagePath: _imagePath,
+                                            showIcon: _imagePath == null,
                                           ),
-                                        ),
-                                        child: Icon(
-                                          Icons.photo_camera_outlined,
-                                          size: 13,
-                                          color: theme.colorScheme.primary,
+                                          Positioned(
+                                            right: -2,
+                                            bottom: -2,
+                                            child: Container(
+                                              padding: const EdgeInsets.all(3),
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color:
+                                                    theme.colorScheme.surface,
+                                                border: Border.all(
+                                                  color: theme
+                                                      .colorScheme
+                                                      .primary
+                                                      .withValues(alpha: 0.45),
+                                                ),
+                                              ),
+                                              child: Icon(
+                                                Icons.photo_camera_outlined,
+                                                size: 13,
+                                                color:
+                                                    theme.colorScheme.primary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: Spacing.md),
+                                  Expanded(
+                                    child: SmoothTyping(
+                                      controller: _ctrl,
+                                      style: theme.textTheme.bodyLarge,
+                                      // Без «призраков»: при быстром стирании десяток
+                                      // гаснущих копий читался как заедание. Появление
+                                      // букв остаётся плавным, а удаление — мгновенным
+                                      // и ровным.
+                                      ghosts: false,
+                                      builder: (style) => TextField(
+                                        controller: _ctrl,
+                                        style: style,
+                                        focusNode: _nameFocus,
+                                        // Имя набирается СВОЕЙ клавиатурой внизу
+                                        // листа: поле только каретка и выделение,
+                                        // системный IME не поднимается.
+                                        readOnly: true,
+                                        showCursor: true,
+                                        onTap: () => setState(() {
+                                          _kbScore = false;
+                                          _kbOpen = true;
+                                          _nameFocus.requestFocus();
+                                        }),
+                                        magnifierConfiguration:
+                                            TextMagnifierConfiguration.disabled,
+                                        contextMenuBuilder:
+                                            minimalContextMenuBuilder,
+                                        cursorOpacityAnimates: true,
+                                        maxLength: _kFriendNameMax,
+                                        inputFormatters: [
+                                          LengthLimitingTextInputFormatter(
+                                            _kFriendNameMax,
+                                          ),
+                                        ],
+                                        decoration: _fieldDecoration(
+                                          theme,
+                                          hint: Translations.t(
+                                            'profileFriendName',
+                                            context,
+                                            'Имя друга',
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(width: Spacing.md),
-                            Expanded(
-                              child: SmoothTyping(
-                                controller: _ctrl,
-                                style: theme.textTheme.bodyLarge,
-                                // Без «призраков»: при быстром стирании десяток
-                                // гаснущих копий читался как заедание. Появление
-                                // букв остаётся плавным, а удаление — мгновенным
-                                // и ровным.
-                                ghosts: false,
-                                builder: (style) => TextField(
-                                  controller: _ctrl,
-                                  style: style,
-                                  focusNode: _nameFocus,
-                                  // Обычное поле: имя набирается системной
-                                  // клавиатурой Android.
-                                  magnifierConfiguration:
-                                      TextMagnifierConfiguration.disabled,
-                                  contextMenuBuilder: minimalContextMenuBuilder,
-                                  cursorOpacityAnimates: true,
-                                  maxLength: _kFriendNameMax,
-                                  inputFormatters: [
-                                    LengthLimitingTextInputFormatter(
-                                      _kFriendNameMax,
+                              const SizedBox(height: Spacing.md),
+                              SizedBox(
+                                height: 46,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: profileAvatarVariants.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: Spacing.xs),
+                                  itemBuilder: (context, i) => PressScale(
+                                    pressedScale: 0.86,
+                                    duration: const Duration(milliseconds: 180),
+                                    releaseDuration: const Duration(
+                                      milliseconds: 340,
                                     ),
-                                  ],
-                                  decoration: _fieldDecoration(
-                                    theme,
-                                    hint: Translations.t(
-                                      'profileFriendName',
-                                      context,
-                                      'Имя друга',
+                                    child: GestureDetector(
+                                      // Выбор градиента снимает свою картинку: иначе
+                                      // непонятно, что показывать в кружке, — и аватарка
+                                      // мягко возвращается к сгенерированному варианту.
+                                      onTap: () => setState(() {
+                                        _imagePath = null;
+                                        _avatar = i;
+                                      }),
+                                      child: AnimatedContainer(
+                                        duration: MotionPrefs.shouldReduceMotion
+                                            ? Duration.zero
+                                            : Motion.normal,
+                                        curve: Curves.easeOutCubic,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: i == _avatar
+                                                ? theme.colorScheme.primary
+                                                : Colors.transparent,
+                                            width: 2.5,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.all(2),
+                                        child: ProfileAvatar(
+                                          index: i,
+                                          size: 34,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: Spacing.md),
-                        SizedBox(
-                          height: 46,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: profileAvatarVariants.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: Spacing.xs),
-                            itemBuilder: (context, i) => PressScale(
-                              pressedScale: 0.86,
-                              duration: const Duration(milliseconds: 180),
-                              releaseDuration: const Duration(
-                                milliseconds: 340,
-                              ),
-                              child: GestureDetector(
-                                // Выбор градиента снимает свою картинку: иначе
-                                // непонятно, что показывать в кружке, — и аватарка
-                                // мягко возвращается к сгенерированному варианту.
-                                onTap: () => setState(() {
-                                  _imagePath = null;
-                                  _avatar = i;
-                                }),
-                                child: AnimatedContainer(
-                                  duration: MotionPrefs.shouldReduceMotion
-                                      ? Duration.zero
-                                      : Motion.normal,
-                                  curve: Curves.easeOutCubic,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: i == _avatar
-                                          ? theme.colorScheme.primary
-                                          : Colors.transparent,
-                                      width: 2.5,
+                              const SizedBox(height: Spacing.md),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Expanded(
+                                    child: SmoothTyping(
+                                      controller: _scoreCtrl,
+                                      style: theme.textTheme.bodyLarge,
+                                      ghosts: false,
+                                      builder: (style) => TextField(
+                                        controller: _scoreCtrl,
+                                        style: style,
+                                        focusNode: _scoreFocus,
+                                        // Очки — тоже своя клавиатура; из неё в это
+                                        // поле проходят только цифры (см. _kbChar).
+                                        readOnly: true,
+                                        showCursor: true,
+                                        onTap: () => setState(() {
+                                          _kbScore = true;
+                                          _kbOpen = true;
+                                          _scoreFocus.requestFocus();
+                                        }),
+                                        magnifierConfiguration:
+                                            TextMagnifierConfiguration.disabled,
+                                        contextMenuBuilder:
+                                            minimalContextMenuBuilder,
+                                        cursorOpacityAnimates: true,
+                                        maxLength: _kFriendScoreMax,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                          LengthLimitingTextInputFormatter(
+                                            _kFriendScoreMax,
+                                          ),
+                                        ],
+                                        decoration: _fieldDecoration(
+                                          theme,
+                                          label: Translations.t(
+                                            'profileFriendScore',
+                                            context,
+                                            'Очки рейтинга',
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                  padding: const EdgeInsets.all(2),
-                                  child: ProfileAvatar(index: i, size: 34),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: Spacing.md),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: SmoothTyping(
-                                controller: _scoreCtrl,
-                                style: theme.textTheme.bodyLarge,
-                                ghosts: false,
-                                builder: (style) => TextField(
-                                  controller: _scoreCtrl,
-                                  style: style,
-                                  focusNode: _scoreFocus,
-                                  keyboardType: TextInputType.number,
-                                  magnifierConfiguration:
-                                      TextMagnifierConfiguration.disabled,
-                                  contextMenuBuilder: minimalContextMenuBuilder,
-                                  cursorOpacityAnimates: true,
-                                  maxLength: _kFriendScoreMax,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(
-                                      _kFriendScoreMax,
-                                    ),
-                                  ],
-                                  decoration: _fieldDecoration(
-                                    theme,
-                                    label: Translations.t(
-                                      'profileFriendScore',
-                                      context,
-                                      'Очки рейтинга',
+                                  const SizedBox(width: Spacing.xs),
+                                  PressScale(
+                                    pressedScale: 0.9,
+                                    child: IconButton.filledTonal(
+                                      tooltip: Translations.t(
+                                        'profileFriendScoreRandom',
+                                        context,
+                                        'Случайные очки',
+                                      ),
+                                      onPressed: () => setState(
+                                        () => _scoreCtrl.text = _funScore(
+                                          _ctrl.text,
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.casino_outlined),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(width: Spacing.xs),
-                            PressScale(
-                              pressedScale: 0.9,
-                              child: IconButton.filledTonal(
-                                tooltip: Translations.t(
-                                  'profileFriendScoreRandom',
+                              const SizedBox(height: Spacing.xs),
+                              Text(
+                                Translations.t(
+                                  'profileFriendScoreHint',
                                   context,
-                                  'Случайные очки',
+                                  'Очки — за активность: привычки, задачи, дни в логе. '
+                                      'Чем больше — тем выше в рейтинге.',
                                 ),
-                                onPressed: () => setState(
-                                  () => _scoreCtrl.text = _funScore(_ctrl.text),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
-                                icon: const Icon(Icons.casino_outlined),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Главное действие — ОТДЕЛЬНАЯ широкая кнопка под полями:
+                        // так она не отъедает место у набора и читается как действие,
+                        // а не как ещё одна клавиша.
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            Spacing.md,
+                            Spacing.xs,
+                            Spacing.md,
+                            Spacing.sm,
+                          ),
+                          child: PressScale(
+                            pressedScale: 0.97,
+                            duration: const Duration(milliseconds: 200),
+                            releaseDuration: const Duration(milliseconds: 340),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: FilledButton(
+                                onPressed: _submit,
+                                child: Text(
+                                  Translations.t('add', context, 'Добавить'),
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: Spacing.xs),
-                        Text(
-                          Translations.t(
-                            'profileFriendScoreHint',
-                            context,
-                            'Очки — за активность: привычки, задачи, дни в логе. '
-                                'Чем больше — тем выше в рейтинге.',
-                          ),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  // Главное действие — ОТДЕЛЬНАЯ широкая кнопка под полями:
-                  // так она не отъедает место у набора и читается как действие,
-                  // а не как ещё одна клавиша.
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      Spacing.md,
-                      Spacing.xs,
-                      Spacing.md,
-                      Spacing.sm,
-                    ),
-                    child: PressScale(
-                      pressedScale: 0.97,
-                      duration: const Duration(milliseconds: 200),
-                      releaseDuration: const Duration(milliseconds: 340),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: FilledButton(
-                          onPressed: _submit,
-                          child: Text(
-                            Translations.t('add', context, 'Добавить'),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                _friendsKeyboard(
+                  open: _kbOpen,
+                  onOpen: () => setState(() {
+                    _kbOpen = true;
+                    (_kbScore ? _scoreFocus : _nameFocus).requestFocus();
+                  }),
+                  onClose: () {
+                    Haptics.light();
+                    setState(() => _kbOpen = false);
+                  },
+                  onChar: _kbChar,
+                  onBackspace: _kbDelete,
+                  onSpace: _kbSpace,
+                  onSubmit: _submit,
+                  actionLabel: Translations.t('add', context, 'Добавить'),
+                ),
+              ],
             ),
           ),
         ),
@@ -766,11 +933,21 @@ class _FriendScoreSheetState extends State<_FriendScoreSheet> {
   late final TextEditingController _ctrl = TextEditingController(
     text: '${widget.friend.score}',
   );
+  final _focus = FocusNode();
+
+  /// Своя клавиатура развёрнута (системный IME здесь не поднимается).
+  bool _kbOpen = false;
 
   @override
   void dispose() {
+    _focus.dispose();
     _ctrl.dispose();
     super.dispose();
+  }
+
+  void _kbChar(String ch) {
+    if (!RegExp(r'^[0-9]$').hasMatch(ch)) return;
+    _kbInsert(_ctrl, ch, maxLength: _kFriendScoreMax);
   }
 
   @override
@@ -784,139 +961,170 @@ class _FriendScoreSheetState extends State<_FriendScoreSheet> {
         ),
         child: SafeArea(
           top: false,
-          // Когда клавиатура поднята, низ экрана уже занят ею: нижний
-          // системный отступ здесь добавил бы лишнюю щель между листом и
-          // клавиатурой, и лист «стоял бы» на воздухе.
+          // Когда системная клавиатура поднята, низ экрана уже занят ею:
+          // без этого условия между листом и панелью была бы лишняя щель.
           bottom: MediaQuery.viewInsetsOf(context).bottom == 0,
-          // Системная клавиатура: лист поднимается над ней на её высоту,
-          // а содержимое прокручивается, чтобы поле и кнопка не прятались
-          // под панелью.
-          child: Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(context).bottom,
+          // Своя клавиатура внизу листа: он не выше 88% экрана, поэтому панель
+          // с ручкой и кнопка действия всегда остаются в экране.
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
             ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      Spacing.md,
-                      Spacing.md,
-                      Spacing.md,
-                      Spacing.sm,
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Шапка — как у листа действий: аватарка и имя друга.
-                        // Раньше окно очков открывалось «с пустого места» — было
-                        // не понять, кому правишь счёт.
-                        Row(
-                          children: [
-                            ProfileAvatar(
-                              index: widget.friend.colorIndex,
-                              size: 40,
-                              imagePath: widget.friend.imagePath,
-                              showIcon: !widget.friend.hasImage,
-                            ),
-                            const SizedBox(width: Spacing.sm),
-                            Expanded(
-                              child: Text(
-                                widget.friend.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: Weights.semibold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: Spacing.md),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: SmoothTyping(
-                                controller: _ctrl,
-                                style: theme.textTheme.bodyLarge,
-                                ghosts: false,
-                                builder: (style) => TextField(
-                                  controller: _ctrl,
-                                  style: style,
-                                  keyboardType: TextInputType.number,
-                                  magnifierConfiguration:
-                                      TextMagnifierConfiguration.disabled,
-                                  contextMenuBuilder: minimalContextMenuBuilder,
-                                  cursorOpacityAnimates: true,
-                                  maxLength: _kFriendScoreMax,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(
-                                      _kFriendScoreMax,
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            Spacing.md,
+                            Spacing.md,
+                            Spacing.md,
+                            Spacing.sm,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Шапка — как у листа действий: аватарка и имя друга.
+                              // Раньше окно очков открывалось «с пустого места» — было
+                              // не понять, кому правишь счёт.
+                              Row(
+                                children: [
+                                  ProfileAvatar(
+                                    index: widget.friend.colorIndex,
+                                    size: 40,
+                                    imagePath: widget.friend.imagePath,
+                                    showIcon: !widget.friend.hasImage,
+                                  ),
+                                  const SizedBox(width: Spacing.sm),
+                                  Expanded(
+                                    child: Text(
+                                      widget.friend.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: Weights.semibold,
+                                          ),
                                     ),
-                                  ],
-                                  decoration: _fieldDecoration(
-                                    theme,
-                                    label: Translations.t(
-                                      'profileFriendScore',
-                                      context,
-                                      'Очки рейтинга',
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: Spacing.md),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Expanded(
+                                    child: SmoothTyping(
+                                      controller: _ctrl,
+                                      style: theme.textTheme.bodyLarge,
+                                      ghosts: false,
+                                      builder: (style) => TextField(
+                                        controller: _ctrl,
+                                        style: style,
+                                        keyboardType: TextInputType.number,
+                                        magnifierConfiguration:
+                                            TextMagnifierConfiguration.disabled,
+                                        contextMenuBuilder:
+                                            minimalContextMenuBuilder,
+                                        cursorOpacityAnimates: true,
+                                        maxLength: _kFriendScoreMax,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                          LengthLimitingTextInputFormatter(
+                                            _kFriendScoreMax,
+                                          ),
+                                        ],
+                                        decoration: _fieldDecoration(
+                                          theme,
+                                          label: Translations.t(
+                                            'profileFriendScore',
+                                            context,
+                                            'Очки рейтинга',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: Spacing.xs),
+                                  PressScale(
+                                    pressedScale: 0.9,
+                                    child: IconButton.filledTonal(
+                                      tooltip: Translations.t(
+                                        'profileFriendScoreRandom',
+                                        context,
+                                        'Случайные очки',
+                                      ),
+                                      onPressed: () => setState(
+                                        () => _ctrl.text = _funScore(
+                                          widget.friend.name,
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.casino_outlined),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: Spacing.md),
+                              SizedBox(
+                                width: double.infinity,
+                                child: PressScale(
+                                  pressedScale: 0.96,
+                                  pressOverlay: pressGloss(
+                                    BorderRadius.circular(999),
+                                    strength: 0.22,
+                                  ),
+                                  maxTiltAngle: 0.22,
+                                  child: FilledButton.tonal(
+                                    onPressed: () {
+                                      final score =
+                                          int.tryParse(_ctrl.text.trim()) ?? 0;
+                                      widget.onSave(
+                                        widget.friend.copyWith(score: score),
+                                      );
+                                    },
+                                    style: _roundButtonStyle(),
+                                    child: Text(
+                                      Translations.t(
+                                        'save',
+                                        context,
+                                        'Сохранить',
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: Spacing.xs),
-                            PressScale(
-                              pressedScale: 0.9,
-                              child: IconButton.filledTonal(
-                                tooltip: Translations.t(
-                                  'profileFriendScoreRandom',
-                                  context,
-                                  'Случайные очки',
-                                ),
-                                onPressed: () => setState(
-                                  () => _ctrl.text = _funScore(
-                                    widget.friend.name,
-                                  ),
-                                ),
-                                icon: const Icon(Icons.casino_outlined),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: Spacing.md),
-                        SizedBox(
-                          width: double.infinity,
-                          child: PressScale(
-                            pressedScale: 0.96,
-                            pressOverlay: pressGloss(
-                              BorderRadius.circular(999),
-                              strength: 0.22,
-                            ),
-                            maxTiltAngle: 0.22,
-                            child: FilledButton.tonal(
-                              onPressed: () {
-                                final score =
-                                    int.tryParse(_ctrl.text.trim()) ?? 0;
-                                widget.onSave(
-                                  widget.friend.copyWith(score: score),
-                                );
-                              },
-                              style: _roundButtonStyle(),
-                              child: Text(
-                                Translations.t('save', context, 'Сохранить'),
-                              ),
-                            ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                _friendsKeyboard(
+                  open: _kbOpen,
+                  onOpen: () => setState(() {
+                    _kbOpen = true;
+                    _focus.requestFocus();
+                  }),
+                  onClose: () {
+                    Haptics.light();
+                    setState(() => _kbOpen = false);
+                  },
+                  onChar: _kbChar,
+                  onBackspace: () => _kbBackspace(_ctrl),
+                  onSpace: () {},
+                  onSubmit: () {
+                    final score = int.tryParse(_ctrl.text.trim()) ?? 0;
+                    widget.onSave(widget.friend.copyWith(score: score));
+                  },
+                  actionLabel: Translations.t('save', context, 'Сохранить'),
+                ),
+              ],
             ),
           ),
         ),

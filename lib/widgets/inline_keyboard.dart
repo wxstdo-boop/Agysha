@@ -250,7 +250,36 @@ class _InlineKeyboardState extends State<InlineKeyboard>
             _CollapseHandle(theme: theme, onCollapse: widget.onCollapse!),
           _row(theme, _digits, widget.keyHeight),
           const SizedBox(height: 6),
-          ..._layoutRows(theme),
+          // Смена раскладки — не подмена кадром: старый ряд мягко уходит,
+          // новый въезжает снизу с растворением. Числовой ряд и нижняя
+          // строка остаются на месте, поэтому панель не «прыгает».
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder: (current, previous) => Stack(
+              alignment: Alignment.center,
+              children: [...previous, if (current != null) current],
+            ),
+            transitionBuilder: (child, animation) {
+              final t = Curves.easeOutCubic.transform(animation.value);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.10),
+                    end: Offset.zero,
+                  ).animate(AlwaysStoppedAnimation(t)),
+                  child: child,
+                ),
+              );
+            },
+            child: Column(
+              key: ValueKey(_layout),
+              mainAxisSize: MainAxisSize.min,
+              children: _layoutRows(theme),
+            ),
+          ),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -532,37 +561,44 @@ class InlineKeyboardHandle extends StatelessWidget {
         Haptics.light();
         onExpand();
       },
-      child: Container(
-        height: 38,
-        margin: const EdgeInsets.fromLTRB(8, 2, 8, 6),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Color.alphaBlend(
-            theme.colorScheme.onSurface.withValues(alpha: 0.05),
-            theme.colorScheme.surfaceContainer.withValues(alpha: 0.34),
-          ),
-          borderRadius: BorderRadius.circular(Radii.lg),
-          border: Border.all(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.10),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.keyboard_alt_outlined,
-              size: 18,
-              color: theme.colorScheme.onSurfaceVariant,
+      // Та же отдача, что у клавиш: свёрнутая панель — тоже кнопка.
+      child: PressScale(
+        pressedScale: 0.97,
+        duration: const Duration(milliseconds: 140),
+        releaseDuration: const Duration(milliseconds: 260),
+        repeatGuard: Duration.zero,
+        child: Container(
+          height: 38,
+          margin: const EdgeInsets.fromLTRB(8, 2, 8, 6),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              theme.colorScheme.onSurface.withValues(alpha: 0.05),
+              theme.colorScheme.surfaceContainer.withValues(alpha: 0.34),
             ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.onSurface,
-                fontWeight: Weights.semibold,
+            borderRadius: BorderRadius.circular(Radii.lg),
+            border: Border.all(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.10),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.keyboard_alt_outlined,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                  fontWeight: Weights.semibold,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -668,6 +704,15 @@ class _KeyState extends State<_Key> {
         pressedScale: 0.86,
         duration: const Duration(milliseconds: 190),
         releaseDuration: const Duration(milliseconds: 340),
+        // 3D-отдача: клавиша наклоняется к пальцу (тише общего угла —
+        // на 40-пиксельной шляпке крупный угол читался как перекос), а
+        // поверх заливки идёт «мокрый» блик — его видно и на сплошной
+        // красной клавише-действии.
+        maxTiltAngle: 0.13,
+        pressOverlay: pressGloss(
+          BorderRadius.circular(Radii.md),
+          strength: 0.24,
+        ),
         // Отдачу рисует сам PressScale: `Material`+`InkWell` на каждую клавишу
         // — лишние слои и чернильные всплески. Держим только один «блик»
         // нажатия через `Listener` внутри PressScale, а тап отдаёт GestureDetector.
@@ -680,7 +725,12 @@ class _KeyState extends State<_Key> {
           onTapDown: (_) => _startHold(),
           onTapUp: (_) => _stopHold(),
           onTapCancel: _stopHold,
-          child: DecoratedBox(
+          // AnimatedContainer: включение регистра и смена раскладки
+          // перекрашивают клавишу плавно, а не кадром — вместе с перелётом
+          // букв это одно движение.
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
             decoration: BoxDecoration(
               color: keyColor,
               borderRadius: BorderRadius.circular(Radii.md),
@@ -696,14 +746,36 @@ class _KeyState extends State<_Key> {
                         ),
               ),
             ),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
               height: widget.height,
               alignment: Alignment.center,
               child: widget.icon != null
-                  ? Icon(
-                      widget.icon,
-                      size: 20,
-                      color: widget.active ? Colors.white : cs.onSurfaceVariant,
+                  ? AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.88, end: 1).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          ),
+                          child: child,
+                        ),
+                      ),
+                      child: Icon(
+                        widget.icon,
+                        key: ValueKey(widget.icon),
+                        size: 20,
+                        color: widget.active
+                            ? Colors.white
+                            : cs.onSurfaceVariant,
+                      ),
                     )
                   : Text(
                       widget.label!,
@@ -749,6 +821,10 @@ class _CaseGlyph extends StatelessWidget {
       pressedScale: 0.86,
       duration: const Duration(milliseconds: 190),
       releaseDuration: const Duration(milliseconds: 340),
+      // Та же 3D-отдача и блик, что у служебных клавиш: буквы не должны
+      // «отдавать» иначе, чем «стереть» и «пробел».
+      maxTiltAngle: 0.13,
+      pressOverlay: pressGloss(BorderRadius.circular(Radii.md), strength: 0.24),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {

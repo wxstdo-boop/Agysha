@@ -45,8 +45,15 @@ class PressScale extends StatefulWidget {
   /// Включён ли тактильный 3D-наклон карточки по направлению касания.
   final bool enableTilt;
 
-  /// Максимальный угол наклона (радианы). По умолчанию 0.22 (~12.6°) —
-  /// ощутимый 3D-тилт: 0.17 под пальцем читался как «слабовато».
+  /// Только «глубина»: горизонтальная составляющая наклона гасится, и
+  /// содержимое не съезжает влево/вправо под пальцем. Нужно широким
+  /// текстовым ячейкам (таблетка разделов): там боковой сдвиг читался как
+  /// «текст скукоживается влево и возвращается».
+  final bool tiltDepthOnly;
+
+  /// Максимальный угол наклона (радианы). По умолчанию 0.16 (~9°) — тилт
+  /// остаётся заметным, но больше не «выкручивает» карточку: 0.22 на мелких
+  /// ячейках и строках читался как рывок в сторону.
   final double maxTiltAngle;
 
   /// Подложка отдачи: цвет, который мягко проявляется под содержимым
@@ -88,7 +95,8 @@ class PressScale extends StatefulWidget {
     this.enabled = true,
     this.pressedOpacity = 1.0,
     this.enableTilt = true,
-    this.maxTiltAngle = 0.22,
+    this.tiltDepthOnly = false,
+    this.maxTiltAngle = 0.16,
     this.pressTint,
     this.pressTintStrength = 0.12,
     this.pressTintRadius,
@@ -179,6 +187,13 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// а амплитуда не проваливается ниже этого значения.
   static const double _minTilt = 0.62;
 
+  /// Общий множитель амплитуды. Владелец просил «3D у всего чуть меньше и
+  /// плавнее» — вместо правки восемнадцати точечных `maxTiltAngle` углы
+  /// сжимаются здесь одним коэффициентом: карточки, кнопки и таблетки
+  /// наклоняются на одну и ту же долю мягче, а относительная разница между
+  /// мелкими и крупными элементами сохраняется.
+  static const double _globalTilt = 0.72;
+
   /// Наклон для нажатия ровно по центру, где направления от пальца нет
   /// (сдвиг от точки касания нулевой): верх элемента уходит от пальца, низ
   /// поднимается — «вдавливание» читается и без смещения руки.
@@ -234,11 +249,11 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         AnimationController(
           vsync: this,
           value: 1.0,
-          // Вход наклона — быстрый (120 мс), выход — мягкий (320 мс).
-          // Раньше обе стороны шли 460 мс, и наклон «выползал»: карточка
-          // долго оставалась плоской, хотя палец уже на ней.
-          duration: const Duration(milliseconds: 150),
-          reverseDuration: const Duration(milliseconds: 420),
+          // Вход наклона — мягкий (220 мс), выход — ещё мягче (560 мс).
+          // 150 мс входа давали щелчок на первом кадре у мелких элементов,
+          // а слишком короткий возврат читался как «карточка дёрнулась».
+          duration: const Duration(milliseconds: 220),
+          reverseDuration: const Duration(milliseconds: 560),
         )..addStatusListener((status) {
           if (status != AnimationStatus.dismissed) return;
           // Наклон уже невидим (сила 0) — можно обнулить углы без рывка.
@@ -349,9 +364,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       0.05,
     );
     _lastTiltTick = elapsed;
-    // 85 мс — время «догона» пальца: движение идёт мягко и без щелчка,
-    // но всё ещё заметно отзывчиво.
-    final k = 1.0 - math.exp(-dt / 0.085);
+    // 120 мс — время «догона» пальца: наклон теперь едет заметно мягче и
+    // не успевает рывком среагировать на дрожание руки.
+    final k = 1.0 - math.exp(-dt / 0.120);
     _tilt = _tilt + (_tiltTarget - _tilt) * k;
     if ((_tiltTarget - _tilt).distance < 0.002) {
       _tilt = _tiltTarget;
@@ -571,8 +586,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
         if (tiltActive) {
           // Угол зависит ТОЛЬКО от силы наклона (tiltFade), а не от прогресса
           // нажатия: свайп гасит нажатие мгновенно, но наклон уходит плавно.
-          final tiltX = -currentTilt.dy * widget.maxTiltAngle * tiltFade;
-          final tiltY = currentTilt.dx * widget.maxTiltAngle * tiltFade;
+          final angle = widget.maxTiltAngle * _globalTilt * tiltFade;
+          final tiltX = -currentTilt.dy * angle;
+          final tiltY = widget.tiltDepthOnly ? 0.0 : currentTilt.dx * angle;
           final perspective = _perspectiveFor(_tiltSize);
           if (perspective > 0) tiltMatrix.setEntry(3, 2, perspective);
           tiltMatrix.rotateX(tiltX);

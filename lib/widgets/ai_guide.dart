@@ -358,6 +358,15 @@ class _AiChatSheetState extends State<_AiChatSheet>
   double _foldTo = 0;
   Curve _foldCurve = Curves.easeOutCubic;
   VoidCallback? _foldDone;
+
+  /// Высота листа на последнем кадре — нужна системному «назад»/свайпу:
+  /// складка должна уйти ровно на неё, иначе лист закрывается с пустым
+  /// хвостом или обрезается на полпути.
+  double _sheetH = 0;
+
+  /// Закрытие уже запущено (системный жест или крестик): второй вызов
+  /// ничего не перезапускает, иначе лист «дёргался».
+  bool _closing = false;
   late final AnimationController _foldAnim = AnimationController(vsync: this)
     ..addListener(_onFoldTick);
 
@@ -410,9 +419,7 @@ class _AiChatSheetState extends State<_AiChatSheet>
         sheetHeight,
         duration: const Duration(milliseconds: 190),
         curve: Curves.easeInCubic,
-        onDone: () {
-          if (mounted) Navigator.of(context).pop();
-        },
+        onDone: _popNow,
       );
     } else {
       _animateFold(
@@ -421,6 +428,30 @@ class _AiChatSheetState extends State<_AiChatSheet>
         curve: Curves.easeOutCubic,
       );
     }
+  }
+
+  void _popNow() {
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  /// Закрытие листа «как рукой»: сначала лист плавно складывается вниз,
+  /// только потом закрывается роут. Так системная кнопка «назад» и
+  /// edge-swipe на телефоне дают тот же мягкий уход, что и свайп за маркер,
+  /// а не мгновенное исчезновение окна.
+  void _requestClose() {
+    if (_closing || !mounted) return;
+    final h = _sheetH > 0 ? _sheetH : 460.0;
+    _closing = true;
+    setState(() => _folding = true);
+    _animateFold(
+      h,
+      // Чуть длиннее прежних 190 мс: системный жест читается как намеренный,
+      // и резкое «в стол» на нём выглядело рывком.
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeInCubic,
+      onDone: _popNow,
+    );
   }
 
   @override
@@ -451,11 +482,15 @@ class _AiChatSheetState extends State<_AiChatSheet>
     final foldProgress = sheetHeight <= 0
         ? 0.0
         : (_fold / sheetHeight).clamp(0.0, 1.0);
+    if (!_folding && _fold <= 0.5) _sheetH = sheetHeight;
 
     return PopScope(
-      // Системная кнопка «назад» не закрывает чат: только крестик.
-      // Navigator.pop из крестика работает и при canPop: false.
+      // Роут не закрывается сам: системный «назад»/свайп сначала просит
+      // [_requestClose], лист плавно складывается — и только потом pop.
       canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _requestClose();
+      },
       child: RepaintBoundary(
         // Отступ следует за IME покадрово (MediaQuery.viewInsets сам
         // анимирован системой). AnimatedPadding добавлял свою 220 мс
@@ -2595,23 +2630,50 @@ class _AiChatBodyState extends State<_AiChatBody>
         // Своя клавиатура: свёрнутая — узкая полоска, развёрнутая — панель
         // с ручкой. Высота меняется плавно, лента не прыгает кадром.
         AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
+          // Сворачивание/разворачивание — одно медленное движение: 300 мс
+          // easeInOut, а не 220 мс «в лоб». Поле ввода над панелью едет
+          // вместе с ней, поэтому не «телепортируется» вниз кадром.
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
           alignment: Alignment.topCenter,
-          child: _keyboardOpen
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
-                  child: InlineKeyboard(
-                    keyHeight: 46,
-                    onChar: _insertChar,
-                    onBackspace: _backspace,
-                    onSpace: _space,
-                    onAction: _send,
-                    actionLabel: null,
-                    onCollapse: _collapseKeyboard,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder: (current, previous) => Stack(
+              alignment: Alignment.topCenter,
+              children: [...previous, if (current != null) current],
+            ),
+            transitionBuilder: (child, animation) {
+              final t = Curves.easeOutCubic.transform(animation.value);
+              return FadeTransition(
+                opacity: animation,
+                child: SizeTransition(
+                  sizeFactor: AlwaysStoppedAnimation(t),
+                  axisAlignment: -1,
+                  child: child,
+                ),
+              );
+            },
+            child: _keyboardOpen
+                ? Padding(
+                    key: const ValueKey('kb_open'),
+                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
+                    child: InlineKeyboard(
+                      keyHeight: 46,
+                      onChar: _insertChar,
+                      onBackspace: _backspace,
+                      onSpace: _space,
+                      onAction: _send,
+                      actionLabel: null,
+                      onCollapse: _collapseKeyboard,
+                    ),
+                  )
+                : InlineKeyboardHandle(
+                    key: const ValueKey('kb_handle'),
+                    onExpand: _expandKeyboard,
                   ),
-                )
-              : InlineKeyboardHandle(onExpand: _expandKeyboard),
+          ),
         ),
       ],
     );
