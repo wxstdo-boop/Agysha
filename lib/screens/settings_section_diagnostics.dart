@@ -100,16 +100,21 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  splashColor: theme.colorScheme.primary.withValues(alpha: 0.18),
-                  highlightColor:
-                      theme.colorScheme.primary.withValues(alpha: 0.12),
+                  splashColor: theme.colorScheme.primary.withValues(
+                    alpha: 0.18,
+                  ),
+                  highlightColor: theme.colorScheme.primary.withValues(
+                    alpha: 0.12,
+                  ),
                   onTap: _devOpening ? null : _showDevToolsScreen,
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14),
                     leading: const CanaryIcon(size: 40),
                     title: Text(_developerCornerTitle(context)),
-                    trailing:
-                        const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 16,
+                    ),
                   ),
                 ),
               ),
@@ -232,6 +237,22 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            // Отдельная кнопка меню отладки: свой код доступа (0625),
+            // отдельно от скрытого входа в «Уголок разработчика» по имени.
+            OutlinedButton.icon(
+              onPressed: _showDebugModeDialog,
+              icon: const Icon(Icons.bug_report_outlined, size: 18),
+              label: Text(Translations.t('debugMenuTitle', context, 'Debug')),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                side: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: 0.6,
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             Text(

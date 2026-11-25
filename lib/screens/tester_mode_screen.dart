@@ -1,0 +1,184 @@
+import 'package:flutter/material.dart';
+
+import '../l10n/translations.dart';
+import '../services/action_log.dart';
+import '../services/tester_checks.dart';
+import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
+
+/// Режим тестера: прогон проверок функционала и их результаты.
+///
+/// Проверки идут по очереди и только читают состояние приложения (пробные
+/// ключи пишутся и сразу удаляются), поэтому запускать можно сколько угодно
+/// раз — данные человека не меняются.
+class TesterModeScreen extends StatefulWidget {
+  const TesterModeScreen({super.key});
+
+  @override
+  State<TesterModeScreen> createState() => _TesterModeScreenState();
+}
+
+class _TesterModeScreenState extends State<TesterModeScreen> {
+  final List<TesterCheckResult> _results = <TesterCheckResult>[];
+  bool _running = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _run();
+  }
+
+  Future<void> _run() async {
+    if (_running) return;
+    setState(() {
+      _running = true;
+      _results.clear();
+    });
+    ActionLog.record('тестер', 'запущены проверки функционала');
+    final results = await TesterChecks.runAll(
+      onResult: (result) {
+        if (!mounted) return;
+        setState(() => _results.add(result));
+      },
+    );
+    if (!mounted) return;
+    final failed = results.where((r) => r.status == TesterStatus.fail).length;
+    ActionLog.record(
+      'тестер',
+      'проверки завершены',
+      data: {'всего': results.length, 'ошибок': failed},
+    );
+    setState(() => _running = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final failed = _results.where((r) => r.status == TesterStatus.fail).length;
+    final done = !_running && _results.isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          Translations.t('testerChecksTitle', context, 'Проверка функционала'),
+        ),
+        leading: const BackButtonTooltip(),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: Translations.t('testerRunAll', context, 'Проверить всё'),
+            onPressed: _running ? null : _run,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        children: [
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  if (_running)
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2.4),
+                    )
+                  else
+                    Icon(
+                      failed == 0
+                          ? Icons.check_circle_outline_rounded
+                          : Icons.error_outline_rounded,
+                      color: failed == 0 ? colors.primary : colors.error,
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _running
+                          ? Translations.t(
+                              'testerRunning',
+                              context,
+                              'Проверяю…',
+                            )
+                          : done
+                          ? (failed == 0
+                                ? Translations.t(
+                                    'testerAllPassed',
+                                    context,
+                                    'Все проверки пройдены',
+                                  )
+                                : Translations.t(
+                                    'testerSomeFailed',
+                                    context,
+                                    'Есть ошибки: {n}',
+                                  ).replaceAll('{n}', '$failed'))
+                          : Translations.t(
+                              'testerNotRun',
+                              context,
+                              'Проверки ещё не запускались',
+                            ),
+                      style: theme.textTheme.titleSmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ..._results.map((result) => _TesterRow(result: result)),
+          const SizedBox(height: 20),
+          Center(
+            child: FilledButton.tonalIcon(
+              onPressed: _running ? null : _run,
+              icon: const Icon(Icons.play_arrow_rounded, size: 18),
+              label: Text(
+                Translations.t('testerRunAll', context, 'Проверить всё'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TesterRow extends StatelessWidget {
+  const _TesterRow({required this.result});
+
+  final TesterCheckResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final (icon, color) = switch (result.status) {
+      TesterStatus.pass => (Icons.check_rounded, colors.primary),
+      TesterStatus.fail => (Icons.close_rounded, colors.error),
+      TesterStatus.skip => (Icons.remove_rounded, colors.onSurfaceVariant),
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ListTile(
+          dense: true,
+          leading: Icon(icon, color: color, size: 20),
+          title: Text(result.title, style: theme.textTheme.bodyMedium),
+          subtitle: result.detail.isEmpty
+              ? null
+              : Text(
+                  result.detail,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}

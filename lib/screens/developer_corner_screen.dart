@@ -130,6 +130,10 @@ class DeveloperModePasswordDialog extends StatefulWidget {
   final VoidCallback onCancel;
   final Future<void> Function() onUnlock;
 
+  /// Код, который открывает диалог. По умолчанию — код «Уголка
+  /// разработчика»; меню отладки передаёт свой код (0625).
+  final String code;
+
   const DeveloperModePasswordDialog({
     super.key,
     required this.title,
@@ -139,6 +143,7 @@ class DeveloperModePasswordDialog extends StatefulWidget {
     required this.unlockLabel,
     required this.onCancel,
     required this.onUnlock,
+    this.code = '7720',
   });
 
   @override
@@ -195,7 +200,7 @@ class _DeveloperModePasswordDialogState
 
   Future<void> _submit() async {
     if (_busy) return;
-    if (_controller.text != '7720') {
+    if (_controller.text != widget.code) {
       setState(() => _invalid = true);
       return;
     }

@@ -71,6 +71,81 @@ extension _SettingsDevTools on _SettingsScreenState {
     });
   }
 
+  /// Вход в меню отладки: отдельная кнопка со своим кодом доступа.
+  ///
+  /// Это не «Уголок разработчика» и не его режим — отдельный служебный
+  /// экран для проверки функционала и журнала действий. Код только
+  /// прикрывает случайные нажатия, данные он не защищает.
+  Future<void> _showDebugModeDialog() async {
+    var openMenuAfterClose = false;
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: Translations.t('debugMenuTitle', context, 'Debug'),
+      barrierColor: Colors.black.withValues(alpha: 0.62),
+      transitionDuration: const Duration(milliseconds: 460),
+      pageBuilder: (ctx, _, _) => MediaQuery.removeViewInsets(
+        context: ctx,
+        removeBottom: true,
+        child: SafeArea(
+          child: Center(
+            child: DeveloperModePasswordDialog(
+              title: Translations.t('debugMenuTitle', ctx, 'Debug'),
+              prompt: Translations.t(
+                'debugModePrompt',
+                ctx,
+                'Enter the debug menu access code',
+              ),
+              invalidCode: Translations.t(
+                'devModeInvalidCode',
+                ctx,
+                'That code did not match. Try again.',
+              ),
+              cancelLabel: Translations.cancelOf(ctx),
+              unlockLabel: Translations.t('devModeUnlock', ctx, 'Unlock'),
+              code: kDebugAccessCode,
+              onCancel: () => Navigator.of(ctx).pop(),
+              onUnlock: () async {
+                await DebugService.setDebugEnabled(true);
+                ActionLog.record('отладка', 'меню открыто по коду');
+                if (!mounted || !ctx.mounted) return;
+                openMenuAfterClose = true;
+                Navigator.of(ctx).pop();
+              },
+            ),
+          ),
+        ),
+      ),
+      transitionBuilder: (ctx, animation, _, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.08),
+              end: Offset.zero,
+            ).animate(curved),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.88, end: 1).animate(curved),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+    if (openMenuAfterClose && mounted) {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const DebugMenuScreen()));
+      // Меню можно и просто закрыть: режим отладки сам по себе не остаётся
+      // включённым навсегда — его состояние живёт в переключателе меню.
+    }
+  }
+
   Future<void> _showDevToolsScreen() async {
     if (_devOpening) return;
     _devOpening = true;

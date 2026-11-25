@@ -69,6 +69,8 @@ import 'widgets/ai_guide.dart';
 import 'utils/page_transitions.dart';
 import 'utils/snackbar.dart';
 import 'utils/jank_probe.dart';
+import 'services/action_log.dart';
+import 'services/debug_service.dart';
 import 'services/update_service.dart';
 import 'services/update_notice.dart';
 import 'services/installer.dart';
@@ -85,6 +87,10 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 /// `NavigatorObserver` переживает пересборки `MaterialApp`, а новый объект на
 /// каждом build сбрасывал бы стек роутов.
 final JankRouteObserver _jankObserver = JankRouteObserver();
+
+/// Пишет в журнал действий переходы по именованным маршрутам (только когда
+/// логирование включено в меню отладки).
+final ActionLogRouteObserver _actionLogObserver = ActionLogRouteObserver();
 Timer? _autoSaveTimer;
 bool _autoSaveFailureActive = false;
 
@@ -845,6 +851,12 @@ Future<void> _predecodeSplashLogo() async {
 Future<_StartupState> _loadStartupState() async {
   // Инициализируем SharedPreferences ОДИН раз ДО всего.
   await initPrefs();
+  // Служебные режимы и журнал читаются сразу после prefs: логирование и
+  // «режим тестера» должны быть известны до первого действия пользователя,
+  // иначе первые записи потерялись бы. Оба по умолчанию выключены.
+  DebugService.init();
+  ActionLog.init();
+  ActionLog.record('приложение', 'запуск', data: {'версия': kAppVersion});
   // Метка «кто отвечает» доступна с первого кадра: иначе плашка начинала
   // с «ada-0.0.3» и прыгала на имя провайдера.
   AiGuideService.restoreModelLabel();
@@ -1804,6 +1816,7 @@ class AgyshaAppState extends State<AgyshaApp>
     // снимок приложения вместо приватных данных.
     aiLockScreenVisible.value = true;
     setSecureWindow(true);
+    ActionLog.record('приложение', 'экран заблокирован PIN');
     // Держим флаг в актуальном состоянии: по нему решается, нужен ли
     // повторный запрос PIN при следующем возврате из фона.
     if (!_locked) setState(() => _locked = true);
@@ -1837,6 +1850,7 @@ class AgyshaAppState extends State<AgyshaApp>
 
   void unlock() {
     aiLockScreenVisible.value = false;
+    ActionLog.record('приложение', 'разблокировано PIN');
     setState(() {
       _locked = false;
     });
@@ -2049,6 +2063,7 @@ class AgyshaAppState extends State<AgyshaApp>
       // Ада-трекинг: догоняем пропущенный отчёт (приложение лежало в фоне)
       // и перезаводим таймер на ближайшие 08:00/21:00.
       unawaited(_adaTrackTick());
+      ActionLog.record('приложение', 'возврат из фона');
       // Пока приложение лежало в фоне, мог выйти новый релиз: проверка
       // сама держит суточный интервал, а плашка — одну на версию.
       if (kSelfUpdateEnabled) {
@@ -2445,7 +2460,7 @@ class AgyshaAppState extends State<AgyshaApp>
           title: 'Agysha',
           debugShowCheckedModeBanner: false,
           navigatorKey: navigatorKey,
-          navigatorObservers: [_jankObserver],
+          navigatorObservers: [_jankObserver, _actionLogObserver],
           // Такой же эффект «натяжения» при перетягивании краёв, как у
           // горизонтального PageView на главном экране, но для вертикальных
           // списков во всех разделах (Android-глоу заменяется на баунс).
