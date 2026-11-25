@@ -171,6 +171,33 @@ void main() {
     expect(out.substring(fixAt), contains('кнопка заедала'));
   }, skip: skipWithoutBash);
 
+  test('тело коммита добавляет пункты, проза в релиз не едет', () {
+    // Раньше в релиз попадал только заголовок коммита: семь строк тела, где
+    // и написано, что поменялось, терялись, и заметка выглядела пустой.
+    const input = '''
+- Кузница: таблетка модели
+- Таблетка «Модель • «имя»» вместо ленты
+Подробности ниже:
+- 3D-наклон у пузырей
+''';
+    final out = filterArgs(input, '--sections');
+    expect(out, contains('Таблетка «Модель • «имя»» вместо ленты'));
+    expect(out, contains('3D-наклон у пузырей'));
+    expect(out, isNot(contains('Подробности ниже')));
+  }, skip: skipWithoutBash);
+
+  test('быстрое тело коммита не заваливает релиз десятком пунктов', () {
+    final buffer = StringBuffer('- Кузница: полировка пузырей\n');
+    for (var i = 1; i <= 14; i++) {
+      buffer.writeln('- Пункт тела номер $i про плавность');
+    }
+    final bullets = filterArgs(buffer.toString(), '--sections')
+        .split('\n')
+        .where((line) => line.startsWith('- '))
+        .length;
+    expect(bullets, lessThanOrEqualTo(9));
+  }, skip: skipWithoutBash);
+
   test('fastlane-заметки без заголовков и в порядке истории', () {
     // F-Droid режет changelog по 500 символам: блоки и подпись съели бы
     // пункты, поэтому flat-режим остаётся плоским. Порядок — как в истории,

@@ -190,8 +190,11 @@ jobs:
           # ввод, блоки «Новое / Плавнее / Починили» и подпись. Flat-режим
           # (без флага) остаётся для fastlane, где F-Droid режет текст по 500
           # символам и любой заголовок съедает пункт.
-          NOTES="$(git log --no-merges --pretty=format:'- %s' "$RANGE" \
-            | bash tool/release_notes.sh --sections || true)"
+          # Заголовки коммитов плюс их тело: в теле мы пишем, что именно
+          # поменялось для человека, и раньше эти пункты до релиза не доезжали.
+          NOTES="$( { git log --no-merges --pretty=format:'- %s' "$RANGE"
+            git log --no-merges --pretty=format:'%b' "$RANGE" | grep -E '^- [^ ]'
+          } | bash tool/release_notes.sh --sections || true)"
           if [ -z "${NOTES//[[:space:]]/}" ]; then
             NOTES="- ✨ Обновление и мелкие улучшения"
           fi

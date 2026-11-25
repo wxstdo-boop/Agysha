@@ -115,9 +115,12 @@ seen = set()
 for raw in sys.stdin:
     line = raw.rstrip("\n")
     # Перенос строки длинного пункта из changelog — не заголовок коммита,
-    # отдаём как есть, иначе хвост пункта теряется.
+    # отдаём как есть, иначе хвост пункта теряется. В режиме разделов тело
+    # коммита приходит сырым: его прозу и заголовки не печатаем, берём только
+    # готовые пункты «- …».
     if not line.startswith("- "):
-        print(line)
+        if not SECTIONS:
+            print(line)
         continue
     # Срезаем Conventional Commits во всех видах, включая breaking-варианты:
     # `fix(strike)!:`, `feat!:`, `feat(scope)!:`. Раньше шаблон ждал двоеточие
@@ -132,6 +135,13 @@ for raw in sys.stdin:
                   "", text).strip()
     if not text:
         continue
+    # Тело коммита бывает и служебным («Подробности ниже:»), и слишком
+    # длинным для заметки: такие строки в релиз не отдаём.
+    if len(text) < 6 or text.endswith(":"):
+        continue
+    if len(text) > 140:
+        cut = text[:140]
+        text = cut.rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
     text = text[0].upper() + text[1:]
     low = text.lower()
     emoji = "✨"
@@ -152,6 +162,14 @@ if not SECTIONS:
     for emoji, text in order:
         print("- " + emoji + " " + text)
     raise SystemExit(0)
+
+# Тело коммитов добавляет пункты сверх заголовков: длинный список из десяти
+# строк в релизе не читают. Оставляем первые девять по истории.
+LIMIT = 9
+left = LIMIT
+for key in ("new", "polish", "fix"):
+    buckets[key] = buckets[key][:left]
+    left -= len(buckets[key])
 
 total = sum(len(v) for v in buckets.values())
 if total == 0:
