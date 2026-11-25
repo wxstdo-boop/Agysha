@@ -43,7 +43,10 @@ void main() {
     for (final t in svc.tasks.toList()) {
       await svc.remove(t.id);
     }
-    await svc.removeCategories();
+    // Очищаем категории: удаляем все по одной
+    for (final c in svc.categories.toList()) {
+      await svc.removeCategory(c);
+    }
   });
 
   setUp(() async {
@@ -54,7 +57,9 @@ void main() {
     for (final t in svc.tasks.toList()) {
       await svc.remove(t.id);
     }
-    await svc.removeCategories();
+    for (final c in svc.categories.toList()) {
+      await svc.removeCategory(c);
+    }
   });
 
   tearDownAll(() async {
