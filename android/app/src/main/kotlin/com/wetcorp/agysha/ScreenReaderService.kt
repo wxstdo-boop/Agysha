@@ -22,6 +22,29 @@ class ScreenReaderService : AccessibilityService() {
             private set
         @Volatile var latestAt: Long = 0L
             private set
+
+        /** Живой экземпляр сервиса — нужен для снимка «прямо сейчас». */
+        @Volatile private var instance: ScreenReaderService? = null
+
+        /**
+         * Снять экран НЕМЕДЛЕННО, не дожидаясь accessibility-события.
+         *
+         * Раньше снимок обновлялся только по событиям системы: человек
+         * открывал чат Ады и спрашивал «что на экране», а Ада отдавала
+         * старый снимок (или пустой) — «не видит экран». Теперь Dart просит
+         * снимок в момент отправки сообщения, и мы обходим активное окно
+         * прямо здесь.
+         */
+        fun captureNow(): Boolean {
+            val svc = instance ?: return false
+            return try {
+                svc.captureFrom(svc.rootInActiveWindow, null)
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        val isAlive: Boolean get() = instance != null
     }
 
     private var lastCaptureAt = 0L
@@ -51,17 +74,32 @@ class ScreenReaderService : AccessibilityService() {
         if (pkg == packageName && isOverlayWindow(root)) return
 
         lastCaptureAt = now
+        captureFrom(root, pkg)
+    }
 
-        try {
+    /**
+     * Обходит активное окно и обновляет снимок. Возвращает true, если текст
+     * собрался. [pkg] == null — берём пакет из корня (путь «по запросу»).
+     */
+    private fun captureFrom(root: AccessibilityNodeInfo?, pkgHint: String?): Boolean {
+        root ?: return false
+        val pkg = pkgHint ?: root.packageName?.toString() ?: packageName
+        // Окно самой Ады не читаем: иначе она видит собственный чат.
+        if (pkg == packageName && isOverlayWindow(root)) return false
+        return try {
             val sb = StringBuilder()
             collect(root, sb, 0)
             val text = normalize(sb.toString())
-            if (text.isNotEmpty()) {
+            if (text.isEmpty()) {
+                false
+            } else {
                 latestText = text
                 latestPackage = pkg
-                latestAt = now
+                latestAt = System.currentTimeMillis()
+                true
             }
         } catch (_: Exception) {
+            false
         } finally {
             try { root.recycle() } catch (_: Exception) {}
         }
@@ -117,9 +155,20 @@ class ScreenReaderService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         // Мусор от предыдущей сессии сервиса не должен жить вечно.
         latestText = ""
         latestPackage = ""
         latestAt = 0L
+    }
+
+    override fun onDestroy() {
+        if (instance === this) instance = null
+        super.onDestroy()
+    }
+
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        if (instance === this) instance = null
+        return super.onUnbind(intent)
     }
 }

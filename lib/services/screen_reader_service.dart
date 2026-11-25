@@ -51,9 +51,23 @@ abstract final class ScreenReaderService {
     } catch (_) {}
   }
 
+  /// Жив ли сейчас сам сервис спец. возможностей: разрешение может быть
+  /// выдано, но система ещё не подняла службу — тогда снимка не будет.
+  static Future<bool> serviceAlive() async {
+    try {
+      return await _ch.invokeMethod<bool>('serviceAlive') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Свежий снимок текста экрана ('' — если нет разрешения/выключено/
   /// снимок устарел или пуст). Данные давностью больше ~10 минут считаем
   /// неактуальными: лучше без контекста, чем с чужим старым текстом.
+  ///
+  /// Нативная сторона перед ответом обновляет снимок, если он старше
+  /// двух секунд (см. `getScreenText` в MainActivity) — поэтому метод
+  /// отдаёт именно то, что на экране СЕЙЧАС.
   static Future<String> snapshot({int maxChars = 3200}) async {
     try {
       if (!(await isEnabledPref())) return '';

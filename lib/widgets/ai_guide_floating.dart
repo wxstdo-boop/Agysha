@@ -18,7 +18,9 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   // Ещё меньше: 168 px в высоту и не шире 202 px — окошко перестаёт
   // закрывать половину экрана, но строка ввода и две строки ответа влезают.
   static const double _expandedHeight = 100;
-  static const double _collapsedSize = 40;
+  // Кружок рисуется 44 px: границы считаем по нему же, иначе окно
+  // прижималось к краю с невидимым зазором в 4 px.
+  static const double _collapsedSize = 44;
 
   /// Ширина развёрнутого окошка: заметно уже прежней, ближе к квадрату.
   static double _windowWidth(double screenWidth) =>
@@ -164,7 +166,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
       _historySnapshot = raw;
       if (raw != null && raw.isNotEmpty) {
         final list = jsonDecode(raw) as List;
-        final clearedAt = AiGuideService.chatClearedAt();
+        final clearedAt = await AiGuideService.chatClearedAtFresh();
         // Как и в полном чате: без явной очистки ничего не отбрасываем,
         // иначе сообщения без метки времени пропадали при перезаходе.
         final loaded = list
@@ -222,6 +224,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
     if (saved.isEmpty || !mounted) return;
     final known = {for (final m in _messages) AiChatStore.identity(m)};
     if (saved.every((m) => known.contains(AiChatStore.identity(m)))) return;
+    // prefs уже перечитаны в AiChatStore.persist — кэш свежий.
     final clearedAt = AiGuideService.chatClearedAt();
     final visible = saved
         .where((m) => AiGuideService.visibleInChat(m, clearedAt))
@@ -297,13 +300,19 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
     _scrollToBottom();
     try {
       final lang = await SettingsService.resolveLanguageCode();
+      // Мини-окно поверх чужого приложения: Ада видит текст экрана
+      // (мессенджер и т.п.) и может подсказать ответ собеседнику — но
+      // только если «Вижу экран» включён. Раньше снимок запрашивался
+      // всегда, и выключенный тумблер ни на что не влиял.
+      final screenAware = await ScreenReaderService.isEnabledPref();
       final answer = await AiGuideService.send(
         userText: message,
         history: _messages.take(_messages.length - 1).toList(),
         languageCode: lang,
-        // Мини-окно поверх чужого приложения: Ада видит текст экрана
-        // (мессенджер и т.п.) и может подсказать ответ собеседнику.
-        screenContext: await ScreenReaderService.snapshot(),
+        screenContext: screenAware
+            ? await ScreenReaderService.snapshot()
+            : null,
+        screenAware: screenAware,
       );
       if (!mounted) {
         await AiGuideService.appendBackgroundAnswer(answer);
@@ -379,23 +388,40 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
     if (_dragTicker == null) return;
     if (!_dragTicker!.isActive) {
       _dragTarget = _pos;
+      _dragLastElapsed = Duration.zero;
       _dragTicker!.start();
     }
     _dragTarget = _clamped(_dragTarget + delta, screen);
   }
 
-  void _onDragTick(Duration _) {
+  /// Догоняние пальца считаем по ВРЕМЕНИ кадра, а не фиксированной долей
+  /// за кадр. Прежний `lerp(_pos, target, 0.55)` при 120 Гц разгонялся
+  /// вдвое быстрее, чем при 60, — на Realme окно «прилипало» к пальцу
+  /// рывком, а на медленных кадрах отставало. Теперь поведение одинаково.
+  static const double _dragTauMs = 34.0;
+
+  void _onDragTick(Duration elapsed) {
+    final dtMs = _dragLastElapsed == Duration.zero
+        ? 16.0
+        : (elapsed - _dragLastElapsed).inMicroseconds / 1000.0;
+    _dragLastElapsed = elapsed;
+    final dt = dtMs.clamp(4.0, 48.0);
     final target = _clamped(_dragTarget, _dragScreen);
-    final next = Offset.lerp(_pos, target, 0.55)!;
+    final t = 1 - math.exp(-dt / _dragTauMs);
+    final next = Offset.lerp(_pos, target, t)!;
     if ((next - target).distance < 0.35) {
       _pos = target;
       _posNotifier.value = _pos;
       _dragTicker?.stop();
+      _dragLastElapsed = Duration.zero;
       return;
     }
     _pos = next;
     _posNotifier.value = _pos;
   }
+
+  /// Время предыдущего кадра драга: по нему считаем dt (см. _onDragTick).
+  Duration _dragLastElapsed = Duration.zero;
 
   void _savePos(Size screen) {
     globalPrefs.setDouble('ai_bubble_fx', _pos.dx / screen.width);

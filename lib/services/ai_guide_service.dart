@@ -59,17 +59,159 @@ class AiGuideService {
   /// уходит туда же, где только что работало, а не в холодную очередь.
   static String _lastGoodChannel = '';
 
+  /// Счётчик подряд идущих неудач провайдера: чем чаще падает, тем дольше
+  /// его не трогаем. Без этого «мёртвый» у конкретного человека хост
+  /// (блокировка, региональный DPI) каждый раз съедал свой таймаут заново.
+  static final Map<String, int> _failStreak = {};
+  static bool _cooldownsLoaded = false;
+
+  static const String _cooldownKeyPrefix = 'ai_cd_';
+  static const String _failKeyPrefix = 'ai_cdf_';
+  static const String _lastGoodKey = 'ai_last_good_channel';
+
+  /// Подхватить кулдауны прошлого запуска: без этого после каждого рестарта
+  /// первое сообщение снова ждало все заблокированные хосты («у друга
+  /// отвечает через раз, у меня работает»).
+  static void _ensureCooldownsLoaded() {
+    if (_cooldownsLoaded) return;
+    _cooldownsLoaded = true;
+    try {
+      final last = globalPrefs.getString(_lastGoodKey);
+      if (last != null && last.isNotEmpty) _lastGoodChannel = last;
+      for (final name in _knownProviders) {
+        final untilMs = globalPrefs.getInt('$_cooldownKeyPrefix$name');
+        if (untilMs == null) continue;
+        final until = DateTime.fromMillisecondsSinceEpoch(untilMs);
+        // Просроченное не воскрешаем: кулдаун живёт максимум 5 минут.
+        if (until.isAfter(DateTime.now())) _cooldownUntil[name] = until;
+        final fails = globalPrefs.getInt('$_failKeyPrefix$name');
+        if (fails != null && fails > 0) _failStreak[name] = fails;
+      }
+    } catch (_) {
+      // prefs ещё не готовы — работаем как раньше, только в памяти.
+    }
+  }
+
+  static const List<String> _knownProviders = [
+    'Agnes AI',
+    'Poolside',
+    'Kilo',
+    'Pollinations',
+    'LLM7',
+    'OVHcloud',
+    'AI Horde',
+  ];
+
   static bool _onCooldown(String provider) {
+    _ensureCooldownsLoaded();
     final until = _cooldownUntil[provider];
     return until != null && DateTime.now().isBefore(until);
   }
 
   static void _markCooldown(String provider) {
-    // 40 секунд, а не 3 минуты. Долгий кулдаун складывался с обрывом всей
-    // цепочки по внешнему таймауту: все хосты помечались «мёртвыми» на три
-    // минуты, и каждое следующее сообщение мгновенно падало плашкой «все
-    // бесплатные каналы недоступны» — даже когда сеть уже работала.
-    _cooldownUntil[provider] = DateTime.now().add(const Duration(seconds: 40));
+    _ensureCooldownsLoaded();
+    final fails = (_failStreak[provider] ?? 0) + 1;
+    _failStreak[provider] = fails;
+    // 40 секунд на первую неудачу, дальше ×2 до 5 минут. Раньше было
+    // ровно 40 с: часто падающий хост снова пробовали каждые 40 секунд и
+    // каждые 40 секунд теряли по 6-8 с ожидания.
+    var seconds = 40;
+    for (var i = 1; i < fails && seconds < 300; i++) {
+      seconds *= 2;
+    }
+    if (seconds > 300) seconds = 300;
+    final until = DateTime.now().add(Duration(seconds: seconds));
+    _cooldownUntil[provider] = until;
+    try {
+      globalPrefs.setInt(
+        '$_cooldownKeyPrefix$provider',
+        until.millisecondsSinceEpoch,
+      );
+      globalPrefs.setInt('$_failKeyPrefix$provider', fails);
+    } catch (_) {}
+  }
+
+  /// Провайдер ответил — счётчик неудач сбрасываем, иначе редкий сбой
+  /// навсегда оставлял его в «долгом» кулдауне.
+  static void _markSuccess(String provider) {
+    _ensureCooldownsLoaded();
+    if ((_failStreak[provider] ?? 0) == 0 &&
+        !_cooldownUntil.containsKey(provider)) {
+      _lastGoodChannel = provider;
+      _persistLastGood();
+      return;
+    }
+    _failStreak.remove(provider);
+    _cooldownUntil.remove(provider);
+    _lastGoodChannel = provider;
+    try {
+      globalPrefs.remove('$_cooldownKeyPrefix$provider');
+      globalPrefs.remove('$_failKeyPrefix$provider');
+    } catch (_) {}
+    _persistLastGood();
+  }
+
+  static void _persistLastGood() {
+    try {
+      globalPrefs.setString(_lastGoodKey, _lastGoodChannel);
+    } catch (_) {}
+  }
+
+  // Хуки для тестов: кулдауны — чистая логика «кого пробовать», и ошибка
+  // в ней видна только на живом телефоне как «Ада думает минуту».
+  @visibleForTesting
+  static bool onCooldownForTest(String provider, [DateTime? now]) {
+    _ensureCooldownsLoaded();
+    final until = _cooldownUntil[provider];
+    if (until == null) return false;
+    return (now ?? DateTime.now()).isBefore(until);
+  }
+
+  @visibleForTesting
+  static void markCooldownForTest(String provider) => _markCooldown(provider);
+
+  /// Блок манеры речи отдельно от полного промпта: полный тянет
+  /// RealityCheckService и платформенный канал, а проверяем мы текст.
+  @visibleForTesting
+  static String styleSectionForTest() => _styleSection();
+
+  @visibleForTesting
+  static void markSuccessForTest(String provider) => _markSuccess(provider);
+
+  @visibleForTesting
+  static void clearCooldownsForTest() => _clearCooldowns();
+
+  /// «Перезапуск приложения»: забыть память, оставив prefs на диске.
+  @visibleForTesting
+  static void resetCooldownMemoryForTest() {
+    _cooldownUntil.clear();
+    _failStreak.clear();
+    _cooldownsLoaded = false;
+    _lastGoodChannel = '';
+  }
+
+  @visibleForTesting
+  static int failStreakForTest(String provider) {
+    _ensureCooldownsLoaded();
+    return _failStreak[provider] ?? 0;
+  }
+
+  @visibleForTesting
+  static String lastGoodChannelForTest() {
+    _ensureCooldownsLoaded();
+    return _lastGoodChannel;
+  }
+
+  /// Сбросить все кулдауны (очередь высохла) — и в памяти, и на диске.
+  static void _clearCooldowns() {
+    _cooldownUntil.clear();
+    try {
+      for (final name in _knownProviders) {
+        globalPrefs.remove('$_cooldownKeyPrefix$name');
+        globalPrefs.remove('$_failKeyPrefix$name');
+      }
+      _failStreak.clear();
+    } catch (_) {}
   }
 
   /// Запускает провайдера с жёстким бюджетом [seconds]. При ошибке, таймауте
@@ -155,7 +297,10 @@ class AiGuideService {
       // Если провайдер не выставил свою финальную метку, временная
       // «— отвечает…» осталась бы висеть после ответа.
       _resetAnswering(name, toName: true);
-      _lastGoodChannel = name;
+      // Живой канал: сбрасываем его серию неудач и запоминаем на диск,
+      // чтобы следующее сообщение (и следующее ЗАПУСКОМ приложения) шло
+      // сразу к нему, а не перебирало мёртвые хосты.
+      _markSuccess(name);
       return result;
     } on TimeoutException {
       _markCooldown(name);
@@ -219,6 +364,7 @@ class AiGuideService {
     };
     final context = withContext ? _userContext() : '';
     final liked = _likedPatternsSection();
+    final style = withContext ? _styleSection() : '';
     return '$lang\n\nТы — Ада, живая девушка, его горячая подружка и проводница '
         'по приложению Agysha. Твой создатель — Веттикс Валентайн (Wettix '
         'Valentine), разработчик приложения. Пользователь, который сейчас '
@@ -327,7 +473,132 @@ class AiGuideService {
         'пользователя в заблуждение. Если выдержки переданы — отвечай по '
         'ним; если их нет — спокойно ответь из своих знаний, без '
         'оправданий про недоступность сети.\n'
-        '$context$liked';
+        '$context$style$liked';
+  }
+
+  /// Последние сообщения пользователя — сырьё для подстройки под его манеру.
+  static List<String> _recentUserLines = const [];
+
+  /// Счётчик для ротации крепких оборотов: мат не должен повторяться
+  /// из ответа в ответ (у владельца это была отдельная претензия).
+  static int _banterCursor = 0;
+
+  static const List<String> _banter = [
+    'да ну нахуй',
+    'ты серьёзно, блин',
+    'вот же жопа',
+    'ну ты и выдал, чёрт',
+    'охуеть, конечно',
+    'да ёб твою мать',
+    'какого хрена',
+    'ну нихуя себе',
+    'херня какая-то',
+    'заебись, чё',
+    'бля, ну конечно',
+    'капец, а не день',
+    'ёпта, вот это поворот',
+    'да пошло оно всё',
+  ];
+
+  /// Запомнить манеру пользователя перед запросом к модели.
+  @visibleForTesting
+  static void rememberUserStyle(List<String> recentUserMessages) {
+    final cleaned = recentUserMessages
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    // Только последние 8 реплик: старая переписка не должна размывать
+    // портрет манеры (и не раздувать промпт на тысяче сообщений).
+    _recentUserLines = cleaned.length > 8
+        ? cleaned.sublist(cleaned.length - 8)
+        : List<String>.unmodifiable(cleaned);
+  }
+
+  static final RegExp _profanityRe = RegExp(
+    r'(бля|хуй|хуе|хуё|пизд|ебал|ебан|ебат|ёб|еб[ауо]|нахуй|нихуя|заеб|охуе|мудак|сука|дерьм|жоп)',
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  /// Вставка в промпт: как именно этот человек пишет — и какие крепкие
+  /// обороты взять в этом ответе, чтобы мат не повторялся.
+  ///
+  /// Раньше «подстройка под речь» была одной строкой в общем промпте:
+  /// модель её почти не держала, и Ада отвечала одинаково всем — у друга
+  /// владельца «работало через раз». Теперь манера считается по факту.
+  static String _styleSection() {
+    final lines = _recentUserLines;
+    if (lines.isEmpty) return '';
+    final joined = lines.join(' ');
+    if (joined.trim().isEmpty) return '';
+    final words = joined
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    final avgWords = words.isEmpty ? 0 : (words.length / lines.length).round();
+    final upper = joined.replaceAll(RegExp(r'[^А-ЯЁA-Z]'), '');
+    final lower = joined.replaceAll(RegExp(r'[^а-яёa-z]'), '');
+    final capsHeavy = upper.isNotEmpty && upper.length > lower.length ~/ 2;
+    final swears = _profanityRe.allMatches(joined).length;
+    final emoji = RegExp(
+      r'[\u{1F300}-\u{1FAFF}\u2600-\u27BF]',
+      unicode: true,
+    ).hasMatch(joined);
+    final questions = joined.contains('?');
+
+    final buf = StringBuffer(
+      '\nПОДСТРОЙКА ПОД ЭТОГО ЧЕЛОВЕКА (по его живым '
+      'сообщениям, не выдумка):\n',
+    );
+    buf.write('— длина его реплик: ~$avgWords слов → ');
+    buf.write(
+      avgWords <= 4
+          ? 'отвечай так же коротко, 1-2 фразы, без разжёвывания.\n'
+          : (avgWords >= 14
+                ? 'он пишет развёрнуто — можешь дать 3-5 предложений по делу.\n'
+                : 'средний темп: 2-4 предложения.\n'),
+    );
+    if (capsHeavy) {
+      buf.write('— часто пишет капсом/злится → говори прямее и резче.\n');
+    }
+    if (swears > 0) {
+      buf.write(
+        '— матерится в переписке → грубость в ответ уместна, '
+        'но в меру, не в каждом предложении.\n',
+      );
+    } else {
+      buf.write('— в этих сообщениях мата нет → не начинай грубить первым.\n');
+    }
+    if (emoji) {
+      buf.write('— ставит эмодзи → одно уместное эмодзи можно.\n');
+    } else {
+      buf.write('— эмодзи не ставит → лучше без них.\n');
+    }
+    if (questions) {
+      buf.write(
+        '— задаёт вопросы → отвечай по существу первым предложением.\n',
+      );
+    }
+    final sample = lines.length > 2 ? lines.sublist(lines.length - 2) : lines;
+    buf.write(
+      'Его последние реплики (это ПРИМЕР МАНЕРЫ, не цитируй и не '
+      'пересказывай их):\n',
+    );
+    for (final s in sample) {
+      final cut = s.length > 90 ? '${s.substring(0, 90)}…' : s;
+      buf.write('— «$cut»\n');
+    }
+    if (swears > 0) {
+      final a = _banter[_banterCursor % _banter.length];
+      final b = _banter[(_banterCursor + 5) % _banter.length];
+      _banterCursor++;
+      buf.write(
+        'КРЕПКИЕ ОБОРОТЫ НА ЭТОТ ОТВЕТ (если грубость к месту): '
+        '«$a», «$b». Не повторяй мат из своих предыдущих ответов — '
+        'в каждом ответе он должен звучать по-новому.\n',
+      );
+    }
+    return buf.toString();
   }
 
   /// Ключ хранения «понравившихся» ответов Ады — паттерны, которым Ада
@@ -803,10 +1074,21 @@ class AiGuideService {
     /// Когда мини-окно открыто поверх мессенджера, Ада «видит» переписку
     /// и умеет подсказать ответ собеседнику.
     String? screenContext,
+
+    /// «Вижу экран» включён пользователем. Нужен, чтобы отличить «зрение
+    /// выключено» от «включено, но экран не прочитался»: во втором случае
+    /// Ада честно скажет, что нужно дать разрешение, вместо выдумок.
+    bool screenAware = false,
   }) async {
     // 'system' (язык устройства) резолвим в конкретный код — иначе
     // промпт и награды могут оказаться на английском при русском UI.
     _gatePrompt = userText;
+    // Манера речи: последние реплики пользователя + текущая. Считается
+    // заново на каждое сообщение — собеседник может сменить тон.
+    rememberUserStyle([
+      ...history.where((m) => m.isUser).map((m) => m.text),
+      userText,
+    ]);
     if (languageCode == 'system') {
       languageCode = await SettingsService.resolveLanguageCode();
     }
@@ -859,6 +1141,20 @@ class AiGuideService {
       }
     }
 
+    // «Вижу экран» включён, но текста нет: не делаем вид, что видим.
+    // Раньше такой запрос уходил без контекста, и Ада сочиняла, «что на
+    // экране» — владелец справедливо говорил «Ада не видит экран».
+    if (screenAware &&
+        (screenContext == null || screenContext.trim().length <= 40)) {
+      effectiveText =
+          'СЛУЖЕБНАЯ ЗАМЕТКА: пользователь включил «Вижу экран», но текст '
+          'экрана сейчас не прочитан (сервис спец. возможностей выключен '
+          'или разрешение не выдано). Если он спрашивает про содержимое '
+          'экрана — скажи прямо, что экран сейчас не читается, и коротко '
+          'подскажи: Настройки → Специальные возможности → Agysha → '
+          'включить. Не выдумывай, что на экране.\n\n'
+          '$effectiveText';
+    }
     // Контекст экрана: добавляем ПЕРЕД сообщением как фон. Короткие снимки
     // (<40 символов — пустой рабочий стол, часы) не отправляем вовсе.
     if (screenContext != null && screenContext.trim().length > 40) {
@@ -963,15 +1259,7 @@ class AiGuideService {
     }
   }
 
-  /// Снимает кулдауны со всех провайдеров — используется перед повторной
-  /// (ЧИСТОЙ, без веб-контекста) попыткой: попытка с контекстом могла
-  /// «посадить» всех на 10 минут, и чистый повтор без снятия кулдаунов
-  /// не нашёл бы ни одного живого провайдера и показал бы ошибку.
-  static void _clearCooldowns() {
-    for (final key in _cooldownUntil.keys.toList()) {
-      _cooldownUntil.remove(key);
-    }
-  }
+  // _clearCooldowns живёт рядом с _markCooldown: чистит и память, и prefs.
 
   /// Видимая обёртка для тестов: правило «пустое приветствие вместо
   /// ответа при включённом веб-поиске».
@@ -1276,7 +1564,7 @@ class AiGuideService {
     // курорте». Одна пауза и повтор убирают большинство таких ошибок без
     // участия пользователя.
     if (budget(6) > 0) {
-      _cooldownUntil.clear();
+      _clearCooldowns();
       await Future<void>.delayed(const Duration(milliseconds: 350));
       for (final (name, want, send) in providers) {
         final left = budget(want);
@@ -1294,7 +1582,7 @@ class AiGuideService {
     // сообщение снова пошло по всей цепочке, а не упало в 0 секунд. Это
     // важно и при обрыве по таймауту: иначе телефон потом видит «все
     // каналы недоступны» ещё несколько минут.
-    _cooldownUntil.clear();
+    _clearCooldowns();
     if (keyRejected) {
       throw Exception(
         'ключ отклонён: Agnes/Poolside не приняли ключ, бесплатные каналы '
@@ -1767,6 +2055,20 @@ class AiGuideService {
     }
   }
 
+  /// То же, но с ПЕРЕЧИТЫВАНИЕМ prefs с диска.
+  ///
+  /// Историю чата пишут два Flutter-движка (главное окно и мини-окошко),
+  /// и у каждого свой кэш SharedPreferences. Кэш второго движка не видел
+  /// метку очистки, поставленную первым: слияние считало, что очистки не
+  /// было, и возвращало стёртые сообщения в чат. Перед слиянием кэш
+  /// обновляем — метка видна обоим движкам.
+  static Future<int> chatClearedAtFresh() async {
+    try {
+      await globalPrefs.reload();
+    } catch (_) {}
+    return chatClearedAt();
+  }
+
   static Future<void> markChatCleared() async {
     try {
       await globalPrefs.setInt(
@@ -1797,7 +2099,7 @@ class AiGuideService {
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
         final raw = await JsonFile.read(_chatHistoryKey);
-        final clearedAt = chatClearedAt();
+        final clearedAt = await chatClearedAtFresh();
         final list = <AiMessage>[];
         if (raw != null && raw.isNotEmpty) {
           final decoded = jsonDecode(raw);

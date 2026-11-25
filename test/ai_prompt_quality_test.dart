@@ -124,11 +124,15 @@ void main() {
     // адреса отдают 429 — Kilo обязан быть первым из «ключевых» источников,
     // иначе Ада тратит бюджет на заведомо мёртвые попытки.
     final src = File('lib/services/ai_guide_service.dart').readAsStringSync();
-    final kilo = src.indexOf("'Kilo',\n        6,");
-    expect(kilo, greaterThan(0), reason: 'Kilo пропал из цепочки');
+    // Порядок ищем только внутри самой цепочки: имена провайдеров
+    // встречаются и в _knownProviders выше по файлу.
+    final chain = src.indexOf('final providers = <(String, int,');
+    expect(chain, greaterThan(0), reason: 'цепочка провайдеров не найдена');
+    final kilo = src.indexOf("'Kilo',\n        6,", chain);
+    expect(kilo, greaterThan(chain), reason: 'Kilo пропал из цепочки');
     for (final later in ["'LLM7',", "'OVHcloud',", "'AI Horde',"]) {
       expect(
-        src.indexOf(later),
+        src.indexOf(later, chain),
         greaterThan(kilo),
         reason: '$later должен идти после Kilo',
       );
