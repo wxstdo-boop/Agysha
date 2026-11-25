@@ -549,6 +549,9 @@ const Map<String, String> _ru = {
       'LLM7, Pollinations и AI Horde отвечают без всякого ключа.',
   'freeFallbacks': 'Бесплатные фолбэки:',
   'aiResort': 'ИИ на курорте, подожди немного',
+  'changelogOfflineTitle': 'Нет связи с GitHub',
+  'changelogOfflineHint':
+      'Журнал собирается из релизов приложения. Проверь соединение и потяни список вниз — он подтянется.',
   'retry': 'Повторить',
   'changeIcon': 'Сменить иконку',
   'chooseIcon': 'Выберите иконку',

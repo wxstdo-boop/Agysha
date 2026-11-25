@@ -551,6 +551,9 @@ const Map<String, String> _fr = {
       'LLM7, Pollinations et AI Horde répondent sans aucune clé.',
   'freeFallbacks': 'Solutions de secours gratuites :',
   'aiResort': 'L’IA est en vacances, attends un peu',
+  'changelogOfflineTitle': 'Pas de connexion à GitHub',
+  'changelogOfflineHint':
+      'Le journal est construit à partir des versions de l’app. Vérifie la connexion et tire la liste vers le bas — elle se chargera.',
   'retry': 'Réessayer',
   'changeIcon': 'Changer l’icône',
   'chooseIcon': 'Choisir une icône',

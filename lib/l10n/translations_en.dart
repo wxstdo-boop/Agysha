@@ -542,6 +542,9 @@ const Map<String, String> _en = {
       'LLM7, Pollinations and AI Horde answer without any key.',
   'freeFallbacks': 'Free fallbacks:',
   'aiResort': 'AI is on vacation, wait a bit',
+  'changelogOfflineTitle': 'No connection to GitHub',
+  'changelogOfflineHint':
+      'The log is built from the app releases. Check your connection and pull the list down — it will load.',
   'retry': 'Retry',
   'changeIcon': 'Change icon',
   'chooseIcon': 'Choose icon',

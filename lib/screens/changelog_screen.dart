@@ -89,7 +89,8 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     // Живой список; если сеть недоступна — встроенный запасной.
-    final raw = _entries ?? _fallbackEntries(context);
+    // Живой список; null — ни один источник не ответил (см. _buildOffline).
+    final raw = _entries ?? const <ChangelogEntry>[];
     // Обычному человеку — выжимка; в уголке разработчика — полный журнал.
     final entries = widget.detailed ? raw : digestChangelog(raw);
 
@@ -118,6 +119,8 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
           switchOutCurve: Curves.easeInCubic,
           child: _loading
               ? const _ChangelogSkeleton(key: ValueKey('changelog_loading'))
+              : _entries == null
+              ? _buildOffline(theme)
               // ЛЕНИВЫЙ список: живых релизов бывает под сотню, и построение
               // всех карточек одним кадром (ListView(children: […])) держало
               // первый кадр экрана и «съедало» память. ListView.builder строит
@@ -348,54 +351,61 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
     );
   }
 
-  /// Встроенный запасной список: последние значимые версии на случай, когда
-  /// релизы с GitHub недоступны (нет сети, лимит API). Держим коротким —
-  /// это именно подстраховка, а не второй источник правды.
-  List<ChangelogEntry> _fallbackEntries(BuildContext context) => [
-    ChangelogEntry(
-      version: '1.6.72',
-      date: '2026-10-20',
-      changes: [
-        Translations.t(
-          'changeTaskShelvesContrast',
-          context,
-          'Task shelves: headings are now readable in both light and dark themes',
+  /// Ни один источник не ответил (нет сети, GitHub режет запросы).
+  ///
+  /// Раньше здесь подставлялся встроенный список версий 1.6.70–1.6.72: экран
+  /// не был пустым, но показывал октябрьские выпуски как свежие — со стороны
+  /// это и читалось как «список изменений умер». Честное «нет связи» с
+  /// повтором лучше, чем старые новости под видом новых. Как только журнал
+  /// хоть раз загрузился, он лежит в prefs и офлайн показывается он же.
+  Widget _buildOffline(ThemeData theme) {
+    return ListView(
+      key: const ValueKey('changelog_offline'),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(Spacing.lg),
+      children: [
+        const SizedBox(height: Spacing.xl),
+        Icon(
+          Icons.cloud_off_rounded,
+          size: 52,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
         ),
-        Translations.t(
-          'changeLintCleanup',
-          context,
-          'Tidied up the internals — the app is a little more dependable now',
+        const SizedBox(height: Spacing.md),
+        Text(
+          Translations.t(
+            'changelogOfflineTitle',
+            context,
+            'Нет связи с GitHub',
+          ),
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: Weights.bold,
+          ),
+        ),
+        const SizedBox(height: Spacing.xs),
+        Text(
+          Translations.t(
+            'changelogOfflineHint',
+            context,
+            'Журнал собирается из релизов приложения. Проверь соединение и '
+                'потяни список вниз — он подтянется.',
+          ),
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+          ),
+        ),
+        const SizedBox(height: Spacing.lg),
+        Center(
+          child: FilledButton.icon(
+            onPressed: () => _load(force: true),
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(Translations.t('retry', context, 'Повторить')),
+          ),
         ),
       ],
-    ),
-    ChangelogEntry(
-      version: '1.6.71',
-      date: '2026-10-20',
-      changes: [
-        Translations.t(
-          'changeTaskShelves',
-          context,
-          'Tasks are split into "Active" and "Completed" shelves',
-        ),
-        Translations.t(
-          'changeTaskMarkFinal',
-          context,
-          'Completing a task is final — it moves to the completed shelf',
-        ),
-      ],
-    ),
-    ChangelogEntry(
-      version: '1.6.70',
-      date: '2026-10-19',
-      changes: [
-        Translations.t(
-          'changeCIUpdate',
-          context,
-          'Releases go out more smoothly — we reworked the build pipeline',
-        ),
-      ],
-    ),
-  ];
+    );
+  }
 }
 
 /// Номер САМОЙ СВЕЖЕЙ версии с мягким подчёркиванием.

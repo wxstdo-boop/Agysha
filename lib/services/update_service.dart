@@ -225,8 +225,20 @@ class UpdateService {
   // брошенная. Источник тот же, что у автообновления: публичные релизы.
 
   /// Забирает последние релизы и превращает их в записи журнала.
-  /// Возвращает null при любой сетевой/форматной ошибке — экран тогда
-  /// показывает встроенный список, а не пустоту.
+  ///
+  /// Три источника по очереди, потому что один GitHub API — ненадёжный:
+  /// у анонимных запросов лимит 60 в час на IP, а мобильный оператор делит
+  /// один IP на тысячи телефонов, поэтому `api.github.com` регулярно отвечает
+  /// 403. Журнал от этого «умирал» и показывал октябрьский встроенный список.
+  ///
+  /// 1. `api.github.com` — полный список релизов (до [limit] штук);
+  /// 2. `releases.atom` на github.com — последние 10 релизов, без лимита
+  ///    и без авторизации (github.com доступен там, где API режут);
+  /// 3. последний удачный список из prefs — один раз загрузили, значит и
+  ///    офлайн покажем настоящие версии, а не заглушку.
+  ///
+  /// Возвращает null, только если не сработало ни одно: экран показывает
+  /// честное «нет связи» с кнопкой повтора.
   ///
   /// Результат кэшируется в памяти на [_changelogTtl]: повторное открытие
   /// экрана не дёргает сеть и рисуется мгновенно.
@@ -242,6 +254,30 @@ class UpdateService {
         now.difference(cachedAt) < _changelogTtl) {
       return _changelogCache;
     }
+    final fromApi = await _fetchChangelogFromApi(limit);
+    if (fromApi != null) {
+      _changelogCache = fromApi;
+      _changelogCacheAt = now;
+      saveChangelogCache(fromApi);
+      return fromApi;
+    }
+    final fromAtom = await _fetchChangelogFromAtom();
+    if (fromAtom != null) {
+      _changelogCache = fromAtom;
+      _changelogCacheAt = now;
+      saveChangelogCache(fromAtom);
+      return fromAtom;
+    }
+    final stored = loadChangelogCache();
+    if (stored != null) {
+      _changelogCache = stored;
+      _changelogCacheAt = now;
+      return stored;
+    }
+    return null;
+  }
+
+  Future<List<ChangelogEntry>?> _fetchChangelogFromApi(int limit) async {
     final uri = Uri.parse(
       'https://api.github.com/repos/$kUpdateRepoOwner/$kUpdateRepoName/'
       'releases?per_page=$limit',
@@ -269,9 +305,153 @@ class UpdateService {
       if (entries.isEmpty) return null;
       // Свежие сверху: имена версий сравниваем по числам, а не строками.
       entries.sort((a, b) => compareVersionNames(b.version, a.version));
-      _changelogCache = entries;
-      _changelogCacheAt = now;
       return entries;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Резервный источник: Atom-лента релизов на github.com.
+  ///
+  /// Отдаёт последние 10 релизов вместе с телом, лимитов на неё нет, а хост
+  /// github.com доступен там, где `api.github.com` отвечает 403 (мобильный
+  /// оператор, корпоративный прокси, блокировки). Тело в ленте — HTML,
+  /// поэтому пункты вытаскиваем теми же правилами, что и markdown-заметки:
+  /// `<li>` → строка списка, остальные теги — в утиль.
+  Future<List<ChangelogEntry>?> _fetchChangelogFromAtom() async {
+    final uri = Uri.parse(
+      'https://github.com/$kUpdateRepoOwner/$kUpdateRepoName/releases.atom',
+    );
+    try {
+      final res = await http
+          .get(uri, headers: const {'User-Agent': 'Agysha'})
+          .timeout(const Duration(seconds: 14));
+      if (res.statusCode != 200) return null;
+      final entries = parseAtomFeed(res.body);
+      return entries.isEmpty ? null : entries;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Разбор Atom-ленты релизов. Вынесено отдельно, чтобы покрыть тестом без
+  /// сети.
+  @visibleForTesting
+  static List<ChangelogEntry> parseAtomFeed(String xml) {
+    final entries = <ChangelogEntry>[];
+    for (final match in RegExp(
+      r'<entry>(.*?)</entry>',
+      dotAll: true,
+    ).allMatches(xml)) {
+      final block = match.group(1)!;
+      final title = _atomTag(block, 'title');
+      final version = RegExp(r'(\d+(?:\.\d+)*)').firstMatch(title)?.group(1);
+      if (version == null) continue;
+      final updated = _atomTag(block, 'updated');
+      final dateTime = DateTime.tryParse(updated)?.toLocal();
+      final date = dateTime != null
+          ? '${dateTime.year.toString().padLeft(4, '0')}-'
+                '${dateTime.month.toString().padLeft(2, '0')}-'
+                '${dateTime.day.toString().padLeft(2, '0')}'
+          : (updated.length >= 10 ? updated.substring(0, 10) : '');
+      final time = dateTime != null
+          ? '${dateTime.hour.toString().padLeft(2, '0')}:'
+                '${dateTime.minute.toString().padLeft(2, '0')}:'
+                '${dateTime.second.toString().padLeft(2, '0')}'
+          : '';
+      final html = _atomTag(block, 'content');
+      final changes = parseReleaseNotes(_htmlToLines(html));
+      if (changes.isEmpty) changes.add(kQuietReleaseNote);
+      entries.add(
+        ChangelogEntry(
+          version: version,
+          date: date,
+          time: time,
+          changes: changes,
+        ),
+      );
+    }
+    entries.sort((a, b) => compareVersionNames(b.version, a.version));
+    return entries;
+  }
+
+  static String _atomTag(String block, String tag) {
+    final match = RegExp(
+      '<$tag[^>]*>(.*?)</$tag>',
+      dotAll: true,
+    ).firstMatch(block);
+    return match == null ? '' : _unescapeXml(match.group(1)!);
+  }
+
+  static String _unescapeXml(String value) => value
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&apos;', "'")
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&');
+
+  /// HTML тела релиза → текст в том же виде, что markdown-заметки: каждый
+  /// `<li>` становится строкой «- пункт», `<br>` — переводом строки, парные
+  /// теги и таблица SHA отбрасываются.
+  static String _htmlToLines(String html) {
+    var text = html
+        .replaceAll(RegExp(r'<li[^>]*>', caseSensitive: false), '\n- ')
+        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'</p>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'<[^>]+>'), '')
+        .replaceAll('&#43;', '+')
+        .replaceAll('&nbsp;', ' ');
+    text = _unescapeXml(text);
+    return text;
+  }
+
+  /// Последний удачный список — в prefs: без него офлайн-открытие снова
+  /// показывало бы «заглушку» вместо настоящих релизов.
+  static const String _changelogCacheKey = 'changelog_cache_v1';
+
+  @visibleForTesting
+  void saveChangelogCache(List<ChangelogEntry> entries) {
+    try {
+      final data = [
+        for (final e in entries.take(40))
+          {'v': e.version, 'd': e.date, 't': e.time, 'c': e.changes},
+      ];
+      globalPrefs.setString(_changelogCacheKey, jsonEncode(data));
+    } catch (_) {
+      // Кэш — удобство, а не условие работы: без prefs журнал просто
+      // останется сетевым.
+    }
+  }
+
+  @visibleForTesting
+  List<ChangelogEntry>? loadChangelogCache() {
+    try {
+      final raw = globalPrefs.getString(_changelogCacheKey);
+      if (raw == null || raw.isEmpty) return null;
+      final data = jsonDecode(raw);
+      if (data is! List) return null;
+      final entries = <ChangelogEntry>[];
+      for (final item in data) {
+        if (item is! Map) continue;
+        final version = item['v'] as String? ?? '';
+        if (version.isEmpty) continue;
+        final changes = [
+          for (final c in (item['c'] as List? ?? const []))
+            if (c is String && c.isNotEmpty) c,
+        ];
+        if (changes.isEmpty) continue;
+        entries.add(
+          ChangelogEntry(
+            version: version,
+            date: item['d'] as String? ?? '',
+            time: item['t'] as String? ?? '',
+            changes: changes,
+          ),
+        );
+      }
+      return entries.isEmpty ? null : entries;
     } catch (_) {
       return null;
     }
