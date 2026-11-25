@@ -890,6 +890,11 @@ class _PillLabelState extends State<_PillLabel>
     }
     _from = _value;
     _to = widget.glow;
+    // Зажигание — быстрым шагом (подсветка «появляется» сразу после тапа),
+    // гашение — мягче: резкий уход красного читался как мигание.
+    _ctrl.duration = _to > _from
+        ? const Duration(milliseconds: 150)
+        : const Duration(milliseconds: 300);
     _ctrl.forward(from: 0);
   }
 
@@ -959,8 +964,14 @@ class _PillLabelState extends State<_PillLabel>
   }
 }
 
-/// Выбранный раздел выделяется текстом без отдельной фоновой таблетки.
-/// Виджет сохраняет интерфейс для геометрических тестов без отрисовки фона.
+/// Подвижная подложка выбранного раздела: «камень», который едет под
+/// таблеткой и растягивается в угол при упоре в край дорожки.
+///
+/// Одно время здесь стояла пустая заглушка (фон убрали в пользу одного
+/// текста), и после тапов раздел выглядел «никак»: подпись перекрашивалась,
+/// но подложки не было вовсе. Возвращаем мягкое монохромное стекло в цвет
+/// темы — без градиентов проезжающих тем, чтобы барабан разделов не спорил
+/// с палитрой приложения.
 class _GlassStone extends StatelessWidget {
   final double capRadius;
 
@@ -968,6 +979,32 @@ class _GlassStone extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox.expand();
+    final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(capRadius),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cs.primary.withValues(alpha: dark ? 0.26 : 0.14),
+            cs.primary.withValues(alpha: dark ? 0.16 : 0.07),
+          ],
+        ),
+        border: Border.all(
+          color: cs.primary.withValues(alpha: dark ? 0.34 : 0.20),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: cs.primary.withValues(alpha: dark ? 0.18 : 0.10),
+            blurRadius: 10,
+            spreadRadius: -2,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+    );
   }
 }

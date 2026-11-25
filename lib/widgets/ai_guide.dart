@@ -42,6 +42,27 @@ part 'ai_guide_floating.dart';
 /// Значение хранится в prefs ('ai_floating') — переживает перезапуск.
 final ValueNotifier<bool> aiFloating = ValueNotifier<bool>(false);
 
+/// Полностью выключает плавающее окошко Ады: снимает флаг «в окне»,
+/// прячет пузырь в приложении и закрывает системный оверлей.
+///
+/// Один путь на все «убрать Аду»: раньше каждый вызывающий гасил только
+/// свою половину состояния, и после «убрал пузырь → вернулся в приложение»
+/// системное окно оставалось висеть поверх экрана (а его прозрачная область
+/// ещё и перехватывала касания — таблетка разделов «не отвечала»).
+Future<void> disableAdaFloating() async {
+  if (aiFloating.value) aiFloating.value = false;
+  try {
+    if (globalPrefs.getBool('ai_floating') ?? false) {
+      await globalPrefs.setBool('ai_floating', false);
+    }
+  } catch (_) {}
+  if (!kIsWeb) {
+    try {
+      await closeAdaOverlay();
+    } catch (_) {}
+  }
+}
+
 /// Чат плавно уходит в пузырь: пока true — лист сжимается к правому
 /// нижнему углу и гаснет, а не пропадает скачком.
 final ValueNotifier<bool> aiCollapsing = ValueNotifier<bool>(false);
@@ -1676,10 +1697,9 @@ class _AiChatBodyState extends State<_AiChatBody>
       await Future<void>.delayed(const Duration(milliseconds: 150));
       if (mounted && context.mounted) Navigator.pop(context);
     } else {
-      // Выключили — окошко исчезает, чат остаётся открытым.
-      aiFloating.value = false;
-      globalPrefs.setBool('ai_floating', false);
-      if (!kIsWeb) await closeAdaOverlay();
+      // Выключили — окошко исчезает (включая системный оверлей), чат
+      // остаётся открытым.
+      await disableAdaFloating();
     }
   }
 
@@ -2143,7 +2163,16 @@ class _AiChatBodyState extends State<_AiChatBody>
                         child: IgnorePointer(
                           ignoring:
                               !(_historyLoaded && _messages.isEmpty && !_busy),
-                          child: const _EmptyChatPlaceholder(),
+                          // TickerMode: пока подсказка скрыта, её «дыхание»
+                          // (GentleFloat) не крутится. Раньше невидимый
+                          // виджет всё равно будил движок каждый кадр, и в
+                          // чате с сотней сообщений это отнимало кадровое
+                          // время у прокрутки и анимаций под Impeller.
+                          child: TickerMode(
+                            enabled:
+                                _historyLoaded && _messages.isEmpty && !_busy,
+                            child: const _EmptyChatPlaceholder(),
+                          ),
                         ),
                       ),
                     ],

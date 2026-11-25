@@ -1404,30 +1404,52 @@ class _TasksScreenState extends State<TasksScreen>
             context,
             '{n} ч',
           ).replaceAll('{n}', '${est ~/ 60}');
-    return Container(
+    return AnimatedContainer(
+      // Срок меняет состояние сам: в полночь «Сегодня» становится
+      // «Просрочено», а после выполнения/переноса меняется дата. Раньше
+      // плашка перекрашивалась и переобувалась одним кадром — в ленте это
+      // читалось как мигание. Теперь цвет, рамка и заливка перетекают.
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
         color: color.withValues(alpha: 0.08),
         border: Border.all(color: color.withValues(alpha: 0.22), width: 1),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            overdue ? Icons.warning_amber_rounded : Icons.schedule,
-            size: 13,
-            color: color.withValues(alpha: 0.85),
+      child: AnimatedSwitcher(
+        // Текст и значок меняются перекрёстно: «Просрочено» ↔ «Сегодня» ↔
+        // дата. Ключ собран из всего видимого, поэтому смена оценки
+        // («45 мин» → «1 ч») тоже идёт фейдом, а не подменой кадра.
+        duration: const Duration(milliseconds: 240),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, anim) => FadeTransition(
+          opacity: anim,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1).animate(anim),
+            child: child,
           ),
-          const SizedBox(width: 5),
-          Text(
-            estLabel == null ? label : '$label · $estLabel',
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: color.withValues(alpha: 0.88),
+        ),
+        child: Row(
+          key: ValueKey('due_${overdue}_${label}_${estLabel ?? ''}'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              overdue ? Icons.warning_amber_rounded : Icons.schedule,
+              size: 13,
+              color: color.withValues(alpha: 0.85),
             ),
-          ),
-        ],
+            const SizedBox(width: 5),
+            Text(
+              estLabel == null ? label : '$label · $estLabel',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: color.withValues(alpha: 0.88),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

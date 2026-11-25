@@ -60,7 +60,10 @@ import 'overlay/ada_overlay.dart'
         AdaOverlayApp;
 import 'overlay/overlay_bridge.dart';
 import 'overlay/launch_intent.dart'
-    show listenOpenAdaChat, consumePendingOpenAdaChat, shouldOpenAdaChatOnLaunch;
+    show
+        listenOpenAdaChat,
+        consumePendingOpenAdaChat,
+        shouldOpenAdaChatOnLaunch;
 import 'widgets/ada_avatars.dart';
 import 'widgets/ai_guide.dart';
 import 'utils/page_transitions.dart';
@@ -855,6 +858,16 @@ Future<_StartupState> _loadStartupState() async {
         aiFloating.value = false;
       }
     }());
+  } else if (!kIsWeb) {
+    // Обратный случай: Аду убрали, а системное окно пузыря пережило
+    // перезапуск приложения (служба оверлея живёт сама по себе). Раньше
+    // оно так и висело поверх экрана «в фоне» — ровно этот баг. Гасим
+    // окно на старте, если режим «в окне» выключен.
+    unawaited(() async {
+      try {
+        await closeAdaOverlay();
+      } catch (_) {}
+    }());
   }
 
   // Данные старых версий переезжают в JSON-файлы до того, как их начнут
@@ -1162,12 +1175,14 @@ void _openAdaFromBubble() {
   // ровно то «нажим на пузырь и ничего не происходит».
   attempt();
   // А пузырь параллельно плавно растворяется: резкое исчезновение в
-  // момент подъёма приложения читалось как мигание.
+  // момент подъёма приложения читалось как мигание. Пауза = reverse пузыря
+  // (200 мс) плюс кадр запаса: окно закрывается уже погасшим, но не висит
+  // прозрачным поверх выезжающего чата лишние 200 мс, как раньше.
   unawaited(() async {
     try {
       await syncOverlayState({'cmd': 'fade_out'});
     } catch (_) {}
-    await Future<void>.delayed(const Duration(milliseconds: 220));
+    await Future<void>.delayed(const Duration(milliseconds: 210));
     try {
       await closeAdaOverlay();
     } catch (_) {}
@@ -1832,6 +1847,11 @@ class AgyshaAppState extends State<AgyshaApp>
     // (main app уже в resumed), поэтому нужен polling.
     aiFloating.addListener(_onAiFloatingChanged);
     if (aiFloating.value) _startOverlayCheck();
+    // Аду выключили в настройках — системное окошко обязано умереть вместе
+    // с пузырём. Раньше гасился только кружок у «+», а прозрачное окно
+    // оставалось поверх экрана: после возврата в приложение оно висело в
+    // фоне и перехватывало касания (разделы «не нажимались»).
+    SettingsService.aiGuideEnabled.addListener(_onAiGuideEnabledChanged);
     // platformDispatcher.locale may not be populated on the very first
     // build frame. Re-resolve once the first frame is drawn so the
     // "Phone language" (system) option picks up the real device locale
@@ -1879,6 +1899,17 @@ class AgyshaAppState extends State<AgyshaApp>
       _startOverlayCheck();
     } else {
       _stopOverlayCheck();
+      // Флаг «в окне» снят (пузырь убрали, чат открылся) — системное окно
+      // закрываем сразу, не дожидаясь опроса: иначе оно живёт своей жизнью.
+      if (!kIsWeb) unawaited(closeAdaOverlay());
+    }
+  }
+
+  /// Включили/выключили Аду в настройках. Выключили — снимаем «в окне» и
+  /// закрываем системный оверлей; включили — просто возвращаем пузырь.
+  void _onAiGuideEnabledChanged() {
+    if (!SettingsService.aiGuideEnabled.value) {
+      unawaited(disableAdaFloating());
     }
   }
 
@@ -1909,6 +1940,7 @@ class AgyshaAppState extends State<AgyshaApp>
     _stopOverlayCheck();
     _adaTrackTimer?.cancel();
     aiFloating.removeListener(_onAiFloatingChanged);
+    SettingsService.aiGuideEnabled.removeListener(_onAiGuideEnabledChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -1964,6 +1996,10 @@ class AgyshaAppState extends State<AgyshaApp>
         if (awayMs >= kRelockGrace.inMilliseconds) _goLock();
       }
       HabitService().normalizeIfDayChanged();
+      // Вернулись в приложение, а «в окне» уже выключено — закрываем
+      // системное окно Ады, если оно пережило уход в фон. Иначе оно висит
+      // поверх и глотает касания (таблетка разделов).
+      if (!aiFloating.value && !kIsWeb) unawaited(closeAdaOverlay());
       // В фоне тики таймеров замораживаются — при возврате пересчитываем
       // остаток по стенным часам, чтобы счётчик не отставал.
       TimerService().refreshFromClock();

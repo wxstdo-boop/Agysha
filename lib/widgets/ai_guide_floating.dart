@@ -730,13 +730,11 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                     ),
                   ),
                 ),
-                // Закрыть окошко (выключить режим).
+                // Закрыть окошко (выключить режим) — вместе с системным
+                // окном, иначе оно остаётся висеть поверх экрана.
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    aiFloating.value = false;
-                    globalPrefs.setBool('ai_floating', false);
-                  },
+                  onTap: () => unawaited(disableAdaFloating()),
                   child: Padding(
                     padding: const EdgeInsets.all(6),
                     child: Icon(

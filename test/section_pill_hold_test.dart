@@ -50,7 +50,11 @@ void main() {
       await gesture.moveBy(Offset(i.isEven ? -2 : 2, 0));
       await tester.pump(const Duration(milliseconds: 16));
     }
-    expect(sectionDragPage.value, before, reason: 'дрожание руки не двигает камень');
+    expect(
+      sectionDragPage.value,
+      before,
+      reason: 'дрожание руки не двигает камень',
+    );
     await gesture.up();
     await tester.pumpAndSettle();
   });
@@ -108,7 +112,8 @@ void main() {
     expect(
       first,
       greaterThan(stretched * 0.9),
-      reason: 'растяжка не должна пропадать в первом же кадре '
+      reason:
+          'растяжка не должна пропадать в первом же кадре '
           '(раньше захваченная тяга обнулялась на статусе forward)',
     );
     // И дальше ширина только уменьшается — форма «расслабляется» плавно.
@@ -123,80 +128,84 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('камень растягивается ПОД пальцем у края, не только на отпускании', (
-    tester,
-  ) async {
-    await pumpPill(tester);
-    double stoneWidth() {
-      final r = tester.getRect(
-        find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == '_GlassStone',
-        ),
+  testWidgets(
+    'камень растягивается ПОД пальцем у края, не только на отпускании',
+    (tester) async {
+      await pumpPill(tester);
+      double stoneWidth() {
+        final r = tester.getRect(
+          find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == '_GlassStone',
+          ),
+        );
+        return r.width;
+      }
+
+      // Покой в первом разделе — базовая ширина камня.
+      await tester.pump();
+      final rest = stoneWidth();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(SectionPill)),
       );
-      return r.width;
-    }
-
-    // Покой в первом разделе — базовая ширина камня.
-    await tester.pump();
-    final rest = stoneWidth();
-
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byType(SectionPill)),
-    );
-    await tester.pump();
-    // Тянем к правому краю, НЕ отпуская: камень должен растянуться уже под
-    // пальцем (жалоба «к углам не растягивается, только на отпускании»).
-    for (var i = 0; i < 24; i++) {
-      await gesture.moveBy(const Offset(16, 0));
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    final underFinger = stoneWidth();
-    expect(
-      underFinger,
-      greaterThan(rest),
-      reason: 'под пальцем у края камень обязан растянуться, а не ждать отпускания',
-    );
-    await gesture.up();
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('у края растяжка не «замирает» под пальцем и не скачет на отпускании', (
-    tester,
-  ) async {
-    await pumpPill(tester);
-    double stoneWidth() {
-      final r = tester.getRect(
-        find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == '_GlassStone',
-        ),
+      await tester.pump();
+      // Тянем к правому краю, НЕ отпуская: камень должен растянуться уже под
+      // пальцем (жалоба «к углам не растягивается, только на отпускании»).
+      for (var i = 0; i < 24; i++) {
+        await gesture.moveBy(const Offset(16, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final underFinger = stoneWidth();
+      expect(
+        underFinger,
+        greaterThan(rest),
+        reason:
+            'под пальцем у края камень обязан растянуться, а не ждать отпускания',
       );
-      return r.width;
-    }
+      await gesture.up();
+      await tester.pumpAndSettle();
+    },
+  );
 
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byType(SectionPill)),
-    );
-    await tester.pump();
-    // Дотягиваем до ПРАВОГО края рельса: страница упирается в предел и
-    // sectionDragPage перестаёт меняться. Раньше именно здесь камень
-    // «замирал» под пальцем, а на отпускании рывком прыгал в настоящее
-    // значение тяги.
-    for (var i = 0; i < 26; i++) {
-      await gesture.moveBy(const Offset(16, 0));
+  testWidgets(
+    'у края растяжка не «замирает» под пальцем и не скачет на отпускании',
+    (tester) async {
+      await pumpPill(tester);
+      double stoneWidth() {
+        final r = tester.getRect(
+          find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == '_GlassStone',
+          ),
+        );
+        return r.width;
+      }
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(SectionPill)),
+      );
+      await tester.pump();
+      // Дотягиваем до ПРАВОГО края рельса: страница упирается в предел и
+      // sectionDragPage перестаёт меняться. Раньше именно здесь камень
+      // «замирал» под пальцем, а на отпускании рывком прыгал в настоящее
+      // значение тяги.
+      for (var i = 0; i < 26; i++) {
+        await gesture.moveBy(const Offset(16, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final before = stoneWidth();
+      await gesture.up();
       await tester.pump(const Duration(milliseconds: 16));
-    }
-    final before = stoneWidth();
-    await gesture.up();
-    await tester.pump(const Duration(milliseconds: 16));
-    final first = stoneWidth();
-    expect(
-      (first - before).abs(),
-      lessThan(0.02 * before),
-      reason: 'на отпускании форма не должна прыгать: под пальцем растяжка '
-          'уже доехала до того же значения',
-    );
-    await tester.pumpAndSettle();
-  });
+      final first = stoneWidth();
+      expect(
+        (first - before).abs(),
+        lessThan(0.02 * before),
+        reason:
+            'на отпускании форма не должна прыгать: под пальцем растяжка '
+            'уже доехала до того же значения',
+      );
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('растяжка нарастает без скачка в начале тяги', (tester) async {
     await pumpPill(tester);
@@ -246,5 +255,29 @@ void main() {
     );
     await gesture.up();
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('под выбранным разделом видна подвижная подложка', (
+    tester,
+  ) async {
+    await pumpPill(tester);
+    // Регрессия: одно время здесь стояла пустая заглушка, и после тапов
+    // подпись перекрашивалась, а фона под разделом не было вовсе —
+    // «фон не появляется».
+    final stone = find.byWidgetPredicate(
+      (w) => w.runtimeType.toString() == '_GlassStone',
+    );
+    expect(stone, findsOneWidget);
+    final box = tester.widget<DecoratedBox>(
+      find.descendant(of: stone, matching: find.byType(DecoratedBox)),
+    );
+    final deco = box.decoration as BoxDecoration;
+    expect(
+      deco.gradient,
+      isNotNull,
+      reason: 'подложка должна быть залита, а не прозрачна',
+    );
+    expect(deco.borderRadius, isNotNull);
+    expect(deco.boxShadow, isNotNull);
   });
 }

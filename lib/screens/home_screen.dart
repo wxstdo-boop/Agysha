@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart'
     show ValueListenable, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import '../services/haptics.dart';
@@ -55,11 +57,15 @@ class _HomeScreenState extends State<HomeScreen>
   late final AnimationController _pillSnapCtrl;
   Animation<double>? _pillSnapAnimation;
   bool _pillSnapActive = false;
+
   /// Раздел, выбранный ТАПОМ по таблетке и ещё не достигнутый. Пока он не
   /// null, `_onPageChanged` не перебивает выбор промежуточными страницами
   /// (перелёт 0 → 3 проезжает 1 и 2): иначе подсветка раздела и заголовок
   /// мигали соседями, а тап читался как «переключился не туда».
   int? _tapTarget;
+
+  /// Страховка выбора раздела (см. [_armTapWatchdog]).
+  Timer? _tapWatchdog;
 
   // Плавный перелёт разделов пружиной: повторный тап по другой вкладке лишь
   // МЕНЯЕТ ЦЕЛЬ, а движение продолжается с текущей скоростью. Было: каждый
@@ -213,6 +219,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     _dragHold?.cancel();
+    _tapWatchdog?.cancel();
     _dragHold = null;
     WidgetsBinding.instance.removeObserver(this);
     sectionPillSnapTarget.removeListener(_onPillSnapTarget);
@@ -418,6 +425,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _onSpringSettled() {
     _tapTarget = null;
+    _tapWatchdog?.cancel();
     if (!mounted || !_pageController.hasClients) return;
     final page = _pageController.page;
     if (page == null || !page.isFinite) return;
@@ -425,9 +433,7 @@ class _HomeScreenState extends State<HomeScreen>
     _lastSettledPage = settled;
     if (_currentIndex.value != settled) _currentIndex.value = settled;
     sectionScrollOffset.value =
-        sectionPillSnapByPage[settled] ??
-        sectionOffsetByPage[settled] ??
-        0;
+        sectionPillSnapByPage[settled] ?? sectionOffsetByPage[settled] ?? 0;
     sectionPillVisible.value = sectionScrollOffset.value <= 8;
     globalPrefs.setInt('last_home_tab', settled);
   }
@@ -499,6 +505,25 @@ class _HomeScreenState extends State<HomeScreen>
     return false;
   }
 
+  /// Страховка от «разделы перестали работать»: если пружина почему-то не
+  /// довела карусель (тикер приглушён, позиция отцепилась, кадр потерялся),
+  /// через 900 мс дожимаем цель одним кадром и снимаем застрявший выбор.
+  void _armTapWatchdog(int index) {
+    _tapWatchdog?.cancel();
+    _tapWatchdog = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted || !_pageController.hasClients) return;
+      final page = _pageController.page;
+      if (page == null || !page.isFinite) return;
+      if ((page - index).abs() <= 0.02) {
+        if (_tapTarget != null) _onSpringSettled();
+        return;
+      }
+      _pageSpring.stop();
+      _pageController.jumpToPage(index);
+      _onSpringSettled();
+    });
+  }
+
   void _onTabTap(int index) {
     if (!_pageController.hasClients) {
       // Карусель ещё не отрисована: цель тапа держать некому, и она
@@ -506,6 +531,7 @@ class _HomeScreenState extends State<HomeScreen>
       _tapTarget = null;
       return;
     }
+    _armTapWatchdog(index);
     final fromPage = _pageController.hasClients
         ? (_pageController.page ?? _currentIndex.value.toDouble())
         : _currentIndex.value.toDouble();
@@ -572,30 +598,21 @@ class _HomeScreenState extends State<HomeScreen>
         index: 0,
         page: _railPage,
         child: RepaintBoundary(
-          child: AlarmsScreen(
-            scrollOffset: sectionScrollOffset,
-            pillIndex: 0,
-          ),
+          child: AlarmsScreen(scrollOffset: sectionScrollOffset, pillIndex: 0),
         ),
       ),
       _PageTickerGate(
         index: 1,
         page: _railPage,
         child: RepaintBoundary(
-          child: HabitsScreen(
-            scrollOffset: sectionScrollOffset,
-            pillIndex: 1,
-          ),
+          child: HabitsScreen(scrollOffset: sectionScrollOffset, pillIndex: 1),
         ),
       ),
       _PageTickerGate(
         index: 2,
         page: _railPage,
         child: RepaintBoundary(
-          child: TasksScreen(
-            scrollOffset: sectionScrollOffset,
-            pillIndex: 2,
-          ),
+          child: TasksScreen(scrollOffset: sectionScrollOffset, pillIndex: 2),
         ),
       ),
       if (rcOn)
@@ -651,9 +668,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(
-                      alpha: dark ? 0.14 : 0.04,
-                    ),
+                    color: Colors.black.withValues(alpha: dark ? 0.14 : 0.04),
                     blurRadius: 4,
                     offset: const Offset(0, 1),
                   ),
@@ -669,11 +684,7 @@ class _HomeScreenState extends State<HomeScreen>
                   highlightColor: cs.primary.withValues(alpha: 0.16),
                   onTap: onTap,
                   child: Center(
-                    child: Icon(
-                      icon,
-                      size: 20,
-                      color: cs.onSurfaceVariant,
-                    ),
+                    child: Icon(icon, size: 20, color: cs.onSurfaceVariant),
                   ),
                 ),
               ),
