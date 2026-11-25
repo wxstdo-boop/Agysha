@@ -92,6 +92,8 @@ const Map<String, String> _fr = {
       'La version ne fournit pas de SHA-256 valide. Installation annulée.',
   'updateInstalled': 'Mis à jour vers v{v}',
   'updateAvailable': 'Mise à jour disponible',
+  'updateNoticeAction': 'Mettre à jour',
+  'updateDownloading': 'Téléchargement de la mise à jour…',
   'updateAvailableBody': 'Installer la v{v} ?',
   'install': 'Installer',
   'updateInstallBlocked':

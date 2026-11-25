@@ -88,6 +88,8 @@ const Map<String, String> _ru = {
   'updateHashMissing': 'У релиза нет корректного SHA-256. Установка отменена.',
   'updateInstalled': 'Обновлено до v{v}',
   'updateAvailable': 'Доступно обновление',
+  'updateNoticeAction': 'Обновить',
+  'updateDownloading': 'Скачиваю обновление…',
   'updateAvailableBody': 'Установить v{v}?',
   'install': 'Установить',
   'updateInstallBlocked':

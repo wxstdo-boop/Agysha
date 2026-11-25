@@ -86,6 +86,8 @@ const Map<String, String> _en = {
       'The release has no valid SHA-256 digest. Installation was cancelled.',
   'updateInstalled': 'Updated to v{v}',
   'updateAvailable': 'Update available',
+  'updateNoticeAction': 'Update',
+  'updateDownloading': 'Downloading update…',
   'updateAvailableBody': 'Install v{v}?',
   'install': 'Install',
   'updateInstallBlocked':

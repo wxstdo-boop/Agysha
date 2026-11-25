@@ -70,6 +70,7 @@ import 'utils/page_transitions.dart';
 import 'utils/snackbar.dart';
 import 'utils/jank_probe.dart';
 import 'services/update_service.dart';
+import 'services/update_notice.dart';
 import 'services/installer.dart';
 import 'services/app_version.dart';
 export 'services/backup_service.dart';
@@ -387,6 +388,16 @@ void _watchInstallOutcome() {
 }
 
 bool _watchingInstallOutcome = false;
+
+/// Тихая проверка обновлений, а затем плашка «вышла новая версия».
+///
+/// [announce] выключают на заблокированном экране: плашка живёт в оверлее
+/// выше маршрутов и легла бы поверх запроса PIN. Такую версию озвучиваем
+/// уже после разблокировки (см. `unlock`).
+Future<void> _checkUpdates({bool announce = true}) async {
+  await UpdateService.instance.silentDailyCheck();
+  if (announce) await UpdateNotice.instance.announce(pendingUpdate.value);
+}
 
 /// Догоняет загрузку обновления, пережившую перезапуск приложения.
 ///
@@ -1364,7 +1375,8 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
   // релиз новее, таблетка в Настройках сразу предложит обновиться.
   // В сборке для F-Droid самообновление выключено — проверку не запускаем.
   if (kSelfUpdateEnabled) {
-    unawaited(UpdateService.instance.silentDailyCheck());
+    // Плюс плашка «вышла новая версия» — но не поверх запроса PIN.
+    unawaited(_checkUpdates(announce: !ready.hasPin));
     // Слушаем итог самообновления: успех показываем «обновлено», а отказ
     // системы (Play Protect и т. п.) — понятной подсказкой. В F-Droid
     // самообновления нет, поэтому и слушатель не нужен.
@@ -1829,6 +1841,13 @@ class AgyshaAppState extends State<AgyshaApp>
       _locked = false;
     });
     _goSplash();
+    // Обновление, найденное до блокировки (в том числе при старте, пока
+    // экран был закрыт PIN), сообщаем уже на разблокированном экране.
+    // Проверка внутри держит суточный интервал — повторного запроса к API
+    // при каждом разблокировании не будет.
+    if (kSelfUpdateEnabled) {
+      unawaited(_checkUpdates());
+    }
   }
 
   @override
@@ -2030,6 +2049,11 @@ class AgyshaAppState extends State<AgyshaApp>
       // Ада-трекинг: догоняем пропущенный отчёт (приложение лежало в фоне)
       // и перезаводим таймер на ближайшие 08:00/21:00.
       unawaited(_adaTrackTick());
+      // Пока приложение лежало в фоне, мог выйти новый релиз: проверка
+      // сама держит суточный интервал, а плашка — одну на версию.
+      if (kSelfUpdateEnabled) {
+        unawaited(_checkUpdates(announce: !_locked));
+      }
       unawaited(_scheduleAdaTrackingNotifs());
       // Автоэкспорт «догоняет» пропущенный час, пока приложение было
       // закрыто или в фоне — Dart-таймер там не срабатывает.
