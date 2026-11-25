@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/haptics.dart';
 import '../utils/design_tokens.dart';
 import 'itshnik_theme.dart';
+import 'resident_theme.dart';
 
 /// Единый построитель темы приложения.
 ///
@@ -68,6 +69,7 @@ ThemeData buildAgyshaTheme(
   ItshnikFont itshnikFont = ItshnikFont.pixel,
 }) {
   final isItshnik = themeKey == ItshnikPalette.key;
+  final isResident = themeKey == ResidentPalette.key;
   final appFontFamily = isItshnik
       ? itshnikFont.text
       : (fontFamily == 'caveat' ? 'Caveat' : null);
@@ -279,5 +281,9 @@ ThemeData buildAgyshaTheme(
   // Эксклюзивная тема «IT-шник» донашивает общий каркас и меняет только то,
   // что делает её собой: пиксельные шрифты, жёсткие углы, свечение и
   // блочный плеск нажатия.
-  return isItshnik ? applyItshnikTheme(base, font: itshnikFont) : base;
+  if (isItshnik) return applyItshnikTheme(base, font: itshnikFont);
+  // «Резидент» донашивает тот же каркас: меняются углы, рамки, типографика
+  // HUD и плеск нажатия, палитра приходит из ResidentPalette.scheme.
+  if (isResident) return applyResidentTheme(base);
+  return base;
 }

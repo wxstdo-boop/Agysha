@@ -30,12 +30,14 @@ extension _SettingsSectionTop on _SettingsScreenState {
             // «IT-шник» — отдельная кнопка под барабаном, а не его камора:
             // пока тема включена, барабан не показываем вовсе, чтобы он не
             // подсвечивал чужую камору как выбранную.
-            if (appState.themeKey == ItshnikPalette.key)
-              _ItshnikCarouselPause()
+            if (SettingsService.exclusiveThemeKeys.contains(appState.themeKey))
+              _ItshnikCarouselPause(themeKey: appState.themeKey)
             else
               _buildThemeCarousel(context),
             const SizedBox(height: 14),
-            _buildItshnikButton(context, appState),
+            // Обе эксклюзивные темы — одной строкой: две плитки-прямоугольника
+            // рядом, а не два отдельных ряда настроек.
+            _buildExclusiveThemesRow(context, appState),
             if (appState.themeKey == ItshnikPalette.key) ...[
               const SizedBox(height: 14),
               _buildItshnikStylePanel(context, appState),

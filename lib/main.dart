@@ -18,7 +18,10 @@ import 'widgets/mutilated_overlay.dart';
 import 'widgets/metel_overlay.dart';
 import 'widgets/itshnik_overlay.dart';
 import 'widgets/itshnik_tap_effects.dart';
+import 'widgets/resident_overlay.dart';
+import 'widgets/resident_tap_effects.dart';
 import 'theme/itshnik_theme.dart';
+import 'theme/resident_theme.dart';
 import 'l10n/locale_provider.dart';
 import 'l10n/translations.dart';
 import 'services/pin_service.dart';
@@ -1877,7 +1880,8 @@ class AgyshaAppState extends State<AgyshaApp>
         // светлая.
         return ThemeMode.light;
       case ItshnikPalette.key:
-        // «IT-шник» — эксклюзивная тема-терминал, всегда тёмная.
+      case ResidentPalette.key:
+        // Эксклюзивные темы («IT-шник», «Резидент») всегда тёмные.
         return ThemeMode.dark;
       default:
         return ThemeMode.system;
@@ -2608,6 +2612,9 @@ class AgyshaAppState extends State<AgyshaApp>
                 if (_themeKey == ItshnikPalette.key) {
                   return ItshnikPalette.schemeFor(_itshnikVariant);
                 }
+                if (_themeKey == ResidentPalette.key) {
+                  return ResidentPalette.scheme;
+                }
                 if (_themeKey == 'oled') {
                   return const ColorScheme.dark(
                     primary: Color(0xFFFF5252),
@@ -2878,6 +2885,14 @@ class AgyshaAppState extends State<AgyshaApp>
                             wallpaperIsVideo: _itshnikWallpaperIsVideo,
                             child: const SizedBox.expand(),
                           ),
+                        // Фон «Резидента» — корпоративный терминал: гексагоны,
+                        // ленты алого шёлка и скан-линия под прозрачными
+                        // экранами темы.
+                        if (_themeKey == ResidentPalette.key)
+                          const ResidentBackdrop(
+                            key: ValueKey('resident_backdrop'),
+                            child: SizedBox.expand(),
+                          ),
                         // Контент (Navigator) — всегда ОДИН слой, без анимации:
                         // раньше AnimatedSwitcher оборачивал и контент, и пятна,
                         // поэтому при смене темы ВЕСЬ экран «вспыхивал» (fade
@@ -2891,6 +2906,12 @@ class AgyshaAppState extends State<AgyshaApp>
                           ItshnikTapEffects(
                             key: const ValueKey('itshnik_tap_effects'),
                             variant: _itshnikVariant,
+                          ),
+                        // Прицел «Резидента»: гексагональное кольцо, засечки
+                        // по осям и «захват цели» в точке нажатия.
+                        if (_themeKey == ResidentPalette.key)
+                          const ResidentTapEffects(
+                            key: ValueKey('resident_tap_effects'),
                           ),
                         // Пятна крови темы MUTILATED — ОТДЕЛЬНЫЙ слой поверх
                         // Navigator (включая drag-прокси при перетаскивании).

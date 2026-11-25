@@ -547,9 +547,11 @@ Play Protect, file an appeal», support.google.com/googleplay/answer/2812853).
   включена, барабан заменён заглушкой-пояснением. Причина —
   `_indexOfKey()` в `settings_theme_carousel.dart` возвращает 0 для
   незнакомого ключа, и барабан «выбрал» бы первую камору.
-- Кнопка помнит, откуда пришли: pref `theme_before_itshnik`
-  (`SettingsService.loadThemeBeforeItshnik/saveThemeBeforeItshnik`), и
-  выключение возвращает прежнюю тему, а не системную.
+- Плитки помнят, откуда пришли: pref `theme_before_<ключ темы>`
+  (`SettingsService.loadThemeBeforeExclusive/saveThemeBeforeExclusive`), и
+  выключение возвращает прежнюю тему, а не системную. Ключ у каждой
+  эксклюзивной темы свой: переключение IT-шник → Резидент не должно
+  возвращать в IT-шник. Список «эксклюзивов» — `SettingsService.exclusiveThemeKeys`.
 - **Фон лежит ПОД интерфейсом.** `ItshnikBackdrop` — самый нижний слой
   стека в `main.dart`, а `scaffoldBackgroundColor` у темы прозрачный:
   иначе непрозрачный градиент/сетка закрыли бы весь UI (реальный баг при
@@ -560,6 +562,24 @@ Play Protect, file an appeal», support.google.com/googleplay/answer/2812853).
   `assets/fonts/` вместе с текстами лицензий; VT323 не годится — без
   кириллицы. Постобработка темы — `applyItshnikTheme(base)` в
   `lib/theme/itshnik_theme.dart`, отклик нажатия — `ItshnikSplash`.
+
+## Эксклюзивная тема «Резидент» (Resident Evil + Ада Вонг)
+
+- Ключ `'resident'` (`ResidentPalette.key`), палитра и постобработка —
+  `lib/theme/resident_theme.dart` (`blood`, `brass`, `steel`, `ink`,
+  `applyResidentTheme`, `ResidentSplash`). Экраны прозрачные: фон
+  `ResidentBackdrop` (`lib/widgets/resident_overlay.dart`) — нижний слой
+  стека в `main.dart`, как у IT-шника; отклик нажатий —
+  `ResidentTapEffects` (`lib/widgets/resident_tap_effects.dart`).
+- **Обе эксклюзивные плитки — ОДНА строка.** `ExclusiveThemesRow`
+  (`lib/widgets/exclusive_theme_tiles.dart`) кладёт два равных
+  прямоугольника в `Row`, высота по умолчанию 104; отдельные плитки на
+  всю ширину больше не добавлять — владелец просил не занимать два ряда.
+  Активная плитка помечена `Semantics(selected: true)`.
+- `applyResidentTheme` вызывается из `buildAgyshaTheme` по `themeKey`,
+  `ThemeMode` — всегда тёмный. Новую эксклюзивную тему заводить теми же
+  тремя файлами (палитра / фон / эффекты) + ветка в `settings_service.dart`
+  и `exclusiveThemeKeys`.
 
 ## Токены дизайна и движение
 

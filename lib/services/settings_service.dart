@@ -90,6 +90,11 @@ class SettingsService {
       // молча откатывалась бы на системную.
       case 'itshnik':
         return 'itshnik';
+      // «Резидент» (Resident Evil + Ада Вонг) — вторая эксклюзивная тема, та
+      // же отдельная кнопка. Без ветки она после перезапуска откатывалась бы
+      // на системную.
+      case 'resident':
+        return 'resident';
       default:
         // Без явного выбора — СИСТЕМНАЯ тема (обои/Material You), а не Grok:
         // у Grok primary почти чёрный, и таблетка/переключатели выглядели
@@ -98,25 +103,32 @@ class SettingsService {
     }
   }
 
-  static const _keyThemeBeforeItshnik = 'theme_before_itshnik';
+  /// Ключ «откуда ушёл» — свой у каждой эксклюзивной темы: переключение
+  /// IT-шник → Резидент не должно заставлять «Резидент» возвращать IT-шник.
+  static String _themeBeforeKey(String themeKey) => 'theme_before_$themeKey';
 
-  /// Тема, которая стояла до включения «IT-шника»: выключили эксклюзивную —
+  /// Ключи эксклюзивных тем: их нельзя запоминать как «прежнюю тему».
+  static const Set<String> exclusiveThemeKeys = {'itshnik', 'resident'};
+
+  /// Тема, которая стояла до включения эксклюзивной темы: выключили её —
   /// человек возвращается туда, откуда пришёл, а не в случайную «тёмную».
-  static Future<String> loadThemeBeforeItshnik() async {
+  static Future<String> loadThemeBeforeExclusive(String themeKey) async {
+    final key = _themeBeforeKey(themeKey);
     final map = await _loadSettings();
-    final value =
-        map[_keyThemeBeforeItshnik] as String? ??
-        globalPrefs.getString(_keyThemeBeforeItshnik);
-    if (value == null || value.isEmpty || value == 'itshnik') return 'dark';
+    final value = map[key] as String? ?? globalPrefs.getString(key);
+    if (value == null || value.isEmpty || exclusiveThemeKeys.contains(value)) {
+      return 'dark';
+    }
     return value;
   }
 
   /// Пишется в ту же очередь, что и тема: кнопка сохраняет «откуда ушёл»
   /// и сразу переключает тему, иначе две записи могли обогнать друг друга.
-  static Future<void> saveThemeBeforeItshnik(String mode) {
+  static Future<void> saveThemeBeforeExclusive(String themeKey, String mode) {
+    final key = _themeBeforeKey(themeKey);
     _themeWrites = _themeWrites.then((_) async {
       final map = await _loadSettings();
-      map[_keyThemeBeforeItshnik] = mode;
+      map[key] = mode;
       await _saveSettings(map);
     });
     return _themeWrites;

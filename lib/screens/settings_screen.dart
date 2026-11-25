@@ -19,7 +19,6 @@ import '../widgets/ada_icon.dart';
 import '../widgets/settings_search_icon.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/robot_glyph.dart';
-import '../widgets/itshnik_mita.dart';
 import '../services/alarm_service.dart';
 import '../services/app_version.dart';
 import '../services/renderer_service.dart';
@@ -58,6 +57,8 @@ import 'changelog_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import '../widgets/agysha_confirm_dialog.dart';
+import '../widgets/exclusive_theme_tiles.dart';
+import '../theme/resident_theme.dart';
 
 part 'settings_components.dart';
 part 'settings_permissions.dart';
