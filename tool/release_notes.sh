@@ -142,6 +142,10 @@ for raw in sys.stdin:
     if len(text) > 140:
         cut = text[:140]
         text = cut.rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
+    elif text.endswith((",", ";")):
+        # Перенесённый пункт тела приходит без второй половины: висящая
+        # запятая выдаёт обрубок, лучше честное многоточие.
+        text = text[:-1].rstrip() + "…"
     text = text[0].upper() + text[1:]
     low = text.lower()
     emoji = "✨"
