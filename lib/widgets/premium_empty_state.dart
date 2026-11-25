@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'press_scale.dart';
+import 'section_pill.dart' show kSectionPillSlotHeight;
 
 /// Внешний отступ карточки пустого состояния — один на привычки, задачи и
 /// будильники: 16 по бокам (общая сетка страницы), 12 сверху и 32 снизу.
@@ -207,6 +208,27 @@ class PremiumEmptyState extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [header, paddedCard],
+    );
+  }
+}
+
+/// Единая обёртка пустого состояния раздела — привычки, задачи, будильники
+/// используют именно её, поэтому карточка во всех трёх стоит в одном и том
+/// же месте: тот же слот под таблетку разделов, тот же отступ до карточки.
+/// Скролл нужен для pull-to-refresh и для низких экранов, где карточка выше
+/// свободного места.
+class SectionEmptyState extends StatelessWidget {
+  final Widget child;
+
+  const SectionEmptyState({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      key: const ValueKey('empty_state'),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.only(top: kSectionPillSlotHeight + 8),
+      child: child,
     );
   }
 }

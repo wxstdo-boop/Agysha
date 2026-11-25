@@ -102,16 +102,21 @@ const Map<String, String> _fr = {
   'open': 'Ouvrir',
   'patchNotes': 'Notes de mise à jour',
   'changelogDetailedTitle': 'Journal détaillé',
-  'changelogDetailedSubtitle': 'Toutes les versions et tous les points, sans filtre',
-  'changelogDetailedHint': 'Toutes les versions et tous les points, sans filtre',
+  'changelogDetailedSubtitle':
+      'Toutes les versions et tous les points, sans filtre',
+  'changelogDetailedHint':
+      'Toutes les versions et tous les points, sans filtre',
   'itshnikOn': 'ON',
   'itshnikOff': 'OFF',
   'itshnikOnHint': 'Thème activé · touchez pour désactiver',
-  'itshnikOffHint': 'Un terminal sombre à la MiSide : pixels, phosphore, effets propres',
-  'itshnikCarouselPaused': 'Carrousel en pause : le thème exclusif « IT-шник » est actif. Désactivez-le ci-dessous pour choisir un thème.',
+  'itshnikOffHint':
+      'Un terminal sombre à la MiSide : pixels, phosphore, effets propres',
+  'itshnikCarouselPaused':
+      'Carrousel en pause : le thème exclusif « IT-шник » est actif. Désactivez-le ci-dessous pour choisir un thème.',
   'soon': 'Bientôt',
   'noAlarms': 'Aucune alarme pour l’instant',
   'noHabits': 'Aucune habitude pour l’instant',
+  'showAllTasks': 'Afficher toutes les tâches',
   'noTasks': 'Aucune tâche pour l’instant',
   'noRealityChecks': 'Aucune vérification de réalité pour l’instant',
   'emptyAlarmHint': 'Créez un rythme doux pour votre journée en une minute.',
@@ -707,7 +712,8 @@ const Map<String, String> _fr = {
   'testerTestNotification': 'Notification de test',
   'testerTestNotificationSent': 'Notification envoyée',
   'testerTestNotificationTitle': 'Vérification des notifications',
-  'testerTestNotificationBody': 'Si vous voyez ceci, les notifications fonctionnent.',
+  'testerTestNotificationBody':
+      'Si vous voyez ceci, les notifications fonctionnent.',
   'actionLogTitle': 'Journal des actions',
   'actionLogSubtitle':
       'Désactivé par défaut : le journal s’écrit seulement quand il est actif',

@@ -256,16 +256,12 @@ class _ItshnikGlyph extends StatelessWidget {
         border: Border.all(color: phosphor.withValues(alpha: 0.4)),
       ),
       alignment: Alignment.center,
-      child: Text(
-        active ? '>_' : r'$_',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontFamily: 'ItsDigits',
-          fontSize: 18,
-          height: 1,
-          letterSpacing: 0.5,
-          color: phosphor.withValues(alpha: active ? 1 : 0.55),
-        ),
+      // Портрет Миты вместо терминального глифа: тема узнаётся по лицу.
+      // Выключенная — «спит», включённая — подмигивает.
+      child: MitaFace(
+        size: 40,
+        mood: active ? MitaMood.wink : MitaMood.sleepy,
+        opacity: active ? 1 : 0.5,
       ),
     );
   }

@@ -101,11 +101,14 @@ const Map<String, String> _en = {
   'itshnikOn': 'ON',
   'itshnikOff': 'OFF',
   'itshnikOnHint': 'Theme is on · tap to turn off',
-  'itshnikOffHint': 'A dark MiSide-flavoured terminal: pixels, phosphor, its own effects',
-  'itshnikCarouselPaused': 'Carousel paused: the exclusive “IT-шник” theme is on. Turn it off below to pick a theme.',
+  'itshnikOffHint':
+      'A dark MiSide-flavoured terminal: pixels, phosphor, its own effects',
+  'itshnikCarouselPaused':
+      'Carousel paused: the exclusive “IT-шник” theme is on. Turn it off below to pick a theme.',
   'soon': 'Soon',
   'noAlarms': 'No alarms yet',
   'noHabits': 'No habits yet',
+  'showAllTasks': 'Show all tasks',
   'noTasks': 'No tasks yet',
   'noRealityChecks': 'No reality checks yet',
   'emptyAlarmHint': 'Set a gentle rhythm for your day in one minute.',

@@ -3,7 +3,6 @@ import 'dart:math';
 import '../services/haptics.dart';
 import '../services/sounds.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 
 import '../models/habit.dart';
@@ -858,13 +857,7 @@ class _HabitsScreenState extends State<HabitsScreen>
                                   // PremiumEmptyState). Скролл нужен и для
                                   // pull-to-refresh на пустом экране, и чтобы
                                   // карточка не обрезалась на низком экране.
-                                  : SingleChildScrollView(
-                                      key: const ValueKey('empty_state'),
-                                      physics:
-                                          const AlwaysScrollableScrollPhysics(),
-                                      padding: const EdgeInsets.only(
-                                        top: kSectionPillSlotHeight + 8,
-                                      ),
+                                  : SectionEmptyState(
                                       child: _buildEmpty(context, theme),
                                     ),
                             ),

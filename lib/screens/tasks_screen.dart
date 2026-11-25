@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import 'dart:async';
 import '../services/haptics.dart';
@@ -70,12 +69,6 @@ class _TasksScreenState extends State<TasksScreen>
     duration: const Duration(milliseconds: 280),
     value: 1,
   );
-  late final Animation<double> _revealFade = Tween<double>(
-    // Начинаем не с нуля: если пользователь тапает по категориям подряд,
-    // список не «пропадает в пустоту», а лишь мягко подсвечивается.
-    begin: 0.35,
-    end: 1.0,
-  ).animate(CurvedAnimation(parent: _reveal, curve: Curves.easeOut));
   late final Animation<Offset> _revealSlide = Tween<Offset>(
     begin: const Offset(0, 0.02),
     end: Offset.zero,
@@ -544,8 +537,8 @@ class _TasksScreenState extends State<TasksScreen>
           }).toList();
           return Scaffold(
             // Без своего AppBar: белая полоса под таблеткой убрана.
-            // Карусель категорий лежит в header'е списка/пустого состояния —
-            // листается вместе с содержимым, а не стоит фиксированной полосой.
+            // Карусель категорий лежит в header'е списка — листается вместе
+            // с содержимым, а не стоит фиксированной полосой.
             // Прозрачный фон: общая «skin»-подложка Home уже стоит ПОД
             // PageView — разделы показывают ОДНУ ту же поверхность, которая
             // «задвигается» при прокрутке (а не дорисовывает свой белый блок
@@ -555,10 +548,9 @@ class _TasksScreenState extends State<TasksScreen>
               visible: sectionPillVisible,
               child: FabScrollListener(
                 visible: _fabVisible,
-                // ОДИН и тот же скролл-вью для списка и для пустого состояния
-                // (пустое состояние — это 0 задач + карточка в header'е).
-                // Поэтому карусель категорий живёт в дереве постоянно и при
-                // переходе «непусто → пусто» не пересоздаётся.
+                // Пустое состояние — отдельный скролл с той же обёрткой, что
+                // в привычках и будильниках (SectionEmptyState): карточка
+                // стоит в одном и том же месте трёх разделов.
                 child: RepaintBoundary(
                   key: const ValueKey('tasks_scroll_view'),
                   // До загрузки данных — пустота: кадр пустого состояния,
@@ -575,53 +567,18 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  /// Карточка пустого состояния (та же, что в [PremiumEmptyState]) — но как
-  /// обычный блок ВНУТРИ скролла: без Expanded и без своего скролла.
-  /// Отступ — общий kEmptyStatePadding (16 по бокам, 12 сверху, 32 снизу):
-  /// ровно те же значения даёт PremiumEmptyState в привычках и будильниках.
-  Widget _buildEmptyCard(BuildContext context, ThemeData theme) {
-    return Padding(
-      padding: kEmptyStatePadding,
-      child: Center(
-        child: PremiumEmptyCard(
-          icon: Icons.task_alt_outlined,
-          title: Translations.noTasksOf(context),
-          hint: Translations.t('emptyTaskHint', context),
-          advice: Translations.t('emptyTaskAdvice', context),
-          actionLabel: Translations.t('newTask', context),
-          accent: const Color(0xFF5E8FB5),
-          onPressed: () {
-            Haptics.light();
-            _addTask();
-          },
-        ),
-      ),
-    );
-  }
-
-  /// Header скролла: карусель категорий всегда, а под ней — карточка пустого
-  /// состояния (только когда задач нет). Структура одна и та же, поэтому
-  /// карусель НЕ пересоздаётся при переходе «непусто ↔ пусто».
-  /// Зазор до первой карточки одинаковый в обоих случаях и равен 12: у
-  /// пустой карточки его даёт kEmptyStatePadding, у списка — явный слот ниже.
-  Widget _buildHeader(BuildContext context, ThemeData theme, bool empty) {
+  /// Header списка: карусель категорий, а под ней — зазор 12 до первой
+  /// карточки. Пустой экран карусель не показывает (выбирать не из чего):
+  /// он идёт отдельной веткой в [_buildScrollList].
+  Widget _buildHeader(BuildContext context, ThemeData theme) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildCategoryHeader(context, theme),
-        if (empty)
-          FadeTransition(
-            opacity: _revealFade,
-            child: SlideTransition(
-              position: _revealSlide,
-              child: _buildEmptyCard(context, theme),
-            ),
-          )
-        else
-          // Тот же зазор до первой карточки списка, что даёт
-          // kEmptyStatePadding пустому состоянию — 12.
-          const SizedBox(height: 12),
+        // Тот же зазор до первой карточки списка, что даёт
+        // kEmptyStatePadding пустому состоянию — 12.
+        const SizedBox(height: 12),
       ],
     );
   }
@@ -726,7 +683,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  /// Единственный скролл раздела задач: и для списка, и для пустого состояния.
+  /// Скролл раздела задач: пустое состояние отдельной веткой, иначе список.
   /// Сам список — [SliverReorderableList] внутри [CustomScrollView]: элементы
   /// строятся лениво, только видимые, поэтому прокрутка остаётся плавной и с
   /// десятками задач.
@@ -744,6 +701,46 @@ class _TasksScreenState extends State<TasksScreen>
     List<Task> all,
   ) {
     final empty = tasks.isEmpty;
+    // Пустое состояние — ТА ЖЕ обёртка, что в привычках и будильниках:
+    // карточка стоит в одном и том же месте трёх разделов. Карусель
+    // категорий на пустом экране не нужна (выбирать не из чего); если
+    // пользователь отфильтровал пустую категорию, под карточкой есть
+    // возврат ко всем задачам.
+    if (empty) {
+      return SectionEmptyState(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PremiumEmptyState(
+              icon: Icons.task_alt_outlined,
+              title: Translations.noTasksOf(context),
+              hint: Translations.t('emptyTaskHint', context),
+              advice: Translations.t('emptyTaskAdvice', context),
+              actionLabel: Translations.t('newTask', context),
+              accent: const Color(0xFF5E8FB5),
+              onPressed: () {
+                Haptics.light();
+                _addTask();
+              },
+            ),
+            if (_filter != '')
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: TextButton(
+                  onPressed: () => _setFilter(''),
+                  child: Text(
+                    Translations.t(
+                      'showAllTasks',
+                      context,
+                      'Показать все задачи',
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
     // Архивная полка живёт ТОЛЬКО в «Все»: в пользовательской категории
     // список не делится, выполненные остаются в общем порядке. Иначе в
     // отдельной категории появлялась полка «Архивные», которой там быть не
@@ -814,12 +811,10 @@ class _TasksScreenState extends State<TasksScreen>
       physics: const AlwaysScrollableScrollPhysics(),
       scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
       slivers: [
-        // Таблетка разделов + карусель категорий (+ карточка пустого
-        // состояния, если задач нет) — первый (непереставляемый) элемент
-        // списка: листаются вместе с задачами, как обычный контент.
-        // Своего горизонтального отступа у слота нет: карусель держит 16
-        // сама, а карточка пустого состояния — через kEmptyStatePadding.
-        SliverToBoxAdapter(child: _buildHeader(context, theme, empty)),
+        // Карусель категорий — первый (непереставляемый) элемент списка:
+        // листается вместе с задачами, как обычный контент.
+        // Своего горизонтального отступа у слота нет: карусель держит 16 сама.
+        SliverToBoxAdapter(child: _buildHeader(context, theme)),
         // Активные задачи идут БЕЗ заголовка: они и есть основной список —
         // подписывать их «Активные» значит подписывать очевидное. Заголовок
         // несёт только архивная полка, чтобы отличаться от остального.

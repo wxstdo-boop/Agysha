@@ -12,9 +12,11 @@ import '../utils/motion_prefs.dart';
 /// 1) вертикальный градиент «чернила → глубокий бирюзовый»;
 /// 2) перспективная сетка-пол, которая медленно едет на зрителя;
 /// 3) плавающие «биты» — редкие квадратики, поднимающиеся вверх;
-/// 4) скан-линии старого монитора и один бегущий блик;
-/// 5) периодический глитч (RGB-разрыв полосами);
-/// 6) виньетка и свечение в углах.
+/// 4) цифровой дождь из падающих столбцов кода;
+/// 5) редкие пиксельные сердечки Миты, всплывающие снизу;
+/// 6) скан-линии старого монитора и один бегущий блик;
+/// 7) периодический глитч (RGB-разрыв полосами);
+/// 8) «дыхание» экрана, виньетка и свечение в углах.
 ///
 /// Всё живёт в ОДНОМ контроллере и одном CustomPainter: контроллер тикает
 /// через [MotionPrefs.ambient] (реже на слабом GPU), фаза округляется до
@@ -47,6 +49,25 @@ class _ItshnikBackdropState extends State<ItshnikBackdrop>
         speed: 0.010 + rng.nextDouble() * 0.030,
         alpha: 0.10 + rng.nextDouble() * 0.22,
         pink: rng.nextDouble() < 0.22,
+      );
+    });
+    _cache.rain = List.generate(16, (i) {
+      return _CodeColumn(
+        x: rng.nextDouble(),
+        speed: 0.035 + rng.nextDouble() * 0.075,
+        offset: rng.nextDouble(),
+        length: 5 + rng.nextInt(9),
+        pink: rng.nextDouble() < 0.16,
+      );
+    });
+    _cache.hearts = List.generate(9, (_) {
+      return _HeartBit(
+        x: rng.nextDouble(),
+        y: rng.nextDouble(),
+        speed: 0.008 + rng.nextDouble() * 0.018,
+        size: 5 + rng.nextDouble() * 7,
+        sway: rng.nextDouble() * math.pi * 2,
+        alpha: 0.05 + rng.nextDouble() * 0.10,
       );
     });
     _ctrl = ambientRepeat(
@@ -110,10 +131,48 @@ class _Bit {
   });
 }
 
+/// Столбец цифрового дождя.
+class _CodeColumn {
+  final double x;
+  final double speed;
+  final double offset;
+  final int length;
+  final bool pink;
+
+  const _CodeColumn({
+    required this.x,
+    required this.speed,
+    required this.offset,
+    required this.length,
+    required this.pink,
+  });
+}
+
+/// Всплывающее пиксельное сердечко.
+class _HeartBit {
+  final double x;
+  final double y;
+  final double speed;
+  final double size;
+  final double sway;
+  final double alpha;
+
+  const _HeartBit({
+    required this.x,
+    required this.y,
+    required this.speed,
+    required this.size,
+    required this.sway,
+    required this.alpha,
+  });
+}
+
 /// Краски и градиенты, зависящие только от размера холста: пересобираются
 /// при смене размера, а не на каждом кадре.
 class _ItshnikCache {
   List<_Bit>? bits;
+  List<_CodeColumn>? rain;
+  List<_HeartBit>? hearts;
   Size? _size;
   Paint? _background;
   Paint? _vignette;
@@ -206,9 +265,12 @@ class _ItshnikPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, cache._glowBottom!);
 
     _paintGrid(canvas, size, t);
+    _paintCodeRain(canvas, size, t);
     _paintBits(canvas, size, t);
+    _paintHearts(canvas, size, t);
     _paintScanlines(canvas, size, t);
     _paintGlitch(canvas, size, t);
+    _paintBreath(canvas, size, t);
 
     canvas.drawRect(Offset.zero & size, cache._vignette!);
   }
@@ -279,6 +341,67 @@ class _ItshnikPainter extends CustomPainter {
         paint,
       );
     }
+  }
+
+  void _paintCodeRain(Canvas canvas, Size size, double t) {
+    final columns = cache.rain;
+    if (columns == null) return;
+    final paint = Paint();
+    for (final c in columns) {
+      final x = (c.x * size.width / _pixel).floorToDouble() * _pixel;
+      final head = ((c.offset + t * c.speed * 10) % 1.15) * size.height;
+      for (var i = 0; i < c.length; i++) {
+        final y = head - i * 7.0;
+        if (y < -8 || y > size.height + 8) continue;
+        final fade = (1 - i / c.length) * 0.32;
+        paint.color = (c.pink ? ItshnikPalette.pink : ItshnikPalette.phosphor)
+            .withValues(alpha: fade);
+        // Голова столбца ярче, хвост растворяется.
+        final width = i == 0 ? _pixel * 2 : _pixel;
+        canvas.drawRect(Rect.fromLTWH(x, y, width, _pixel * 1.4), paint);
+      }
+    }
+  }
+
+  void _paintHearts(Canvas canvas, Size size, double t) {
+    final hearts = cache.hearts;
+    if (hearts == null) return;
+    final paint = Paint();
+    for (final h in hearts) {
+      final y = ((h.y - t * h.speed * 8) % 1.0 + 1.0) % 1.0;
+      final sway = math.sin(t * math.pi * 2 + h.sway) * 10;
+      final x = h.x * size.width + sway;
+      paint.color = ItshnikPalette.pink.withValues(alpha: h.alpha);
+      final s = h.size;
+      // Два кружка и треугольник — пиксельное сердце Миты.
+      canvas.drawCircle(Offset(x - s * 0.24, y * size.height), s * 0.30, paint);
+      canvas.drawCircle(Offset(x + s * 0.24, y * size.height), s * 0.30, paint);
+      final tip = Path()
+        ..moveTo(x - s * 0.53, y * size.height + s * 0.12)
+        ..lineTo(x, y * size.height + s * 0.72)
+        ..lineTo(x + s * 0.53, y * size.height + s * 0.12)
+        ..close();
+      canvas.drawPath(tip, paint);
+    }
+  }
+
+  void _paintBreath(Canvas canvas, Size size, double t) {
+    // Медленное «дыхание» экрана: яркий центр чуть пульсирует.
+    final pulse = 0.5 + 0.5 * math.sin(t * math.pi * 2);
+    final paint = Paint()
+      ..shader =
+          RadialGradient(
+            colors: [
+              ItshnikPalette.phosphor.withValues(alpha: 0.02 + 0.035 * pulse),
+              ItshnikPalette.phosphor.withValues(alpha: 0.0),
+            ],
+          ).createShader(
+            Rect.fromCircle(
+              center: Offset(size.width * 0.5, size.height * 0.46),
+              radius: size.shortestSide * (0.55 + 0.06 * pulse),
+            ),
+          );
+    canvas.drawRect(Offset.zero & size, paint);
   }
 
   void _paintScanlines(Canvas canvas, Size size, double t) {

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import '../services/haptics.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import '../widgets/section_pill.dart';
 import '../models/alarm.dart';
 import '../models/app_timer.dart';
@@ -431,11 +430,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
   /// одинаково. Верхний слот kSectionPillSlotHeight + 8, дальше 12 до
   /// карточки даёт kEmptyStatePadding.
   Widget _buildAlarmEmpty(BuildContext context, ThemeData theme) {
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(top: kSectionPillSlotHeight + 8),
-      child: _buildAlarmEmptyCard(context, theme),
-    );
+    return SectionEmptyState(child: _buildAlarmEmptyCard(context, theme));
   }
 
   DateTime? _findNextAlarmTime(List<Alarm> alarms, DateTime now) {

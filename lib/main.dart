@@ -17,6 +17,7 @@ import 'screens/startup_diagnostic_screen.dart';
 import 'widgets/mutilated_overlay.dart';
 import 'widgets/metel_overlay.dart';
 import 'widgets/itshnik_overlay.dart';
+import 'widgets/itshnik_tap_effects.dart';
 import 'theme/itshnik_theme.dart';
 import 'l10n/locale_provider.dart';
 import 'l10n/translations.dart';
@@ -2636,6 +2637,14 @@ class AgyshaAppState extends State<AgyshaApp>
                         // поэтому при смене темы ВЕСЬ экран «вспыхивал» (fade
                         // контента + дубль двух subtree).
                         child!,
+                        // Эффекты нажатий «IT-шника»: Мита, волна и пиксели
+                        // в точке тапа. Слой не перехватывает жесты (Listener
+                        // translucent + IgnorePointer) и живёт только при
+                        // включённой теме.
+                        if (_themeKey == ItshnikPalette.key)
+                          const ItshnikTapEffects(
+                            key: ValueKey('itshnik_tap_effects'),
+                          ),
                         // Пятна крови темы MUTILATED — ОТДЕЛЬНЫЙ слой поверх
                         // Navigator (включая drag-прокси при перетаскивании).
                         // Анимируется ТОЛЬКО слой пятен: плавно проявляются при

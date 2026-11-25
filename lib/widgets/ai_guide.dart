@@ -33,6 +33,7 @@ import '../widgets/smooth_typing.dart';
 import 'agysha_confirm_dialog.dart';
 import '../utils/design_tokens.dart';
 import '../widgets/smooth_caret.dart';
+import '../widgets/inline_keyboard.dart';
 
 export 'berserk_sheet.dart';
 part 'ai_guide_bubbles.dart';
@@ -600,6 +601,9 @@ class _AiChatBodyState extends State<_AiChatBody>
   // переживают очистку и перезапуск приложения.
   final Set<String> _liked = {};
   bool _busy = false;
+  // Своя клавиатура в чате: её можно свернуть ручкой и вернуть тапом по
+  // полоске. По умолчанию открыта — как обычная системная при входе в чат.
+  bool _keyboardOpen = true;
   bool _error = false;
   // Повтор с плашки: плашка остаётся на месте (только кнопка становится
   // спиннером), иначе при нажатии «обновить» лента прыгала вверх — плашка
@@ -879,6 +883,65 @@ class _AiChatBodyState extends State<_AiChatBody>
       duration: const Duration(seconds: 6),
       groupKey: 'ada-history-storage',
     );
+  }
+
+  /// Вставка символа своей клавиатурой в позицию каретки — с заменой
+  /// выделенного фрагмента. Системный IME для этого не нужен.
+  void _insertChar(String ch) {
+    final t = _inputCtrl.text;
+    final sel = _inputCtrl.selection;
+    if (sel.isValid && sel.start >= 0 && sel.end >= sel.start) {
+      final newText = t.replaceRange(sel.start, sel.end, ch);
+      _inputCtrl.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: sel.start + ch.length),
+      );
+    } else {
+      _inputCtrl.value = TextEditingValue(
+        text: t + ch,
+        selection: TextSelection.collapsed(offset: t.length + ch.length),
+      );
+    }
+  }
+
+  void _backspace() {
+    final t = _inputCtrl.text;
+    if (t.isEmpty) return;
+    final sel = _inputCtrl.selection;
+    if (sel.isValid && sel.start >= 0 && sel.end > sel.start) {
+      _inputCtrl.value = TextEditingValue(
+        text: t.replaceRange(sel.start, sel.end, ''),
+        selection: TextSelection.collapsed(offset: sel.start),
+      );
+    } else if (sel.isValid && sel.start > 0) {
+      _inputCtrl.value = TextEditingValue(
+        text: t.replaceRange(sel.start - 1, sel.start, ''),
+        selection: TextSelection.collapsed(offset: sel.start - 1),
+      );
+    } else {
+      _inputCtrl.value = TextEditingValue(
+        text: t.substring(0, t.length - 1),
+        selection: TextSelection.collapsed(offset: t.length - 1),
+      );
+    }
+  }
+
+  void _space() => _insertChar(' ');
+
+  void _collapseKeyboard() {
+    if (!_keyboardOpen) return;
+    Haptics.light();
+    setState(() => _keyboardOpen = false);
+  }
+
+  void _expandKeyboard() {
+    if (_keyboardOpen) {
+      _inputFocus.requestFocus();
+      return;
+    }
+    Haptics.light();
+    setState(() => _keyboardOpen = true);
+    _inputFocus.requestFocus();
   }
 
   void _onInputFocus() {
@@ -1996,13 +2059,10 @@ class _AiChatBodyState extends State<_AiChatBody>
                 ),
               ),
               const SizedBox(width: 4),
-              _buildHeaderButton(
-                icon: Icons.close,
-                tooltip: Translations.t('close', context, 'Закрыть'),
-                onTap: () => Navigator.pop(context),
-                cs: cs,
-                isDark: isDark,
-              ),
+              // Крестика закрытия здесь нет: чат Ады закрывается системным
+              // «назад» или сворачиванием в плавающее окошко. Раньше справа
+              // висел третий крестик подряд — он читался как часть истории,
+              // а не как выход.
             ],
           ),
         ),
@@ -2071,165 +2131,174 @@ class _AiChatBodyState extends State<_AiChatBody>
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      ListView.builder(
-                        controller: _scrollCtrl,
-                        // reverse:true — индекс 0 это НИЗ чата: открытие сразу
-                        // показывает последние сообщения, никаких прыжков.
-                        reverse: true,
-                        // bottom: 112 — статичный запас под полем ввода:
-                        // последнее сообщение не ложится вровень с полем.
-                        // Паддинг не зависит от клавиатуры — лента не
-                        // пересчитывается при её анимации.
-                        padding: const EdgeInsets.only(
-                          left: 14,
-                          right: 14,
-                          top: 12,
-                          bottom: 116,
-                        ),
-                        itemCount: _messages.length + (_busy ? 1 : 0),
-                        // Ключ пузыря — метка времени, а не индекс. В
-                        // reverse-ленте новая реплика вставляется в 0 и
-                        // сдвигает все индексы: без этого колбэка лента
-                        // пересоздавала пузыри и мигала при отправке,
-                        // появлении ответа и повторе.
-                        findChildIndexCallback: (key) {
-                          if (key is! ValueKey<String>) return null;
-                          final m = RegExp(
-                            r'^msg_(\d+)_(true|false)$',
-                          ).firstMatch(key.value);
-                          if (m == null) return null;
-                          final ts = int.tryParse(m.group(1)!);
-                          if (ts == null) return null;
-                          final isUser = m.group(2) == 'true';
-                          final mi = _messages.indexWhere(
-                            (msg) => msg.ts == ts && msg.isUser == isUser,
-                          );
-                          if (mi < 0) return null;
-                          return _busy
-                              ? _messages.length - mi
-                              : _messages.length - 1 - mi;
-                        },
-                        // Элементы уже обёрнуты в RepaintBoundary ниже;
-                        // не добавляем вторую границу для каждого пузыря.
-                        addRepaintBoundaries: false,
-                        itemBuilder: (context, i) {
-                          if (_busy && i == 0) {
-                            // «Печатает…» — самый нижний элемент, прямо у поля.
-                            // При ответе слот не пропадает кадром: он гасит
-                            // ПРОЗРАЧНОСТЬ и ВЫСОТУ (heightFactor). Раньше
-                            // индикатор исчезал мгновенно вместе с появлением
-                            // пузыря, и лента прыгала вверх на его высоту —
-                            // переход «Сочиняю…» → полный ответ читался рывком.
-                            return TweenAnimationBuilder<double>(
-                              // Ключ ПОСТОЯННЫЙ: при смене ключа элемент
-                              // пересоздавался и индикатор на миг вспыхивал
-                              // во весь рост заново — это и читалось как
-                              // мигание чата при ответе.
-                              key: const ValueKey('typing_slot'),
-                              tween: Tween(
-                                begin: 1.0,
-                                end: _typingFade ? 0.0 : 1.0,
-                              ),
-                              duration: const Duration(milliseconds: 320),
-                              curve: Curves.easeInOutCubic,
-                              builder: (context, fade, child) => ClipRect(
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  heightFactor: fade,
-                                  child: Opacity(opacity: fade, child: child),
+                      // Тап по пустому месту над клавиатурой сворачивает её:
+                      // так же, как ручка на панели. Жесты пузырей (копия,
+                      // закрепление) остаются у них.
+                      GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: _collapseKeyboard,
+                        child: ListView.builder(
+                          controller: _scrollCtrl,
+                          // reverse:true — индекс 0 это НИЗ чата: открытие сразу
+                          // показывает последние сообщения, никаких прыжков.
+                          reverse: true,
+                          // bottom: 112 — статичный запас под полем ввода:
+                          // последнее сообщение не ложится вровень с полем.
+                          // Паддинг не зависит от клавиатуры — лента не
+                          // пересчитывается при её анимации.
+                          padding: const EdgeInsets.only(
+                            left: 14,
+                            right: 14,
+                            top: 12,
+                            bottom: 116,
+                          ),
+                          itemCount: _messages.length + (_busy ? 1 : 0),
+                          // Ключ пузыря — метка времени, а не индекс. В
+                          // reverse-ленте новая реплика вставляется в 0 и
+                          // сдвигает все индексы: без этого колбэка лента
+                          // пересоздавала пузыри и мигала при отправке,
+                          // появлении ответа и повторе.
+                          findChildIndexCallback: (key) {
+                            if (key is! ValueKey<String>) return null;
+                            final m = RegExp(
+                              r'^msg_(\d+)_(true|false)$',
+                            ).firstMatch(key.value);
+                            if (m == null) return null;
+                            final ts = int.tryParse(m.group(1)!);
+                            if (ts == null) return null;
+                            final isUser = m.group(2) == 'true';
+                            final mi = _messages.indexWhere(
+                              (msg) => msg.ts == ts && msg.isUser == isUser,
+                            );
+                            if (mi < 0) return null;
+                            return _busy
+                                ? _messages.length - mi
+                                : _messages.length - 1 - mi;
+                          },
+                          // Элементы уже обёрнуты в RepaintBoundary ниже;
+                          // не добавляем вторую границу для каждого пузыря.
+                          addRepaintBoundaries: false,
+                          itemBuilder: (context, i) {
+                            if (_busy && i == 0) {
+                              // «Печатает…» — самый нижний элемент, прямо у поля.
+                              // При ответе слот не пропадает кадром: он гасит
+                              // ПРОЗРАЧНОСТЬ и ВЫСОТУ (heightFactor). Раньше
+                              // индикатор исчезал мгновенно вместе с появлением
+                              // пузыря, и лента прыгала вверх на его высоту —
+                              // переход «Сочиняю…» → полный ответ читался рывком.
+                              return TweenAnimationBuilder<double>(
+                                // Ключ ПОСТОЯННЫЙ: при смене ключа элемент
+                                // пересоздавался и индикатор на миг вспыхивал
+                                // во весь рост заново — это и читалось как
+                                // мигание чата при ответе.
+                                key: const ValueKey('typing_slot'),
+                                tween: Tween(
+                                  begin: 1.0,
+                                  end: _typingFade ? 0.0 : 1.0,
                                 ),
-                              ),
-                              // Вход мягкий и длинный: раньше индикатор
-                              // «щёлкал» из 70% с ростом за 280 мс — при
-                              // ответе на полное сообщение это читалось как
-                              // рывок. Теперь почти без масштаба, с подъёмом
-                              // снизу за 440 мс.
-                              child: TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0, end: 1),
-                                duration: const Duration(milliseconds: 440),
-                                curve: Curves.easeOutQuart,
-                                // Высота растёт ВМЕСТЕ с прозрачностью
-                                // (heightFactor): раньше пузырёк «Сочиняю…»
-                                // возникал сразу во весь рост и одним кадром
-                                // сдвигал ленту вверх — на длинном сообщении
-                                // это и читалось как рывок.
-                                builder: (context, t, child) => ClipRect(
+                                duration: const Duration(milliseconds: 320),
+                                curve: Curves.easeInOutCubic,
+                                builder: (context, fade, child) => ClipRect(
                                   child: Align(
                                     alignment: Alignment.bottomCenter,
-                                    heightFactor: t,
-                                    child: Opacity(
-                                      opacity: t,
-                                      child: Transform.translate(
-                                        offset: Offset(0, 14 * (1 - t)),
-                                        child: Transform.scale(
-                                          scale: 0.94 + 0.06 * t,
-                                          child: child,
+                                    heightFactor: fade,
+                                    child: Opacity(opacity: fade, child: child),
+                                  ),
+                                ),
+                                // Вход мягкий и длинный: раньше индикатор
+                                // «щёлкал» из 70% с ростом за 280 мс — при
+                                // ответе на полное сообщение это читалось как
+                                // рывок. Теперь почти без масштаба, с подъёмом
+                                // снизу за 440 мс.
+                                child: TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0, end: 1),
+                                  duration: const Duration(milliseconds: 440),
+                                  curve: Curves.easeOutQuart,
+                                  // Высота растёт ВМЕСТЕ с прозрачностью
+                                  // (heightFactor): раньше пузырёк «Сочиняю…»
+                                  // возникал сразу во весь рост и одним кадром
+                                  // сдвигал ленту вверх — на длинном сообщении
+                                  // это и читалось как рывок.
+                                  builder: (context, t, child) => ClipRect(
+                                    child: Align(
+                                      alignment: Alignment.bottomCenter,
+                                      heightFactor: t,
+                                      child: Opacity(
+                                        opacity: t,
+                                        child: Transform.translate(
+                                          offset: Offset(0, 14 * (1 - t)),
+                                          child: Transform.scale(
+                                            scale: 0.94 + 0.06 * t,
+                                            child: child,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
+                                  child: _TypingIndicator(animation: _dotsCtrl),
                                 ),
-                                child: _TypingIndicator(animation: _dotsCtrl),
+                              );
+                            }
+                            // Индекс в исходном массиве (0 = последнее сообщение).
+                            final mi = _busy
+                                ? _messages.length - i
+                                : _messages.length - 1 - i;
+                            final m = _messages[mi];
+                            // Сосед ВЫШЕ в ленте (следующий по истории).
+                            final above = mi + 1 < _messages.length
+                                ? _messages[mi + 1]
+                                : null;
+                            // Анимация входа — ТОЛЬКО у сообщений, добавленных
+                            // ПОСЛЕ открытия чата (последние 3 из них). Сообщения
+                            // истории при открытии НЕ анимируются: лист уже выезжает,
+                            // и пузыри не «прыгают» поверх. Также не анимируются
+                            // старые пузыри при скролле большого чата.
+                            final msgTs = m.ts;
+                            final animate =
+                                msgTs != null && _freshTs.contains(msgTs);
+                            // Моё сообщение «прочитано», когда сразу за ним в
+                            // истории идёт ответ Ады (она обработала сообщение).
+                            // Время прочтения — метка ответа Ады.
+                            final read =
+                                m.isUser &&
+                                mi + 1 < _messages.length &&
+                                !_messages[mi + 1].isUser;
+                            final readAt = read ? _messages[mi + 1].ts : null;
+                            // Ключ по самому сообщению: индексы сдвигаются при
+                            // каждой вставке, и раньше все пузыри
+                            // пересоздавались — вход нового читался рывком.
+                            // Ключ — только по метке и автору: текст сообщения
+                            // при потоковой дорисовке меняется, и хеш текста в
+                            // ключе пересоздавал пузырь на каждом куске ответа —
+                            // сообщение «приходило грубо», рывками.
+                            final bubbleKey = ValueKey(
+                              'msg_${m.ts}_${m.isUser}',
+                            );
+                            return RepaintBoundary(
+                              key: bubbleKey,
+                              child: _MessageBubble(
+                                key: bubbleKey,
+                                message: m,
+                                firstInGroup:
+                                    above == null || above.isUser != m.isUser,
+                                animate: animate,
+                                read: read,
+                                readAt: readAt,
+                                liked: _liked.contains(_msgKey(m)),
+                                pinned: _isPinned(m),
+                                onToggleLike: () => _toggleLike(m),
+                                onCopy: () => _copyMessage(m),
+                                // Зажать аватарку Ады — закрепить/открепить (до 10).
+                                onLongPress: m.isUser
+                                    ? null
+                                    : () => _togglePin(m),
+                                onTogglePin: m.isUser
+                                    ? null
+                                    : () => _togglePin(m),
                               ),
                             );
-                          }
-                          // Индекс в исходном массиве (0 = последнее сообщение).
-                          final mi = _busy
-                              ? _messages.length - i
-                              : _messages.length - 1 - i;
-                          final m = _messages[mi];
-                          // Сосед ВЫШЕ в ленте (следующий по истории).
-                          final above = mi + 1 < _messages.length
-                              ? _messages[mi + 1]
-                              : null;
-                          // Анимация входа — ТОЛЬКО у сообщений, добавленных
-                          // ПОСЛЕ открытия чата (последние 3 из них). Сообщения
-                          // истории при открытии НЕ анимируются: лист уже выезжает,
-                          // и пузыри не «прыгают» поверх. Также не анимируются
-                          // старые пузыри при скролле большого чата.
-                          final msgTs = m.ts;
-                          final animate =
-                              msgTs != null && _freshTs.contains(msgTs);
-                          // Моё сообщение «прочитано», когда сразу за ним в
-                          // истории идёт ответ Ады (она обработала сообщение).
-                          // Время прочтения — метка ответа Ады.
-                          final read =
-                              m.isUser &&
-                              mi + 1 < _messages.length &&
-                              !_messages[mi + 1].isUser;
-                          final readAt = read ? _messages[mi + 1].ts : null;
-                          // Ключ по самому сообщению: индексы сдвигаются при
-                          // каждой вставке, и раньше все пузыри
-                          // пересоздавались — вход нового читался рывком.
-                          // Ключ — только по метке и автору: текст сообщения
-                          // при потоковой дорисовке меняется, и хеш текста в
-                          // ключе пересоздавал пузырь на каждом куске ответа —
-                          // сообщение «приходило грубо», рывками.
-                          final bubbleKey = ValueKey('msg_${m.ts}_${m.isUser}');
-                          return RepaintBoundary(
-                            key: bubbleKey,
-                            child: _MessageBubble(
-                              key: bubbleKey,
-                              message: m,
-                              firstInGroup:
-                                  above == null || above.isUser != m.isUser,
-                              animate: animate,
-                              read: read,
-                              readAt: readAt,
-                              liked: _liked.contains(_msgKey(m)),
-                              pinned: _isPinned(m),
-                              onToggleLike: () => _toggleLike(m),
-                              onCopy: () => _copyMessage(m),
-                              // Зажать аватарку Ады — закрепить/открепить (до 10).
-                              onLongPress: m.isUser
-                                  ? null
-                                  : () => _togglePin(m),
-                              onTogglePin: m.isUser
-                                  ? null
-                                  : () => _togglePin(m),
-                            ),
-                          );
-                        },
+                          },
+                        ),
                       ),
                       // Подсказка пустого чата: плавно появляется, когда
                       // сообщений нет, и гаснет при первом сообщении.
@@ -2446,6 +2515,12 @@ class _AiChatBodyState extends State<_AiChatBody>
                                     TextMagnifierConfiguration.disabled,
                                 controller: _inputCtrl,
                                 focusNode: _inputFocus,
+                                // Ввод идёт своей панелью, поэтому системный
+                                // IME не поднимается: поле остаётся только
+                                // кареткой и выделением.
+                                readOnly: true,
+                                showCursor: true,
+                                onTap: _expandKeyboard,
                                 textInputAction: TextInputAction.send,
                                 onSubmitted: (_) => _send(),
                                 minLines: 1,
@@ -2514,9 +2589,27 @@ class _AiChatBodyState extends State<_AiChatBody>
             ),
           ),
         ),
-        // Ввод идёт системной клавиатурой Android: лист поднимается над
-        // ней на её высоту (см. Padding с viewInsets в build _AiChatSheet),
-        // а поле и кнопка отправки остаются над панелью.
+        // Своя клавиатура: свёрнутая — узкая полоска, развёрнутая — панель
+        // с ручкой. Высота меняется плавно, лента не прыгает кадром.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _keyboardOpen
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
+                  child: InlineKeyboard(
+                    keyHeight: 46,
+                    onChar: _insertChar,
+                    onBackspace: _backspace,
+                    onSpace: _space,
+                    onAction: _send,
+                    actionLabel: null,
+                    onCollapse: _collapseKeyboard,
+                  ),
+                )
+              : InlineKeyboardHandle(onExpand: _expandKeyboard),
+        ),
       ],
     );
   }
