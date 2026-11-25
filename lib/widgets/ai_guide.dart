@@ -2444,6 +2444,9 @@ class _AiChatBodyState extends State<_AiChatBody>
         // Поле ввода.
         SafeArea(
           top: false,
+          // Клавиатура уже отступает лист на свою высоту: нижний системный
+          // отступ в этот момент дал бы двойную щель под полем.
+          bottom: MediaQuery.viewInsetsOf(context).bottom == 0,
           child: RepaintBoundary(
             // Поле имеет постоянный размер при движении IME. Отдельный
             // слой позволяет сдвигать его вместе с листом без полной
