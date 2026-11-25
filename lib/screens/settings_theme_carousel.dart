@@ -516,12 +516,14 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                     // каморой под указателем: так название «сменяется» во
                     // время кручения, а не только после остановки. Затухание
                     // включается на остановке — там ему есть что сглаживать.
-                    // Пока барабан едет, подпись меняется вслед за каморой
-                    // под указателем, но не кадровым «щелчком»: короткое
-                    // перекрёстное затухание 90 мс успевает сгладить подмену
-                    // и при этом не наслаивает три подписи друг на друга.
+                    // Пока барабан едет, подпись меняется ВСЛЕД за каморой
+                    // без затухания: короткий кросс-фейд на быстром
+                    // вращении успевал наложить две-три подписи друг на
+                    // друга — текст «мылился» и читался как рывки. Свежая
+                    // подпись без фейда чёткая, а плавность даёт само
+                    // движение барабана. Затухание остаётся на остановке.
                     duration: _moving
-                        ? const Duration(milliseconds: 90)
+                        ? Duration.zero
                         : const Duration(milliseconds: 280),
                     switchInCurve: Curves.easeOut,
                     switchOutCurve: Curves.easeIn,
@@ -669,7 +671,7 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                   // Двухфазные 380 мс остаются для остановки: там смена одна
                   // и её видно целиком.
                   duration: _moving
-                      ? const Duration(milliseconds: 90)
+                      ? const Duration(milliseconds: 70)
                       : const Duration(milliseconds: 380),
                   switchInCurve: const Interval(
                     0.38,

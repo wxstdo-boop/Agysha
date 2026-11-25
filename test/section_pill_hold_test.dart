@@ -278,6 +278,8 @@ void main() {
       reason: 'подложка должна быть залита, а не прозрачна',
     );
     expect(deco.borderRadius, isNotNull);
-    expect(deco.boxShadow, isNotNull);
+    // Обводка есть, а BoxShadow убран намеренно: размытая тень — самая
+    // дорогая часть отрисовки капсулы на Impeller, и на 54 px её не видно.
+    expect(deco.border, isNotNull);
   });
 }

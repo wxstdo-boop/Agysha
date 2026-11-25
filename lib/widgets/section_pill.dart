@@ -680,17 +680,37 @@ class _SectionPillState extends State<SectionPill>
       clipBehavior: Clip.none,
       fit: StackFit.expand,
       children: [
-        Align(
-          alignment: Alignment(indicatorAlignment, 0),
-          child: Transform.scale(
-            alignment: Alignment(anchorX, 0),
-            scaleX: scaleX,
-            scaleY: scaleY,
-            child: FractionallySizedBox(
-              widthFactor: 1.0 / count,
-              heightFactor: 0.90,
-              child: RepaintBoundary(child: _GlassStone(capRadius: capRadius)),
-            ),
+        // Подложка выбранного раздела считается ПРЯМОЙ геометрией, без
+        // Align + Transform.scale + FractionallySizedBox: эта цепочка на
+        // Impeller иногда отдавала пустой кадр — подложка «пропадала» после
+        // тапов. Здесь позиция и размер — обычные числа кадра.
+        Positioned.fill(
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final w = box.maxWidth;
+              final h = box.maxHeight;
+              final cell = w / count;
+              final stoneH = h * 0.90 * scaleY;
+              final stoneW = (cell * scaleX).clamp(0.0, w);
+              // indicatorAlignment: -1 — первая ячейка, +1 — последняя.
+              final baseLeft = (w - cell) / 2 * (1 + indicatorAlignment);
+              final left = switch (anchorX) {
+                > 0 => baseLeft + cell - stoneW,
+                < 0 => baseLeft,
+                _ => baseLeft + (cell - stoneW) / 2,
+              };
+              return Stack(
+                children: [
+                  Positioned(
+                    left: left,
+                    top: (h - stoneH) / 2,
+                    width: stoneW,
+                    height: stoneH,
+                    child: _GlassStone(capRadius: capRadius),
+                  ),
+                ],
+              );
+            },
           ),
         ),
         GestureDetector(
@@ -732,9 +752,11 @@ class _SectionPillState extends State<SectionPill>
                       child: PressScale(
                         enabled: !_dragging,
                         pressedScale: 0.94,
-                        pressTint: const Color(0xFFFF453A),
-                        pressTintStrength: 0.10,
-                        pressTintRadius: BorderRadius.circular(18),
+                        // Второй подложки под пальцем НЕТ: подсветку несёт
+                        // только камень выбранного раздела. Раньше поверх
+                        // него вспыхивал красный квадрат отдачи — читалось
+                        // как «две подложки», одна из которых пропадает.
+                        pressTintStrength: 0,
                         enableTilt: true,
                         // Если pointer-up потеряется при быстрых тапах и
                         // переключениях, красная подложка снимется сама:
@@ -890,11 +912,8 @@ class _PillLabelState extends State<_PillLabel>
     }
     _from = _value;
     _to = widget.glow;
-    // Зажигание — быстрым шагом (подсветка «появляется» сразу после тапа),
-    // гашение — мягче: резкий уход красного читался как мигание.
-    _ctrl.duration = _to > _from
-        ? const Duration(milliseconds: 150)
-        : const Duration(milliseconds: 300);
+    // Длительность НЕ трогаем: смена её на каждом кадре драга постоянно
+    // перезапускала контроллер, и цвет подписи шёл рваными шагами.
     _ctrl.forward(from: 0);
   }
 
@@ -993,17 +1012,11 @@ class _GlassStone extends StatelessWidget {
           ],
         ),
         border: Border.all(
-          color: cs.primary.withValues(alpha: dark ? 0.34 : 0.20),
+          color: cs.primary.withValues(alpha: dark ? 0.40 : 0.26),
           width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: dark ? 0.18 : 0.10),
-            blurRadius: 10,
-            spreadRadius: -2,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        // Без BoxShadow: размытая тень — самая дорогая часть отрисовки на
+        // Impeller, а на капсуле её и не видно за обводкой.
       ),
     );
   }

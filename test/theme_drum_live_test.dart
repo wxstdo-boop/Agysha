@@ -79,17 +79,19 @@ void main() {
     );
   });
 
-  test('пока барабан едет, смена подписи короткая и без наслоений', () {
+  test('пока барабан едет, смена подписи без наслоений', () {
     final src = read('lib/screens/settings_theme_carousel.dart');
     expect(
       src,
-      contains(
-        'duration: _moving\n                      ? const Duration(milliseconds: 90)',
+      matches(
+        RegExp(
+          r'duration:\s*_moving\s*\?\s*Duration\.zero\s*:\s*const Duration\(milliseconds: 280\)',
+        ),
       ),
       reason:
-          'пока барабан едет, подпись меняется коротким кроссфейдом 90 мс: '
-          'мгновенная подмена читалась как «название не меняется», а длинный '
-          'кроссфейд наслаивал десяток затуханий',
+          'пока барабан едет, подпись меняется вслед за каморой без фейда: '
+          'короткий кроссфейд на быстром вращении накладывал две-три подписи '
+          'друг на друга, и текст мылился; на остановке остаётся затухание',
     );
     expect(
       src,
@@ -105,16 +107,15 @@ void main() {
 
   test('пока барабан едет, значок в центре тоже меняется плавно', () {
     final src = read('lib/screens/settings_theme_carousel.dart');
-    final shortFades = 'const Duration(milliseconds: 90)'
-        .allMatches(src)
-        .length;
     expect(
-      shortFades,
-      greaterThanOrEqualTo(2),
+      src,
+      contains(
+        'duration: _moving\n                      ? const Duration(milliseconds: 70)',
+      ),
       reason:
-          'подпись и значок обязаны переключаться коротким затуханием 90 мс '
-          'во время кручения: мгновенная подмена выглядела как дёрганье, '
-          'а долгий кроссфейд — как «не меняется»',
+          'значок в центре во время кручения меняется коротким двухфазным '
+          'затуханием 70 мс: мгновенная подмена выглядела как дёрганье, '
+          'а долгий кроссфейд — как «значок отстаёт»',
     );
     expect(
       src,
