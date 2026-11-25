@@ -398,6 +398,86 @@ void main() {
       expect(hits.last, contains('murakumo'));
     });
 
+    test('write_file с настоящими переводами строк и висячей запятой '
+        'доходит целиком', () async {
+      // Локальные модели шлют «почти JSON»: реальные переводы строк внутри
+      // строки и запятую перед закрывающей скобкой. Раньше такой вызов
+      // считался битым, и правка молча терялась — «ИИ не может write file».
+      const rawArgs =
+          '{"path": "lib/a.dart", "content": "void main() {\n'
+          '  runApp();\n}\n", }';
+      final client = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'choices': [
+              {
+                'message': {
+                  'content': null,
+                  'tool_calls': [
+                    {
+                      'id': 'call_1',
+                      'function': {'name': 'write_file', 'arguments': rawArgs},
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final chat = FreePoolForgeChat(client: client);
+
+      final reply = await chat.complete([
+        {'role': 'user', 'content': 'сделай'},
+      ], []);
+
+      final call = reply.toolCalls.single;
+      expect(call.argumentsBroken, isFalse);
+      expect(call.arguments['path'], 'lib/a.dart');
+      expect(call.arguments['content'], 'void main() {\n  runApp();\n}\n');
+    });
+
+    test(
+      'обрезанный JSON инструмента не выдаётся за валидные аргументы',
+      () async {
+        // Обрубок чинить нельзя: в файл попал бы недописанный код.
+        const rawArgs = '{"path": "lib/a.dart", "content": "void main() {';
+        final client = MockClient((request) async {
+          return http.Response(
+            jsonEncode({
+              'choices': [
+                {
+                  'message': {
+                    'content': null,
+                    'tool_calls': [
+                      {
+                        'id': 'call_1',
+                        'function': {
+                          'name': 'write_file',
+                          'arguments': rawArgs,
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        });
+        final chat = FreePoolForgeChat(client: client);
+
+        final reply = await chat.complete([
+          {'role': 'user', 'content': 'сделай'},
+        ], []);
+
+        expect(reply.toolCalls.single.argumentsBroken, isTrue);
+      },
+    );
+
     test('когда все провайдеры недоступны — понятная ошибка', () async {
       final client = MockClient(
         (request) async => http.Response('<html>down</html>', 503),

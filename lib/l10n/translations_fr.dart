@@ -729,7 +729,7 @@ const Map<String, String> _fr = {
   'forgeFiles': 'fichiers modifiés',
   'forgeSafetyNote':
       'L’agent répond aussitôt aux questions. Les modifications vont dans une branche et une pull request — main reste intact. IA : fournisseurs gratuits intégrés.',
-  'forgeThinking': 'L’agent réfléchit…',
+  'forgeThinking': 'Ada réfléchit…',
   'forgeChatEmpty':
       'Pose une question sur le projet ou décris ce qu’il faut modifier.',
   'forgeClearChat': 'Effacer la discussion',

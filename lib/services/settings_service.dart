@@ -329,6 +329,22 @@ class SettingsService {
     final map = await _loadSettings();
     map[_keyForgeModel] = id.trim();
     await _saveSettings(map);
+    // Дубликат в обычных настройках: экран «Кузницы» показывает выбранную
+    // модель сразу на первом кадре, не дожидаясь расшифровки файла.
+    try {
+      await globalPrefs.setString(_keyForgeModel, id.trim());
+    } catch (_) {
+      // Зеркало — только подсказка для таблетки.
+    }
+  }
+
+  /// Выбор модели без чтения зашифрованного файла (`''` — авто-пул).
+  static String forgeModelSync() {
+    try {
+      return (globalPrefs.getString(_keyForgeModel) ?? '').trim();
+    } catch (_) {
+      return '';
+    }
   }
 
   static Future<bool> loadPerfectionism() async {
@@ -438,6 +454,7 @@ class SettingsService {
     final map = await _loadSettings();
     map[_keyAiKey] = _normalizeKey(value);
     await _saveSettings(map);
+    await _rememberProviderKind(map);
   }
 
   /// Ключи часто вставляют из чата/скриншота: с «Bearer », кавычками или
@@ -467,6 +484,58 @@ class SettingsService {
     final map = await _loadSettings();
     map[_keyAgnesKey] = _normalizeKey(value);
     await _saveSettings(map);
+    await _rememberProviderKind(map);
+  }
+
+  /// Единый «ключ провайдера» для всех, кому он нужен: новое поле
+  /// (`setting_ai_key`) и старое поле Agnes (`setting_agnes_key`) — для
+  /// человека это одно и то же. Кузница читала только новое поле, и ключ,
+  /// сохранённый старой сборкой (или вторым полем), она не видела: отвечал
+  /// бесплатный пул, а Agnes пропадала из выбора моделей.
+  static Future<String> loadProviderKey() async {
+    final map = await _loadSettings();
+    final ai = ((map[_keyAiKey] as String?) ?? '').trim();
+    if (ai.isNotEmpty) return ai;
+    return ((map[_keyAgnesKey] as String?) ?? '').trim();
+  }
+
+  /// Вид ключа провайдера без самого ключа. Экран «Кузницы» строит таблетку
+  /// моделей на первом кадре, а зашифрованный файл настроек читается только
+  /// асинхронно; кэш в обычных настройках даёт Agnes в выборе сразу, не
+  /// держа при этом файл открытым.
+  static const _keyProviderKind = 'setting_provider_key_kind';
+
+  static String providerKeyKindOf(String key) {
+    final value = key.trim();
+    if (value.isEmpty) return '';
+    return value.startsWith('sk-or-') ? 'openrouter' : 'other';
+  }
+
+  static String providerKeyKindSync() {
+    String? kind;
+    try {
+      kind = globalPrefs.getString(_keyProviderKind);
+    } catch (_) {
+      // Настройки ещё не подняты (ранний кадр, тесты): пула без ключа достаточно.
+      return '';
+    }
+    return kind == 'openrouter' || kind == 'other' ? kind! : '';
+  }
+
+  static Future<void> _rememberProviderKind(Map<String, dynamic> map) async {
+    final ai = ((map[_keyAiKey] as String?) ?? '').trim();
+    final agnes = ((map[_keyAgnesKey] as String?) ?? '').trim();
+    final kind = providerKeyKindOf(ai.isNotEmpty ? ai : agnes);
+    try {
+      if (kind.isEmpty) {
+        await globalPrefs.remove(_keyProviderKind);
+      } else {
+        await globalPrefs.setString(_keyProviderKind, kind);
+      }
+    } catch (_) {
+      // Кэш вида ключа — подсказка для таблетки, а не данные: без него
+      // ключ всё равно читается на ходе агента.
+    }
   }
 
   static const _keyGeminiKey = 'setting_gemini_key';

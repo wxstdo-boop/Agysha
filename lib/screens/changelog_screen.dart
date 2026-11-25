@@ -178,11 +178,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
           ),
           const SizedBox(height: Spacing.xxs),
           Text(
-            Translations.t(
-              'patchRoadmap',
-              context,
-              'Minor tweaks, PR in 2027',
-            ),
+            Translations.t('patchRoadmap', context, 'Minor tweaks, PR in 2027'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onPrimaryContainer.withValues(
                 alpha: 0.86,
@@ -279,15 +275,12 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                       // Текст заметки — курсивом: пункты читаются как живая
                       // заметка автора, а не как протокол официального отчёта.
                       Expanded(
-                        // Заметка — главный текст карточки, поэтому она
-                        // крупнее и плотнее обычного bodyMedium и держит
-                        // почти полный контраст: раньше сероватый мелкий
-                        // курсив читался как «блеклый список».
+                        // Размер — как у обычного bodyMedium: увеличенный
+                        // кегль ломал сетку карточки на узких экранах.
                         child: Text(
                           entry.changes[j],
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            fontSize: 14,
-                            height: 1.45,
+                            height: 1.4,
                             fontStyle: FontStyle.italic,
                             color: theme.colorScheme.onSurface.withValues(
                               alpha: 0.94,
@@ -374,7 +367,6 @@ class _LatestVersionState extends State<_LatestVersion>
     with SingleTickerProviderStateMixin {
   /// Тот же «кровавый», что у подписи LARAF: свежий релиз помечен тем же
   /// фирменным акцентом, что и сплэш.
-
 
   late final AnimationController _ctrl = AnimationController(
     vsync: this,

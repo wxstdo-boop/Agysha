@@ -14,7 +14,9 @@ import '../utils/context_menu.dart';
 import '../utils/markdown_text.dart';
 import '../utils/snackbar.dart';
 
+import '../widgets/agysha_bunny.dart';
 import '../widgets/press_scale.dart';
+import '../widgets/robot_glyph.dart';
 import '../widgets/smooth_caret.dart';
 import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
@@ -109,7 +111,6 @@ class _ForgeScreenState extends State<ForgeScreen> {
   /// Выбранная в таблетке модель (id из пула) и сам список реально
   /// доступных моделей. Пустая строка — «Авто»: пул перебирается целиком.
   String _modelId = '';
-  bool _modelPrefLoaded = false;
   List<ForgeModelOption> _models = const <ForgeModelOption>[];
 
   /// Пул таблетки уже известен. До этого таблетку не показываем вовсе:
@@ -186,29 +187,15 @@ class _ForgeScreenState extends State<ForgeScreen> {
     super.dispose();
   }
 
-  /// Пересобрать таблетку под текущий ключ ИИ и один раз восстановить
-  /// сохранённый выбор. Чтение настроек идёт здесь, а не в `initState`:
-  /// диск не должен задерживать первый кадр экрана.
-  Future<void> _syncModels(String apiKey) async {
-    final models = FreePoolForgeChat.catalogFor(apiKey);
-    String saved = '';
-    if (!_modelPrefLoaded) {
-      _modelPrefLoaded = true;
-      try {
-        saved = await SettingsService.loadForgeModel();
-      } catch (_) {
-        saved = '';
-      }
-    }
-    if (!mounted) return;
+  /// Пересобрать таблетку под наличный ключ провайдера. Выбор пользователя
+  /// лежит в зеркале обычных настроек, поэтому здесь нет ни одного чтения
+  /// файла: таблетка готова на первом кадре и ничего не ждёт.
+  void _syncModels(String keyKind) {
+    final models = FreePoolForgeChat.catalogForKeyKind(keyKind);
     setState(() {
       _models = models;
       _modelsReady = true;
-      if (saved.isNotEmpty && models.any((m) => m.id == saved)) {
-        _modelId = saved;
-      } else if (!models.any((m) => m.id == _modelId)) {
-        _modelId = '';
-      }
+      if (!models.any((m) => m.id == _modelId)) _modelId = '';
     });
   }
 
@@ -459,11 +446,16 @@ class _ForgeScreenState extends State<ForgeScreen> {
       if (saved != null && _tokenController.text.isEmpty) {
         _savedToken = saved;
       }
-      // Пул таблетки сразу соответствует вставленному ключу: со своим
-      // ключом появляются платные сильные модели, без него — бесплатные.
-      _models = FreePoolForgeChat.catalogFor(saved ?? '');
-      _modelsReady = true;
     });
+    // Пул таблетки строится по КЛЮЧУ ПРОВАЙДЕРА, а не по токену GitHub:
+    // раньше здесь стоял `saved` (токен репозитория), поэтому Agnes
+    // появлялась на запуске и исчезала при первой отправке. Вид ключа берём
+    // из кэша обычных настроек: зашифрованный файл читается только на ходе
+    // агента, и экран не ждёт его ради таблетки.
+    if (!mounted) return;
+    final savedModel = SettingsService.forgeModelSync();
+    if (savedModel.isNotEmpty && _modelId.isEmpty) _modelId = savedModel;
+    _syncModels(SettingsService.providerKeyKindSync());
     if (saved != null) unawaited(_checkToken(silent: true));
   }
 
@@ -658,12 +650,12 @@ class _ForgeScreenState extends State<ForgeScreen> {
     // прогон должен идти на бесплатных провайдерах, а не падать молча.
     String apiKey = '';
     try {
-      apiKey = (await SettingsService.loadAiKey()).trim();
+      apiKey = (await SettingsService.loadProviderKey()).trim();
     } catch (_) {
       apiKey = '';
     }
     if (!mounted) return;
-    await _syncModels(apiKey);
+    _syncModels(SettingsService.providerKeyKindOf(apiKey));
     if (!mounted) return;
 
     final history = List<ForgeChatMessage>.from(_messages);
@@ -713,6 +705,9 @@ class _ForgeScreenState extends State<ForgeScreen> {
         task: text,
         languageCode: languageCode,
         providerNote: providerNote,
+        // Смена ключа или модели пересобирает агента: иначе ход шёл бы с
+        // прежним пулом, выбранная Agnes не применялась.
+        chatSignature: '${apiKey.isEmpty ? 0 : 1}|$_modelId',
       );
     } on ForgeException catch (e) {
       if (mounted) _failRun(e.message);
@@ -801,7 +796,11 @@ class _ForgeScreenState extends State<ForgeScreen> {
       child: Scaffold(
         appBar: AppBar(
           leading: const BackButtonTooltip(),
-          title: Text(Translations.t('forgeTitle', context, 'Кузница')),
+          // «Кузница / MiDe–cli»: у экрана два имени — своё и CLI-агента,
+          // чьими руками он правит репозиторий.
+          title: Text(
+            '${Translations.t('forgeTitle', context, 'Кузница')} / MiDe–cli',
+          ),
           centerTitle: true,
           backgroundColor: Colors.transparent,
           actions: [
@@ -1031,7 +1030,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
     return null;
   }
 
-  /// Одна таблетка под «Кузницей» — «Модель • «имя»».
+  /// Одна таблетка под «Кузницей» — «„имя“», без слова «Модель».
   ///
   /// Раньше это была лента из всех моделей: она мигала при запуске, съедала
   /// ширину и путала — какую же модель выберет агент. Теперь на виду ровно
@@ -1042,8 +1041,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
     final color = selected == null ? accent : _modelColor(selected, cs, accent);
     final label = selected?.label ?? 'Авто · весь пул';
     return AnimatedSize(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
+      // Бока таблетки едут вместе с подписью: 300 мс с мягким входом-выходом
+      // вместо рывка на смене длины.
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubic,
       alignment: Alignment.topCenter,
       child: AnimatedOpacity(
         // Пул приходит из настроек: таблетка не появляется рывком, а мягко
@@ -1054,12 +1055,12 @@ class _ForgeScreenState extends State<ForgeScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 2, 20, 2),
           child: Align(
-            alignment: Alignment.centerLeft,
+            alignment: Alignment.center,
             child: PressScale(
-              pressedScale: 0.965,
+              pressedScale: 0.975,
               enableTilt: true,
-              duration: const Duration(milliseconds: 150),
-              releaseDuration: const Duration(milliseconds: 420),
+              duration: const Duration(milliseconds: 130),
+              releaseDuration: const Duration(milliseconds: 340),
               curve: Curves.easeOutCubic,
               maxTiltAngle: 0.22,
               pressTint: color,
@@ -1125,22 +1126,21 @@ class _ForgeScreenState extends State<ForgeScreen> {
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
                         layoutBuilder: (current, previous) => Stack(
-                          alignment: Alignment.centerLeft,
+                          alignment: Alignment.center,
                           children: [...previous, ?current],
                         ),
                         transitionBuilder: (child, anim) => FadeTransition(
                           opacity: anim,
                           child: SlideTransition(
-                            position:
-                                Tween<Offset>(
-                                  begin: const Offset(0, 0.18),
-                                  end: Offset.zero,
-                                ).animate(anim),
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.18),
+                              end: Offset.zero,
+                            ).animate(anim),
                             child: child,
                           ),
                         ),
                         child: Text(
-                          'Модель • «$label»',
+                          '«$label»',
                           key: ValueKey('forge_pill_$label'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1718,14 +1718,14 @@ class _ForgeScreenState extends State<ForgeScreen> {
         // текстом». Сжимаем всего на 1.5%: выделение текста при этом не
         // сбивается на соседние слова.
         child: PressScale(
-          pressedScale: 0.985,
+          pressedScale: 0.978,
           enableTilt: true,
-          maxTiltAngle: 0.20,
+          maxTiltAngle: 0.24,
           duration: const Duration(milliseconds: 170),
           releaseDuration: const Duration(milliseconds: 440),
           curve: Curves.easeOutCubic,
           pressTint: isUser ? accent : cs.primary,
-          pressTintStrength: 0.05,
+          pressTintStrength: 0.07,
           pressTintRadius: BorderRadius.circular(16),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 560),
@@ -1748,10 +1748,11 @@ class _ForgeScreenState extends State<ForgeScreen> {
                 if (!isUser) ...[
                   Row(
                     children: [
-                      Icon(Icons.smart_toy_outlined, size: 15, color: accent),
+                      RobotGlyph(size: 15, color: accent),
                       const SizedBox(width: 7),
                       Text(
-                        Translations.t('forgeTitle', context, 'Кузница'),
+                        '${Translations.t('forgeTitle', context, 'Кузница')} / '
+                        'MiDe–cli',
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: accent,
                           fontWeight: FontWeight.w800,
@@ -1810,9 +1811,17 @@ class _ForgeScreenState extends State<ForgeScreen> {
                 ],
                 // Под ответом — кто именно ответил. Подпись дышит вместе
                 // с пузырём и не висит общей строкой в конце чата.
-                if (!isUser && (message.model ?? '').trim().isNotEmpty) ...[
+                if (!isUser) ...[
                   const SizedBox(height: 8),
-                  _ModelCaption(label: message.model!.trim(), cs: cs),
+                  // Подпись есть у КАЖДОГО ответа: старые реплики в истории
+                  // пришли без модели, и тогда честно показываем текущий
+                  // канал вместо пустого места.
+                  _ModelCaption(
+                    label: (message.model ?? '').trim().isNotEmpty
+                        ? message.model!.trim()
+                        : (_selectedOption?.label ?? 'Пул · Авто'),
+                    cs: cs,
+                  ),
                 ],
               ],
             ),
@@ -1840,10 +1849,18 @@ class _ForgeScreenState extends State<ForgeScreen> {
           children: [
             Row(
               children: [
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                // Вместо вечной крутилки — тот же зайчик, что бежит на
+                // плашке обновления: «Ада думает» читается живым, а не
+                // «приложение грузится».
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: AnimatedBunny(
+                    size: 16,
+                    color: accent,
+                    period: const Duration(milliseconds: 1100),
+                    lift: 0.22,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

@@ -722,7 +722,7 @@ const Map<String, String> _ru = {
   'forgeFiles': 'файлов изменено',
   'forgeSafetyNote':
       'На вопросы агент отвечает сразу. Правки идут в отдельную ветку и pull request — main не трогается. ИИ: встроенные бесплатные провайдеры.',
-  'forgeThinking': 'Агент думает…',
+  'forgeThinking': 'Ада думает…',
   'forgeChatEmpty': 'Спроси что-нибудь о проекте или напиши, что изменить.',
   'forgeClearChat': 'Очистить чат',
   'forgeStopRun': 'Остановить',

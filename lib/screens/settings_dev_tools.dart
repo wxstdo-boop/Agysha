@@ -286,8 +286,8 @@ extension _SettingsDevTools on _SettingsScreenState {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                leading: const Icon(
-                  Icons.hardware_rounded,
+                leading: const RobotGlyph(
+                  size: 24,
                   color: Color(0xFF8D6E63),
                 ),
                 title: Text(

@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'agysha_bunny.dart';
 import 'press_scale.dart';
 import 'press_splat.dart' show GlassFabTile, BloodSpecks;
 import 'glass_sheen.dart';

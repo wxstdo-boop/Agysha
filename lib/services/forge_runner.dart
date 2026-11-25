@@ -20,6 +20,12 @@ class ForgeRunner extends ChangeNotifier {
   static final ForgeRunner instance = ForgeRunner();
 
   ForgeAgent? _agent;
+
+  /// Настройки, с которыми собран текущий агент. Агент живёт между ходами
+  /// ради общей рабочей ветки, но ключ ИИ и выбранная модель меняются —
+  /// со старым агентом выбор не применялся: отвечал бесплатный пул, хотя
+  /// человек вставил свой ключ и выбрал Agnes.
+  String _agentSignature = '';
   bool _running = false;
   bool _stopping = false;
   String? _provider;
@@ -82,6 +88,7 @@ class ForgeRunner extends ChangeNotifier {
     required String task,
     required String languageCode,
     String providerNote = '',
+    String chatSignature = '',
   }) async {
     if (_running) return;
     _running = true;
@@ -92,14 +99,17 @@ class ForgeRunner extends ChangeNotifier {
     _steps.clear();
     notifyListeners();
 
-    final agent =
-        _agent ??= ForgeAgent(
-          service: service,
-          chat: chat,
-          owner: owner,
-          repo: repo,
-          baseBranch: baseBranch,
-        );
+    final signature = '$chatSignature|$owner/$repo@$baseBranch';
+    final agent = _agent != null && _agentSignature == signature
+        ? _agent!
+        : (_agent = ForgeAgent(
+            service: service,
+            chat: chat,
+            owner: owner,
+            repo: repo,
+            baseBranch: baseBranch,
+          ));
+    _agentSignature = signature;
 
     try {
       var providerLogged = false;
@@ -129,7 +139,9 @@ class ForgeRunner extends ChangeNotifier {
         pullRequestUrl: turn.pullRequestUrl,
         branch: turn.branch,
         ts: DateTime.now().millisecondsSinceEpoch,
-        model: chat.lastModel,
+        // Подпись модели под ответом обязательна: шлюз не всегда сообщает
+        // конкретную подмодель, тогда честно показываем сработавший канал.
+        model: chat.lastModel ?? _provider,
       );
       // В хранилище пишем, не задерживая ход: экран всё равно покажет ответ,
       // а если хранилище недоступно, ждать его незачем.

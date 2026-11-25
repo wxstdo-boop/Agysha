@@ -715,7 +715,7 @@ const Map<String, String> _en = {
   'forgeFiles': 'files changed',
   'forgeSafetyNote':
       'Questions are answered right away. Edits go to a branch and a pull request — main is untouched. AI: built-in free providers.',
-  'forgeThinking': 'Agent is thinking…',
+  'forgeThinking': 'Ada is thinking…',
   'forgeChatEmpty':
       'Ask a question about the project or describe what to change.',
   'forgeClearChat': 'Clear chat',

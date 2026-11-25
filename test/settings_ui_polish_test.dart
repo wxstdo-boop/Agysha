@@ -164,6 +164,61 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets('барабан: вертикальный свайп по колесу листает настройки, '
+      'а не меняет тему', (tester) async {
+    await openSettings(tester);
+    final revolver = find.byKey(const ValueKey('theme_revolver'));
+    await tester.ensureVisible(revolver);
+    await tester.pump(const Duration(milliseconds: 200));
+    final rect = tester.getRect(revolver);
+
+    // Список настроек — ближайший Scrollable над колесом; первый Scrollable
+    // в дереве принадлежит другому экрану и стоит на месте.
+    final scrollable = find
+        .ancestor(of: revolver, matching: find.byType(Scrollable))
+        .first;
+
+    Offset chamberCenter(Element e) =>
+        (e.renderObject! as RenderBox).localToGlobal(Offset.zero) +
+        (e.renderObject! as RenderBox).size.center(Offset.zero);
+
+    /// Центры камор ОТНОСИТЕЛЬНО колеса: страница под ними уезжает.
+    List<Offset> ring() {
+      final origin = tester.getRect(revolver).topLeft;
+      return find
+          .descendant(of: revolver, matching: find.byType(Icon))
+          .evaluate()
+          .where((e) => ((e.widget as Icon).size ?? 24) <= 20)
+          .map((e) => chamberCenter(e) - origin)
+          .toList();
+    }
+
+    final before = tester.state<ScrollableState>(scrollable).position.pixels;
+    final ringBefore = ring();
+
+    // Палец начинает ровно на колесе и ведёт строго вверх — это прокрутка.
+    await tester.dragFrom(rect.center, const Offset(0, -140));
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final after = tester.state<ScrollableState>(scrollable).position.pixels;
+    expect(
+      after,
+      greaterThan(before + 1),
+      reason: 'свайп по колесу должен листать настройки',
+    );
+    final ringAfter = ring();
+    expect(ringAfter.length, ringBefore.length);
+    for (var k = 0; k < ringBefore.length; k++) {
+      expect(
+        (ringAfter[k] - ringBefore[k]).distance,
+        lessThan(0.5),
+        reason: 'колесо не должно проворачиваться от вертикального свайпа',
+      );
+    }
+    // Досеиваем появление новых карточек: их анимация держит таймер.
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   testWidgets('барабан тем: сдвиг на один шаг (58 px) переключает камору', (
     tester,
   ) async {
@@ -537,7 +592,9 @@ void main() {
       reason: 'отдельной строки «Звуки» больше нет',
     );
 
-    final tile = find.ancestor(of: title, matching: find.byType(ListTile)).first;
+    final tile = find
+        .ancestor(of: title, matching: find.byType(ListTile))
+        .first;
     final vib = find.descendant(
       of: tile,
       matching: find.byIcon(Icons.vibration),

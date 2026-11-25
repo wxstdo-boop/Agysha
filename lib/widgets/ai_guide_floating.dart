@@ -920,8 +920,13 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
                         width: 30,
                         height: 30,
                         child: Padding(
-                          padding: EdgeInsets.all(7),
-                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                          padding: EdgeInsets.all(6),
+                          child: AnimatedBunny(
+                            size: 18,
+                            color: Color(0xFFFF5265),
+                            period: Duration(milliseconds: 1100),
+                            lift: 0.22,
+                          ),
                         ),
                       )
                     : IconButton.filled(

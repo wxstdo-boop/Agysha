@@ -136,6 +136,13 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// два касания выдают по очереди противоположные углы и барабан дёргается.
   int? _pointerId;
   Offset _lastLocal = Offset.zero;
+
+  /// Ось жеста: null — палец только опустился, ещё не ясно, крутят колесо
+  /// или листают настройки. Пока ось не выбрана, барабан не двигается:
+  /// иначе вертикальная прокрутка страницы, начатая над колесом, проворачивала
+  /// его — «в середине барабан меняется при скролле».
+  bool? _horizontalGesture;
+  Offset _downLocal = Offset.zero;
   double _lastAngle = 0;
   double _lastRadius = 0;
 
@@ -331,6 +338,8 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _spin.stop();
     _pointerId = event.pointer;
     _lastLocal = event.localPosition;
+    _downLocal = event.localPosition;
+    _horizontalGesture = null;
     final v = event.localPosition - Offset(_side / 2, _side / 2);
     _lastRadius = v.distance;
     _lastAngle = math.atan2(v.dy, v.dx);
@@ -353,6 +362,22 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _onPointerMove(PointerMoveEvent event) {
     if (_pointerId != event.pointer) return;
     final local = event.localPosition;
+    if (_horizontalGesture == null) {
+      final moved = local - _downLocal;
+      const slop = 9.0;
+      if (moved.distance < slop) return;
+      _horizontalGesture = moved.dx.abs() > moved.dy.abs();
+      // Ось зафиксирована. Точку отсчёта НЕ сдвигаем: движение, накопленное
+      // до порога, принадлежит этому же жесту — иначе каждый оборот терял
+      // первые градусы, и барабан замирал между каморами.
+      if (_horizontalGesture == false) {
+        // Вертикальный жест — это прокрутка страницы, колесо стоит.
+        _dragging = false;
+        return;
+      }
+      _dragging = true;
+    }
+    if (_horizontalGesture == false) return;
     final v = local - Offset(_side / 2, _side / 2);
     final radius = v.distance;
     final stepAngle = 2 * math.pi / _n;
@@ -395,9 +420,31 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
 
   void _onPointerUp(PointerEvent event) {
     if (_pointerId != event.pointer) return;
+    final wasHorizontal = _horizontalGesture == true;
     _pointerId = null;
     _dragging = false;
-    _settleFromDrag();
+    _horizontalGesture = null;
+    // Прокрутку страницы не «доводим» колесом: отпустили вертикальный жест —
+    // барабан просто остаётся на ближайшей каморе.
+    if (wasHorizontal) {
+      _settleFromDrag();
+    } else {
+      _settleTo(_pos.roundToDouble());
+    }
+  }
+
+  /// Вертикальный жест по колесу листает настройки: колесо не крутится,
+  /// страница едет на ту же дельту — «просто листать» работает и здесь.
+  void _onVerticalDragUpdate(DragUpdateDetails details) {
+    if (_horizontalGesture != false) return;
+    final scrollable = Scrollable.maybeOf(context);
+    final position = scrollable?.position;
+    if (position == null) return;
+    final next = (position.pixels - details.delta.dy).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    position.jumpTo(next);
   }
 
   /// Довод после жеста — ВСЕГДА по итоговому смещению, а не по последнему
@@ -464,12 +511,13 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
                 width: side,
                 height: side,
                 child: GestureDetector(
-                  // Пока палец на барабане, список настроек не листается:
-                  // иначе страница уезжала под пальцем и мешала крутить.
-                  // За пределами круга прокрутка работает как обычно.
+                  // Вертикальный жест по колесу НЕ крутит барабан и не
+                  // проваливается в список: колесо само везёт страницу на ту
+                  // же дельту. Иначе палец, начавший скролл в середине
+                  // настроек, проворачивал темы.
                   behavior: HitTestBehavior.opaque,
                   onVerticalDragStart: (_) {},
-                  onVerticalDragUpdate: (_) {},
+                  onVerticalDragUpdate: _onVerticalDragUpdate,
                   onVerticalDragEnd: (_) {},
                   child: Listener(
                     behavior: HitTestBehavior.opaque,

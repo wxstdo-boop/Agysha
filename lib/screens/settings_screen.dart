@@ -19,6 +19,7 @@ import '../widgets/canary_icon.dart';
 import '../widgets/ada_icon.dart';
 import '../widgets/settings_search_icon.dart';
 import '../widgets/press_scale.dart';
+import '../widgets/robot_glyph.dart';
 import '../services/alarm_service.dart';
 import '../services/app_version.dart';
 import '../services/renderer_service.dart';

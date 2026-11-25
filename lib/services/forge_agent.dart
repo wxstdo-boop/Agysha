@@ -810,15 +810,19 @@ class ForgeAgent {
       case 'write_file':
         final path = _requirePath(call);
         final raw =
-            _str(call.arguments['content']) ??
-            _str(call.arguments['file_content']) ??
-            _str(call.arguments['new_content']) ??
-            _str(call.arguments['text']);
+            _textOf(call.arguments['content']) ??
+            _textOf(call.arguments['file_content']) ??
+            _textOf(call.arguments['new_content']) ??
+            _textOf(call.arguments['contents']) ??
+            _textOf(call.arguments['body']) ??
+            _textOf(call.arguments['data']) ??
+            _textOf(call.arguments['code']) ??
+            _textOf(call.arguments['text']);
         if (raw == null) {
           throw ForgeException(
             400,
             'write_file без content (передай полное содержимое файла в поле '
-            'content)',
+            'content). Пришли ключи: ${call.arguments.keys.join(', ')}',
           );
         }
         final content = _normalizeFileContent(raw);
@@ -978,14 +982,37 @@ class ForgeAgent {
   }
 
   String _requirePath(ForgeToolCall call) {
-    final path = _str(call.arguments['path']);
+    final path =
+        _str(call.arguments['path']) ??
+        _str(call.arguments['file_path']) ??
+        _str(call.arguments['filepath']) ??
+        _str(call.arguments['filename']) ??
+        _str(call.arguments['file']);
     if (path == null || path.trim().isEmpty) {
       throw ForgeException(400, 'Не указан path');
     }
-    if (isBlockedPath(path)) {
-      throw ForgeException(403, 'Путь закрыт для агента: $path');
+    final clean = _cleanRepoPath(path);
+    if (isBlockedPath(clean)) {
+      throw ForgeException(403, 'Путь закрыт для агента: $clean');
     }
-    return path;
+    return clean;
+  }
+
+  /// Путь из ответа модели приводят к виду, который понимает GitHub API:
+  /// без `./`, ведущего слеша, без префиксов `a/`/`b/` из диффа и без
+  /// «owner/repo/» — иначе write_file всегда отвечал 404.
+  String _cleanRepoPath(String path) {
+    var p = path.trim().replaceAll('\\', '/');
+    while (p.startsWith('./')) {
+      p = p.substring(2);
+    }
+    while (p.startsWith('/')) {
+      p = p.substring(1);
+    }
+    if (p.startsWith('a/') || p.startsWith('b/')) p = p.substring(2);
+    final prefix = '$owner/$repo/';
+    if (p.startsWith(prefix)) p = p.substring(prefix.length);
+    return p;
   }
 
   String _systemPrompt(String languageCode) =>
@@ -1071,6 +1098,16 @@ class ForgeAgent {
   }
 
   static String? _str(dynamic value) => value is String ? value : null;
+
+  /// Текст из любого «строкоподобного» значения: модели иногда кладут в
+  /// `content` готовый объект/массив (например, JSON конфига) — раньше это
+  /// превращалось в «write_file без content».
+  static String? _textOf(dynamic value) {
+    if (value is String) return value;
+    if (value is Map || value is List) return jsonEncode(value);
+    if (value is num || value is bool) return value.toString();
+    return null;
+  }
 }
 
 /// Модель, которую можно выбрать в «Кузнице», — ровно из того пула, что
@@ -1129,8 +1166,17 @@ class FreePoolForgeChat implements ForgeChat {
   /// Модели, доступные с таким ключом (или без него), по убыванию силы.
   static List<ForgeModelOption> catalogFor(String apiKey) {
     final key = apiKey.trim();
-    final hasKey = key.isNotEmpty;
-    final openRouter = key.startsWith('sk-or-');
+    return catalogForKeyKind(
+      key.isEmpty ? '' : (key.startsWith('sk-or-') ? 'openrouter' : 'other'),
+    );
+  }
+
+  /// То же, но по виду ключа (`''`, `other`, `openrouter`): вид хранится
+  /// в обычных настройках, поэтому таблетка знает про Agnes и Poolside до
+  /// того, как прочитан зашифрованный файл с самим ключом.
+  static List<ForgeModelOption> catalogForKeyKind(String kind) {
+    final hasKey = kind.isNotEmpty;
+    final openRouter = kind == 'openrouter';
     final all = <ForgeModelOption>[
       // Свой ключ может быть ключом Agnes — в настройках это одно поле
       // «Ключ провайдера». Сначала Agnes: раньше такой ключ уходил на
@@ -1482,10 +1528,90 @@ class _FreeProvider {
       }
       return (args: const {}, broken: true);
     } catch (_) {
+      // Локальные модели часто шлют почти-JSON: настоящие переводы строк
+      // внутри строки, одинарные кавычки, висящая запятая. Раньше такой
+      // вызов сразу считался битым — и `write_file` «не работал» вовсе.
+      final repaired = _repairJson(raw);
+      if (repaired != null) return (args: repaired, broken: false);
       return (args: const {}, broken: true);
     }
   }
   return (args: const {}, broken: false);
+}
+
+/// Разбирает «почти JSON» аргументов инструмента, не додумывая содержимое:
+/// чинятся только структура и экранирование, обрезанная строка остаётся
+/// битой (иначе в файл попал бы обрубок).
+Map<String, dynamic>? _repairJson(String raw) {
+  var s = raw.trim();
+  if (s.startsWith('```')) {
+    final nl = s.indexOf('\n');
+    if (nl < 0) return null;
+    s = s.substring(nl + 1);
+    final fence = s.lastIndexOf('```');
+    if (fence >= 0) s = s.substring(0, fence);
+    s = s.trim();
+  }
+  final open = s.indexOf('{');
+  if (open < 0) return null;
+  s = s.substring(open);
+  final escaped = _escapeRawControlChars(s);
+  // Висящая запятая перед закрывающей скобкой — частая правка руками.
+  final noTrailing = escaped.replaceAllMapped(
+    RegExp(r',\s*([}\]])'),
+    (m) => m.group(1)!,
+  );
+  for (final candidate in <String>[noTrailing]) {
+    try {
+      final decoded = jsonDecode(candidate);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (_) {
+      continue;
+    }
+  }
+  return null;
+}
+
+/// Экранирует настоящие управляющие символы ВНУТРИ строковых литералов.
+/// Вне строк ничего не меняется, поэтому переводы строк форматирования
+/// остаются как есть.
+String _escapeRawControlChars(String input) {
+  final out = StringBuffer();
+  var inString = false;
+  var escaped = false;
+  for (final rune in input.runes) {
+    final ch = String.fromCharCode(rune);
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        out.write(ch);
+        continue;
+      }
+      if (ch == '\\') {
+        escaped = true;
+        out.write(ch);
+        continue;
+      }
+      if (ch == '"') {
+        inString = false;
+        out.write(ch);
+        continue;
+      }
+      if (ch == '\n') {
+        out.write(r'\n');
+      } else if (ch == '\r') {
+        out.write(r'\r');
+      } else if (ch == '\t') {
+        out.write(r'\t');
+      } else {
+        out.write(ch);
+      }
+      continue;
+    }
+    if (ch == '"') inString = true;
+    out.write(ch);
+  }
+  return out.toString();
 }
 
 /// Сигнал остановки, который пролетел сквозь ожидание ответа модели.

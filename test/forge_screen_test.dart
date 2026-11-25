@@ -405,9 +405,8 @@ void main() {
           repo: 'agysha',
           service: service,
           runner: ForgeRunner(),
-          chatFactory: (_) => _ScriptedChat([
-            const ForgeChatReply(text: 'Привет.'),
-          ]),
+          chatFactory: (_) =>
+              _ScriptedChat([const ForgeChatReply(text: 'Привет.')]),
         ),
       ),
     );
@@ -765,9 +764,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Без ключа и без настроек таблетка одна и подписана выбранной
-    // моделью: «Модель • «Авто · весь пул»». Раньше здесь стояла лента из
-    // всех моделей пула, и над заголовком читался список чипов.
-    const pill = 'Модель • «Авто · весь пул»';
+    // моделью: ««Авто · весь пул»» — слово «Модель» из неё убрано.
+    const pill = '«Авто · весь пул»';
     expect(find.text(pill), findsOneWidget);
     final pool = FreePoolForgeChat.catalogFor('');
     expect(pool, isNotEmpty);
@@ -796,7 +794,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.longPress(find.text('Модель • «Авто · весь пул»'));
+    await tester.longPress(find.text('«Авто · весь пул»'));
     await tester.pumpAndSettle();
 
     expect(find.text('Модели для кодинга'), findsOneWidget);

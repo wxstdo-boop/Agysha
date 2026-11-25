@@ -293,8 +293,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     final size = context.size;
     if (size == null || size.width <= 0 || size.height <= 0) return;
     // Тактильный 3D-наклон работает для всех карточек, плашек и кнопок.
-    // Для микро-иконок меньше 20px наклон не нужен.
-    if (size.width < 20 || size.height < 20) return;
+    // Порог — только для настоящих микро-иконок: у короткой реплики чата
+    // высота легко меньше 20px, и раньше она оставалась совсем без отклика.
+    if (size.width < 12 || size.height < 12) return;
     _tiltSize = size;
     final rawNx = (pos.dx / size.width - 0.5) * 2.0;
     final rawNy = (pos.dy / size.height - 0.5) * 2.0;
