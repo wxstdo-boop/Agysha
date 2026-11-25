@@ -159,7 +159,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "$MANUAL_NOTES" ]; then
-            printf 'notes=%s\n' "$MANUAL_NOTES" >> "$GITHUB_OUTPUT"
+            # Многострочные заметки нельзя писать как notes=строка: строка
+            # вторая и дальше не проходит формат $GITHUB_OUTPUT, и весь bump
+            # падал с «Invalid format» ещё до сборки APK.
+            {
+              echo "notes<<EOF"
+              printf '%s\n\n' "$MANUAL_NOTES"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
             echo "Заметки заданы вручную"
             exit 0
           fi
