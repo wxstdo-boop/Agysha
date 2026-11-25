@@ -79,48 +79,51 @@ void main() {
     );
   });
 
-  test('пока барабан едет, смена подписи без наслоений', () {
+  test('подпись меняется одним постоянным затуханием', () {
     final src = read('lib/screens/settings_theme_carousel.dart');
+    // Раньше длительность зависела от `_moving` (0 мс / 280 мс): подпись
+    // то подменялась кадром, то затухала, и на границе режимов глаз
+    // ловил рывок. Теперь скорость одна.
     expect(
-      src,
-      matches(
-        RegExp(
-          r'duration:\s*_moving\s*\?\s*Duration\.zero\s*:\s*const Duration\(milliseconds: 280\)',
-        ),
-      ),
+      'duration: const Duration(milliseconds: 240),'.allMatches(src).length,
+      greaterThanOrEqualTo(2),
       reason:
-          'пока барабан едет, подпись меняется вслед за каморой без фейда: '
-          'короткий кроссфейд на быстром вращении накладывал две-три подписи '
-          'друг на друга, и текст мылился; на остановке остаётся затухание',
+          'подпись и значок в центре должны меняться одной и той же '
+          'постоянной скоростью, без переключения длительности по движению',
     );
     expect(
       src,
-      contains('const Duration(milliseconds: 280)'),
-      reason: 'на остановке подпись должна доехать плавным затуханием',
+      isNot(contains('bool get _moving')),
+      reason:
+          'переключение анимации по «барабан едет» — источник рывка на '
+          'остановке; режимов быть не должно',
     );
     expect(
       src,
-      contains('bool get _moving => _dragging || _spin.isAnimating;'),
-      reason: 'движение должно учитывать и палец, и довод',
+      isNot(contains('_spinFade')),
+      reason: 'затемнение подписи на каждом шаге читалось как мигание',
     );
   });
 
-  test('пока барабан едет, значок в центре тоже меняется плавно', () {
+  test('значок в центре не крутится и не масштабируется', () {
     final src = read('lib/screens/settings_theme_carousel.dart');
+    final hub = body(src, 'Widget _hub(', 'Widget _chamber(');
     expect(
-      src,
-      contains(
-        'duration: _moving\n                      ? const Duration(milliseconds: 70)',
-      ),
+      hub,
+      isNot(contains('ScaleTransition')),
       reason:
-          'значок в центре во время кручения меняется коротким двухфазным '
-          'затуханием 70 мс: мгновенная подмена выглядела как дёрганье, '
-          'а долгий кроссфейд — как «значок отстаёт»',
+          'центр обязан только менять значок; «подрастающий» глиф читался '
+          'как вращение и дёрганье',
     );
     expect(
-      src,
-      contains('const Duration(milliseconds: 380)'),
-      reason: 'на остановке значок должен проявиться двухфазным затуханием',
+      hub,
+      isNot(contains('RotationTransition')),
+      reason: 'в центре ничего не вращается — вращаются только каморы',
+    );
+    expect(
+      hub,
+      contains('FadeTransition'),
+      reason: 'значок в центре обязан сменяться затуханием, а не кадром',
     );
   });
 
@@ -164,26 +167,19 @@ void main() {
     );
   });
 
-  test('подпись и значок в центре дышат вместе с барабаном', () {
+  test('в ключе подписи — сам текст, а не ключ темы', () {
     final src = read('lib/screens/settings_theme_carousel.dart');
-    expect(
-      src,
-      contains('double get _spinFade => 1.0 - 0.55 * _spinCross;'),
-      reason:
-          'смена подписи должна приходиться на самую бледную точку перехода, '
-          'иначе текст подменяется кадром и читается как мигание',
-    );
-    expect(
-      'opacity: _moving ? _spinFade : 1,'.allMatches(src).length,
-      2,
-      reason: 'притухают оба: и название, и значок — иначе значок щёлкает',
-    );
     expect(
       src,
       contains(r"ValueKey('theme_label_${entry.key}_${entry.label}')"),
       reason:
           'в ключе подписи должна быть сама подпись, иначе смена '
           'варианта у Cyberpunk подменяется кадром',
+    );
+    expect(
+      src,
+      isNot(contains('_spinCross')),
+      reason: 'переходной точки между каморами больше нет',
     );
   });
 }

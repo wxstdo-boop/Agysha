@@ -89,7 +89,7 @@ void main() {
     double stoneWidth() {
       final r = tester.getRect(
         find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == '_GlassStone',
+          (w) => w.runtimeType.toString() == '_SectionStone',
         ),
       );
       return r.width;
@@ -135,7 +135,7 @@ void main() {
       double stoneWidth() {
         final r = tester.getRect(
           find.byWidgetPredicate(
-            (w) => w.runtimeType.toString() == '_GlassStone',
+            (w) => w.runtimeType.toString() == '_SectionStone',
           ),
         );
         return r.width;
@@ -174,7 +174,7 @@ void main() {
       double stoneWidth() {
         final r = tester.getRect(
           find.byWidgetPredicate(
-            (w) => w.runtimeType.toString() == '_GlassStone',
+            (w) => w.runtimeType.toString() == '_SectionStone',
           ),
         );
         return r.width;
@@ -212,7 +212,7 @@ void main() {
     double stoneWidth() {
       final r = tester.getRect(
         find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == '_GlassStone',
+          (w) => w.runtimeType.toString() == '_SectionStone',
         ),
       );
       return r.width;
@@ -265,21 +265,22 @@ void main() {
     // подпись перекрашивалась, а фона под разделом не было вовсе —
     // «фон не появляется».
     final stone = find.byWidgetPredicate(
-      (w) => w.runtimeType.toString() == '_GlassStone',
+      (w) => w.runtimeType.toString() == '_SectionStone',
     );
     expect(stone, findsOneWidget);
     final box = tester.widget<DecoratedBox>(
       find.descendant(of: stone, matching: find.byType(DecoratedBox)),
     );
     final deco = box.decoration as BoxDecoration;
-    expect(
-      deco.gradient,
-      isNotNull,
-      reason: 'подложка должна быть залита, а не прозрачна',
-    );
+    // Плашка — та самая мягкая красная заливка, которой раньше отзывалась
+    // ячейка при нажатии, но теперь она постоянная и не пропадает после
+    // тапов. Стеклянного градиента здесь быть не должно: он был «лишней»
+    // подложкой и пропадал кадром.
+    expect(deco.color, isNotNull);
+    expect(deco.gradient, isNull);
     expect(deco.borderRadius, isNotNull);
-    // Обводка есть, а BoxShadow убран намеренно: размытая тень — самая
-    // дорогая часть отрисовки капсулы на Impeller, и на 54 px её не видно.
-    expect(deco.border, isNotNull);
+    expect(deco.border, isNull);
+    // Тени нет: Impeller считает её каждый кадр, а за плашкой её не видно.
+    expect(deco.boxShadow, isNull);
   });
 }

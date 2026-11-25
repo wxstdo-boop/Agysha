@@ -706,7 +706,7 @@ class _SectionPillState extends State<SectionPill>
                     top: (h - stoneH) / 2,
                     width: stoneW,
                     height: stoneH,
-                    child: _GlassStone(capRadius: capRadius),
+                    child: _SectionStone(capRadius: capRadius),
                   ),
                 ],
               );
@@ -983,40 +983,26 @@ class _PillLabelState extends State<_PillLabel>
   }
 }
 
-/// Подвижная подложка выбранного раздела: «камень», который едет под
-/// таблеткой и растягивается в угол при упоре в край дорожки.
+/// Подвижная подложка выбранного раздела — та же мягкая красная плашка,
+/// которой отзывалась ячейка при нажатии (`pressTint` 0xFFFF453A на 10 %),
+/// только теперь она одна, постоянная и едет за выбором.
 ///
-/// Одно время здесь стояла пустая заглушка (фон убрали в пользу одного
-/// текста), и после тапов раздел выглядел «никак»: подпись перекрашивалась,
-/// но подложки не было вовсе. Возвращаем мягкое монохромное стекло в цвет
-/// темы — без градиентов проезжающих тем, чтобы барабан разделов не спорил
-/// с палитрой приложения.
-class _GlassStone extends StatelessWidget {
+/// Одно время вместо неё стоял стеклянный градиент — это была лишняя
+/// подложка, она ещё и пропадала кадром после тапов. Градиент убран,
+/// заливка сплошная: на плашке 54 px он ничего не добавляет, а Impeller
+/// платит за него каждый кадр. Тени нет по той же причине.
+class _SectionStone extends StatelessWidget {
   final double capRadius;
 
-  const _GlassStone({required this.capRadius});
+  const _SectionStone({required this.capRadius});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     return DecoratedBox(
       decoration: BoxDecoration(
+        color: const Color(0xFFFF453A).withValues(alpha: dark ? 0.16 : 0.12),
         borderRadius: BorderRadius.circular(capRadius),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cs.primary.withValues(alpha: dark ? 0.26 : 0.14),
-            cs.primary.withValues(alpha: dark ? 0.16 : 0.07),
-          ],
-        ),
-        border: Border.all(
-          color: cs.primary.withValues(alpha: dark ? 0.40 : 0.26),
-          width: 1,
-        ),
-        // Без BoxShadow: размытая тень — самая дорогая часть отрисовки на
-        // Impeller, а на капсуле её и не видно за обводкой.
       ),
     );
   }
