@@ -7,7 +7,7 @@ publish_to: 'none'
 # т.е. для arm64 Flutter прибавляет 2000 к номеру базы. На телефоне сейчас
 # 47125 (1.6.53), поэтому номер базы должен быть не ниже 45126.
 # Обновление ставится поверх старого с сохранением данных (PIN, будильники).
-version: 1.6.344+45420
+version: 1.6.345+45421
 
 environment:
   sdk: ^3.12.2
@@ -38,60 +38,3 @@ dependencies:
   characters: ^1.4.1
   cryptography: ^2.7.0
   # SHA-256 отпечатка файла: защита подборки музыки от повторного добавления
-  # одного и того же звука. Пакет и так приходил транзитивно (см. pubspec.lock).
-  crypto: ^3.0.8
-  flutter_secure_storage: ^11.2.0
-  shared_preferences: ^2.5.0
-  uuid: ^4.5.1
-  audioplayers: ^6.1.0
-  just_audio: ^0.10.6
-  just_audio_background: ^0.0.1-beta.17
-  file_picker: ^13.4.1
-  flutter_local_notifications: ^23.0.3
-  timezone: ^0.11.2
-  url_launcher: ^6.3.1
-  android_intent_plus: ^6.1.0
-
-  path_provider: ^2.1.0
-  # Локальный форк: регистрирует плагины в оверлейном движке
-  # (иначе в мини-окошке нет prefs/path_provider — история пустая,
-  # ИИ не отвечает) и убирает текст уведомления.
-  flutter_overlay_window:
-    path: third_party/flutter_overlay_window
-  # Локальный форк: pub-версия 6.0.0 компилирует android-библиотеку с
-  # compileSdk 31 и падает на AAR-метаданных (androidx требует 33+).
-  # Сконвертировали форк с compileSdk 36.
-  flutter_keyboard_visibility:
-    path: third_party/flutter_keyboard_visibility
-  http: ^1.2.0
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^6.0.0
-
-flutter:
-  uses-material-design: true
-  assets:
-    - assets/sounds/
-    - assets/agysha.png
-    - assets/agysha_art.png
-  fonts:
-    - family: Caveat
-      fonts:
-        - asset: assets/fonts/Caveat-400.ttf
-          weight: 400
-        - asset: assets/fonts/Caveat-500.ttf
-          weight: 500
-        - asset: assets/fonts/Caveat-600.ttf
-          weight: 600
-        - asset: assets/fonts/Caveat-700.ttf
-          weight: 700
-    # Roboto с широким em dash — для тире в режиме Caveat (см. WideDashController).
-    # Бандлим его: fontFamily 'Roboto' НЕ бандлится и на устройстве не
-    # резолвится, из-за чего глиф тире падал обратно в Caveat и оставался узким.
-    - family: RobotoDash
-      fonts:
-        - asset: assets/fonts/RobotoDash-400.ttf
-          weight: 400
-        - asset: assets/fonts/RobotoDash-700.ttf
-          weight: 700
