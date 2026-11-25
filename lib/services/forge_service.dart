@@ -18,7 +18,7 @@ class ForgeException implements Exception {
   /// а не показывает общую сетевую ошибку.
   bool get isAuth => statusCode == 401;
 
-  /// Не хватает прав: у fine-grained токена нет нужного доступа к репозиторию.
+  /// Не хватает прав: у токена нет нужного доступа к репозиторию.
   bool get isForbidden => statusCode == 403;
 
   @override

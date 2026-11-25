@@ -544,6 +544,92 @@ void main() {
       );
     });
 
+    test('edit_file меняет ровно один фрагмент, не переписывая файл', () async {
+      // Жалоба: «ИИ не может редактировать файл». Целый write_file модель
+      // обрывает на большом файле, поэтому основной путь — правка точного
+      // фрагмента из read_file.
+      final fake = _FakeGitHub();
+      fake.branchFiles['main'] = {
+        'lib/main.dart': 'void main() {\n  runApp(Old());\n}\n',
+      };
+      final chat = _ScriptedChat([
+        _call('read_file', {'path': 'lib/main.dart'}),
+        _call('edit_file', {
+          'path': 'lib/main.dart',
+          'old_string': 'runApp(Old());',
+          'new_string': 'runApp(New());',
+        }),
+        _call('finish', {'summary': 'Поправил точку входа'}),
+      ]);
+      final steps = <ForgeStep>[];
+      final agent = ForgeAgent(
+        service: await _serviceWithToken(fake.client),
+        chat: chat,
+        owner: 'wxstdo-boop',
+        repo: 'agysha',
+      );
+
+      final result = await agent.run(
+        task: 'замени Old на New',
+        baseBranch: 'main',
+        onStep: steps.add,
+      );
+
+      expect(result.filesChanged, 1);
+      expect(steps.map((s) => s.tool), ['read_file', 'edit_file']);
+      final written = fake.branchFiles.values
+          .map((f) => f['lib/main.dart'] ?? '')
+          .firstWhere((c) => c.contains('New()'));
+      expect(written, 'void main() {\n  runApp(New());\n}\n');
+    });
+
+    test('edit_file с неоднозначным old_string ничего не пишет', () async {
+      final fake = _FakeGitHub();
+      fake.branchFiles['main'] = {'lib/a.dart': 'x();\nx();\n'};
+      final chat = _ScriptedChat([
+        _call('edit_file', {
+          'path': 'lib/a.dart',
+          'old_string': 'x();',
+          'new_string': 'y();',
+        }),
+        _call('finish', {'summary': 'не вышло'}),
+      ]);
+      final steps = <ForgeStep>[];
+      final agent = ForgeAgent(
+        service: await _serviceWithToken(fake.client),
+        chat: chat,
+        owner: 'wxstdo-boop',
+        repo: 'agysha',
+      );
+
+      // Без правок `run` считает ход пустым, поэтому смотрим сам прогон.
+      await agent.respond(
+        history: const [],
+        task: 'поправь',
+        baseBranch: 'main',
+        onStep: steps.add,
+      );
+
+      expect(fake.branchFiles['main']!['lib/a.dart'], 'x();\nx();\n');
+      expect(
+        fake.branchFiles.values.any(
+          (f) => (f['lib/a.dart'] ?? '').contains('y();'),
+        ),
+        isFalse,
+      );
+      expect(steps.single.tool, 'edit_file');
+      expect(steps.single.ok, isFalse);
+      // Модель получила объяснение, а не молчание: иначе она повторяла бы
+      // тот же неоднозначный фрагмент до лимита шагов.
+      expect(
+        chat.seenMessages.any(
+          (ms) =>
+              ms.any((m) => '${m['content']}'.contains('встречается 2 раз')),
+        ),
+        isTrue,
+      );
+    });
+
     test('экранированный и завёрнутый в ``` content пишется файлом', () async {
       // Модель иногда присылает ПОЛНЫЙ файл, но с двойным экранированием
       // переводов строк или в ```-заборе. Раньше такой content писался

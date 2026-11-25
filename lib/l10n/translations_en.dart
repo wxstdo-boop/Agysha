@@ -677,7 +677,7 @@ const Map<String, String> _en = {
   'forgeSubtitle':
       'Chat with the agent: ask about the code or ask it to change it.',
   'forgeTokenSection': 'GITHUB ACCESS',
-  'forgeTokenHint': 'Fine-grained: Contents, Pull requests — read and write.',
+  'forgeTokenHint': 'Classic token: repo scope (Contents, Pull requests).',
   'startupDiagTitle': 'Agysha stopped safely',
   'startupDiagBody':
       'Agysha could not finish starting and stopped before it drew the '

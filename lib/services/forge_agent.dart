@@ -261,6 +261,40 @@ class ForgeAgent {
         },
       },
     },
+    // Правка участка файла — второй способ записи и первый, которым модель
+    // реально пользуется: целый файл она часто не осиливает (обрывает
+    // content, путает отступы, присылает дифф), а «замени этот кусок на
+    // этот» даётся ей легко. Именно из-за этого «агент не может
+    // редактировать файл».
+    {
+      'type': 'function',
+      'function': {
+        'name': 'edit_file',
+        'description':
+            'Заменить участок файла в рабочей ветке. old_string — точный '
+            'кусок из read_file (вместе с отступами), new_string — чем его '
+            'заменить. Кусок должен встречаться в файле ровно один раз.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'path': {'type': 'string', 'description': 'Путь файла.'},
+            'old_string': {
+              'type': 'string',
+              'description': 'Точный существующий фрагмент файла.',
+            },
+            'new_string': {
+              'type': 'string',
+              'description': 'Чем заменить фрагмент. Пусто — удалить его.',
+            },
+            'message': {
+              'type': 'string',
+              'description': 'Короткое сообщение коммита.',
+            },
+          },
+          'required': ['path', 'old_string', 'new_string'],
+        },
+      },
+    },
     {
       'type': 'function',
       'function': {
@@ -710,7 +744,7 @@ class ForgeAgent {
   }
 
   static bool _isWrite(String tool) =>
-      tool == 'write_file' || tool == 'delete_file';
+      tool == 'write_file' || tool == 'edit_file' || tool == 'delete_file';
 
   /// Итоговый набор изменённых файлов. Файл, записанный и затем удалённый в
   /// одном ходе, к результату не относится — его из набора убираем.
@@ -807,6 +841,63 @@ class ForgeAgent {
                   'start=$end + 1.]'
             : '';
         return '$header${slice.join('\n')}$tail';
+      case 'edit_file':
+        final path = _requirePath(call);
+        final from = _textOf(call.arguments['old_string']);
+        final to = _textOf(call.arguments['new_string']);
+        if (from == null || from.isEmpty) {
+          throw ForgeException(
+            400,
+            'edit_file без old_string (передай точный кусок файла из '
+            'read_file, вместе с отступами).',
+          );
+        }
+        if (to == null) {
+          throw ForgeException(
+            400,
+            'edit_file без new_string (пустая строка — значит удалить кусок).',
+          );
+        }
+        final current = await service.readFile(owner, repo, path, ref: branch);
+        if (current == null) {
+          throw ForgeException(
+            404,
+            'edit_file: файла $path нет в ветке. Сначала list_dir/read_file.',
+          );
+        }
+        final hits = from.allMatches(current.content).length;
+        if (hits == 0) {
+          throw ForgeException(
+            400,
+            'edit_file: old_string не найден в $path. Скопируй фрагмент '
+            'дословно из read_file — с отступами и без «...».',
+          );
+        }
+        if (hits > 1) {
+          throw ForgeException(
+            400,
+            'edit_file: old_string встречается $hits раз. Добавь соседние '
+            'строки, чтобы фрагмент стал уникальным.',
+          );
+        }
+        final patched = current.content.replaceFirst(from, to);
+        if (patched.trim().isEmpty) {
+          throw ForgeException(
+            400,
+            'edit_file сделал бы файл пустым — так нельзя. Для удаления '
+            'файла есть delete_file.',
+          );
+        }
+        await service.writeFile(
+          owner,
+          repo,
+          path,
+          content: patched,
+          message: _str(call.arguments['message']) ?? 'Кузница: правка $path',
+          branch: branch,
+          sha: current.sha,
+        );
+        return 'Записано: $path (заменён фрагмент)';
       case 'write_file':
         final path = _requirePath(call);
         final raw =
@@ -1053,8 +1144,10 @@ class ForgeAgent {
       'привычках» разрешай по истории и по коду, а не догадками.\n'
       '— Пути бери ТОЛЬКО из list_dir/read_file. Если файла нет в выдаче — '
       'сначала найди его через search_code, не угадывай путь.\n'
-      '— Перед write_file файл должен быть прочитан в этом ходе: правишь то, '
-      'что видел. Один шаг — один файл, content — ПОЛНОЕ содержимое.\n'
+      '— Правишь существующий файл — сначала read_file, потом edit_file с '
+      'точным old_string из прочитанного. Один шаг — один файл.\n'
+      '— write_file — для НОВЫХ файлов и для полной перезаписи, когда правок '
+      'больше половины. content — ПОЛНОЕ содержимое, без «...».\n'
       '— Не присылай диффы, фрагменты и «...» вместо кода. Если файл '
       'большой — правь его по частям отдельными шагами.\n'
       '— Если инструмент вернул ошибку, исправь аргументы и повтори; не '

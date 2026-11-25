@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter/widgets.dart' show WidgetsBinding;
@@ -494,6 +495,9 @@ class SettingsService {
   /// бесплатный пул, а Agnes пропадала из выбора моделей.
   static Future<String> loadProviderKey() async {
     final map = await _loadSettings();
+    // Кто прочитал ключ, тот и починит подсказку для таблетки: иначе у
+    // владельцев, сохранивших ключ старой сборкой, Agnes пропадала из выбора.
+    unawaited(_rememberProviderKind(map));
     final ai = ((map[_keyAiKey] as String?) ?? '').trim();
     if (ai.isNotEmpty) return ai;
     return ((map[_keyAgnesKey] as String?) ?? '').trim();

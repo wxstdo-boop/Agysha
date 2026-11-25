@@ -684,7 +684,7 @@ const Map<String, String> _ru = {
   'forgeTitle': 'Кузница',
   'forgeSubtitle': 'Живой чат с агентом: спроси о коде или попроси изменить.',
   'forgeTokenSection': 'ДОСТУП К GITHUB',
-  'forgeTokenHint': 'Fine-grained, Contents и Pull requests: read and write.',
+  'forgeTokenHint': 'Classic token: права repo (Contents, Pull requests).',
   'startupDiagTitle': 'Agysha остановилась безопасно',
   'startupDiagBody':
       'Agysha не смогла завершить запуск и остановилась до отрисовки '

@@ -689,7 +689,7 @@ const Map<String, String> _fr = {
   'forgeSubtitle':
       'Discussion avec l’agent : pose une question ou demande une modification.',
   'forgeTokenSection': 'ACCÈS GITHUB',
-  'forgeTokenHint': 'Fine-grained : Contents, Pull requests — read and write.',
+  'forgeTokenHint': 'Classic token : portée repo (Contents, Pull requests).',
   'startupDiagTitle': 'Agysha s’est arrêtée en sécurité',
   'startupDiagBody':
       'Agysha n’a pas pu terminer son démarrage et s’est arrêtée avant '

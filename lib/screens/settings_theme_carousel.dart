@@ -142,6 +142,12 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   /// иначе вертикальная прокрутка страницы, начатая над колесом, проворачивала
   /// его — «в середине барабан меняется при скролле».
   bool? _horizontalGesture;
+
+  /// Пока палец крутит барабан, страница придержана: иначе её прокрутка
+  /// уводила колесо из-под пальца. Вертикальный жест придержку не ставит —
+  /// страница едет сама, с инерцией.
+  ScrollHoldController? _scrollHold;
+  bool _scrollHeld = false;
   Offset _downLocal = Offset.zero;
   double _lastAngle = 0;
   double _lastRadius = 0;
@@ -215,7 +221,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     _spin
         .animateWith(
           SpringSimulation(
-            const SpringDescription(mass: 1, stiffness: 210, damping: 26),
+            // Демпфирование почти критическое (26) останавливало колесо
+            // рывком в самом конце — на флике это читалось как «жёсткое
+            // торможение». 20 даёт мягкий, чуть более длинный выкат.
+            const SpringDescription(mass: 1, stiffness: 190, damping: 20),
             _pos,
             target,
             // Быстрый флик не должен вылетать далеко за цель: пружина с
@@ -362,6 +371,11 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
         return;
       }
       _dragging = true;
+      final scroll = Scrollable.maybeOf(context)?.position;
+      if (scroll != null && !_scrollHeld) {
+        _scrollHold = scroll.hold(() {});
+        _scrollHeld = true;
+      }
     }
     if (_horizontalGesture == false) return;
     final v = local - Offset(_side / 2, _side / 2);
@@ -407,6 +421,11 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
   void _onPointerUp(PointerEvent event) {
     if (_pointerId != event.pointer) return;
     final wasHorizontal = _horizontalGesture == true;
+    if (_scrollHeld) {
+      _scrollHold?.cancel();
+      _scrollHold = null;
+      _scrollHeld = false;
+    }
     _pointerId = null;
     _dragging = false;
     _horizontalGesture = null;
@@ -419,19 +438,10 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
     }
   }
 
-  /// Вертикальный жест по колесу листает настройки: колесо не крутится,
-  /// страница едет на ту же дельту — «просто листать» работает и здесь.
-  void _onVerticalDragUpdate(DragUpdateDetails details) {
-    if (_horizontalGesture != false) return;
-    final scrollable = Scrollable.maybeOf(context);
-    final position = scrollable?.position;
-    if (position == null) return;
-    final next = (position.pixels - details.delta.dy).clamp(
-      position.minScrollExtent,
-      position.maxScrollExtent,
-    );
-    position.jumpTo(next);
-  }
+  // Вертикальный жест по колесу листает настройки сам, силами страницы:
+  // колесо не участвует в арене жестов и на вертикальном движении просто
+  // не крутится (см. [_onPointerMove]). Так прокрутка сохраняет инерцию —
+  // ручной `jumpTo` её обрывал, и листание «тормозило» рывком.
 
   /// Довод после жеста — ВСЕГДА по итоговому смещению, а не по последнему
   /// дельта-событию. Раньше направление бралось из последнего delta: если
@@ -496,45 +506,35 @@ class _ThemeRevolverState extends State<_ThemeRevolver>
               SizedBox(
                 width: side,
                 height: side,
-                child: GestureDetector(
-                  // Вертикальный жест по колесу НЕ крутит барабан и не
-                  // проваливается в список: колесо само везёт страницу на ту
-                  // же дельту. Иначе палец, начавший скролл в середине
-                  // настроек, проворачивал темы.
+                child: Listener(
                   behavior: HitTestBehavior.opaque,
-                  onVerticalDragStart: (_) {},
-                  onVerticalDragUpdate: _onVerticalDragUpdate,
-                  onVerticalDragEnd: (_) {},
-                  child: Listener(
-                    behavior: HitTestBehavior.opaque,
-                    onPointerDown: _onPointerDown,
-                    onPointerMove: _onPointerMove,
-                    onPointerUp: _onPointerUp,
-                    onPointerCancel: _onPointerUp,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: <Widget>[
-                        _drumShell(cs, side),
-                        for (var i = 0; i < _n; i++)
-                          _chamber(cs, i, side, widget.entries[i]),
-                        _hub(cs, entry, hub),
-                        // Указатель — единственная неподвижная деталь: камора,
-                        // вставшая под него, и есть выбранная тема.
-                        Positioned(
-                          top: 0,
-                          child: Icon(
-                            Icons.arrow_drop_down,
-                            size: 30,
-                            // Указатель — единственный цветной акцент барабана:
-                            // приглушённо-красный, чтобы сразу читался как
-                            // стрелка, но не спорил с монохромными каморами.
-                            color: const Color(
-                              0xFFFF3B30,
-                            ).withValues(alpha: 0.55),
-                          ),
+                  onPointerDown: _onPointerDown,
+                  onPointerMove: _onPointerMove,
+                  onPointerUp: _onPointerUp,
+                  onPointerCancel: _onPointerUp,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: <Widget>[
+                      _drumShell(cs, side),
+                      for (var i = 0; i < _n; i++)
+                        _chamber(cs, i, side, widget.entries[i]),
+                      _hub(cs, entry, hub),
+                      // Указатель — единственная неподвижная деталь: камора,
+                      // вставшая под него, и есть выбранная тема.
+                      Positioned(
+                        top: 0,
+                        child: Icon(
+                          Icons.arrow_drop_down,
+                          size: 30,
+                          // Указатель — единственный цветной акцент барабана:
+                          // приглушённо-красный, чтобы сразу читался как
+                          // стрелка, но не спорил с монохромными каморами.
+                          color: const Color(
+                            0xFFFF3B30,
+                          ).withValues(alpha: 0.55),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),

@@ -14,9 +14,9 @@ import '../utils/context_menu.dart';
 import '../utils/markdown_text.dart';
 import '../utils/snackbar.dart';
 
-import '../widgets/agysha_bunny.dart';
 import '../widgets/press_scale.dart';
 import '../widgets/robot_glyph.dart';
+import '../widgets/squirrel_wheel.dart';
 import '../widgets/smooth_caret.dart';
 import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
@@ -126,6 +126,11 @@ class _ForgeScreenState extends State<ForgeScreen> {
   /// одного и того же ответа.
   int _handledResultSeq = 0;
 
+  /// Конкретная модель последнего ответа («Kilo · ...», «Agnes AI · ...»).
+  /// Нужна подписям старых реплик: в режиме «Авто» пул сам выбирает канал,
+  /// и вместо честного имени под ответом стояло «Пул · Авто».
+  String _lastAnswerModel = '';
+
   @override
   void initState() {
     super.initState();
@@ -163,6 +168,8 @@ class _ForgeScreenState extends State<ForgeScreen> {
     final done = _runner.finished;
     if (done != null && _runner.resultSeq != _handledResultSeq) {
       _handledResultSeq = _runner.resultSeq;
+      final answered = (done.model ?? '').trim();
+      if (answered.isNotEmpty) _lastAnswerModel = answered;
       setState(() {
         _appendMessage(done);
         _liveSteps.clear();
@@ -185,6 +192,21 @@ class _ForgeScreenState extends State<ForgeScreen> {
     // Слушателя снимаем, прогон НЕ останавливаем: работа продолжается.
     _runner.removeListener(_onRunnerChanged);
     super.dispose();
+  }
+
+  /// Уточняет пул таблетки по реально сохранённому ключу провайдера.
+  /// Кэш вида ключа мог отсутствовать — тогда Agnes не появлялась в выборе.
+  Future<void> _refreshModelPoolFromKey() async {
+    String key = '';
+    try {
+      key = (await SettingsService.loadProviderKey()).trim();
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    final kind = SettingsService.providerKeyKindOf(key);
+    if (kind == SettingsService.providerKeyKindSync()) return;
+    _syncModels(kind);
   }
 
   /// Пересобрать таблетку под наличный ключ провайдера. Выбор пользователя
@@ -214,6 +236,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
   /// доступными моделями для кодинга (сильнейшие сверху). Выбор применяется
   /// тем же кросс-фейдом, что и тап по таблетке, и лист закрывается сам.
   Future<void> _openModelSheet(ColorScheme cs, Color accent) async {
+    // Подсказка из кэша может отсутствовать (ключ сохранён старой сборкой):
+    // лист откроется с тем, что есть, а пул уточнится по ключу к следующему
+    // открытию и к отправке.
+    unawaited(_refreshModelPoolFromKey());
     final options = <ForgeModelOption>[
       const ForgeModelOption(
         id: '',
@@ -411,6 +437,11 @@ class _ForgeScreenState extends State<ForgeScreen> {
         );
       },
     );
+    // Выбрал модель — и хватит: фокус снимаем уже после закрытия листа,
+    // иначе поле ввода возвращало его себе и клавиатура выезжала сама.
+    if (!mounted) return;
+    _inputFocus.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   Future<void> _restoreChat() async {
@@ -456,6 +487,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
     final savedModel = SettingsService.forgeModelSync();
     if (savedModel.isNotEmpty && _modelId.isEmpty) _modelId = savedModel;
     _syncModels(SettingsService.providerKeyKindSync());
+    // Чтение зашифрованного файла здесь не делаем: оно стартует до первого
+    // кадра и, если хранилище молчит, задерживает первую же отправку (чтение
+    // ключа идёт через ту же очередь). Вид ключа уточняется в `_send` по
+    // настоящему ключу и в `_refreshModelPoolFromKey` из листа моделей.
     if (saved != null) unawaited(_checkToken(silent: true));
   }
 
@@ -796,11 +831,9 @@ class _ForgeScreenState extends State<ForgeScreen> {
       child: Scaffold(
         appBar: AppBar(
           leading: const BackButtonTooltip(),
-          // «Кузница / MiDe–cli»: у экрана два имени — своё и CLI-агента,
-          // чьими руками он правит репозиторий.
-          title: Text(
-            '${Translations.t('forgeTitle', context, 'Кузница')} / MiDe–cli',
-          ),
+          // В шапке — только «/ MiDe–cli»: имя экрана «Кузница» дублировало
+          // пункт меню, из которого сюда пришли, и съедало ширину заголовка.
+          title: const Text('/ MiDe–cli'),
           centerTitle: true,
           backgroundColor: Colors.transparent,
           actions: [
@@ -1040,120 +1073,93 @@ class _ForgeScreenState extends State<ForgeScreen> {
     final selected = _selectedOption;
     final color = selected == null ? accent : _modelColor(selected, cs, accent);
     final label = selected?.label ?? 'Авто · весь пул';
-    return AnimatedSize(
-      // Бока таблетки едут вместе с подписью: 300 мс с мягким входом-выходом
-      // вместо рывка на смене длины.
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOutCubic,
-      alignment: Alignment.topCenter,
-      child: AnimatedOpacity(
-        // Пул приходит из настроек: таблетка не появляется рывком, а мягко
-        // проявляется уже с готовым списком моделей.
-        opacity: _modelsReady ? 1 : 0,
-        duration: const Duration(milliseconds: 420),
-        curve: Curves.easeOutCubic,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 2, 20, 2),
-          child: Align(
-            alignment: Alignment.center,
-            child: PressScale(
-              pressedScale: 0.975,
-              enableTilt: true,
-              duration: const Duration(milliseconds: 130),
-              releaseDuration: const Duration(milliseconds: 340),
-              curve: Curves.easeOutCubic,
-              maxTiltAngle: 0.22,
-              pressTint: color,
-              pressTintStrength: 0.07,
-              pressTintRadius: BorderRadius.circular(999),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => unawaited(_openModelSheet(cs, accent)),
-                onLongPress: () => unawaited(_openModelSheet(cs, accent)),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 420),
-                  curve: Curves.easeOutCubic,
-                  padding: const EdgeInsets.fromLTRB(9, 5, 14, 5),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: color.withValues(alpha: 0.34),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.10),
-                        blurRadius: 10,
-                        spreadRadius: -3,
-                      ),
-                    ],
+    return AnimatedOpacity(
+      // Бока таблетки ведёт сама подпись (`_PillLabel`): она знает ширину
+      // старого и нового текста и едет между ними одной кривой. Внешний
+      // `AnimatedSize` тут только мешал — он догонял уже готовую ширину, и
+      // бока дёргались второй раз.
+      // Пул приходит из настроек: таблетка не появляется рывком, а мягко
+      // проявляется уже с готовым списком моделей.
+      opacity: _modelsReady ? 1 : 0,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 2, 20, 2),
+        child: Align(
+          alignment: Alignment.center,
+          child: PressScale(
+            pressedScale: 0.975,
+            enableTilt: true,
+            duration: const Duration(milliseconds: 130),
+            releaseDuration: const Duration(milliseconds: 340),
+            curve: Curves.easeOutCubic,
+            maxTiltAngle: 0.22,
+            pressTint: color,
+            pressTintStrength: 0.07,
+            pressTintRadius: BorderRadius.circular(999),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => unawaited(_openModelSheet(cs, accent)),
+              onLongPress: () => unawaited(_openModelSheet(cs, accent)),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 420),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.fromLTRB(9, 5, 14, 5),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.34),
+                    width: 1,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 420),
-                        curve: Curves.easeOutCubic,
-                        width: 22,
-                        height: 22,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: color.withValues(alpha: 0.18),
-                          border: Border.all(
-                            color: color.withValues(alpha: 0.55),
-                          ),
-                        ),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 320),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          child: Icon(
-                            selected == null
-                                ? Icons.all_inclusive_rounded
-                                : _modelIcon(selected),
-                            key: ValueKey('forge_pill_icon_$label'),
-                            size: 13,
-                            color: color,
-                          ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.10),
+                      blurRadius: 10,
+                      spreadRadius: -3,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 420),
+                      curve: Curves.easeOutCubic,
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color.withValues(alpha: 0.18),
+                        border: Border.all(
+                          color: color.withValues(alpha: 0.55),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      // Смена подписи — кросс-фейд с мягким подъёмом, без
-                      // прыжка ширины: текст едет вместе с таблеткой.
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 380),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 320),
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
-                        layoutBuilder: (current, previous) => Stack(
-                          alignment: Alignment.center,
-                          children: [...previous, ?current],
-                        ),
-                        transitionBuilder: (child, anim) => FadeTransition(
-                          opacity: anim,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 0.18),
-                              end: Offset.zero,
-                            ).animate(anim),
-                            child: child,
-                          ),
-                        ),
-                        child: Text(
-                          '«$label»',
-                          key: ValueKey('forge_pill_$label'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.1,
-                            color: cs.onSurface.withValues(alpha: 0.88),
-                          ),
+                        child: Icon(
+                          selected == null
+                              ? Icons.all_inclusive_rounded
+                              : _modelIcon(selected),
+                          key: ValueKey('forge_pill_icon_$label'),
+                          size: 13,
+                          color: color,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 8),
+                    _PillLabel(
+                      label: '«$label»',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                        color: cs.onSurface.withValues(alpha: 0.88),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1751,8 +1757,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                       RobotGlyph(size: 15, color: accent),
                       const SizedBox(width: 7),
                       Text(
-                        '${Translations.t('forgeTitle', context, 'Кузница')} / '
-                        'MiDe–cli',
+                        '/ MiDe–cli',
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: accent,
                           fontWeight: FontWeight.w800,
@@ -1816,12 +1821,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
                   // Подпись есть у КАЖДОГО ответа: старые реплики в истории
                   // пришли без модели, и тогда честно показываем текущий
                   // канал вместо пустого места.
-                  _ModelCaption(
-                    label: (message.model ?? '').trim().isNotEmpty
-                        ? message.model!.trim()
-                        : (_selectedOption?.label ?? 'Пул · Авто'),
-                    cs: cs,
-                  ),
+                  _ModelCaption(label: _captionLabel(message), cs: cs),
                 ],
               ],
             ),
@@ -1829,6 +1829,19 @@ class _ForgeScreenState extends State<ForgeScreen> {
         ),
       ),
     );
+  }
+
+  /// Подпись модели под ответом. Своё имя ответа важнее всего; иначе —
+  /// выбранная в таблетке модель; иначе — конкретная модель прошлого ответа.
+  /// «Пул · Авто» остаётся только когда агент ещё ни разу не ответил:
+  /// пользователь требует имя модели, а не название режима.
+  String _captionLabel(ForgeChatMessage message) {
+    final own = (message.model ?? '').trim();
+    if (own.isNotEmpty) return own;
+    final selected = _selectedOption;
+    if (selected != null) return selected.label;
+    if (_lastAnswerModel.isNotEmpty) return _lastAnswerModel;
+    return 'Пул · Авто';
   }
 
   /// Пузырь «агент работает»: шаги появляются по мере выполнения.
@@ -1849,17 +1862,17 @@ class _ForgeScreenState extends State<ForgeScreen> {
           children: [
             Row(
               children: [
-                // Вместо вечной крутилки — тот же зайчик, что бежит на
-                // плашке обновления: «Ада думает» читается живым, а не
-                // «приложение грузится».
+                // Тот же значок, что на таблетке обновления: красное колесо
+                // с хомяком внутри. Зайчик читался как «ещё один лоадер»,
+                // а этот знак уже знаком по обновлению и узнаётся сразу.
                 SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: AnimatedBunny(
-                    size: 16,
-                    color: accent,
-                    period: const Duration(milliseconds: 1100),
-                    lift: 0.22,
+                  width: 17,
+                  height: 17,
+                  child: SquirrelWheel(
+                    size: 17,
+                    color: const Color(0xFFFF3B30),
+                    innerColor: const Color(0xFFFF3B30).withValues(alpha: 0.9),
+                    period: const Duration(milliseconds: 2000),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1895,15 +1908,14 @@ class _ForgeScreenState extends State<ForgeScreen> {
                         child: child,
                       ),
                     ),
-                    child: Text(
-                      _activeProvider == null
+                    child: _ThinkingLabel(
+                      key: ValueKey('forge_status_${_activeProvider ?? ''}'),
+                      text: _activeProvider == null
                           ? Translations.t('forgeThinking', context)
                           : '${Translations.t('forgeThinking', context)} · '
                                 '$_activeProvider',
-                      key: ValueKey('forge_status_${_activeProvider ?? ''}'),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
+                      style: theme.textTheme.bodySmall ?? const TextStyle(),
+                      baseColor: cs.onSurfaceVariant.withValues(alpha: 0.62),
                     ),
                   ),
                 ),
@@ -2234,4 +2246,193 @@ class _BubbleRevealState extends State<_BubbleReveal>
       ),
     );
   }
+}
+
+/// Статус «Ада думает»: полупрозрачный текст, через который медленным циклом
+/// проходит красный блик. Цикл нарочно длинный (2.6 с) и с easeInOut —
+/// это «дыхание», а не бегущая строка: текст не мигает и не рябит.
+class _ThinkingLabel extends StatefulWidget {
+  const _ThinkingLabel({
+    super.key,
+    required this.text,
+    required this.style,
+    required this.baseColor,
+  });
+
+  final String text;
+  final TextStyle style;
+  final Color baseColor;
+
+  @override
+  State<_ThinkingLabel> createState() => _ThinkingLabelState();
+}
+
+class _ThinkingLabelState extends State<_ThinkingLabel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _shine = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  )..repeat();
+
+  static const Color _glow = Color(0xFFFF3B30);
+
+  @override
+  void dispose() {
+    _shine.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (still) {
+      return Text(
+        widget.text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: widget.style.copyWith(color: widget.baseColor),
+      );
+    }
+    return AnimatedBuilder(
+      animation: _shine,
+      builder: (context, _) {
+        final t = Curves.easeInOut.transform(_shine.value);
+        final dx = -1.1 + 2.2 * t;
+        return ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (rect) => LinearGradient(
+            begin: Alignment(dx - 0.6, 0),
+            end: Alignment(dx + 0.6, 0),
+            colors: <Color>[
+              widget.baseColor,
+              Color.lerp(widget.baseColor, _glow, 0.92)!,
+              widget.baseColor,
+            ],
+            stops: const <double>[0.0, 0.5, 1.0],
+          ).createShader(rect),
+          child: Text(
+            widget.text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: widget.style.copyWith(color: Colors.white),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Подпись модели в таблетке: ширина едет ОДНОЙ кривой от старого текста к
+/// новому, а сами тексты перетекают кросс-фейдом.
+///
+/// Раньше шириной занимался внешний `AnimatedSize`: он стартовал уже после
+/// подмены текста, поэтому бока таблетки сначала прыгали на новую длину и
+/// лишь потом догоняли её — отсюда «сжимаются/разжимаются под текст».
+class _PillLabel extends StatefulWidget {
+  const _PillLabel({required this.label, required this.style});
+
+  final String label;
+  final TextStyle style;
+
+  @override
+  State<_PillLabel> createState() => _PillLabelState();
+}
+
+class _PillLabelState extends State<_PillLabel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _morph = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 360),
+    value: 1,
+  );
+  late String _shown = widget.label;
+  String? _previous;
+
+  static const Curve _curve = Curves.easeInOutCubic;
+
+  @override
+  void didUpdateWidget(covariant _PillLabel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.label == _shown) return;
+    _previous = _shown;
+    _shown = widget.label;
+    _morph.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _morph.dispose();
+    super.dispose();
+  }
+
+  double _widthOf(String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style.merge(widget.style);
+    final from = _widthOf(_previous ?? _shown, style);
+    final to = _widthOf(_shown, style);
+    final previous = _previous;
+    return AnimatedBuilder(
+      animation: _morph,
+      builder: (context, _) {
+        final t = _curve.transform(_morph.value);
+        final width = from + (to - from) * t;
+        return SizedBox(
+          width: width,
+          height: _heightOf(style),
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              if (previous != null && t < 1)
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: (1 - t).clamp(0.0, 1.0),
+                    child: _text(previous, style),
+                  ),
+                ),
+              Positioned.fill(
+                child: Opacity(
+                  opacity: previous == null ? 1 : t,
+                  child: _text(_shown, style),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  double _heightOf(TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: 'Ag', style: style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final height = painter.height;
+    painter.dispose();
+    return height;
+  }
+
+  Widget _text(String text, TextStyle style) => Text(
+    text,
+    maxLines: 1,
+    softWrap: false,
+    overflow: TextOverflow.visible,
+    textAlign: TextAlign.center,
+    style: style,
+  );
 }
