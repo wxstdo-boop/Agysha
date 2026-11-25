@@ -1027,7 +1027,7 @@ class _AiChatBodyState extends State<_AiChatBody>
       _historySnapshot = raw;
       if (raw != null && raw.isNotEmpty) {
         final list = jsonDecode(raw) as List;
-        final clearedAt = AiGuideService.chatClearedAt();
+        final clearedAt = await AiGuideService.chatClearedAtFresh();
         // Отсекаем только то, что старше явной очистки чата. При
         // clearedAt == 0 фильтр по метке выбрасывал ВСЕ старые сообщения
         // без ts — человек выходил из чата и возвращался в пустую ленту.
@@ -1045,14 +1045,17 @@ class _AiChatBodyState extends State<_AiChatBody>
               .toList();
           final merged = AiChatStore.union(loaded, local);
           setState(() {
-            // Чат исчерпал 1000 сообщений — стираем и начинаем заново.
-            if (loaded.length >= 1000) {
-              _messages.clear();
-            } else {
-              _messages
-                ..clear()
-                ..addAll(merged);
-            }
+            // Лимит истории — держим ПОСЛЕДНИЕ 1000 сообщений, а не стираем
+            // ленту целиком. Раньше на тысячном сообщении чат при открытии
+            // становился пустым («сам снёсся»), а следующая запись
+            // возвращала часть сообщений с диска («воскрес»).
+            _messages
+              ..clear()
+              ..addAll(
+                merged.length > 1000
+                    ? merged.sublist(merged.length - 1000)
+                    : merged,
+              );
             // Всё, что было загружено при открытии, НЕ анимирует вход —
             // только сообщения, добавленные после (см. animate ниже).
             // Подтягиваем счётчик меток к объединённой ленте: иначе
@@ -1060,9 +1063,8 @@ class _AiChatBodyState extends State<_AiChatBody>
             // другого движка, ключ пузыря совпадёт и вход не анимируется.
             _seedLastTs();
           });
-          // История не менялась: не пересериализуем и не шифруем весь файл
-          // при каждом открытии. Сохраняем только если применили лимит.
-          if (loaded.length >= 1000) _saveHistory();
+          // История была длиннее лимита: подрезаем файл до хвоста.
+          if (merged.length > 1000) _saveHistory();
           // Открытие чата: мгновенно на последнее сообщение, без
           // «проезда» по всей истории.
           _scrollToBottom(animate: false);
@@ -1614,6 +1616,7 @@ class _AiChatBodyState extends State<_AiChatBody>
         screenContext: _screenAware
             ? await ScreenReaderService.snapshot()
             : null,
+        screenAware: _screenAware,
       );
       // Окно закрыли, пока Ада думала: дописываем ответ в историю, чтобы
       // он ждал при следующем открытии. Чат очистили вручную — ответ

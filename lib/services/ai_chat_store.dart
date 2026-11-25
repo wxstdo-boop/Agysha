@@ -82,7 +82,7 @@ class AiChatStore {
       // считаться удалением чужих сообщений (механика слияния в
       // [JsonFile] трактует отсутствие элемента как delete).
       final raw = await JsonFile.read(key);
-      final clearedAt = AiGuideService.chatClearedAt();
+      final clearedAt = await AiGuideService.chatClearedAtFresh();
       final toSaveVisible = toSave
           .where((m) => AiGuideService.visibleInChat(m, clearedAt))
           .toList();
@@ -122,7 +122,7 @@ class AiChatStore {
     List<AiMessage> local,
   ) async {
     final raw = await JsonFile.read(key);
-    final clearedAt = AiGuideService.chatClearedAt();
+    final clearedAt = await AiGuideService.chatClearedAtFresh();
     final merged = union(
       parse(
         raw,

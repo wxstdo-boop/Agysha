@@ -119,6 +119,12 @@ String _searchQuery(String query) {
   return words.take(12).join(' ');
 }
 
+// Порядок фактов в контексте Ады: сначала обычная выдача, потом свежие
+// новости, Википедия — в конце. Меняется, если запрос про «сейчас».
+const int _tierWeb = 0;
+const int _tierNews = 1;
+const int _tierWiki = 2;
+
 /// Реальный веб-поиск без ключей: Bing (HTML — настоящие веб-результаты)
 /// + DuckDuckGo Instant Answer + Wikipedia (на языке пользователя).
 /// Параллельно, с быстрыми таймаутами. Собираем до 6 фактов в компактный
@@ -126,7 +132,18 @@ String _searchQuery(String query) {
 /// контекста и отвечает пусто — поэтому лимит строже, чем раньше).
 /// Возвращает пустую строку, если ничего найти не удалось.
 Future<String> _webSearchImpl(String query, String languageCode) async {
-  final results = <String>[];
+  // Источники работают параллельно и раньше складывали строки в один
+  // список по мере готовности — кто успел, тот и занял первые места.
+  // Отсюда «Ада ответила статьёй 2010 года про погоду»: Википедия
+  // успевала раньше свежих новостей. Теперь у каждого источника свой
+  // уровень, а порядок в контексте фиксированный.
+  final buckets = <int, List<String>>{};
+  var total = 0;
+  void addResult(String line, int tier) {
+    (buckets[tier] ??= <String>[]).add(line);
+    total++;
+  }
+
   const ua = {'User-Agent': 'Mozilla/5.0 (Linux; Android 13) Agysha/1.3'};
 
   /// Простое декодирование HTML-сущностей для заголовков/сниппетов.
@@ -255,8 +272,8 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
         if (!domainBudget(host, 2)) continue;
         final src = ' [$host]';
         final line = snip.length >= 40 ? '$title — $snip$src' : '$title$src';
-        results.add(line);
-        if (results.length >= 10) break;
+        addResult(line, _tierWeb);
+        if (total >= 12) break;
       }
     } catch (_) {}
   }
@@ -295,7 +312,7 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
       final linkRe = RegExp(r'<link>(.*?)</link>', dotAll: true);
       final descRe = RegExp(r'<description>(.*?)</description>', dotAll: true);
       for (final m in itemRe.allMatches(body)) {
-        if (results.length >= 10) break;
+        if (total >= 12) break;
         final item = m.group(0)!;
         final title = clean(titleRe.firstMatch(item)?.group(1) ?? '');
         if (title.isEmpty) continue;
@@ -310,7 +327,10 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
         }
         if (!domainBudget(host, 2)) continue;
         final src = ' [$host]';
-        results.add(snip.length >= 40 ? '$title — $snip$src' : '$title$src');
+        addResult(
+          snip.length >= 40 ? '$title — $snip$src' : '$title$src',
+          _tierWeb,
+        );
       }
     } catch (_) {}
   }
@@ -345,7 +365,7 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
         dotAll: true,
       );
       for (final m in blockRe.allMatches(body)) {
-        if (results.length >= 10) break;
+        if (total >= 12) break;
         final block = m.group(0)!;
         final lm = linkRe.firstMatch(block);
         if (lm == null) continue;
@@ -357,8 +377,9 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
         final snip = clean(snipRe.firstMatch(block)?.group(1) ?? '');
         if (title.isEmpty || !relevant('$title $snip')) continue;
         if (!domainBudget(host, 2)) continue;
-        results.add(
+        addResult(
           snip.length >= 40 ? '$title — $snip [$host]' : '$title [$host]',
+          _tierWeb,
         );
       }
     } catch (_) {}
@@ -386,7 +407,7 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
       if (abstractText.trim().length >= 60 &&
           relevant(abstractText) &&
           domainBudget('duckduckgo.com', 3)) {
-        results.add('${abstractText.trim()} [duckduckgo.com]');
+        addResult('${abstractText.trim()} [duckduckgo.com]', _tierWeb);
       }
       final topics = data['RelatedTopics'] as List? ?? [];
       var ddgAdded = 0;
@@ -402,7 +423,7 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
               if (text.trim().isNotEmpty &&
                   relevant(text) &&
                   domainBudget('duckduckgo.com', 3)) {
-                results.add('${text.trim()} [duckduckgo.com]');
+                addResult('${text.trim()} [duckduckgo.com]', _tierWeb);
                 ddgAdded++;
               }
             }
@@ -412,7 +433,7 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
           if (text.trim().isNotEmpty &&
               relevant(text) &&
               domainBudget('duckduckgo.com', 3)) {
-            results.add('${text.trim()} [duckduckgo.com]');
+            addResult('${text.trim()} [duckduckgo.com]', _tierWeb);
             ddgAdded++;
           }
         }
@@ -453,10 +474,11 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
             !domainBudget('$lang.wikipedia.org', 3)) {
           continue;
         }
-        results.add(
+        addResult(
           snippet.isNotEmpty
               ? '$title: $snippet [$lang.wikipedia.org]'
               : '$title [$lang.wikipedia.org]',
+          _tierWiki,
         );
       }
     } catch (_) {}
@@ -512,7 +534,7 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
         final label = host.isNotEmpty ? host : source.toLowerCase();
         if (label.isEmpty) continue;
         if (!domainBudget(label, 2)) continue;
-        results.add('$title [$label]');
+        addResult('$title [$label]', _tierNews);
         added++;
       }
     } catch (_) {}
@@ -553,13 +575,58 @@ Future<String> _webSearchImpl(String query, String languageCode) async {
     return '${cut(body, 140)}${marker.group(0)}';
   }
 
+  // Запрос про «сейчас» (погода, курс, новости) — Википедия вредна:
+  // энциклопедическая статья про климат или чемпионат 2018 года
+  // выглядит свежей для модели, и Ада отвечает прошлым вместо текущего.
+  final freshNeeded = RegExp(
+    r'сегодня|сейчас|погод|курс[а-я]*\b|цен[аыу]|стоимост|новост|'
+    r'свеж|последн|кто (?:сейчас|лидирует|выиграл)|today|current|latest|'
+    r'now|news|price|weather|who won',
+    caseSensitive: false,
+  ).hasMatch(searchQuery.toLowerCase());
+
+  final thisYear = DateTime.now().year;
+  bool staleYear(String text) {
+    if (!freshNeeded) return false;
+    for (final m in RegExp(r'\b(19\d{2}|20\d{2})\b').allMatches(text)) {
+      final year = int.parse(m.group(1)!);
+      if (year <= thisYear - 2) return true;
+    }
+    return false;
+  }
+
+  final order = freshNeeded
+      ? const [_tierNews, _tierWeb, _tierWiki]
+      : const [_tierWeb, _tierNews, _tierWiki];
+
   final seen = <String>{};
   final unique = <String>[];
-  for (final r in results) {
-    final key = normKey(r);
-    if (key.isEmpty || !seen.add(key)) continue;
-    unique.add(truncate(r));
+  for (final tier in order) {
+    for (final r in buckets[tier] ?? const <String>[]) {
+      final key = normKey(r);
+      if (key.isEmpty) continue;
+      // Старое при запросе «сейчас» пропускаем, но не теряем совсем:
+      // ниже добираем из отброшенного, если свежего не нашлось. Поэтому
+      // в seen его не записываем — иначе запасной проход его не увидит.
+      if (staleYear(r)) continue;
+      if (!seen.add(key)) continue;
+      unique.add(truncate(r));
+      if (unique.length >= 6) break;
+    }
     if (unique.length >= 6) break;
+  }
+  if (unique.isEmpty) {
+    // Ничего свежего не нашлось — лучше энциклопедический ответ, чем
+    // пустой контекст и «Ада не нашла ничего» на простой вопрос.
+    for (final tier in order) {
+      for (final r in buckets[tier] ?? const <String>[]) {
+        final key = normKey(r);
+        if (key.isEmpty || !seen.add(key)) continue;
+        unique.add(truncate(r));
+        if (unique.length >= 4) break;
+      }
+      if (unique.length >= 4) break;
+    }
   }
   if (unique.isEmpty) return '';
   final sb = StringBuffer();

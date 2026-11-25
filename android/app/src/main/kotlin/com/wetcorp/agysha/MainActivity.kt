@@ -503,13 +503,24 @@ class MainActivity : AudioServiceActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "hasPermission" -> result.success(isScreenReaderEnabled())
-                    "getScreenText" -> result.success(
-                        mapOf(
-                            "text" to ScreenReaderService.latestText,
-                            "package" to ScreenReaderService.latestPackage,
-                            "at" to ScreenReaderService.latestAt,
-                        ),
-                    )
+                    "serviceAlive" -> result.success(ScreenReaderService.isAlive)
+                    "getScreenText" -> {
+                        // Снимок просят в момент отправки сообщения: если он
+                        // старше двух секунд, обходим активное окно заново.
+                        // Без этого Ада отвечала по устаревшему тексту (или
+                        // по пустому, если событий от системы не было) —
+                        // «не видит экран».
+                        val stale = System.currentTimeMillis() -
+                            ScreenReaderService.latestAt > 2000L
+                        if (stale) ScreenReaderService.captureNow()
+                        result.success(
+                            mapOf(
+                                "text" to ScreenReaderService.latestText,
+                                "package" to ScreenReaderService.latestPackage,
+                                "at" to ScreenReaderService.latestAt,
+                            ),
+                        )
+                    }
                     "openAccessibilitySettings" -> {
                         try {
                             // FLAG_ACTIVITY_NEW_TASK: окно может открыть настройки
