@@ -411,7 +411,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
     );
   }
 
-  Widget _buildAlarmEmpty(BuildContext context, ThemeData theme) {
+  /// Карточка пустого состояния будильников — та же, что в привычках и
+  /// задачах (PremiumEmptyCard внутри PremiumEmptyState), с общим
+  /// kEmptyStatePadding: 16 по бокам, 12 сверху, 32 снизу.
+  Widget _buildAlarmEmptyCard(BuildContext context, ThemeData theme) {
     return PremiumEmptyState(
       icon: Icons.alarm_add_outlined,
       title: Translations.noAlarmsOf(context),
@@ -420,6 +423,18 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       actionLabel: Translations.t('newAlarm', context),
       accent: theme.colorScheme.primary,
       onPressed: _addAlarm,
+    );
+  }
+
+  /// Пустое состояние без списка (ни будильников, ни таймеров): свой скролл,
+  /// как в привычках и задачах — pull-to-refresh и низкий экран работают
+  /// одинаково. Верхний слот kSectionPillSlotHeight + 8, дальше 12 до
+  /// карточки даёт kEmptyStatePadding.
+  Widget _buildAlarmEmpty(BuildContext context, ThemeData theme) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.only(top: kSectionPillSlotHeight + 8),
+      child: _buildAlarmEmptyCard(context, theme),
     );
   }
 
@@ -653,8 +668,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           // Слот под стекло таблетки разделов больше не живёт внутри
           // секции таймеров: он постоянный, поэтому его высота не «дышит»
           // при добавлении/удалении таймера и список не дёргается.
+          // Верхний слот под стекло таблетки разделов — тот же, что в
+          // привычках и задачах: kSectionPillSlotHeight + 8.
           const SizedBox(
-            height: kSectionPillSlotHeight,
+            height: kSectionPillSlotHeight + 8,
             width: double.infinity,
           ),
           _buildNextAlarmPill(context, theme, alarms),
@@ -676,7 +693,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                   : const SizedBox(width: double.infinity);
             },
           ),
-          if (alarms.isEmpty) _buildAlarmEmpty(context, theme),
+          if (alarms.isEmpty) _buildAlarmEmptyCard(context, theme),
         ],
       ),
       // Медленнее штатного автоскролла (по умолчанию 50 → ~1000 px/с):
@@ -690,7 +707,9 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       // поэтому раздел будильников с 1-2 карточками не листался и не
       // свайпался вверх/вниз, в отличие от остальных разделов.
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      // 16 по бокам — общая сетка страницы, как у привычек и задач:
+      // карточки, статус и заголовок «Таймеры» стоят на одной вертикали.
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       itemCount: alarms.length,
       // Предзагрузка вне вьюпорта и изоляция отрисовки каждой карточки от
       // соседних — при прокрутке и драге список не «дёргается» на слабых
@@ -983,7 +1002,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           // ВЫШЕ статуса и секции), поэтому здесь только обычный отступ.
           // Сверху — чуть больше воздуха: зазор между последней карточкой
           // будильника и заголовком «Таймеры» читался слипшимся.
-          padding: const EdgeInsets.fromLTRB(16, 26, 16, 0),
+          padding: const EdgeInsets.fromLTRB(0, 26, 0, 0),
           child: Row(
             children: [
               Text(
@@ -1032,7 +1051,7 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                 // Сверху чуть больше отступа: пока последняя карточка
                 // схлопывается, текст лежит ПОД ней и не должен выглядывать
                 // в её верхний зазор.
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                padding: const EdgeInsets.fromLTRB(0, 8, 0, 14),
                 child: _FadeInText(
                   Translations.t('noTimers', context),
                   style: theme.textTheme.bodyMedium?.copyWith(
@@ -1109,10 +1128,11 @@ class _AlarmsScreenState extends State<AlarmsScreen>
       // строки её не было вовсе, и удаление последнего таймера выглядело
       // иначе, чем удаление любого другого.
       resizeDuration: const Duration(milliseconds: 300),
-      // Фон удаления = границы карточки: у неё margin 12 по бокам и 5
-      // сверху/снизу. Без вертикального отступа плашка была на 10 px выше
-      // карточки — читалась «шире карточки».
-      inset: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      // Фон удаления = границы карточки: по бокам её держит padding списка
+      // (16), сверху/снизу — 4, как у остальных карточек ритм 8. Без
+      // вертикального отступа плашка была на 10 px выше карточки —
+      // читалась «шире карточки».
+      inset: const EdgeInsets.symmetric(vertical: 4),
       confirmDismiss: (_) async {
         final ok = await showAgyshaConfirm(
           context,
@@ -1148,7 +1168,9 @@ class _AlarmsScreenState extends State<AlarmsScreen>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          // Только вертикальный отступ 4: по бокам карточку ставит в сетку
+          // 16 padding списка (свой margin 12 по бокам давал 24 от края).
+          margin: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

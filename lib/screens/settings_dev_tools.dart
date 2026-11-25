@@ -475,6 +475,40 @@ extension _SettingsDevTools on _SettingsScreenState {
                   );
                 },
               ),
+              // Подробный журнал изменений: всё, что пришло из релизов, без
+              // выжимки для обычного человека (см. ChangelogScreen.detailed).
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                leading: const Icon(
+                  Icons.receipt_long_outlined,
+                  color: Color(0xFF9E9E9E),
+                ),
+                title: Text(
+                  Translations.t(
+                    'changelogDetailedTitle',
+                    routeContext,
+                    'Журнал изменений (подробный)',
+                  ),
+                ),
+                subtitle: Text(
+                  Translations.t(
+                    'changelogDetailedSubtitle',
+                    routeContext,
+                    'Все релизы и все пункты, без выжимки',
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                onTap: () => Navigator.of(routeContext).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ChangelogScreen(detailed: true),
+                  ),
+                ),
+              ),
               // Меню отладки — отдельная кнопка уголка, и только при
               // включённом режиме тестера (или уже включённой отладке):
               // проверки, логирование, журнал и диагностика живут внутри

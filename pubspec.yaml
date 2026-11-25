@@ -95,3 +95,12 @@ flutter:
           weight: 400
         - asset: assets/fonts/RobotoDash-700.ttf
           weight: 700
+    # Шрифты эксклюзивной темы «IT-шник»: пиксельный Pixelify Sans для
+    # интерфейса и Handjet для цифр/служебных надписей. Оба — SIL OFL 1.1
+    # (лицензии лежат рядом: assets/fonts/OFL-*.txt), кириллица есть.
+    - family: ItsPixel
+      fonts:
+        - asset: assets/fonts/PixelifySans.ttf
+    - family: ItsDigits
+      fonts:
+        - asset: assets/fonts/Handjet.ttf

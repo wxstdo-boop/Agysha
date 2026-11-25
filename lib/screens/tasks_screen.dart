@@ -577,9 +577,11 @@ class _TasksScreenState extends State<TasksScreen>
 
   /// Карточка пустого состояния (та же, что в [PremiumEmptyState]) — но как
   /// обычный блок ВНУТРИ скролла: без Expanded и без своего скролла.
+  /// Отступ — общий kEmptyStatePadding (16 по бокам, 12 сверху, 32 снизу):
+  /// ровно те же значения даёт PremiumEmptyState в привычках и будильниках.
   Widget _buildEmptyCard(BuildContext context, ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 28, 4, 32),
+      padding: kEmptyStatePadding,
       child: Center(
         child: PremiumEmptyCard(
           icon: Icons.task_alt_outlined,
@@ -600,6 +602,8 @@ class _TasksScreenState extends State<TasksScreen>
   /// Header скролла: карусель категорий всегда, а под ней — карточка пустого
   /// состояния (только когда задач нет). Структура одна и та же, поэтому
   /// карусель НЕ пересоздаётся при переходе «непусто ↔ пусто».
+  /// Зазор до первой карточки одинаковый в обоих случаях и равен 12: у
+  /// пустой карточки его даёт kEmptyStatePadding, у списка — явный слот ниже.
   Widget _buildHeader(BuildContext context, ThemeData theme, bool empty) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -613,7 +617,11 @@ class _TasksScreenState extends State<TasksScreen>
               position: _revealSlide,
               child: _buildEmptyCard(context, theme),
             ),
-          ),
+          )
+        else
+          // Тот же зазор до первой карточки списка, что даёт
+          // kEmptyStatePadding пустому состоянию — 12.
+          const SizedBox(height: 12),
       ],
     );
   }
@@ -624,89 +632,94 @@ class _TasksScreenState extends State<TasksScreen>
     final chips = <String>['', ..._service.categories];
     // Центрированная карусель категорий + корзина (удаление выбранной).
     // Без кнопки «управление» — добавление только в форме задачи.
-    // Блок категорий: верхний слот kSectionPillSlotHeight оставляем
-    // для таблетки разделов (как раньше делал padding списка) —
-    // карусель стоит ПОД таблеткой, а не налезает на неё.
+    // Верхний слот kSectionPillSlotHeight + 8 — как в привычках и
+    // будильниках; 16 по бокам — общая сетка страницы (раньше отступ давал
+    // padding списка, поэтому здесь его не было).
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: EdgeInsets.only(top: kSectionPillSlotHeight + 8, bottom: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Expanded(
-                flex: 3,
-                child: _service.categories.isEmpty
-                    ? const SizedBox.shrink()
-                    : SlidingPicker<String>(
-                        key: const ValueKey('cat_carousel'),
-                        items: chips,
-                        selected: _filter,
-                        height: 34,
-                        viewportFraction: 0.50,
-                        onChanged: _setFilter,
-                        itemBuilder: (context, c, selected) {
-                          final label = c == ''
-                              ? Translations.allOf(context)
-                              : c;
-                          return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                              ),
-                              child: AnimatedContainer(
-                                // Без boxShadow (размытая тень давала
-                                // «серый квадрат»). Только чистый цвет
-                                // + тонкая обводка у выбранного.
-                                // 450 → 220 мс: старая таблетка успевала
-                                // «гаснуть» целых 450 мс и всё это время
-                                // ехала рядом с новой — читалось как
-                                // «призрак/дубль» таблетки за категорией.
-                                // 180 мс: цвет выбранной категории успевает
-                                // догнать карусель, а не «доцветает» после
-                                // её остановки (тот самый лаг в конце).
-                                duration: const Duration(milliseconds: 180),
-                                curve: Curves.easeInOutCubic,
+          padding: EdgeInsets.only(top: kSectionPillSlotHeight + 8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _service.categories.isEmpty
+                      ? const SizedBox.shrink()
+                      : SlidingPicker<String>(
+                          key: const ValueKey('cat_carousel'),
+                          items: chips,
+                          selected: _filter,
+                          height: 34,
+                          viewportFraction: 0.50,
+                          onChanged: _setFilter,
+                          itemBuilder: (context, c, selected) {
+                            final label = c == ''
+                                ? Translations.allOf(context)
+                                : c;
+                            return Center(
+                              child: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 6,
+                                  horizontal: 6,
                                 ),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(999),
-                                  color: selected
-                                      ? theme.colorScheme.primary
-                                      : Colors.transparent,
-                                  border: selected
-                                      ? Border.all(
-                                          color: theme.colorScheme.primary,
-                                          width: 2,
-                                        )
-                                      : null,
-                                ),
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    label,
-                                    softWrap: false,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: selected
-                                          ? theme.colorScheme.onPrimary
-                                          : theme.colorScheme.onSurfaceVariant,
-                                      fontWeight: selected
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
+                                child: AnimatedContainer(
+                                  // Без boxShadow (размытая тень давала
+                                  // «серый квадрат»). Только чистый цвет
+                                  // + тонкая обводка у выбранного.
+                                  // 450 → 220 мс: старая таблетка успевала
+                                  // «гаснуть» целых 450 мс и всё это время
+                                  // ехала рядом с новой — читалось как
+                                  // «призрак/дубль» таблетки за категорией.
+                                  // 180 мс: цвет выбранной категории успевает
+                                  // догнать карусель, а не «доцветает» после
+                                  // её остановки (тот самый лаг в конце).
+                                  duration: const Duration(milliseconds: 180),
+                                  curve: Curves.easeInOutCubic,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(999),
+                                    color: selected
+                                        ? theme.colorScheme.primary
+                                        : Colors.transparent,
+                                    border: selected
+                                        ? Border.all(
+                                            color: theme.colorScheme.primary,
+                                            width: 2,
+                                          )
+                                        : null,
+                                  ),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      label,
+                                      softWrap: false,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: selected
+                                            ? theme.colorScheme.onPrimary
+                                            : theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                        fontWeight: selected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -760,7 +773,8 @@ class _TasksScreenState extends State<TasksScreen>
           child: SizeTransition(
             sizeFactor: _splitFade,
             alignment: Alignment.topCenter,
-            child: const SizedBox(height: 14),
+            // Тот же 12-высотный зазор между секциями, что в привычках.
+            child: const SizedBox(height: 12),
           ),
         ),
         SliverPadding(
@@ -803,19 +817,17 @@ class _TasksScreenState extends State<TasksScreen>
         // Таблетка разделов + карусель категорий (+ карточка пустого
         // состояния, если задач нет) — первый (непереставляемый) элемент
         // списка: листаются вместе с задачами, как обычный контент.
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-          sliver: SliverToBoxAdapter(
-            child: _buildHeader(context, theme, empty),
-          ),
-        ),
+        // Своего горизонтального отступа у слота нет: карусель держит 16
+        // сама, а карточка пустого состояния — через kEmptyStatePadding.
+        SliverToBoxAdapter(child: _buildHeader(context, theme, empty)),
         // Активные задачи идут БЕЗ заголовка: они и есть основной список —
         // подписывать их «Активные» значит подписывать очевидное. Заголовок
         // несёт только архивная полка, чтобы отличаться от остального.
         _taskSliver(context, theme, active, all, shelf: 'active'),
         if (archiveEnabled && _archiveVisible)
           SliverFadeTransition(opacity: _splitFade, sliver: completedGroup),
-        const SliverToBoxAdapter(child: SizedBox(height: 4)),
+        // Нижний отступ 8 — как в привычках и будильниках.
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
       ],
     );
   }
@@ -1028,7 +1040,9 @@ class _TasksScreenState extends State<TasksScreen>
     Color tint,
   ) {
     final row = Padding(
-      padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+      // 12 снизу — тот же зазор до карточки, что в привычках; 16 по бокам
+      // даёт SliverPadding полки.
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 12),
       child: Row(
         children: [
           Text(
@@ -1071,9 +1085,10 @@ class _TasksScreenState extends State<TasksScreen>
     return SwipeToDelete(
       key: cardKey,
       dismissKey: ValueKey('dismiss_${task.id}'),
-      // Фон удаления = границы карточки: у [Card] стандартный margin 4 px,
-      // без этого красная плашка выходила за карточку со всех сторон.
-      inset: const EdgeInsets.all(4),
+      // Фон удаления = границы карточки: у карточки теперь только нижний
+      // отступ 8 (как у привычек и будильников), по бокам она стоит в общей
+      // сетке 16 — фон не должен вылезать за неё.
+      inset: const EdgeInsets.only(bottom: 8),
       confirmDismiss: (_) async {
         // Единая «стеклянная» карточка подтверждения вместо системного
         // `AlertDialog` — как у окна сброса ивента.
@@ -1098,6 +1113,10 @@ class _TasksScreenState extends State<TasksScreen>
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
+            // Только нижний отступ 8 — вертикальный ритм списка, общий с
+            // привычками и будильниками. Стандартный margin 4 по бокам
+            // сдвигал карточки на 20 вместо 16 (сетка страницы).
+            margin: const EdgeInsets.only(bottom: 8),
             child: Row(
               children: [
                 // Drag handle слева — перетаскивание только по ЗАЖАТИЮ:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/haptics.dart';
 import '../utils/design_tokens.dart';
+import 'itshnik_theme.dart';
 
 /// Единый построитель темы приложения.
 ///
@@ -63,9 +64,13 @@ ThemeData buildAgyshaTheme(
   required bool isDark,
   required bool isGrokStyle,
   String? fontFamily,
+  String? themeKey,
 }) {
-  final appFontFamily = fontFamily == 'caveat' ? 'Caveat' : null;
-  return ThemeData(
+  final isItshnik = themeKey == ItshnikPalette.key;
+  final appFontFamily = isItshnik
+      ? 'ItsPixel'
+      : (fontFamily == 'caveat' ? 'Caveat' : null);
+  final base = ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
     // Круглый фон зажатия и сочный отклик у всех кнопок и InkWell:
@@ -179,9 +184,7 @@ ThemeData buildAgyshaTheme(
       shadowColor: scheme.shadow.withValues(alpha: isDark ? 0.30 : 0.12),
       surfaceTintColor: scheme.primary.withValues(alpha: isDark ? 0.03 : 0.025),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(
-          isGrokStyle ? Radii.sm : Radii.xl,
-        ),
+        borderRadius: BorderRadius.circular(isGrokStyle ? Radii.sm : Radii.xl),
       ),
     ),
     // Цветокоррекция: единый мягкий стиль для всех диалогов и боттом-
@@ -190,9 +193,7 @@ ThemeData buildAgyshaTheme(
     dialogTheme: DialogThemeData(
       backgroundColor: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(
-          isGrokStyle ? Radii.md : Radii.xl,
-        ),
+        borderRadius: BorderRadius.circular(isGrokStyle ? Radii.md : Radii.xl),
       ),
     ),
     bottomSheetTheme: BottomSheetThemeData(
@@ -274,4 +275,8 @@ ThemeData buildAgyshaTheme(
     ),
     textSelectionTheme: const TextSelectionThemeData(),
   );
+  // Эксклюзивная тема «IT-шник» донашивает общий каркас и меняет только то,
+  // что делает её собой: пиксельные шрифты, жёсткие углы, свечение и
+  // блочный плеск нажатия.
+  return isItshnik ? applyItshnikTheme(base) : base;
 }

@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'press_scale.dart';
 
+/// Внешний отступ карточки пустого состояния — один на привычки, задачи и
+/// будильники: 16 по бокам (общая сетка страницы), 12 сверху и 32 снизу.
+/// Держим его здесь, чтобы пустые состояния трёх разделов нельзя было
+/// развести по разным значениям.
+const EdgeInsets kEmptyStatePadding = EdgeInsets.fromLTRB(16, 12, 16, 32);
+
 /// Карточка пустого состояния: иконка в круге, заголовок, подсказка, совет и
 /// кнопка действия. Вынесена отдельно от [PremiumEmptyState], потому что её
 /// переиспользуют и как элемент прокрутки (внутри header'а списка задач), где
@@ -183,24 +189,24 @@ class PremiumEmptyState extends StatelessWidget {
       accent: accent,
     );
 
-    final header = this.header;
     // Карточка стоит в общем скролле экрана и прижата к верху, как и список:
     // раньше она центрировалась в собственном SingleChildScrollView, и при
     // смене «список ↔ пусто» контент уезжал вниз-вверх — это и читалось как
     // «пустой экран растягивается». Вложенный скролл убран заодно: жест
     // теперь всегда забирает внешний список.
-    if (header == null) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-        child: card,
-      );
-    }
+    // Центрируем только на широких экранах: у карточки предел 360, и без
+    // Center она липла бы к левому краю, в отличие от того же пустого
+    // состояния в задачах.
+    final paddedCard = Padding(
+      padding: kEmptyStatePadding,
+      child: Center(child: card),
+    );
+
+    final header = this.header;
+    if (header == null) return paddedCard;
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        header,
-        Padding(padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), child: card),
-      ],
+      children: [header, paddedCard],
     );
   }
 }

@@ -16,6 +16,8 @@ import 'screens/startup_recovery_screen.dart';
 import 'screens/startup_diagnostic_screen.dart';
 import 'widgets/mutilated_overlay.dart';
 import 'widgets/metel_overlay.dart';
+import 'widgets/itshnik_overlay.dart';
+import 'theme/itshnik_theme.dart';
 import 'l10n/locale_provider.dart';
 import 'l10n/translations.dart';
 import 'services/pin_service.dart';
@@ -1680,6 +1682,9 @@ class AgyshaAppState extends State<AgyshaApp>
         // «Метель» — подарок 12-го дня: холодный белый снег, поэтому только
         // светлая.
         return ThemeMode.light;
+      case ItshnikPalette.key:
+        // «IT-шник» — эксклюзивная тема-терминал, всегда тёмная.
+        return ThemeMode.dark;
       default:
         return ThemeMode.system;
     }
@@ -2111,7 +2116,7 @@ class AgyshaAppState extends State<AgyshaApp>
     // cacheKey включает _fontFamily, чтобы при переключении шрифта тема
     // пересобиралась с новым шрифтом (иначе остаётся закэшированная тема
     // со старым шрифтом — Caveat не переключался).
-    final cacheKey = '${scheme.hashCode}|$isGrokStyle|$_fontFamily';
+    final cacheKey = '${scheme.hashCode}|$isGrokStyle|$_fontFamily|$_themeKey';
     final cached = isDark ? _darkThemeCache : _lightThemeCache;
     final cachedKey = isDark ? _darkThemeCacheKey : _lightThemeCacheKey;
     if (cached != null && cachedKey == cacheKey) return cached;
@@ -2121,6 +2126,7 @@ class AgyshaAppState extends State<AgyshaApp>
       isDark: isDark,
       isGrokStyle: isGrokStyle,
       fontFamily: _fontFamily,
+      themeKey: _themeKey,
     );
     if (isDark) {
       _darkThemeCache = built;
@@ -2328,6 +2334,11 @@ class AgyshaAppState extends State<AgyshaApp>
         final darkScheme = (useDynamic && _darkDynamic != null)
             ? _darkDynamic!
             : (() {
+                // «IT-шник» — палитра живёт в ItshnikPalette, чтобы фон и
+                // эффекты нажатий брали ровно те же цвета.
+                if (_themeKey == ItshnikPalette.key) {
+                  return ItshnikPalette.scheme;
+                }
                 if (_themeKey == 'oled') {
                   return const ColorScheme.dark(
                     primary: Color(0xFFFF5252),
@@ -2586,6 +2597,15 @@ class AgyshaAppState extends State<AgyshaApp>
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
+                        // Фон «IT-шника» — самый нижний слой: у темы
+                        // прозрачные экраны, и терминал просвечивает сквозь
+                        // интерфейс. Держим его вне AnimatedSwitcher: он
+                        // непрозрачный и не должен перекрывать контент.
+                        if (_themeKey == ItshnikPalette.key)
+                          const ItshnikBackdrop(
+                            key: ValueKey('itshnik_backdrop'),
+                            child: SizedBox.expand(),
+                          ),
                         // Контент (Navigator) — всегда ОДИН слой, без анимации:
                         // раньше AnimatedSwitcher оборачивал и контент, и пятна,
                         // поэтому при смене темы ВЕСЬ экран «вспыхивал» (fade

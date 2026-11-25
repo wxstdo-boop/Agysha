@@ -7,6 +7,7 @@ import '../widgets/stagger_in.dart';
 import '../l10n/translations.dart';
 import '../models/changelog_entry.dart';
 import '../services/update_service.dart';
+import '../services/changelog_digest.dart';
 import '../utils/design_tokens.dart';
 
 /// Набор значков для пунктов «Что нового». Значок у каждого пункта СВОЙ и
@@ -31,14 +32,23 @@ const List<IconData> _changeIcons = [
   Icons.auto_fix_high_rounded,
 ];
 
-/// Экран «Что нового».
+/// Экран «Что нового» в двух режимах.
+///
+/// * [detailed] = false — для обычного человека из настроек: только суть
+///   ([digestChangelog] выбрасывает служебные пункты и оставляет по
+///   несколько главных на релиз);
+/// * [detailed] = true — подробный журнал в уголке разработчика: все
+///   релизы и все пункты, без купюр.
 ///
 /// Список берётся из живых GitHub-релизов ([UpdateService.fetchChangelog]),
 /// поэтому он не отстаёт от версии приложения. Пока идёт загрузка — тонкая
 /// полоса прогресса, а если сети нет — показывается встроенный список
 /// последних значимых версий, чтобы экран никогда не был пустым.
 class ChangelogScreen extends StatefulWidget {
-  const ChangelogScreen({super.key});
+  /// Подробный журнал для уголка разработчика.
+  final bool detailed;
+
+  const ChangelogScreen({super.key, this.detailed = false});
 
   @override
   State<ChangelogScreen> createState() => _ChangelogScreenState();
@@ -68,11 +78,21 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     // Живой список; если сеть недоступна — встроенный запасной.
-    final entries = _entries ?? _fallbackEntries(context);
+    final raw = _entries ?? _fallbackEntries(context);
+    // Обычному человеку — выжимка; в уголке разработчика — полный журнал.
+    final entries = widget.detailed ? raw : digestChangelog(raw);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(Translations.t('patchNotes', context)),
+        title: Text(
+          widget.detailed
+              ? Translations.t(
+                  'changelogDetailedTitle',
+                  context,
+                  'Журнал целиком',
+                )
+              : Translations.t('patchNotes', context),
+        ),
         // Задизайненный «Назад» (тултип) — единый стиль со всеми экранами.
         leading: const BackButtonTooltip(),
         centerTitle: true,
@@ -108,7 +128,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildHeader(theme),
+                          _buildHeader(theme, raw.length, entries.length),
                           const SizedBox(height: Spacing.md),
                         ],
                       );
@@ -132,7 +152,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
+  Widget _buildHeader(ThemeData theme, int totalReleases, int shownReleases) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(Spacing.lg),
@@ -178,7 +198,16 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
           ),
           const SizedBox(height: Spacing.xxs),
           Text(
-            Translations.t('patchRoadmap', context, 'Minor tweaks, PR in 2027'),
+            widget.detailed
+                // В подробном режиме плашка — счётчик, а не лирика: сразу
+                // видно, сколько релизов подтянулось и сколько показано.
+                ? '${Translations.t('changelogDetailedHint', context, 'Все выпуски и все пункты без купюр')} · '
+                      '$shownReleases/$totalReleases'
+                : Translations.t(
+                    'patchRoadmap',
+                    context,
+                    'Minor tweaks, PR in 2027',
+                  ),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onPrimaryContainer.withValues(
                 alpha: 0.86,
@@ -211,6 +240,9 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
     final stamp = [
       entry.date,
       if (entry.time.isNotEmpty) entry.time,
+      // В подробном журнале рядом с версией живёт счётчик пунктов: по нему
+      // сразу видно, насколько выпуск «тяжёлый».
+      if (widget.detailed) '${entry.changes.length} п.',
     ].where((s) => s.isNotEmpty).join(', ');
 
     return PressScale(
@@ -281,7 +313,11 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                           entry.changes[j],
                           style: theme.textTheme.bodyMedium?.copyWith(
                             height: 1.4,
-                            fontStyle: FontStyle.italic,
+                            // Подробный журнал читается как протокол:
+                            // курсив — только у тёплой выжимки для человека.
+                            fontStyle: widget.detailed
+                                ? FontStyle.normal
+                                : FontStyle.italic,
                             color: theme.colorScheme.onSurface.withValues(
                               alpha: 0.94,
                             ),

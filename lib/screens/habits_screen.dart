@@ -851,10 +851,19 @@ class _HabitsScreenState extends State<HabitsScreen>
                                       key: const ValueKey('list'),
                                       child: _buildBody(context, theme, habits),
                                     )
-                                  : Padding(
+                                  // Пустое состояние — в своём скролле, как в
+                                  // задачах и будильниках: верхний слот под
+                                  // таблетку разделов, затем 12 до карточки
+                                  // (их даёт kEmptyStatePadding внутри
+                                  // PremiumEmptyState). Скролл нужен и для
+                                  // pull-to-refresh на пустом экране, и чтобы
+                                  // карточка не обрезалась на низком экране.
+                                  : SingleChildScrollView(
                                       key: const ValueKey('empty_state'),
+                                      physics:
+                                          const AlwaysScrollableScrollPhysics(),
                                       padding: const EdgeInsets.only(
-                                        top: kSectionPillSlotHeight,
+                                        top: kSectionPillSlotHeight + 8,
                                       ),
                                       child: _buildEmpty(context, theme),
                                     ),
@@ -898,9 +907,10 @@ class _HabitsScreenState extends State<HabitsScreen>
     final slivers = <Widget>[
       // Полоса «борьбы с неидеальным» раскрывается плавно (и на старте
       // синхронно уже присутствует — без резкого впрыгивания и мигания
-      // после сплэша). Верхний слот под таблетку разделов — её же padding.
+      // после сплэша). Верхний слот под таблетку разделов — тот же, что в
+      // задачах и будильниках: kSectionPillSlotHeight + 8.
       SliverPadding(
-        padding: const EdgeInsets.only(top: kSectionPillSlotHeight),
+        padding: const EdgeInsets.only(top: kSectionPillSlotHeight + 8),
         sliver: SliverToBoxAdapter(
           child: AnimatedSize(
             duration: const Duration(milliseconds: 320),
@@ -912,6 +922,9 @@ class _HabitsScreenState extends State<HabitsScreen>
           ),
         ),
       ),
+      // Одинаковый зазор до первой карточки (или до заголовка секции) — 12.
+      // Полоса перфекционизма своего нижнего отступа больше не держит.
+      const SliverToBoxAdapter(child: SizedBox(height: 12)),
       if (splitSections) ...[
         _sectionHeaderSliver(
           context,
@@ -941,9 +954,9 @@ class _HabitsScreenState extends State<HabitsScreen>
       // края и при отпускании список дёргается.
       physics: const AlwaysScrollableScrollPhysics(),
       scrollCacheExtent: const ScrollCacheExtent.pixels(1500),
-      // Внешний отступ 16 по бокам — как был у SingleChildScrollView:
-      // карточки (свой padding 12) стоят в 28 px от края, полоса
-      // перфекционизма и заголовки секций — в 16.
+      // Внешний отступ 16 по бокам — общая сетка страницы, как у задач и
+      // будильников: карточки, заголовки секций и полоса перфекционизма
+      // стоят на одной вертикали (своего отступа у карточек больше нет).
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1068,37 +1081,32 @@ class _HabitsScreenState extends State<HabitsScreen>
     List<Habit> list,
     List<Habit> sorted,
   ) {
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      sliver: SliverReorderableList(
-        itemCount: list.length,
-        // Медленнее штатного автоскролла (по умолчанию 50): при подтаскивании
-        // карточки к кромке список едет спокойно, а не «улетает» рывком.
-        autoScrollerVelocityScalar: 18,
-        proxyDecorator: (child, index, animation) =>
-            buildDragProxy(child, theme, animation, trackY: _dragProxyY),
-        onReorderItem: (oldLocal, newLocal) {
-          // Локальный индекс (в зоне) → глобальный (в полном списке), чтобы
-          // reorder сохранял порядок и внутри секции, и при закрепе.
-          final oldGlobal = sorted.indexOf(list[oldLocal]);
-          if (oldGlobal < 0) return;
-          int newGlobal;
-          if (newLocal >= list.length) {
-            newGlobal = sorted.indexOf(list.last) + 1;
-            if (newGlobal > sorted.length) newGlobal = sorted.length;
-          } else {
-            newGlobal = sorted.indexOf(list[newLocal]);
-            if (newGlobal < 0) newGlobal = oldGlobal;
-          }
-          if (newGlobal == oldGlobal) return;
-          _service.reorder(oldGlobal, newGlobal);
-        },
-        itemBuilder: (context, i) => KeyedSubtree(
-          key: ValueKey('habit_${list[i].id}'),
-          child: RepaintBoundary(
-            child: _buildHabitCard(context, theme, list, i),
-          ),
-        ),
+    return SliverReorderableList(
+      itemCount: list.length,
+      // Медленнее штатного автоскролла (по умолчанию 50): при подтаскивании
+      // карточки к кромке список едет спокойно, а не «улетает» рывком.
+      autoScrollerVelocityScalar: 18,
+      proxyDecorator: (child, index, animation) =>
+          buildDragProxy(child, theme, animation, trackY: _dragProxyY),
+      onReorderItem: (oldLocal, newLocal) {
+        // Локальный индекс (в зоне) → глобальный (в полном списке), чтобы
+        // reorder сохранял порядок и внутри секции, и при закрепе.
+        final oldGlobal = sorted.indexOf(list[oldLocal]);
+        if (oldGlobal < 0) return;
+        int newGlobal;
+        if (newLocal >= list.length) {
+          newGlobal = sorted.indexOf(list.last) + 1;
+          if (newGlobal > sorted.length) newGlobal = sorted.length;
+        } else {
+          newGlobal = sorted.indexOf(list[newLocal]);
+          if (newGlobal < 0) newGlobal = oldGlobal;
+        }
+        if (newGlobal == oldGlobal) return;
+        _service.reorder(oldGlobal, newGlobal);
+      },
+      itemBuilder: (context, i) => KeyedSubtree(
+        key: ValueKey('habit_${list[i].id}'),
+        child: RepaintBoundary(child: _buildHabitCard(context, theme, list, i)),
       ),
     );
   }
@@ -1110,8 +1118,10 @@ class _HabitsScreenState extends State<HabitsScreen>
     Color tint,
   ) {
     final row = Padding(
-      // Выравнивание с карточками: их отступ теперь в padding списка (12).
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      // Заголовок секции стоит в общей сетке 16 (горизонтальный отступ даёт
+      // внешний SliverPadding списка), 12 снизу — тот же зазор до карточки,
+      // что и между карточками в задачах и будильниках.
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 12),
       child: Row(
         children: [
           // Точка-маркер в тон секции: заголовок читается как «начало списка»
@@ -1792,7 +1802,9 @@ class _HabitsScreenState extends State<HabitsScreen>
     final plaques = _todaysPlaques();
     final seed = _perfSeed();
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      // Нижнего отступа больше нет: зазор до первой карточки/заголовка даёт
+      // общий 12-высотный слот списка, одинаковый во всех трёх разделах.
+      padding: EdgeInsets.zero,
       // Полоса перфекционизма — своя «сцена»: мягкая подложка цвета темы,
       // скруглённые углы и летящая стая НА ФОНЕ (как канарейка в уголке
       // разработчика). Птицы живут под содержимым, клики не ловят.

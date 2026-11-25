@@ -27,7 +27,15 @@ extension _SettingsSectionTop on _SettingsScreenState {
               ),
             ),
             const SizedBox(height: 12),
-            _buildThemeCarousel(context),
+            // «IT-шник» — отдельная кнопка под барабаном, а не его камора:
+            // пока тема включена, барабан не показываем вовсе, чтобы он не
+            // подсвечивал чужую камору как выбранную.
+            if (appState.themeKey == ItshnikPalette.key)
+              _ItshnikCarouselPause()
+            else
+              _buildThemeCarousel(context),
+            const SizedBox(height: 14),
+            _buildItshnikButton(context, appState),
           ],
         ),
       ),

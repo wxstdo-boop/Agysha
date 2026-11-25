@@ -85,12 +85,41 @@ class SettingsService {
       // без проверки здесь она переживала бы сброс до первой смены темы.
       case 'metel':
         return NewYearEventService().prizeGranted ? 'metel' : 'system';
+      // «IT-шник» включается отдельной кнопкой, а не барабаном, но ключ
+      // живёт в тех же настройках: без этой ветки тема после перезапуска
+      // молча откатывалась бы на системную.
+      case 'itshnik':
+        return 'itshnik';
       default:
         // Без явного выбора — СИСТЕМНАЯ тема (обои/Material You), а не Grok:
         // у Grok primary почти чёрный, и таблетка/переключатели выглядели
         // «чёрными» вместо цветов обоев.
         return 'system';
     }
+  }
+
+  static const _keyThemeBeforeItshnik = 'theme_before_itshnik';
+
+  /// Тема, которая стояла до включения «IT-шника»: выключили эксклюзивную —
+  /// человек возвращается туда, откуда пришёл, а не в случайную «тёмную».
+  static Future<String> loadThemeBeforeItshnik() async {
+    final map = await _loadSettings();
+    final value =
+        map[_keyThemeBeforeItshnik] as String? ??
+        globalPrefs.getString(_keyThemeBeforeItshnik);
+    if (value == null || value.isEmpty || value == 'itshnik') return 'dark';
+    return value;
+  }
+
+  /// Пишется в ту же очередь, что и тема: кнопка сохраняет «откуда ушёл»
+  /// и сразу переключает тему, иначе две записи могли обогнать друг друга.
+  static Future<void> saveThemeBeforeItshnik(String mode) {
+    _themeWrites = _themeWrites.then((_) async {
+      final map = await _loadSettings();
+      map[_keyThemeBeforeItshnik] = mode;
+      await _saveSettings(map);
+    });
+    return _themeWrites;
   }
 
   /// Запись темы идёт в очередь: быстрый перебор тем вызывал несколько
