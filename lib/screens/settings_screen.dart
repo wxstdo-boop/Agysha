@@ -172,6 +172,15 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// открываются, повторные тапы по плитке не наслаивают вторую откры-
   /// вающуюся настройку.
   bool _devOpening = false;
+
+  /// Каскад «входа» отыгран для плиток, которые были на экране при открытии.
+  /// ListView строит остальные лениво — уже во время прокрутки, — и для них
+  /// вход не запускается: на скорости листания задержка `index * 40` (до
+  /// 600 мс) плюс 380 мс проявления оставляла человека с пустыми местами, а
+  /// при возврате наверх (плитки к тому моменту выброшены из кэша и строятся
+  /// заново) каскад проигрывался обратно. Теперь всё, что появляется после
+  /// первого кадра, видно сразу и не анимируется повторно.
+  bool _entranceDone = false;
   // Пульсация поля ключа при переключении глазка: текст плавно
   // проявляется/гаснет, а не дёргается мгновенно.
   late final AnimationController _keyPulse = AnimationController(
@@ -200,6 +209,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     // в конце. Раньше каждая загрузка дёргала свой setState — вход в
     // настройки «подлагивал» серией мгновенных перестроек.
     _loadInitialState();
+    // Первый кадр уже содержит плитки, видимые при открытии, — их каскад
+    // стартует как раньше. Всё, что список построит позже (прокрутка), должно
+    // быть на экране сразу, поэтому флаг взводим после отрисовки кадра.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _entranceDone = true);
     // Слушаем изменения статуса уведомлений
     notificationService.addListener(_onNotificationChanged);
     // Право полноэкранных уведомлений выдаётся В СИСТЕМНЫХ настройках, и
@@ -537,15 +550,23 @@ class _SettingsScreenState extends State<SettingsScreen>
             // лёгкие Transform/Opacity — не грузит слабые устройства.
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             itemCount: settingsItems.length,
-            itemBuilder: (context, index) => StaggerIn(
-              index: index,
-              step: const Duration(milliseconds: 46),
-              duration: const Duration(milliseconds: 430),
-              // Чуть позже старта: каскад идёт уже на видимом экране,
-              // а не «за шторкой» перехода.
-              extraDelay: const Duration(milliseconds: 60),
-              child: _pressableCard(settingsItems[index]),
-            ),
+            itemBuilder: (context, index) {
+              // Каскадный вход — только для плиток первого кадра. Дальше
+              // список строит плитки по мере прокрутки, и они появляются
+              // сразу: без ожидания index * 40 мс и без повторного входа
+              // при возврате наверх.
+              final cascade = !_entranceDone;
+              return StaggerIn(
+                index: index,
+                animate: cascade,
+                step: const Duration(milliseconds: 40),
+                duration: const Duration(milliseconds: 430),
+                // Чуть позже старта: каскад идёт уже на видимом экране,
+                // а не «за шторкой» перехода.
+                extraDelay: const Duration(milliseconds: 60),
+                child: _pressableCard(settingsItems[index]),
+              );
+            },
           ),
         ),
       ),

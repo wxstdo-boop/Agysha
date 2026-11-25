@@ -25,6 +25,14 @@ class StaggerIn extends StatefulWidget {
   /// список появляется уже готовым — резко. С ней элементы проявляются
   /// каскадом уже на видимом экране.
   final Duration extraDelay;
+
+  /// false — блок монтируется сразу в конечном состоянии, без fade+подъёма.
+  /// Нужно ленивым спискам: плитка, впервые построенная при прокрутке,
+  /// должна быть видна немедленно, а не ждать `index * step` (в длинном
+  /// списке это до 600 мс задержки плюс 380 мс проявления — на скорости
+  /// листания человек видит пустые места).
+  final bool animate;
+
   final Widget child;
 
   const StaggerIn({
@@ -33,6 +41,7 @@ class StaggerIn extends StatefulWidget {
     this.step = const Duration(milliseconds: 55),
     this.duration = const Duration(milliseconds: 380),
     this.extraDelay = Duration.zero,
+    this.animate = true,
     required this.child,
   });
 
@@ -51,7 +60,7 @@ class _StaggerInState extends State<StaggerIn>
     // Внутри drag-proxy элемент монтируется заново — стартуем сразу
     // в финальном состоянии, чтобы входная анимация не «скакала»
     // во время перетаскивания.
-    if (StaggerIn.suppressEntrance) {
+    if (StaggerIn.suppressEntrance || !widget.animate) {
       _ctrl.value = 1.0;
       return;
     }
