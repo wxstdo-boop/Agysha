@@ -1662,7 +1662,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   /// и только потом убираем из модели — соседи подаются вверх непрерывно.
   Future<void> _removeTrack(MusicTrack track) async {
     setState(() => _removingTrackIds.add(track.id));
-    if (_music.playing && _music.path == track.path) {
+    // Останавливаем не только играющий трек, но и стоящий на паузе: если
+    // удалить именно его, в шторке осталось бы уведомление с треком,
+    // которого больше нет в подборке, а кнопки вели бы в пустоту.
+    if (_music.path == track.path) {
       unawaited(_music.stop());
     }
     await Future<void>.delayed(_trackCollapse);

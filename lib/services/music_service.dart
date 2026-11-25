@@ -60,6 +60,18 @@ class MusicService extends ChangeNotifier {
       _playing = false;
       notifyListeners();
     });
+    // Плеер гасили не мы: в шторке нажали «стоп», система смахнула
+    // уведомление или сервис прибил Android. Плеер уходит в idle, а
+    // «своя музыка» должна отпустить трек — иначе экран профиля ещё
+    // показывал бы играющий трек, которого уже нет.
+    _player.processingStateStream.listen((state) {
+      if (state != ProcessingState.idle || _path == null) return;
+      _path = null;
+      _playlist = const [];
+      _sourceSig = '';
+      _pendingQueueRefresh = false;
+      notifyListeners();
+    });
     unawaited(_applyLoudnessBoost());
   }
 
@@ -370,10 +382,21 @@ class MusicService extends ChangeNotifier {
     }
   }
 
-  /// Полная остановка: используется при удалении трека.
+  /// Полная остановка: удалили играющий трек или нажали «стоп» в шторке.
+  ///
+  /// `player.stop()` не просто ставит звук на паузу — он выводит
+  /// foreground-сервис из работы, и система убирает медиауведомление.
+  /// Пауза уведомление НАРОЧНО оставляет (из шторки можно вернуться к
+  /// треку), а остановка должна стереть его вместе с плеером: иначе в
+  /// шторке висит трек, которого уже нет ни в подборке, ни на диске.
   Future<void> stop() async {
     _playing = false;
     _path = null;
+    // Очередь отпускаем сразу: после остановки индекс в уведомлении не
+    // должен показывать «3 из 12» по старой подборке.
+    _playlist = const [];
+    _sourceSig = '';
+    _pendingQueueRefresh = false;
     notifyListeners();
     final gen = _rampGen;
     await _ramp(_level, 0, over: _fadeOut);
