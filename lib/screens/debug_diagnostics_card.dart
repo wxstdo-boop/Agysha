@@ -39,7 +39,11 @@ class DebugDiagnosticsCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  Translations.t('debugDiagnosticsTitle', context, 'Диагностика'),
+                  Translations.t(
+                    'debugDiagnosticsTitle',
+                    context,
+                    'Диагностика',
+                  ),
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: theme.colorScheme.primary,
                   ),

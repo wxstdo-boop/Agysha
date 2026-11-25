@@ -137,7 +137,6 @@ extension _SettingsDevTools on _SettingsScreenState {
     return unlocked;
   }
 
-
   /// Открывает меню отладки из уголка разработчика.
   ///
   /// Код спрашивается, только пока режим отладки выключен: успешный ввод
@@ -158,9 +157,9 @@ extension _SettingsDevTools on _SettingsScreenState {
       ActionLog.record('отладка', 'меню открыто');
     }
     if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const DebugMenuScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const DebugMenuScreen()));
   }
 
   Future<void> _showDevToolsScreen() async {
@@ -507,8 +506,11 @@ extension _SettingsDevTools on _SettingsScreenState {
                       ),
                     ),
                     subtitle: Text(
-                      Translations.t('debugMenuCornerHint', routeContext,
-                          'Проверки, журнал и диагностика'),
+                      Translations.t(
+                        'debugMenuCornerHint',
+                        routeContext,
+                        'Проверки, журнал и диагностика',
+                      ),
                     ),
                     trailing: ValueListenableBuilder<bool>(
                       valueListenable: DebugService.debugEnabled,
@@ -567,7 +569,6 @@ extension _SettingsDevTools on _SettingsScreenState {
       _ => 'EXPERIMENTAL CONTROLS',
     };
   }
-
 }
 
 /// Движок отрисовки: Skia (по умолчанию) или Impeller.
