@@ -6,6 +6,7 @@ import '../services/app_version.dart';
 import '../services/debug_service.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import 'action_log_screen.dart';
+import 'debug_diagnostics_card.dart';
 import 'tester_mode_screen.dart';
 
 /// Меню отладки: служебные переключатели и входы в проверки и журнал.
@@ -242,6 +243,8 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          const DebugDiagnosticsCard(),
           const SizedBox(height: 20),
           Center(
             child: Text(

@@ -9,65 +9,6 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
     ThemeData theme,
   ) => <Widget>[
     const SizedBox(height: 8),
-    Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.bug_report_outlined,
-                  size: 20,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  Translations.diagnosticsOf(context),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _diagTile(
-              context,
-              icon: Icons.alarm_outlined,
-              label: Translations.t('diagAlarmTest', context),
-              onTap: () => _runAlarmDiag(),
-            ),
-            _diagTile(
-              context,
-              icon: Icons.psychology_outlined,
-              label: Translations.t('diagRcTest', context),
-              onTap: () => _runRcDiag(),
-            ),
-            _diagTile(
-              context,
-              icon: Icons.volume_up_outlined,
-              label: Translations.t('diagSoundTest', context),
-              onTap: () async {
-                final played = Translations.t('diagSoundPlayed', context);
-                final player = AudioPlayer();
-                try {
-                  await player.play(AssetSource('sounds/default.wav'));
-                  await Future.delayed(const Duration(milliseconds: 1500));
-                  await player.stop();
-                } catch (_) {}
-                if (!context.mounted) return;
-                player.dispose();
-                showBeautifulSnackBar(context, message: played);
-              },
-            ),
-          ],
-        ),
-      ),
-    ),
-    const SizedBox(height: 8),
     SizeTransition(
       sizeFactor: _perfScale,
       axis: Axis.vertical,
@@ -237,22 +178,6 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            // Отдельная кнопка меню отладки: свой код доступа (0625),
-            // отдельно от скрытого входа в «Уголок разработчика» по имени.
-            OutlinedButton.icon(
-              onPressed: _showDebugModeDialog,
-              icon: const Icon(Icons.bug_report_outlined, size: 18),
-              label: Text(Translations.t('debugMenuTitle', context, 'Debug')),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(44),
-                side: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.6,
-                  ),
-                ),
-              ),
             ),
             const SizedBox(height: 12),
             Text(

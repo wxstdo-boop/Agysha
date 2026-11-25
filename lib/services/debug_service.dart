@@ -17,6 +17,9 @@ class DebugService {
   static const _keyTesterMode = 'tester_mode_enabled';
 
   static final ValueNotifier<bool> debugEnabled = ValueNotifier<bool>(false);
+
+  /// Живой флаг режима тестера: единственный источник правды для бета-канала,
+  /// уголка разработчика и меню отладки.
   static final ValueNotifier<bool> testerMode = ValueNotifier<bool>(false);
 
   /// Читает сохранённые режимы. Вызывается после `initPrefs()`.
@@ -56,7 +59,11 @@ class DebugService {
 
   static Future<void> setTesterMode(bool value) async {
     testerMode.value = value;
-    await globalPrefs.setBool(_keyTesterMode, value);
+    try {
+      await globalPrefs.setBool(_keyTesterMode, value);
+    } catch (_) {
+      // prefs ещё не готовы — флаг живёт до перезапуска.
+    }
   }
 
   @visibleForTesting

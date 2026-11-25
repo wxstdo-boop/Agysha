@@ -24,6 +24,7 @@ class TesterModeScreen extends StatefulWidget {
 class _TesterModeScreenState extends State<TesterModeScreen> {
   final List<TesterCheckResult> _results = <TesterCheckResult>[];
   bool _running = false;
+  DateTime? _lastRunAt;
 
   @override
   void initState() {
@@ -51,7 +52,10 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
       'проверки завершены',
       data: {'всего': results.length, 'ошибок': failed},
     );
-    setState(() => _running = false);
+    setState(() {
+      _running = false;
+      _lastRunAt = DateTime.now();
+    });
   }
 
   /// Инструменты тестера: отчёт в буфер, живое уведомление, журнал.
@@ -70,13 +74,113 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
     );
   }
 
+  /// Список только ошибок последнего прогона — для багрепорта.
+  Future<void> _copyErrors() async {
+    final failed = _results
+        .where((r) => r.status == TesterStatus.fail)
+        .toList();
+    if (failed.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: TesterChecks.report(failed)));
+    ActionLog.record(
+      'тестер',
+      'список ошибок скопирован в буфер',
+      data: {'ошибок': failed.length},
+    );
+    if (!mounted) return;
+    showBeautifulSnackBar(
+      context,
+      message: Translations.t(
+        'testerErrorsCopied',
+        context,
+        'Ошибки скопированы',
+      ),
+    );
+  }
+
+  Future<void> _clearLog() async {
+    await ActionLog.clear();
+    ActionLog.record('тестер', 'журнал действий очищен');
+    if (!mounted) return;
+    setState(() {});
+    showBeautifulSnackBar(
+      context,
+      message: Translations.t('testerLogCleared', context, 'Журнал очищен'),
+    );
+  }
+
+  /// Сводка по последнему прогону: сколько OK, ошибок и пропусков.
+  void _showSummary() {
+    if (_results.isEmpty) return;
+    final ok = _results.where((r) => r.status == TesterStatus.pass).length;
+    final failed = _results.where((r) => r.status == TesterStatus.fail).length;
+    final skipped = _results.where((r) => r.status == TesterStatus.skip).length;
+    final last = _lastRunAt;
+    final lastLabel = last == null
+        ? 'ещё не завершён'
+        : '${_two(last.day)}.${_two(last.month)}.${last.year} '
+              '${_two(last.hour)}:${_two(last.minute)}:${_two(last.second)}';
+    ActionLog.record('тестер', 'открыта сводка проверок');
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return AlertDialog(
+          title: Text(
+            Translations.t(
+              'testerSummaryTitle',
+              dialogContext,
+              'Сводка проверок',
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('OK: $ok', style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 4),
+              Text(
+                'ОШИБКА: $failed',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: failed == 0
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.error,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text('ПРОПУСК: $skipped', style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 12),
+              Text(
+                'Последний прогон: $lastLabel',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(Translations.t('close', dialogContext, 'Закрыть')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static String _two(int value) => value.toString().padLeft(2, '0');
+
   Future<void> _sendTestNotification() async {
     final notification = NotificationService();
     if (!notification.isInitialized) {
       if (!mounted) return;
       showBeautifulSnackBar(
         context,
-        message: Translations.t('diagNotEnabled', context, 'Уведомления выключены'),
+        message: Translations.t(
+          'diagNotEnabled',
+          context,
+          'Уведомления выключены',
+        ),
         icon: Icons.warning_amber_outlined,
         iconColor: Colors.orange,
       );
@@ -256,6 +360,50 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
                             'actionLogOpen',
                             context,
                             'Журнал действий',
+                          ),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _running ? null : _run,
+                        icon: const Icon(Icons.replay_rounded, size: 18),
+                        label: Text(
+                          Translations.t(
+                            'testerRerun',
+                            context,
+                            'Повторить проверки',
+                          ),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _results.isEmpty ? null : _showSummary,
+                        icon: const Icon(Icons.summarize_outlined, size: 18),
+                        label: Text(
+                          Translations.t(
+                            'testerSummary',
+                            context,
+                            'Показать сводку',
+                          ),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: failed == 0 ? null : _copyErrors,
+                        icon: const Icon(Icons.bug_report_outlined, size: 18),
+                        label: Text(
+                          Translations.t(
+                            'testerCopyErrors',
+                            context,
+                            'Только ошибки в буфер',
+                          ),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: ActionLog.entries.isEmpty ? null : _clearLog,
+                        icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                        label: Text(
+                          Translations.t(
+                            'testerClearLog',
+                            context,
+                            'Очистить журнал',
                           ),
                         ),
                       ),

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../l10n/translations.dart';
 import 'action_log.dart';
@@ -80,6 +83,12 @@ class TesterChecks {
     _settingsCheck,
     _aiKeysCheck,
     _backupCheck,
+    _storageIntegrityCheck,
+    _translationParityCheck,
+    _remindersCheck,
+    _timeZoneCheck,
+    _updateChannelCheck,
+    _dataIntegrityCheck,
   ];
 
   static TesterCheckResult _result(
@@ -311,12 +320,15 @@ class TesterChecks {
         'alarm_permissions',
         'Разрешения будильников',
         snapshot.allGranted,
-        snapshot.allGranted
-            ? 'все выданы'
-            : 'не выдано: ${denied.join(', ')}',
+        snapshot.allGranted ? 'все выданы' : 'не выдано: ${denied.join(', ')}',
       );
     } catch (error) {
-      return _result('alarm_permissions', 'Разрешения будильников', false, '$error');
+      return _result(
+        'alarm_permissions',
+        'Разрешения будильников',
+        false,
+        '$error',
+      );
     }
   }
 
@@ -404,7 +416,12 @@ class TesterChecks {
         granted ? 'Android разрешает показ' : 'запрещено в системе',
       );
     } catch (error) {
-      return _result('notif_permission', 'Разрешение уведомлений', false, '$error');
+      return _result(
+        'notif_permission',
+        'Разрешение уведомлений',
+        false,
+        '$error',
+      );
     }
   }
 
@@ -460,6 +477,224 @@ class TesterChecks {
       );
     } catch (error) {
       return _result('backup', 'Автосохранение', false, '$error');
+    }
+  }
+
+  /// Суммарный размер и число файлов в каталоге данных приложения.
+  ///
+  /// Проверка ловит не «место кончилось», а битое хранилище: каталог не
+  /// читается, отдельные файлы не отдают размер. Всё считается только на
+  /// чтение, ничего не пишется и не удаляется.
+  static Future<TesterCheckResult> _storageIntegrityCheck() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      var files = 0;
+      var bytes = 0;
+      var unreadable = 0;
+      await for (final entity in dir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is! File) continue;
+        files++;
+        try {
+          bytes += await entity.length();
+        } catch (_) {
+          unreadable++;
+        }
+      }
+      final megabytes = (bytes / (1024 * 1024)).toStringAsFixed(1);
+      final limit = 512 * 1024 * 1024;
+      final sane = unreadable == 0 && bytes < limit;
+      final detail = StringBuffer('$files файлов, $megabytes МБ');
+      if (unreadable > 0) detail.write(', без доступа: $unreadable');
+      if (bytes >= limit) detail.write(', больше 512 МБ');
+      return _result(
+        'storage_integrity',
+        'Целостность хранилища',
+        sane,
+        detail.toString(),
+      );
+    } catch (error) {
+      return _result(
+        'storage_integrity',
+        'Целостность хранилища',
+        false,
+        '$error',
+      );
+    }
+  }
+
+  /// Паритет переводов: одинаковый набор ключей в en, ru и fr.
+  static Future<TesterCheckResult> _translationParityCheck() async {
+    try {
+      final data = Translations.rawData;
+      final en = data['en'] ?? const <String, String>{};
+      final ru = data['ru'] ?? const <String, String>{};
+      final fr = data['fr'] ?? const <String, String>{};
+      final missingRu = en.keys.where((key) => !ru.containsKey(key)).length;
+      final missingFr = en.keys.where((key) => !fr.containsKey(key)).length;
+      final extraRu = ru.keys.where((key) => !en.containsKey(key)).length;
+      final extraFr = fr.keys.where((key) => !en.containsKey(key)).length;
+      final parity =
+          missingRu == 0 && missingFr == 0 && extraRu == 0 && extraFr == 0;
+      final detail = StringBuffer(
+        'en ${en.length}, ru ${ru.length}, fr ${fr.length}',
+      );
+      if (parity) {
+        detail.write(', наборы ключей совпадают');
+      } else {
+        detail.write(
+          ', расхождения: ru −$missingRu/+$extraRu, fr −$missingFr/+$extraFr',
+        );
+      }
+      return _result(
+        'l10n_parity',
+        'Паритет переводов',
+        parity,
+        detail.toString(),
+      );
+    } catch (error) {
+      return _result('l10n_parity', 'Паритет переводов', false, '$error');
+    }
+  }
+
+  /// Сколько напоминаний реально поставлено: привычки, будильники и служба.
+  static Future<TesterCheckResult> _remindersCheck() async {
+    try {
+      final habits = HabitService();
+      final alarms = AlarmService();
+      final notification = NotificationService();
+      final loaded = habits.isLoaded;
+      final withReminder = habits.habits
+          .where((habit) => (habit.reminderTime ?? '').trim().isNotEmpty)
+          .length;
+      final alarmsOn = alarms.alarms.where((alarm) => alarm.enabled).length;
+      final detail =
+          '$withReminder напоминаний привычек, '
+          'включённых будильников $alarmsOn, '
+          'служба уведомлений '
+          '${notification.isInitialized ? 'поднята' : 'не поднята'}';
+      if (!loaded) {
+        return _result(
+          'reminders',
+          'Планировщик напоминаний',
+          true,
+          'данные привычек ещё не загружены',
+          skipped: true,
+        );
+      }
+      return _result(
+        'reminders',
+        'Планировщик напоминаний',
+        withReminder <= habits.habits.length,
+        detail,
+      );
+    } catch (error) {
+      return _result('reminders', 'Планировщик напоминаний', false, '$error');
+    }
+  }
+
+  /// Часовой пояс и ближайший перевод стрелок.
+  ///
+  /// Смещение сверяем с реальным поясом (|смещение| ≤ 14 ч), а перевод ищем
+  /// по локальным правилам Dart: сравниваем смещение «сейчас» со смещением
+  /// в тот же день через 1…12 месяцев. Ничего не меняем и не пишем.
+  static Future<TesterCheckResult> _timeZoneCheck() async {
+    try {
+      final now = DateTime.now();
+      final offset = now.timeZoneOffset;
+      final sane = offset.abs() <= const Duration(hours: 14);
+      var nextChange = 'перехода нет в ближайший год';
+      for (var months = 1; months <= 12; months++) {
+        final probe = DateTime(now.year, now.month + months, now.day, 12);
+        final diff = probe.timeZoneOffset - offset;
+        if (diff != Duration.zero) {
+          final day =
+              '${probe.day.toString().padLeft(2, '0')}.'
+              '${probe.month.toString().padLeft(2, '0')}.${probe.year}';
+          final sign = diff.isNegative ? '−' : '+';
+          nextChange =
+              'ближайший перевод: $day ($sign${diff.inMinutes.abs()} мин)';
+          break;
+        }
+      }
+      final sign = offset.isNegative ? '−' : '+';
+      return _result(
+        'timezone',
+        'Часовой пояс и летнее время',
+        sane,
+        '${now.timeZoneName}, смещение $sign${offset.inMinutes.abs()} мин; '
+            '$nextChange',
+      );
+    } catch (error) {
+      return _result(
+        'timezone',
+        'Часовой пояс и летнее время',
+        false,
+        '$error',
+      );
+    }
+  }
+
+  /// Автообновление и канал, с которого приходит обновление.
+  static Future<TesterCheckResult> _updateChannelCheck() async {
+    try {
+      final tester = SettingsService.testerModeEnabled.value;
+      final channel = tester ? 'бета (режим тестера)' : 'стабильный';
+      final update = pendingUpdate.value;
+      final detail =
+          '${kSelfUpdateEnabled ? 'самообновление включено' : 'самообновление выключено'}, '
+          'канал $channel, '
+          '${update == null ? 'ожидающих обновлений нет' : 'ожидает v${update.versionName}'}';
+      return _result('update_channel', 'Автообновление и канал', true, detail);
+    } catch (error) {
+      return _result(
+        'update_channel',
+        'Автообновление и канал',
+        false,
+        '$error',
+      );
+    }
+  }
+
+  /// Целостность накоплений: очки и карма не отрицательны и читаются.
+  static Future<TesterCheckResult> _dataIntegrityCheck() async {
+    try {
+      final score = ScoreService();
+      final profile = ProfileService();
+      final breakdown = score.breakdown;
+      final negative = breakdown.entries
+          .where((entry) => entry.value < 0)
+          .map((entry) => entry.key.name)
+          .toList();
+      final total = score.total;
+      final karma = profile.zenKarma;
+      final sane =
+          negative.isEmpty &&
+          total >= 0 &&
+          total <= ScoreService.maxTotal &&
+          karma >= 0;
+      final detail = StringBuffer(
+        'очки: $total, карма: $karma, '
+        'друзей: ${profile.friends.length}',
+      );
+      if (negative.isNotEmpty) {
+        detail.write(', отрицательные: ${negative.join(', ')}');
+      }
+      return _result(
+        'data_integrity',
+        'Целостность профиля и очков',
+        sane,
+        detail.toString(),
+      );
+    } catch (error) {
+      return _result(
+        'data_integrity',
+        'Целостность профиля и очков',
+        false,
+        '$error',
+      );
     }
   }
 

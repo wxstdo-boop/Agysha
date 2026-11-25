@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:characters/characters.dart';
+import 'debug_service.dart';
 import 'prefs.dart';
 import 'json_file.dart';
 import 'new_year_event_service.dart';
@@ -368,29 +369,34 @@ class SettingsService {
 
   /// Режим тестера: человек соглашается на бета-канал — обновления
   /// приходят в том числе из пре-релизов, а в «О приложении» рядом с
-  /// версией стоит отметка «тестер». Живой флаг, чтобы переключатель в
-  /// уголке разработчика и кнопка в настройках видели одно состояние.
-  static final ValueNotifier<bool> testerModeEnabled = ValueNotifier<bool>(
-    false,
-  );
+  /// версией стоит отметка «тестер».
+  ///
+  /// Хранится в prefs через [DebugService], чтобы переключатели в уголке
+  /// разработчика, в меню отладки и в настройках видели одно состояние.
+  static ValueNotifier<bool> get testerModeEnabled => DebugService.testerMode;
 
   static Future<bool> loadTesterMode() async {
-    final map = await _loadSettings();
-    // globalPrefs читаем только если в настройках ключа ещё нет: иначе
-    // ранний вызов (до initPrefs) падал LateInitializationError.
-    final value = map.containsKey(_keyTesterMode)
-        ? _bool(map[_keyTesterMode], false)
-        : (globalPrefs.getBool(_keyTesterMode) ?? false);
-    testerModeEnabled.value = value;
-    return value;
+    // Старое значение из карты настроек переносим в prefs: там режим живёт
+    // вместе с режимом отладки и переживает перезапуск.
+    try {
+      final map = await _loadSettings();
+      if (map.containsKey(_keyTesterMode)) {
+        await DebugService.setTesterMode(_bool(map[_keyTesterMode], false));
+        return DebugService.testerMode.value;
+      }
+    } catch (_) {
+      // Настройки недоступны (например, в тесте) — остаётся значение prefs.
+    }
+    try {
+      DebugService.testerMode.value =
+          globalPrefs.getBool('tester_mode_enabled') ??
+          DebugService.testerMode.value;
+    } catch (_) {}
+    return DebugService.testerMode.value;
   }
 
-  static Future<void> saveTesterMode(bool value) async {
-    final map = await _loadSettings();
-    map[_keyTesterMode] = value;
-    await _saveSettings(map);
-    testerModeEnabled.value = value;
-  }
+  static Future<void> saveTesterMode(bool value) =>
+      DebugService.setTesterMode(value);
 
   /// Разблокированный режим BERSERK — общий живой флаг для настроек и FAB.
   static final ValueNotifier<bool> berserkEnabled = ValueNotifier<bool>(false);

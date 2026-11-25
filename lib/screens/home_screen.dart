@@ -710,42 +710,51 @@ class _HomeScreenState extends State<HomeScreen>
         // обслуживает сам лист (bodyInsets), фону ресайз не нужен.
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
-          // Плавная отдача при зажатии у всех значков шапки (обновить,
-          // статистика, питание, настройки) — мягко вдавливаются с круглым фоном.
-          leading: buildAppBarButton(
-            icon: Icons.refresh_outlined,
-            tooltip: Translations.refreshOf(context),
-            onTap: () => AgyshaApp.of(context).refreshApp(),
-          ),
-          // Тап по кружку онлайна под «K» открывает профиль.
-          title: AnimatedBlurTitle(onOnlineTap: _openProfile),
-          centerTitle: false,
-          actions: [
-            buildAppBarButton(
-              icon: Icons.bar_chart_outlined,
-              tooltip: Translations.t('statistics', context, 'Статистика'),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const RealityCheckStatsScreen(),
+          // Симметричная шапка: по два круглых значка слева и справа,
+          // а название по центру. Раньше слева была одна кнопка, а справа
+          // три — из-за этого шапка читалась перекошенной.
+          automaticallyImplyLeading: false,
+          titleSpacing: 0,
+          title: Row(
+            children: [
+              const SizedBox(width: 12),
+              buildAppBarButton(
+                icon: Icons.refresh_outlined,
+                tooltip: Translations.refreshOf(context),
+                onTap: () => AgyshaApp.of(context).refreshApp(),
+              ),
+              buildAppBarButton(
+                icon: Icons.bar_chart_outlined,
+                tooltip: Translations.t('statistics', context, 'Статистика'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const RealityCheckStatsScreen(),
+                  ),
                 ),
               ),
-            ),
-            buildAppBarButton(
-              icon: Icons.restaurant_outlined,
-              tooltip: Translations.t('nutrition', context, 'Питание'),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const NutritionScreen()),
+              // Тап по кружку онлайна под «K» открывает профиль.
+              Expanded(
+                child: Center(
+                  child: AnimatedBlurTitle(onOnlineTap: _openProfile),
+                ),
               ),
-            ),
-            buildAppBarButton(
-              icon: Icons.settings_outlined,
-              tooltip: Translations.t('settings', context, 'Настройки'),
-              onTap: () => Navigator.of(
-                context,
-              ).push(slideSideRoute(const SettingsScreen())),
-            ),
-            const SizedBox(width: 4),
-          ],
+              buildAppBarButton(
+                icon: Icons.restaurant_outlined,
+                tooltip: Translations.t('nutrition', context, 'Питание'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const NutritionScreen()),
+                ),
+              ),
+              buildAppBarButton(
+                icon: Icons.settings_outlined,
+                tooltip: Translations.t('settings', context, 'Настройки'),
+                onTap: () => Navigator.of(
+                  context,
+                ).push(slideSideRoute(const SettingsScreen())),
+              ),
+              const SizedBox(width: 12),
+            ],
+          ),
         ),
         body: Stack(
           children: [

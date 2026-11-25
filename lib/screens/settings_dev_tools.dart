@@ -71,29 +71,6 @@ extension _SettingsDevTools on _SettingsScreenState {
     });
   }
 
-  /// Вход в меню отладки: отдельная кнопка со своим кодом доступа.
-  ///
-  /// Это не «Уголок разработчика» и не его режим — отдельный служебный
-  /// экран для проверки функционала и журнала действий. Код только
-  /// прикрывает случайные нажатия, данные он не защищает.
-  Future<void> _showDebugModeDialog() async {
-    final unlocked = await _askServiceCode(
-      title: Translations.t('debugMenuTitle', context, 'Debug'),
-      prompt: Translations.t(
-        'debugModePrompt',
-        context,
-        'Enter the debug menu access code',
-      ),
-    );
-    if (!unlocked || !mounted) return;
-    ActionLog.record('отладка', 'меню открыто по коду');
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const DebugMenuScreen()));
-    // Меню можно и просто закрыть: режим отладки сам по себе не остаётся
-    // включённым навсегда — его состояние живёт в переключателе меню.
-  }
-
   /// Спрашивает код служебных экранов и включает режим отладки при успехе.
   ///
   /// Код нужен только пока отладка выключена: засчитанный вход её включает,
@@ -160,22 +137,29 @@ extension _SettingsDevTools on _SettingsScreenState {
     return unlocked;
   }
 
-  /// Вход в проверки функционала из уголка разработчика.
-  Future<void> _showTesterMode() async {
-    if (DebugService.testerNeedsCode) {
+
+  /// Открывает меню отладки из уголка разработчика.
+  ///
+  /// Код спрашивается, только пока режим отладки выключен: успешный ввод
+  /// включает его и запоминается, поэтому дальше меню открывается сразу.
+  Future<void> _openDebugMenu() async {
+    if (!DebugService.debugEnabled.value) {
       final unlocked = await _askServiceCode(
-        title: Translations.t('testerChecksTitle', context, 'Проверки'),
+        title: Translations.t('debugMenuTitle', context, 'Меню отладки'),
         prompt: Translations.t(
           'debugModePrompt',
           context,
-          'Enter the debug menu access code',
+          'Введите код доступа',
         ),
       );
-      if (!unlocked || !mounted) return;
-      ActionLog.record('тестер', 'проверки открыты по коду');
+      if (!unlocked) return;
+      ActionLog.record('отладка', 'меню открыто по коду');
+    } else {
+      ActionLog.record('отладка', 'меню открыто');
     }
+    if (!mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const TesterModeScreen()),
+      MaterialPageRoute<void>(builder: (_) => const DebugMenuScreen()),
     );
   }
 
@@ -492,155 +476,52 @@ extension _SettingsDevTools on _SettingsScreenState {
                   );
                 },
               ),
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                leading: const Icon(
-                  Icons.bug_report_outlined,
-                  color: Color(0xFFFFB74D),
-                ),
-                title: Text(
-                  Translations.t('debugModeTitle', routeContext, 'Отладка'),
-                ),
-                subtitle: Text(
-                  Translations.t(
-                    'debugModeEntryHint',
-                    routeContext,
-                    'Пока включён, код проверок не спрашивается',
-                  ),
-                ),
-                trailing: ValueListenableBuilder<bool>(
-                  valueListenable: DebugService.debugEnabled,
-                  builder: (context, value, _) => RepaintBoundary(
-                    child: VolumetricSwitch(
-                      value: value,
-                      onChanged: (next) async {
-                        await DebugService.setDebugEnabled(next);
-                        ActionLog.record(
-                          'отладка',
-                          next
-                              ? 'режим отладки включён из уголка'
-                              : 'режим отладки выключен из уголка',
-                        );
-                      },
-                      activeColor: const Color(0xFFFFB74D),
-                      semanticLabel: Translations.t(
-                        'debugModeTitle',
+              // Меню отладки — отдельная кнопка уголка, и только при
+              // включённом режиме тестера (или уже включённой отладке):
+              // проверки, логирование, журнал и диагностика живут внутри
+              // него, а не разбросаны по уголку.
+              ListenableBuilder(
+                listenable: Listenable.merge([
+                  DebugService.testerMode,
+                  DebugService.debugEnabled,
+                ]),
+                builder: (context, _) {
+                  final visible =
+                      DebugService.testerMode.value ||
+                      DebugService.debugEnabled.value;
+                  if (!visible) return const SizedBox.shrink();
+                  return ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                    leading: const Icon(
+                      Icons.bug_report_outlined,
+                      color: Color(0xFF4DB6AC),
+                    ),
+                    title: Text(
+                      Translations.t(
+                        'debugMenuTitle',
                         routeContext,
-                        'Отладка',
-                      ),
-                      scale: 1.28,
-                    ),
-                  ),
-                ),
-                onTap: () => DebugService.setDebugEnabled(
-                  !DebugService.debugEnabled.value,
-                ),
-              ),
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                leading: const Icon(
-                  Icons.fact_check_outlined,
-                  color: Color(0xFF4DB6AC),
-                ),
-                title: Text(
-                  Translations.t(
-                    'testerChecksTitle',
-                    routeContext,
-                    'Проверка функционала',
-                  ),
-                ),
-                subtitle: Text(
-                  Translations.t('testerChecksSubtitle', routeContext),
-                ),
-                trailing: ValueListenableBuilder<bool>(
-                  valueListenable: DebugService.debugEnabled,
-                  builder: (context, unlocked, _) => Icon(
-                    unlocked
-                        ? Icons.arrow_forward_ios_rounded
-                        : Icons.lock_outline_rounded,
-                    size: 16,
-                  ),
-                ),
-                onTap: _showTesterMode,
-              ),
-              ValueListenableBuilder<bool>(
-                valueListenable: ActionLog.enabled,
-                builder: (context, logging, _) => ListTile(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                  leading: const Icon(
-                    Icons.receipt_long_outlined,
-                    color: Color(0xFF90A4AE),
-                  ),
-                  title: Text(
-                    Translations.t(
-                      'actionLogTitle',
-                      routeContext,
-                      'Логирование действий',
-                    ),
-                  ),
-                  subtitle: Text(
-                    Translations.t('actionLogSubtitle', routeContext),
-                  ),
-                  trailing: RepaintBoundary(
-                    child: VolumetricSwitch(
-                      value: logging,
-                      onChanged: (next) async {
-                        await ActionLog.setEnabled(next);
-                      },
-                      activeColor: const Color(0xFF90A4AE),
-                      semanticLabel: Translations.t(
-                        'actionLogTitle',
-                        routeContext,
-                        'Логирование действий',
-                      ),
-                      scale: 1.28,
-                    ),
-                  ),
-                  onTap: () async {
-                    await ActionLog.setEnabled(!ActionLog.enabled.value);
-                  },
-                ),
-              ),
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                leading: const Icon(
-                  Icons.article_outlined,
-                  color: Color(0xFF90A4AE),
-                ),
-                title: Text(
-                  Translations.t('actionLogOpen', routeContext, 'Журнал'),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ValueListenableBuilder<int>(
-                      valueListenable: ActionLog.revision,
-                      builder: (context, _, _) => Text(
-                        '${ActionLog.entries.length}',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        'Меню отладки',
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                  ],
-                ),
-                onTap: () => Navigator.of(routeContext).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ActionLogScreen(),
-                  ),
-                ),
+                    subtitle: Text(
+                      Translations.t('debugMenuCornerHint', routeContext,
+                          'Проверки, журнал и диагностика'),
+                    ),
+                    trailing: ValueListenableBuilder<bool>(
+                      valueListenable: DebugService.debugEnabled,
+                      builder: (context, unlocked, _) => Icon(
+                        unlocked
+                            ? Icons.arrow_forward_ios_rounded
+                            : Icons.lock_outline_rounded,
+                        size: 16,
+                      ),
+                    ),
+                    onTap: _openDebugMenu,
+                  );
+                },
               ),
               const _RenderEngineTile(),
             ],
@@ -687,95 +568,6 @@ extension _SettingsDevTools on _SettingsScreenState {
     };
   }
 
-  Widget _diagTile(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    return PressScale(
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        leading: Icon(
-          icon,
-          size: 20,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-        title: Text(label, style: theme.textTheme.bodyMedium),
-        trailing: const Icon(Icons.play_arrow_outlined, size: 20),
-        dense: true,
-        onTap: onTap,
-      ),
-    );
-  }
-
-  Future<void> _runDiag(int id, String title, String body) async {
-    if (!notificationService.enabled) {
-      final ctx = context;
-      showBeautifulSnackBar(
-        ctx,
-        message: Translations.t('diagNotEnabled', ctx),
-        icon: Icons.warning_amber_outlined,
-        iconColor: Colors.orange,
-      );
-      return;
-    }
-    try {
-      final ec = Translations.t('diagEnableNotif', context);
-      final cc = Translations.t('settingsCantOpen', context);
-      final sc = Translations.t('diagSent', context);
-      final permitted = await notificationService.areNotificationsEnabled();
-      if (!permitted) {
-        final opened = await openNotificationSettingsAndroid();
-        if (!mounted) return;
-        showBeautifulSnackBar(
-          context,
-          message: opened ? ec : cc,
-          icon: Icons.error_outline,
-          iconColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        );
-        return;
-      }
-      await notificationService.showInstant(id, title, body);
-      if (!mounted) return;
-      showBeautifulSnackBar(context, message: sc);
-    } catch (e) {
-      if (!mounted) return;
-      showBeautifulSnackBar(
-        context,
-        message: '${Translations.t('diagError', context)}: $e',
-        icon: Icons.error_outline,
-        iconColor: Colors.red,
-        duration: const Duration(seconds: 5),
-      );
-    }
-  }
-
-  Future<void> _runRcDiag() async {
-    final svc = RealityCheckService();
-    final rcText = Translations.realityChecksOf(context);
-    await svc.load();
-    final question = svc.checks.isNotEmpty
-        ? svc.checks.first.question
-        : 'Is this a dream?';
-    await _runDiag(99998, rcText, question);
-  }
-
-  Future<void> _runAlarmDiag() async {
-    final svc = AlarmService();
-    final alarmsText = Translations.alarmsOf(context);
-    svc.load();
-    final alarm = svc.alarms.isNotEmpty ? svc.alarms.first : null;
-    final body = alarm != null
-        ? (alarm.label.isNotEmpty
-              ? alarm.label
-              : formatHmValues(alarm.time.hour, alarm.time.minute))
-        : 'Alarm test';
-    await _runDiag(99999, alarmsText, body);
-  }
 }
 
 /// Движок отрисовки: Skia (по умолчанию) или Impeller.

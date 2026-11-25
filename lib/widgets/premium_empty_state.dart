@@ -101,12 +101,14 @@ class PremiumEmptyCard extends StatelessWidget {
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.lightbulb_outline_rounded, size: 19, color: tint),
                   const SizedBox(width: 9),
-                  Expanded(
+                  Flexible(
                     child: Text(
                       advice,
+                      textAlign: TextAlign.center,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                         height: 1.4,
