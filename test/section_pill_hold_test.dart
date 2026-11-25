@@ -3,12 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:agysha/l10n/locale_provider.dart';
 import 'package:agysha/widgets/section_pill.dart';
 
-/// Удержание таблетки пальцем не должно «дёргать» карусель разделов.
+/// Таблетка разделов: постоянной подложки-камня больше нет, а мягкая
+/// красная плашка вспыхивает ТОЛЬКО под пальцем и обязана вспыхивать
+/// снова при каждом повторном нажатии.
 ///
-/// На дорожке таблетки камень занимает ~1/4 ширины, а на экране — целую
-/// страницу, поэтому микродрожание пальца усиливается в разы и, попадая в
-/// кадровый тикер, двигает сразу все keep-alive разделы. Дедзона на палец
-/// глушит это дрожание, но осознанный свайп проходит.
+/// Раньше камень с постоянной заливкой конкурировал с текстом и на Impeller
+/// терялся кадром при серии быстрых тапов — это и читалось как «подложка
+/// пропала после пары нажатий». Теперь подложку рисует PressScale-отдача
+/// (`pressTint`), у таблеток она без мёртвого интервала (`repeatGuard`
+/// нулевой), поэтому второй и третий тап вспыхивают так же, как первый.
 void main() {
   setUp(() {
     sectionCurrentIndex.value = 0;
@@ -32,7 +35,85 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('микродрожание пальца при удержании не двигает камень', (
+  /// Максимальная альфа красной отдачи среди подложек таблетки.
+  double tintAlpha(WidgetTester tester) {
+    var best = 0.0;
+    for (final box in tester.widgetList<DecoratedBox>(
+      find.descendant(
+        of: find.byType(SectionPill),
+        matching: find.byType(DecoratedBox),
+      ),
+    )) {
+      final deco = box.decoration;
+      if (deco is! BoxDecoration) continue;
+      final color = deco.color;
+      if (color == null) continue;
+      // Отдача — ровно 0xFFFF453A с переменной альфой.
+      if ((color.r - Color(0xFFFF453A).r).abs() > 0.001) continue;
+      if ((color.g - Color(0xFFFF453A).g).abs() > 0.001) continue;
+      if ((color.b - Color(0xFFFF453A).b).abs() > 0.001) continue;
+      if (color.a > best) best = color.a;
+    }
+    return best;
+  }
+
+  testWidgets('в покое постоянной подложки под разделами нет', (tester) async {
+    await pumpPill(tester);
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate(
+        (w) => w.runtimeType.toString() == '_SectionStone',
+      ),
+      findsNothing,
+      reason: 'постоянный камень удалён — разделы это просто текст',
+    );
+    expect(tintAlpha(tester), lessThan(0.01));
+  });
+
+  testWidgets('при нажатии подложка проявляется и гаснет после отпускания', (
+    tester,
+  ) async {
+    await pumpPill(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(SectionPill)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      tintAlpha(tester),
+      greaterThan(0.02),
+      reason: 'под пальцем обязана быть мягкая красная подложка',
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(
+      tintAlpha(tester),
+      lessThan(0.01),
+      reason: 'подложка живёт только под пальцем',
+    );
+  });
+
+  testWidgets('после пары быстрых нажатий подложка вспыхивает снова', (
+    tester,
+  ) async {
+    await pumpPill(tester);
+    final center = tester.getCenter(find.byType(SectionPill));
+    for (var i = 0; i < 3; i++) {
+      final gesture = await tester.startGesture(center);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 140));
+      expect(
+        tintAlpha(tester),
+        greaterThan(0.02),
+        reason: 'нажатие №${i + 1} должно давать подложку (repeatGuard = 0)',
+      );
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('микродрожание пальца при удержании не двигает разделы', (
     tester,
   ) async {
     await pumpPill(tester);
@@ -45,7 +126,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
     }
     final before = sectionDragPage.value;
-    // Палец «стоит», но дрожит ±2 px — как живая рука.
     for (var i = 0; i < 40; i++) {
       await gesture.moveBy(Offset(i.isEven ? -2 : 2, 0));
       await tester.pump(const Duration(milliseconds: 16));
@@ -53,13 +133,13 @@ void main() {
     expect(
       sectionDragPage.value,
       before,
-      reason: 'дрожание руки не двигает камень',
+      reason: 'дрожание руки не двигает разделы',
     );
     await gesture.up();
     await tester.pumpAndSettle();
   });
 
-  testWidgets('осознанный медленный свайп всё же двигает камень', (
+  testWidgets('осознанный медленный свайп всё же двигает разделы', (
     tester,
   ) async {
     await pumpPill(tester);
@@ -67,7 +147,6 @@ void main() {
       tester.getCenter(find.byType(SectionPill)),
     );
     await tester.pump();
-    // Шаги по 8 px — заметно больше дедзоны, должны накапливаться.
     for (var i = 0; i < 12; i++) {
       await gesture.moveBy(const Offset(8, 0));
       await tester.pump(const Duration(milliseconds: 16));
@@ -80,207 +159,5 @@ void main() {
     expect(sectionDragPage.value!, greaterThan(0.5));
     await gesture.up();
     await tester.pumpAndSettle();
-  });
-
-  testWidgets('отпускание растянутого камня возвращает форму плавно', (
-    tester,
-  ) async {
-    await pumpPill(tester);
-    double stoneWidth() {
-      final r = tester.getRect(
-        find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == '_SectionStone',
-        ),
-      );
-      return r.width;
-    }
-
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byType(SectionPill)),
-    );
-    await tester.pump();
-    // Долгая тяга к правому краю — камень заметно растянут.
-    for (var i = 0; i < 20; i++) {
-      await gesture.moveBy(const Offset(18, 0));
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    final stretched = stoneWidth();
-    await gesture.up();
-    // Первый кадр после отпускания: форма не должна схлопнуться скачком.
-    await tester.pump(const Duration(milliseconds: 16));
-    final first = stoneWidth();
-    expect(
-      first,
-      greaterThan(stretched * 0.9),
-      reason:
-          'растяжка не должна пропадать в первом же кадре '
-          '(раньше захваченная тяга обнулялась на статусе forward)',
-    );
-    // И дальше ширина только уменьшается — форма «расслабляется» плавно.
-    var prev = first;
-    for (var i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 32));
-      final w = stoneWidth();
-      expect(w, lessThanOrEqualTo(prev + 0.01));
-      prev = w;
-    }
-    expect(prev, lessThan(first), reason: 'форма всё же возвращается к покою');
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets(
-    'камень растягивается ПОД пальцем у края, не только на отпускании',
-    (tester) async {
-      await pumpPill(tester);
-      double stoneWidth() {
-        final r = tester.getRect(
-          find.byWidgetPredicate(
-            (w) => w.runtimeType.toString() == '_SectionStone',
-          ),
-        );
-        return r.width;
-      }
-
-      // Покой в первом разделе — базовая ширина камня.
-      await tester.pump();
-      final rest = stoneWidth();
-
-      final gesture = await tester.startGesture(
-        tester.getCenter(find.byType(SectionPill)),
-      );
-      await tester.pump();
-      // Тянем к правому краю, НЕ отпуская: камень должен растянуться уже под
-      // пальцем (жалоба «к углам не растягивается, только на отпускании»).
-      for (var i = 0; i < 24; i++) {
-        await gesture.moveBy(const Offset(16, 0));
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-      final underFinger = stoneWidth();
-      expect(
-        underFinger,
-        greaterThan(rest),
-        reason:
-            'под пальцем у края камень обязан растянуться, а не ждать отпускания',
-      );
-      await gesture.up();
-      await tester.pumpAndSettle();
-    },
-  );
-
-  testWidgets(
-    'у края растяжка не «замирает» под пальцем и не скачет на отпускании',
-    (tester) async {
-      await pumpPill(tester);
-      double stoneWidth() {
-        final r = tester.getRect(
-          find.byWidgetPredicate(
-            (w) => w.runtimeType.toString() == '_SectionStone',
-          ),
-        );
-        return r.width;
-      }
-
-      final gesture = await tester.startGesture(
-        tester.getCenter(find.byType(SectionPill)),
-      );
-      await tester.pump();
-      // Дотягиваем до ПРАВОГО края рельса: страница упирается в предел и
-      // sectionDragPage перестаёт меняться. Раньше именно здесь камень
-      // «замирал» под пальцем, а на отпускании рывком прыгал в настоящее
-      // значение тяги.
-      for (var i = 0; i < 26; i++) {
-        await gesture.moveBy(const Offset(16, 0));
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-      final before = stoneWidth();
-      await gesture.up();
-      await tester.pump(const Duration(milliseconds: 16));
-      final first = stoneWidth();
-      expect(
-        (first - before).abs(),
-        lessThan(0.02 * before),
-        reason:
-            'на отпускании форма не должна прыгать: под пальцем растяжка '
-            'уже доехала до того же значения',
-      );
-      await tester.pumpAndSettle();
-    },
-  );
-
-  testWidgets('растяжка нарастает без скачка в начале тяги', (tester) async {
-    await pumpPill(tester);
-    double stoneWidth() {
-      final r = tester.getRect(
-        find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == '_SectionStone',
-        ),
-      );
-      return r.width;
-    }
-
-    await tester.pump();
-    final base = stoneWidth();
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byType(SectionPill)),
-    );
-    await tester.pump();
-
-    // Медленная тяга мелкими шагами: первый же шаг не должен «раздувать»
-    // камень. Прежняя квадратичная кривая волны давала +23 % ширины за первый
-    // пиксель тяги; сглаженная — около +12 %, поэтому порог 17 % ловит
-    // регресс, но не придирается к нормальному нарастанию.
-    var prev = base;
-    var maxStep = 0.0;
-    var firstStep = 0.0;
-    for (var i = 0; i < 20; i++) {
-      await gesture.moveBy(const Offset(5, 0));
-      for (var f = 0; f < 6; f++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-      final w = stoneWidth();
-      final step = w - prev;
-      if (i == 0) firstStep = step;
-      if (step > maxStep) maxStep = step;
-      prev = w;
-    }
-    expect(
-      firstStep,
-      lessThan(0.17 * base),
-      reason: 'первый шаг тяги не должен раздувать камень скачком',
-    );
-    expect(
-      maxStep,
-      lessThan(0.20 * base),
-      reason: 'растяжка нарастает плавно, без ступенек',
-    );
-    await gesture.up();
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('под выбранным разделом видна подвижная подложка', (
-    tester,
-  ) async {
-    await pumpPill(tester);
-    // Регрессия: одно время здесь стояла пустая заглушка, и после тапов
-    // подпись перекрашивалась, а фона под разделом не было вовсе —
-    // «фон не появляется».
-    final stone = find.byWidgetPredicate(
-      (w) => w.runtimeType.toString() == '_SectionStone',
-    );
-    expect(stone, findsOneWidget);
-    final box = tester.widget<DecoratedBox>(
-      find.descendant(of: stone, matching: find.byType(DecoratedBox)),
-    );
-    final deco = box.decoration as BoxDecoration;
-    // Плашка — та самая мягкая красная заливка, которой раньше отзывалась
-    // ячейка при нажатии, но теперь она постоянная и не пропадает после
-    // тапов. Стеклянного градиента здесь быть не должно: он был «лишней»
-    // подложкой и пропадал кадром.
-    expect(deco.color, isNotNull);
-    expect(deco.gradient, isNull);
-    expect(deco.borderRadius, isNotNull);
-    expect(deco.border, isNull);
-    // Тени нет: Impeller считает её каждый кадр, а за плашкой её не видно.
-    expect(deco.boxShadow, isNull);
   });
 }

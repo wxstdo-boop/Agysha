@@ -67,6 +67,19 @@ class _HomeScreenState extends State<HomeScreen>
   /// Страховка выбора раздела (см. [_armTapWatchdog]).
   Timer? _tapWatchdog;
 
+  /// Отложенная запись выбранного раздела. Раньше `globalPrefs.setInt`
+  /// вызывался прямо в кадре остановки пружины — платформенный канал
+  /// приходил ровно на финиш перехода и добавлял подлаг. Теперь запись
+  /// уезжает за анимацию и склеивается при быстрых переключениях.
+  Timer? _saveTabTimer;
+
+  void _saveTabSoon(int index) {
+    _saveTabTimer?.cancel();
+    _saveTabTimer = Timer(const Duration(milliseconds: 450), () {
+      globalPrefs.setInt('last_home_tab', index);
+    });
+  }
+
   // Плавный перелёт разделов пружиной: повторный тап по другой вкладке лишь
   // МЕНЯЕТ ЦЕЛЬ, а движение продолжается с текущей скоростью. Было: каждый
   // тап заново запускал animateToPage, скорость обнулялась — при частых тапах
@@ -74,7 +87,10 @@ class _HomeScreenState extends State<HomeScreen>
   late final PageSpring _pageSpring = PageSpring(
     vsync: this,
     controller: _pageController,
-    stiffness: 210,
+    // 240 вместо 210: критически демпфированная пружина с низкой жёсткостью
+    // подолгу «доползает» последние пиксели — на финише перехода это читалось
+    // как подлаг. Немного жёстче — тот же мягкий разгон, но без вялого хвоста.
+    stiffness: 240,
     dampingRatio: 1.0,
     onSettled: _onSpringSettled,
   );
@@ -228,6 +244,7 @@ class _HomeScreenState extends State<HomeScreen>
     sectionTabTap.removeListener(_onSectionTabTap);
     sectionDragPage.removeListener(_onSectionDragPage);
     _pageController.removeListener(_onPageScroll);
+    _saveTabTimer?.cancel();
     _pageSpring.dispose();
     _dragSpring.dispose();
     _pageController.dispose();
@@ -435,7 +452,7 @@ class _HomeScreenState extends State<HomeScreen>
     sectionScrollOffset.value =
         sectionPillSnapByPage[settled] ?? sectionOffsetByPage[settled] ?? 0;
     sectionPillVisible.value = sectionScrollOffset.value <= 8;
-    globalPrefs.setInt('last_home_tab', settled);
+    _saveTabSoon(settled);
   }
 
   void _onPageChanged(int index) {
@@ -498,7 +515,7 @@ class _HomeScreenState extends State<HomeScreen>
               sectionOffsetByPage[settled] ??
               0;
           sectionPillVisible.value = sectionScrollOffset.value <= 8;
-          globalPrefs.setInt('last_home_tab', settled);
+          _saveTabSoon(settled);
         }
       }
     }
@@ -710,51 +727,46 @@ class _HomeScreenState extends State<HomeScreen>
         // обслуживает сам лист (bodyInsets), фону ресайз не нужен.
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
-          // Симметричная шапка: по два круглых значка слева и справа,
-          // а название по центру. Раньше слева была одна кнопка, а справа
-          // три — из-за этого шапка читалась перекошенной.
-          automaticallyImplyLeading: false,
-          titleSpacing: 0,
-          title: Row(
-            children: [
-              const SizedBox(width: 12),
-              buildAppBarButton(
-                icon: Icons.refresh_outlined,
-                tooltip: Translations.refreshOf(context),
-                onTap: () => AgyshaApp.of(context).refreshApp(),
-              ),
-              buildAppBarButton(
-                icon: Icons.bar_chart_outlined,
-                tooltip: Translations.t('statistics', context, 'Статистика'),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const RealityCheckStatsScreen(),
-                  ),
-                ),
-              ),
-              // Тап по кружку онлайна под «K» открывает профиль.
-              Expanded(
-                child: Center(
-                  child: AnimatedBlurTitle(onOnlineTap: _openProfile),
-                ),
-              ),
-              buildAppBarButton(
-                icon: Icons.restaurant_outlined,
-                tooltip: Translations.t('nutrition', context, 'Питание'),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const NutritionScreen()),
-                ),
-              ),
-              buildAppBarButton(
-                icon: Icons.settings_outlined,
-                tooltip: Translations.t('settings', context, 'Настройки'),
-                onTap: () => Navigator.of(
-                  context,
-                ).push(slideSideRoute(const SettingsScreen())),
-              ),
-              const SizedBox(width: 12),
-            ],
+          // Прежняя раскладка (её и просили вернуть): слева «обновить», сразу
+          // за ним имя, справа ровным блоком три кнопки — статистика, питание,
+          // настройки. Центральное имя с кнопкой статистики слева читалось
+          // перекошенным, поэтому раскладка снова односторонняя: акцент у
+          // левого края, действия — у правого.
+          titleSpacing: 4,
+          leading: buildAppBarButton(
+            icon: Icons.refresh_outlined,
+            tooltip: Translations.refreshOf(context),
+            onTap: () => AgyshaApp.of(context).refreshApp(),
           ),
+          // Тап по кружку онлайна под «K» открывает профиль.
+          title: AnimatedBlurTitle(onOnlineTap: _openProfile),
+          centerTitle: false,
+          actions: [
+            buildAppBarButton(
+              icon: Icons.bar_chart_outlined,
+              tooltip: Translations.t('statistics', context, 'Статистика'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const RealityCheckStatsScreen(),
+                ),
+              ),
+            ),
+            buildAppBarButton(
+              icon: Icons.restaurant_outlined,
+              tooltip: Translations.t('nutrition', context, 'Питание'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NutritionScreen()),
+              ),
+            ),
+            buildAppBarButton(
+              icon: Icons.settings_outlined,
+              tooltip: Translations.t('settings', context, 'Настройки'),
+              onTap: () => Navigator.of(
+                context,
+              ).push(slideSideRoute(const SettingsScreen())),
+            ),
+            const SizedBox(width: 8),
+          ],
         ),
         body: Stack(
           children: [

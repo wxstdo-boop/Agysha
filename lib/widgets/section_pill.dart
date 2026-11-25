@@ -251,10 +251,6 @@ class _SectionPillState extends State<SectionPill>
   /// на каждом кадре у самого края, отчего камень «мигал и скакал».
   double _edgePull = 0;
 
-  /// Тяга, захваченная в момент отпускания пальца: во время расслабления
-  /// камень спадает с неё к нулю.
-  double _releasePull = 0;
-
   /// «Расслабление» после отпускания: один контроллер, 220 мс, easeOut.
   /// Никаких Timer'ов и второго setState.
   late final AnimationController _edgeSettle;
@@ -290,12 +286,6 @@ class _SectionPillState extends State<SectionPill>
   /// изменении тяги — ребилд идёт ровно за пальцем.
   final ValueNotifier<double> _edgePullNotifier = ValueNotifier<double>(0.0);
 
-  /// Последняя вычисленная величина transit-растяжки (волна) — живая:
-  /// считается прямо из текущей позиции карусели, поэтому при отпускании
-  /// пальца не «прыгает» в замороженное значение, а едет дальше вместе с
-  /// доводкой раздела.
-  double _lastWave = 0;
-
   @override
   void initState() {
     super.initState();
@@ -320,10 +310,7 @@ class _SectionPillState extends State<SectionPill>
           // мгновенно, и форма камня в тот же кадр схлопнулась бы с полной
           // растяжки до одной волны — резкий возврат формы при отпускании.
           if (status == AnimationStatus.completed ||
-              status == AnimationStatus.dismissed) {
-            _releasePull = 0;
-            _lastWave = 0;
-          }
+              status == AnimationStatus.dismissed) {}
         });
   }
 
@@ -337,8 +324,6 @@ class _SectionPillState extends State<SectionPill>
       sectionDragPage.value = null;
     }
     _edgePull = 0;
-    _releasePull = 0;
-    _lastWave = 0;
     if (_edgePullNotifier.value != 0) _edgePullNotifier.value = 0;
     if (_edgeSettle.value != 0) {
       _edgeSettle
@@ -367,10 +352,8 @@ class _SectionPillState extends State<SectionPill>
     // растянутый старой тягой, не должен прыгать в ноль по-своему.
     _edgeSettle.stop();
     _edgeSettle.value = 0;
-    _releasePull = 0;
     _edgePull = 0;
     _edgePullNotifier.value = 0;
-    _lastWave = 0;
 
     _dragPage = sectionRailPage.value
         .clamp(0.0, (count - 1).toDouble())
@@ -501,29 +484,15 @@ class _SectionPillState extends State<SectionPill>
     sectionDragPage.value = null;
   }
 
-  /// Форма «резинки-волны» от смещения [transit] (в долях секции, 0..0.5).
-  ///
-  /// Квадратичная кривая `1-(1-t)^2` — как была: у неё ненулевой наклон в
-  /// нуле, поэтому растяжка видна уже с первых пикселей тяги. Плоский
-  /// smoothstep у нуля почти не растёт — под пальцем казалось, что камень
-  /// «не растягивается вовсе».
-  double _waveShape(double transit) {
-    final t2 = (transit * 2.0).clamp(0.0, 1.0); // 0 — покой, 1 — порог секции
-    return 1.0 - (1.0 - t2) * (1.0 - t2);
-  }
-
   /// «Расслабление» камня после отпускания пальца: захватываем текущую
   /// растяжку и плавно уводим её к нулю (220 мс, easeOut) — камень «сам
   /// отпускает» край, а не соскакивает. До этого было Timer + второй
   /// setState: двойная пересборка в один кадр дёргала камень вбок.
   void _startEdgeSettle() {
-    // Гасить нечего: волна теперь живая (её ведёт позиция карусели), а
-    // захваченной тяги за край нет — settle не нужен вовсе.
-    if (!_dragging && _edgePull == 0) {
-      _lastWave = 0;
-      return;
-    }
-    _releasePull = _edgePull;
+    // Постоянного камня больше нет: тяга за край и её расслабление были
+    // нужны только его растяжке. Гасим уведомление, чтобы Home вернул
+    // карусель из состояния «под пальцем».
+    if (!_dragging && _edgePull == 0) return;
     _edgeSettle
       ..stop()
       ..value = 0
@@ -634,85 +603,17 @@ class _SectionPillState extends State<SectionPill>
   }) {
     final p = rawPage.clamp(0.0, (count - 1).toDouble());
     final selectedIndex = p.round().clamp(0, count - 1);
-    final indicatorAlignment = count == 1
-        ? 0.0
-        : -1.0 + (2.0 * p / (count - 1));
 
-    final transit = (p - p.roundToDouble()).abs();
-    _lastWave = _waveShape(transit);
-
-    final settle = Curves.easeOutCubic.transform(_edgeSettle.value);
-    final wave = _lastWave;
-    final pageOverscroll = rawPage < 0.0
-        ? rawPage
-        : (rawPage > count - 1 ? rawPage - (count - 1) : 0.0);
-    final stretch = _dragging
-        ? _edgePull
-        : (_releasePull != 0
-              ? _releasePull * (1.0 - settle)
-              : (pageOverscroll * 1.5).clamp(-0.9, 0.9));
-    final edgeStretch = stretch.abs();
-
-    // Растяжение ТОЛЬКО в угол (при упоре в край дорожки):
-    // При натяжении влево (stretch < 0) правый край строго зафиксирован (якорь +1.0),
-    // камень вытягивается исключительно влево в угол без расширения вправо.
-    // При натяжении вправо (stretch > 0) левый край строго зафиксирован (якорь -1.0),
-    // камень вытягивается исключительно вправо в угол без расширения влево.
-    // При возврате (release) якорь остаётся неизменным до полного схода в 0 (без дёрганья вбок).
-    final double anchorX;
-    final double scaleX;
-    final double scaleY;
-    final double capRadius;
-
-    if (edgeStretch > 0.0001) {
-      anchorX = stretch < 0 ? 1.0 : -1.0;
-      scaleX = 1.0 + 0.65 * edgeStretch;
-      scaleY = 1.0 - 0.06 * edgeStretch;
-      capRadius = 20.0 + 6.0 * edgeStretch;
-    } else {
-      anchorX = 0.0;
-      scaleX = 1.0 + 0.12 * wave;
-      scaleY = 1.0 - 0.02 * wave;
-      capRadius = 20.0 + 2.0 * wave;
-    }
-
+    // Постоянной подложки-камня здесь БОЛЬШЕ НЕТ: разделы живут обычным
+    // полупрозрачным текстом, а плашка вспыхивает только под пальцем
+    // (pressTint ниже) и мягко растворяется после отпускания. Выбранный
+    // раздел по-прежнему выдаёт красноватая подпись — этого достаточно,
+    // а постоянный камень конкурировал с контентом и «пропадал» кадром
+    // на Impeller при серии тапов.
     return Stack(
       clipBehavior: Clip.none,
       fit: StackFit.expand,
       children: [
-        // Подложка выбранного раздела считается ПРЯМОЙ геометрией, без
-        // Align + Transform.scale + FractionallySizedBox: эта цепочка на
-        // Impeller иногда отдавала пустой кадр — подложка «пропадала» после
-        // тапов. Здесь позиция и размер — обычные числа кадра.
-        Positioned.fill(
-          child: LayoutBuilder(
-            builder: (context, box) {
-              final w = box.maxWidth;
-              final h = box.maxHeight;
-              final cell = w / count;
-              final stoneH = h * 0.90 * scaleY;
-              final stoneW = (cell * scaleX).clamp(0.0, w);
-              // indicatorAlignment: -1 — первая ячейка, +1 — последняя.
-              final baseLeft = (w - cell) / 2 * (1 + indicatorAlignment);
-              final left = switch (anchorX) {
-                > 0 => baseLeft + cell - stoneW,
-                < 0 => baseLeft,
-                _ => baseLeft + (cell - stoneW) / 2,
-              };
-              return Stack(
-                children: [
-                  Positioned(
-                    left: left,
-                    top: (h - stoneH) / 2,
-                    width: stoneW,
-                    height: stoneH,
-                    child: _SectionStone(capRadius: capRadius),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           dragStartBehavior: DragStartBehavior.start,
@@ -752,15 +653,22 @@ class _SectionPillState extends State<SectionPill>
                       child: PressScale(
                         enabled: !_dragging,
                         pressedScale: 0.94,
-                        // Второй подложки под пальцем НЕТ: подсветку несёт
-                        // только камень выбранного раздела. Раньше поверх
-                        // него вспыхивал красный квадрат отдачи — читалось
-                        // как «две подложки», одна из которых пропадает.
-                        pressTintStrength: 0,
+                        // Отдача под пальцем: мягкая красная плашка на всю
+                        // ячейку раздела. Она живёт ТОЛЬКО пока палец лежит
+                        // (PressScale ведёт её кривой 220 мс) и растворяется
+                        // следом за отпусканием. Постоянной подложки нет.
+                        pressTint: const Color(0xFFFF453A),
+                        pressTintStrength: dark ? 0.16 : 0.12,
+                        pressTintRadius: BorderRadius.circular(18),
                         enableTilt: true,
+                        // Быстрые повторные тапы должны снова показывать
+                        // отдачу: общий для кнопок 150-мс повторный мёртвый
+                        // интервал здесь читался как «подложка пропала после
+                        // пары нажатий».
+                        repeatGuard: Duration.zero,
                         // Если pointer-up потеряется при быстрых тапах и
-                        // переключениях, красная подложка снимется сама:
-                        // раньше она иногда «заедала» нажатой навсегда.
+                        // переключениях, плашка снимется сама: раньше она
+                        // иногда «заедала» нажатой навсегда.
                         maxPressDuration: const Duration(milliseconds: 1600),
                         // Отдача как у кнопок Ады и «плюсика»: вдавливание
                         // 220 мс, возврат 620 мс. Возврат заметно длиннее
@@ -978,31 +886,6 @@ class _PillLabelState extends State<_PillLabel>
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Подвижная подложка выбранного раздела — та же мягкая красная плашка,
-/// которой отзывалась ячейка при нажатии (`pressTint` 0xFFFF453A на 10 %),
-/// только теперь она одна, постоянная и едет за выбором.
-///
-/// Одно время вместо неё стоял стеклянный градиент — это была лишняя
-/// подложка, она ещё и пропадала кадром после тапов. Градиент убран,
-/// заливка сплошная: на плашке 54 px он ничего не добавляет, а Impeller
-/// платит за него каждый кадр. Тени нет по той же причине.
-class _SectionStone extends StatelessWidget {
-  final double capRadius;
-
-  const _SectionStone({required this.capRadius});
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFF453A).withValues(alpha: dark ? 0.16 : 0.12),
-        borderRadius: BorderRadius.circular(capRadius),
       ),
     );
   }

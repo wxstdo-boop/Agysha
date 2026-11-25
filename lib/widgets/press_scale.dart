@@ -72,6 +72,11 @@ class PressScale extends StatefulWidget {
   /// отдача снимается сама через это время. `null` — без страховки.
   final Duration? maxPressDuration;
 
+  /// Пауза, в течение которой повторный тап НЕ анимируется. По умолчанию
+  /// 150 мс — защита от «грязного» двойного свечения. Разделам главного
+  /// экрана нужен ноль: каждый их тап обязан снова показать отдачу.
+  final Duration repeatGuard;
+
   const PressScale({
     super.key,
     required this.child,
@@ -89,6 +94,7 @@ class PressScale extends StatefulWidget {
     this.pressTintRadius,
     this.pressOverlay,
     this.maxPressDuration,
+    this.repeatGuard = const Duration(milliseconds: 150),
   });
 
   @override
@@ -148,9 +154,6 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// не запускают новую волну отдачи: иначе подложка вспыхивала несколько
   /// раз подряд и читалась как «грязь» под пальцем.
   DateTime? _lastReleaseAt;
-
-  /// Пауза, в течение которой повторный тап не анимируется.
-  static const _repeatGuard = Duration(milliseconds: 150);
 
   /// Лежит ли палец на элементе прямо сейчас. По нему отдача «самолечится»:
   /// если по какой-то причине нажатие осталось висеть без пальца, первый
@@ -365,7 +368,8 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     if (SwipeToDeleteScope.of(context)) return;
     final released = _lastReleaseAt;
     if (released != null &&
-        DateTime.now().difference(released) < _repeatGuard) {
+        widget.repeatGuard > Duration.zero &&
+        DateTime.now().difference(released) < widget.repeatGuard) {
       return;
     }
     if (_swipeCtrl.value < 1.0) _swipeCtrl.forward();
