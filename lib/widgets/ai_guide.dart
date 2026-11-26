@@ -2491,141 +2491,152 @@ class _AiChatBodyState extends State<_AiChatBody>
             // перерисовки поля на каждом кадре клавиатуры.
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    // Обводка поля плавно «разгорается» при фокусе и гаснет
-                    // при снятии (короткая 220мс анимация, чтобы не тормозить
-                    // клавиатуру, но и не «щёлкать» цветом).
-                    child: AnimatedBuilder(
-                      animation: _focusAnim,
-                      builder: (context, child) {
-                        final t = Curves.easeOutCubic.transform(
-                          _focusAnim.value,
-                        );
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: cs.surfaceContainerHigh.withValues(
-                              alpha: theme.brightness == Brightness.dark
-                                  ? 0.70
-                                  : 0.85,
-                            ),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: Color.lerp(
-                                cs.outlineVariant.withValues(alpha: 0.45),
-                                cs.primary.withValues(alpha: 0.75),
-                                t,
-                              )!,
-                              width: 1.5 + t * 0.4,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(
-                                  alpha: theme.brightness == Brightness.dark
-                                      ? 0.16
-                                      : 0.05,
-                                ),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
+              // Listener, а не только TextField.onTap: после сворачивания
+              // панели первое касание поля иногда не доходило до onTap
+              // (жест забирал родитель/анимация), и клавиатура открывалась
+              // лишь со второго тапа. Сырой pointer-down срабатывает всегда
+              // и идемпотентен.
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (_) {
+                  if (!_keyboardOpen) _expandKeyboard();
+                },
+                child: Row(
+                  children: [
+                    Expanded(
+                      // Обводка поля плавно «разгорается» при фокусе и гаснет
+                      // при снятии (короткая 220мс анимация, чтобы не тормозить
+                      // клавиатуру, но и не «щёлкать» цветом).
+                      child: AnimatedBuilder(
+                        animation: _focusAnim,
+                        builder: (context, child) {
+                          final t = Curves.easeOutCubic.transform(
+                            _focusAnim.value,
+                          );
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHigh.withValues(
+                                alpha: theme.brightness == Brightness.dark
+                                    ? 0.70
+                                    : 0.85,
                               ),
-                            ],
-                          ),
-                          child: child,
-                        );
-                      },
-                      child: Stack(
-                        children: [
-                          // Каждую букву рисует SmoothTyping: она проявляется
-                          // из пустоты и плавно гаснет при стирании. Само поле
-                          // ниже — обычный редактор системной клавиатуры: оно
-                          // отвечает за каретку, выделение и ввод.
-                          SmoothTyping(
-                            controller: _inputCtrl,
-                            cursorColor: cs.primary,
-                            style: TextStyle(
-                              fontSize: 18,
-                              height: 1.4,
-                              color: cs.onSurface,
-                            ),
-                            builder: (style) => SmoothCaret(
-                              builder: (context, caret) => TextField(
-                                scrollController: caret,
-                                style: style,
-                                magnifierConfiguration:
-                                    TextMagnifierConfiguration.disabled,
-                                controller: _inputCtrl,
-                                focusNode: _inputFocus,
-                                // Ввод идёт своей панелью, поэтому системный
-                                // IME не поднимается: поле остаётся только
-                                // кареткой и выделением.
-                                readOnly: true,
-                                showCursor: true,
-                                onTap: _expandKeyboard,
-                                textInputAction: TextInputAction.send,
-                                onSubmitted: (_) => _send(),
-                                minLines: 1,
-                                maxLines: 4,
-                                maxLength: 13000,
-                                inputFormatters: [WideDashFormatter()],
-                                spellCheckConfiguration:
-                                    SpellCheckConfiguration.disabled(),
-                                enableSuggestions: false,
-                                autocorrect: false,
-                                contextMenuBuilder: minimalContextMenuBuilder,
-                                scrollPadding: EdgeInsets.zero,
-                                cursorOpacityAnimates: true,
-                                decoration: InputDecoration(
-                                  counterText: '',
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 18,
-                                    vertical: 12,
-                                  ),
-                                ),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: Color.lerp(
+                                  cs.outlineVariant.withValues(alpha: 0.45),
+                                  cs.primary.withValues(alpha: 0.75),
+                                  t,
+                                )!,
+                                width: 1.5 + t * 0.4,
                               ),
-                            ),
-                          ),
-                          // Плавная подсказка «Спроси меня»: гаснет, когда
-                          // начинаешь вводить, и мягко возвращается, когда
-                          // поле пустое — вместо резкого щелчка.
-                          IgnorePointer(
-                            child: ValueListenableBuilder<TextEditingValue>(
-                              valueListenable: _inputCtrl,
-                              builder: (context, v, _) => AnimatedOpacity(
-                                opacity: v.text.isEmpty ? 1.0 : 0.0,
-                                duration: const Duration(milliseconds: 240),
-                                curve: Curves.easeOutCubic,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 18,
-                                    vertical: 12,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(
+                                    alpha: theme.brightness == Brightness.dark
+                                        ? 0.16
+                                        : 0.05,
                                   ),
-                                  child: Text(
-                                    Translations.t(
-                                      'aiGuideHint',
-                                      context,
-                                      'Ask me…',
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: child,
+                          );
+                        },
+                        child: Stack(
+                          children: [
+                            // Каждую букву рисует SmoothTyping: она проявляется
+                            // из пустоты и плавно гаснет при стирании. Само поле
+                            // ниже — обычный редактор системной клавиатуры: оно
+                            // отвечает за каретку, выделение и ввод.
+                            SmoothTyping(
+                              controller: _inputCtrl,
+                              cursorColor: cs.primary,
+                              style: TextStyle(
+                                fontSize: 18,
+                                height: 1.4,
+                                color: cs.onSurface,
+                              ),
+                              builder: (style) => SmoothCaret(
+                                builder: (context, caret) => TextField(
+                                  scrollController: caret,
+                                  style: style,
+                                  magnifierConfiguration:
+                                      TextMagnifierConfiguration.disabled,
+                                  controller: _inputCtrl,
+                                  focusNode: _inputFocus,
+                                  // Ввод идёт своей панелью, поэтому системный
+                                  // IME не поднимается: поле остаётся только
+                                  // кареткой и выделением.
+                                  readOnly: true,
+                                  showCursor: true,
+                                  onTap: _expandKeyboard,
+                                  textInputAction: TextInputAction.send,
+                                  onSubmitted: (_) => _send(),
+                                  minLines: 1,
+                                  maxLines: 4,
+                                  maxLength: 13000,
+                                  inputFormatters: [WideDashFormatter()],
+                                  spellCheckConfiguration:
+                                      SpellCheckConfiguration.disabled(),
+                                  enableSuggestions: false,
+                                  autocorrect: false,
+                                  contextMenuBuilder: minimalContextMenuBuilder,
+                                  scrollPadding: EdgeInsets.zero,
+                                  cursorOpacityAnimates: true,
+                                  decoration: InputDecoration(
+                                    counterText: '',
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 12,
                                     ),
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      height: 1.4,
-                                      color: cs.onSurfaceVariant.withValues(
-                                        alpha: 0.8,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Плавная подсказка «Спроси меня»: гаснет, когда
+                            // начинаешь вводить, и мягко возвращается, когда
+                            // поле пустое — вместо резкого щелчка.
+                            IgnorePointer(
+                              child: ValueListenableBuilder<TextEditingValue>(
+                                valueListenable: _inputCtrl,
+                                builder: (context, v, _) => AnimatedOpacity(
+                                  opacity: v.text.isEmpty ? 1.0 : 0.0,
+                                  duration: const Duration(milliseconds: 240),
+                                  curve: Curves.easeOutCubic,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 12,
+                                    ),
+                                    child: Text(
+                                      Translations.t(
+                                        'aiGuideHint',
+                                        context,
+                                        'Ask me…',
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        height: 1.4,
+                                        color: cs.onSurfaceVariant.withValues(
+                                          alpha: 0.8,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _SendButton(busy: _busy, onTap: () => _send()),
-                ],
+                    const SizedBox(width: 8),
+                    _SendButton(busy: _busy, onTap: () => _send()),
+                  ],
+                ),
               ),
             ),
           ),
