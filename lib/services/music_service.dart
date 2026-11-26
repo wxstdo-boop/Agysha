@@ -65,7 +65,9 @@ class MusicService extends ChangeNotifier {
     // «своя музыка» должна отпустить трек — иначе экран профиля ещё
     // показывал бы играющий трек, которого уже нет.
     _player.processingStateStream.listen((state) {
-      if (state != ProcessingState.idle || _path == null) return;
+      // `idle` бывает и в момент, когда мы сами только заводим источник
+      // (плеер ещё не поднялся) — тогда трек уже выбран и его не трогаем.
+      if (state != ProcessingState.idle || _path == null || _playing) return;
       _path = null;
       _playlist = const [];
       _sourceSig = '';
@@ -366,10 +368,9 @@ class MusicService extends ChangeNotifier {
   Future<void> pause() async {
     _playing = false;
     notifyListeners();
-    final gen = _rampGen;
-    await _ramp(_level, 0, over: _fadeOut);
+    final faded = await _ramp(_level, 0, over: _fadeOut);
     // За время фейда могли снова нажать «плей» — тогда паузу не делаем.
-    if (gen != _rampGen || _playing) return;
+    if (!faded || _playing) return;
     try {
       await _player.pause();
     } catch (_) {}
@@ -398,9 +399,8 @@ class MusicService extends ChangeNotifier {
     _sourceSig = '';
     _pendingQueueRefresh = false;
     notifyListeners();
-    final gen = _rampGen;
-    await _ramp(_level, 0, over: _fadeOut);
-    if (gen != _rampGen || _playing) return;
+    final faded = await _ramp(_level, 0, over: _fadeOut);
+    if (!faded || _playing) return;
     _level = 1;
     try {
       await _player.stop();
@@ -580,9 +580,14 @@ class MusicService extends ChangeNotifier {
     }
   }
 
-  /// Плавно перевести уровень от [from] к [to] (0…1) за [over]. Завершается,
-  /// когда фейд доехал или его сменил другой; новый вызов отменяет прежний.
-  Future<void> _ramp(double from, double to, {required Duration over}) async {
+  /// Плавно ведёт громкость [from] → [to] и сообщает, доиграл ли фейд до
+  /// конца: `false` значит, что его перебил более новый фейд (например,
+  /// человек снова нажал «плей», пока шло затухание). Решение «ставить ли
+  /// паузу / глушить плеер» принимается ТОЛЬКО по этому ответу — раньше
+  /// вызывающий сверял поколение, снятое ДО вызова, и после любого фейда
+  /// оно гарантированно отличалось, из-за чего пауза не доходила до плеера:
+  /// звук гас, а трек продолжал играть, и уведомление оставалось «играющим».
+  Future<bool> _ramp(double from, double to, {required Duration over}) async {
     _fadeTimer?.cancel();
     final gen = ++_rampGen;
     final start = from.clamp(0.0, 1.0);
@@ -592,16 +597,16 @@ class MusicService extends ChangeNotifier {
       try {
         await _player.setVolume(target);
       } catch (_) {}
-      return;
+      return true;
     }
     const steps = 14;
     final stepMs = (over.inMilliseconds / steps).round().clamp(1, 1000);
     var i = 0;
-    final done = Completer<void>();
+    final done = Completer<bool>();
     _fadeTimer = Timer.periodic(Duration(milliseconds: stepMs), (t) async {
       if (gen != _rampGen) {
         t.cancel();
-        if (!done.isCompleted) done.complete();
+        if (!done.isCompleted) done.complete(false);
         return;
       }
       i++;
@@ -612,7 +617,7 @@ class MusicService extends ChangeNotifier {
       } catch (_) {}
       if (i >= steps) {
         t.cancel();
-        if (!done.isCompleted) done.complete();
+        if (!done.isCompleted) done.complete(true);
       }
     });
     return done.future;
