@@ -381,6 +381,79 @@ void main() {
       expect(paths.length, requestsBefore);
     });
 
+    test('loadLikedTracks: два одновременных вызова — одна загрузка', () async {
+      final store = _MemoryStore(value: 'tok');
+      final page = List.generate(
+        3,
+        (i) => _trackJson(i + 1, title: 'Трек ${i + 1}', artist: 'Исполнитель'),
+      );
+      var likesRequests = 0;
+
+      final service = YandexMusicService.forTesting(
+        store: store,
+        client: MockClient((request) async {
+          if (request.url.path == '/account/status') {
+            return _json(_accountBody(uid: 7));
+          }
+          if (request.url.path == '/users/7/likes/tracks') {
+            likesRequests++;
+            // Медленный ответ: второй вызов приходит, пока первый в полёте.
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+            return _json(_likesPage(page));
+          }
+          return _json({'error': 'unexpected'}, 404);
+        }),
+      );
+
+      final results = await Future.wait([
+        service.loadLikedTracks(),
+        service.loadLikedTracks(refresh: true),
+      ]);
+
+      expect(results[0].map((track) => track.id), ['1', '2', '3']);
+      expect(results[1].map((track) => track.id), ['1', '2', '3']);
+      // Одна страница вместо двух: второй вызов дождался первого.
+      expect(likesRequests, 1);
+    });
+
+    test(
+      'loadLikedTracks: после ошибки следующая попытка снова идёт в сеть',
+      () async {
+        final store = _MemoryStore(value: 'tok');
+        var likesRequests = 0;
+
+        final service = YandexMusicService.forTesting(
+          store: store,
+          client: MockClient((request) async {
+            if (request.url.path == '/account/status') {
+              return _json(_accountBody(uid: 7));
+            }
+            if (request.url.path == '/users/7/likes/tracks') {
+              likesRequests++;
+              if (likesRequests == 1) {
+                return _json({'error': 'boom'}, 500);
+              }
+              return _json(
+                _likesPage([
+                  _trackJson(1, title: 'Трек 1', artist: 'Исполнитель'),
+                ]),
+              );
+            }
+            return _json({'error': 'unexpected'}, 404);
+          }),
+        );
+
+        await expectLater(
+          service.loadLikedTracks(),
+          throwsA(isA<YandexMusicApiException>()),
+        );
+
+        final tracks = await service.loadLikedTracks();
+        expect(tracks, hasLength(1));
+        expect(likesRequests, 2);
+      },
+    );
+
     test('loadLikedTracks: битый JSON — ошибка сервиса, не падение', () async {
       final store = _MemoryStore(value: 'tok');
       final service = YandexMusicService.forTesting(

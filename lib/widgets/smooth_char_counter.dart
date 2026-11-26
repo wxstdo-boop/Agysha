@@ -15,6 +15,13 @@ class SmoothCharCounter extends StatelessWidget {
     this.maxLength,
   });
 
+  /// Кэш измерения ширины: последний ключ (строка + масштаб шрифта) и
+  /// полученная ширина. Живёт на классе, а не на экземпляре, потому что
+  /// виджет пересоздаётся на каждый символ.
+  static Object? _measuredScaler;
+  static String? _measuredText;
+  static double? _measuredWidth;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -41,14 +48,26 @@ class SmoothCharCounter extends StatelessWidget {
     final widest = maxLength == null
         ? '9' * (currentLength.toString().length).clamp(1, maxDigits)
         : '${'9' * maxDigits}/$maxLength';
-    final measure =
-        TextPainter(textDirection: TextDirection.ltr, textScaler: scaler)
-          ..text = TextSpan(
-            text: widest,
-            style: style.copyWith(fontWeight: FontWeight.w700),
-          );
-    measure.layout();
-    final counterWidth = (measure.width + 8).clamp(38.0, 220.0);
+    // Ширина зависит только от строки и системного масштаба шрифта (размер
+    // 12 и вес w700 тут постоянны), а `buildCounter` зовётся на каждый
+    // введённый символ. Поэтому мерим один раз и держим результат, пока
+    // ключ не сменился: `TextPainter.layout` — это полный шейпинг текста.
+    double counterWidth;
+    if (scaler == _measuredScaler && widest == _measuredText) {
+      counterWidth = _measuredWidth!;
+    } else {
+      final measure =
+          TextPainter(textDirection: TextDirection.ltr, textScaler: scaler)
+            ..text = TextSpan(
+              text: widest,
+              style: style.copyWith(fontWeight: FontWeight.w700),
+            );
+      measure.layout();
+      counterWidth = (measure.width + 8).clamp(38.0, 220.0);
+      _measuredScaler = scaler;
+      _measuredText = widest;
+      _measuredWidth = counterWidth;
+    }
     return SizedBox(
       width: counterWidth,
       child: AnimatedSwitcher(

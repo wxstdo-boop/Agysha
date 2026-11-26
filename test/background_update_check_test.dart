@@ -42,6 +42,40 @@ void main() {
     expect(kBackgroundUpdateUniqueName, isNotEmpty);
   });
 
+  test(
+    'тумблер выключен: расписание снимается, а не тикает вхолостую',
+    () async {
+      final cancelled = <String>[];
+      var registered = 0;
+
+      await syncBackgroundUpdateRegistration(
+        enabled: false,
+        register: () async => registered++,
+        cancel: (name) async => cancelled.add(name),
+      );
+
+      expect(cancelled, [
+        kBackgroundUpdateUniqueName,
+        kBackgroundUpdateCatchUpName,
+      ]);
+      expect(registered, 0);
+    },
+  );
+
+  test('тумблер включён: периодическая задача ставится заново', () async {
+    final cancelled = <String>[];
+    var registered = 0;
+
+    await syncBackgroundUpdateRegistration(
+      enabled: true,
+      register: () async => registered++,
+      cancel: (name) async => cancelled.add(name),
+    );
+
+    expect(registered, 1);
+    expect(cancelled, isEmpty);
+  });
+
   test('догоняющая проверка отдельная и не висит с прошлой недели', () {
     expect(kBackgroundUpdateCatchUpName, isNot(kBackgroundUpdateUniqueName));
     expect(kBackgroundUpdateCatchUpDelay.inMinutes, inInclusiveRange(1, 60));

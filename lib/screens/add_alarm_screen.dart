@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:material_ui/material_ui.dart';
 import '../widgets/smooth_tooltip.dart' show SmoothTooltip, BackButtonTooltip;
@@ -47,6 +48,11 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
   String? _customSoundPath;
   bool _editing = false;
   AudioPlayer? _player;
+  // Подписка на «звук доиграл». Плеер один на экран, поэтому и слушатель
+  // должен быть один: без этой ссылки на каждый тап по звуку добавлялась
+  // новая подписка, и на завершение приходило столько setState, сколько
+  // было нажатий.
+  StreamSubscription<void>? _completeSub;
   String? _playingSound;
   late List<String> _availableSounds;
 
@@ -107,6 +113,8 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
   @override
   void dispose() {
     _labelCtrl.dispose();
+    _completeSub?.cancel();
+    _completeSub = null;
     _player?.dispose();
     super.dispose();
   }
@@ -152,7 +160,7 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
       final player = _player ??= AudioPlayer();
       // Слушатель вешаем ОДИН раз за жизнь плеера; короткий звук в 1с
       // иначе можно не поймать при быстрой смене.
-      player.onPlayerComplete.listen((_) {
+      _completeSub ??= player.onPlayerComplete.listen((_) {
         if (mounted && _playingSound != null) {
           setState(() => _playingSound = null);
         }

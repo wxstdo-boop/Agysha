@@ -1091,15 +1091,19 @@ class _DaysBarPainter extends CustomPainter {
   ) {
     // date приходит в формате 'yyyy-MM-dd' — берём день месяца.
     final day = date.length >= 10 ? date.substring(8, 10) : date;
+    // Ведущий ноль срезаем один раз на вызов: раньше `RegExp('^0')`
+    // компилировался дважды (в ключе и в тексте) на каждую подпись, то есть
+    // четыре компиляции на кадр роста столбиков и на кадр растяжения.
+    final label = day.replaceFirst(_leadingZero, '');
     // Кэш раскладок: `TextPainter.layout()` — шейпинг шрифта, а painter
     // перерисовывается каждый кадр роста столбиков и на каждом кадре
     // растяжения (слой внутри `Transform` перерисовывается). Две подписи на
     // кадр — уже заметная работа на слабом GPU.
     final tp = _labelCache.putIfAbsent(
-      '${day.replaceFirst(RegExp(r'^0'), '')}|${labelColor.toARGB32()}',
+      '$label|${labelColor.toARGB32()}',
       () => TextPainter(
         text: TextSpan(
-          text: day.replaceFirst(RegExp(r'^0'), ''),
+          text: label,
           style: TextStyle(
             color: labelColor,
             fontSize: 11,
@@ -1120,6 +1124,10 @@ class _DaysBarPainter extends CustomPainter {
   }
 
   static final Map<String, TextPainter> _labelCache = <String, TextPainter>{};
+
+  /// Ведущий ноль подписи дня — одна скомпилированная регулярка на painter,
+  /// а не новая на каждый вызов `_label` (см. комментарий там).
+  static final RegExp _leadingZero = RegExp(r'^0');
 
   void _drawStar(Canvas canvas, Offset c, double r, Color color) {
     final path = Path();

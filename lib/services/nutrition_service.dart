@@ -314,6 +314,9 @@ class NutritionService extends ChangeNotifier {
   Future<void> _save() async {
     if (!_loaded) return;
     final value = jsonEncode(_meals.map((e) => e.toJson()).toList());
+    // load() зовёт _save() на каждом старте после подрезки истории: если
+    // ничего не отрезали, документ тот же — не читаем и не пишем файл.
+    if (_snapshot != null && value == _snapshot) return;
     final resolved = await JsonFile.writeWithSnapshotRetrying(
       _key,
       value,

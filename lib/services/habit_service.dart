@@ -388,7 +388,7 @@ class HabitService extends ChangeNotifier {
 
   /// Планирует напоминание «Вспомнить всё» для привычки (если задано
   /// время): каждый день или по выбранным дням недели.
-  Future<void> _scheduleReminder(Habit h) async {
+  Future<void> _scheduleReminder(Habit h, {String? lang}) async {
     final time = h.reminderTime;
     if (time == null || !time.contains(':')) return;
     final parts = time.split(':');
@@ -398,19 +398,27 @@ class HabitService extends ChangeNotifier {
     // Текст напоминания в списке привычек НЕ показываем — он живёт
     // в самом уведомлении: если задан «текст напоминания», показываем
     // его, иначе стандартное «Пора вспомнить: <имя>».
-    String lang = 'ru';
-    try {
-      lang = await SettingsService.loadLanguageCode();
-    } catch (_) {}
+    // Язык можно передать готовым: rescheduleAllReminders читает настройки
+    // один раз на весь проход, а не по разу на каждую привычку.
+    final String resolvedLang;
+    if (lang != null) {
+      resolvedLang = lang;
+    } else {
+      var code = 'ru';
+      try {
+        code = await SettingsService.loadLanguageCode();
+      } catch (_) {}
+      resolvedLang = code;
+    }
     final custom = h.reminderText?.trim();
     final body = (custom != null && custom.isNotEmpty)
         ? custom
         : Translations.tFor(
-            lang,
+            resolvedLang,
             'habitReminderBody',
             'Пора вспомнить: {name}',
           ).replaceAll('{name}', h.name);
-    final localTitle = _reminderTitle(h.name, lang);
+    final localTitle = _reminderTitle(h.name, resolvedLang);
     if (h.activeDays.isEmpty) {
       await notificationService.scheduleHabitReminder(
         base,
@@ -422,36 +430,52 @@ class HabitService extends ChangeNotifier {
         payload: 'habit:${h.id}',
       );
     } else {
-      for (final day in h.activeDays) {
-        await notificationService.scheduleHabitReminder(
-          base + day,
-          day,
-          hour,
-          minute,
-          localTitle,
-          body,
-          payload: 'habit:${h.id}',
-        );
-      }
+      // Дни недели независимы (у каждого свой id) — планируем параллельно:
+      // по очереди это до семи round-trip к плагину на одну привычку.
+      await Future.wait([
+        for (final day in h.activeDays)
+          notificationService.scheduleHabitReminder(
+            base + day,
+            day,
+            hour,
+            minute,
+            localTitle,
+            body,
+            payload: 'habit:${h.id}',
+          ),
+      ]);
     }
   }
 
   /// Отменяет все напоминания привычки (все слоты).
   Future<void> cancelReminderFor(String habitId) async {
     final base = _notifBase(habitId);
-    for (var d = 0; d <= 7; d++) {
-      await notificationService.cancelReminder(base + d);
-    }
+    // Слоты независимы: восемь отмен разом, а не восемь ожиданий подряд.
+    // cancelReminder глушит свои ошибки, поэтому Future.wait не падает.
+    await Future.wait([
+      for (var d = 0; d <= 7; d++) notificationService.cancelReminder(base + d),
+    ]);
   }
 
   /// Перепланирует напоминания всех привычек (старт приложения / возврат
   /// из фона) — система могла потерять их, пока приложение не работало.
   Future<void> rescheduleAllReminders() async {
     if (!_loaded) await load();
-    for (final h in _habits) {
-      await cancelReminderFor(h.id);
-      await _scheduleReminder(h);
-    }
+    if (_habits.isEmpty) return;
+    var lang = 'ru';
+    try {
+      lang = await SettingsService.loadLanguageCode();
+    } catch (_) {}
+    // Привычки друг от друга не зависят (у каждой свой диапазон id), а
+    // вызовов плагина здесь 8N+; последовательный проход на возврате из
+    // фона складывался в заметную паузу. Внутри привычки порядок прежний:
+    // сначала отмена, потом планирование.
+    await Future.wait(_habits.map((h) => _rescheduleOne(h, lang)));
+  }
+
+  Future<void> _rescheduleOne(Habit h, String lang) async {
+    await cancelReminderFor(h.id);
+    await _scheduleReminder(h, lang: lang);
   }
 
   /// Заголовок напоминания в локали приложения.

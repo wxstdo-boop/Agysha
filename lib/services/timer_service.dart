@@ -35,6 +35,12 @@ class TimerService extends ChangeNotifier {
   int _tickCount = 0;
   bool _savingRuntime = false;
 
+  /// Последнее записанное содержимое runtime-файла. Пока таймер идёт,
+  /// `_endsAt` не меняется, а `_saveRuntime` зовётся раз в 10 секунд — без
+  /// этой проверки один и тот же документ шифровался и переписывался впустую
+  /// всю длительность таймера.
+  String? _runtimeWritten;
+
   List<AppTimer> get timers => List.unmodifiable(_timers);
 
   /// Данные уже загружены с диска (в main() до первого кадра).
@@ -86,6 +92,7 @@ class TimerService extends ChangeNotifier {
   Future<void> _restoreRuntime() async {
     final raw = await JsonFile.read(_runtimeKey);
     if (raw == null || raw.isEmpty) return;
+    _runtimeWritten = raw;
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return;
@@ -115,6 +122,9 @@ class TimerService extends ChangeNotifier {
   Future<void> _save() async {
     if (!_loaded) return;
     final value = appTimersToJson(_timers);
+    // Ничего не изменилось (forceSave, повторный вызов после load) — не
+    // читаем и не пишем файл зря. Так же уже сделано в habits/tasks/alarms.
+    if (_snapshot != null && value == _snapshot) return;
     final resolved = await JsonFile.writeWithSnapshotRetrying(
       _key,
       value,
@@ -137,7 +147,10 @@ class TimerService extends ChangeNotifier {
           map[entry.key] = entry.value.toIso8601String();
         }
       }
-      await JsonFile.write(_runtimeKey, jsonEncode(map));
+      final value = jsonEncode(map);
+      if (_runtimeWritten == value) return;
+      await JsonFile.write(_runtimeKey, value);
+      _runtimeWritten = value;
     } finally {
       _savingRuntime = false;
     }

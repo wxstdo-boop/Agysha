@@ -166,6 +166,44 @@ Future<void> initializeBackgroundUpdates() async {
   }
 }
 
+/// Приводит расписание в соответствие с тумблером «уведомления об
+/// обновлениях».
+///
+/// Задача WorkManager сама по себе не знает про тумблер: `runBackgroundUpdateCheck`
+/// выходит на первой строке, но система всё равно будит процесс (а после
+/// перезагрузки — и устройство) раз в час ради проверки, которая заведомо
+/// ничего не сделает. Поэтому при выключенных уведомлениях расписание
+/// снимается, а не «висит вхолостую».
+///
+/// [enabled], [register] и [cancel] подменяются в тестах: настоящий вызов
+/// идёт в плагин WorkManager, а проверить нужно само решение «ставить или
+/// снимать», в том числе на веб-сборке.
+Future<void> syncBackgroundUpdateRegistration({
+  bool? enabled,
+  Future<void> Function()? register,
+  Future<void> Function(String uniqueName)? cancel,
+}) async {
+  if (kIsWeb) return;
+  final on = enabled ?? SettingsService.readUpdateNotificationsEnabled();
+  if (!on) {
+    try {
+      await initializeBackgroundUpdates();
+      final stop =
+          cancel ?? (String name) => Workmanager().cancelByUniqueName(name);
+      await stop(kBackgroundUpdateUniqueName);
+      await stop(kBackgroundUpdateCatchUpName);
+    } catch (error) {
+      debugPrint('background update cancel failed: $error');
+    }
+    return;
+  }
+  if (register != null) {
+    await register();
+    return;
+  }
+  await registerBackgroundUpdateCheck();
+}
+
 /// Регистрирует периодическую задачу. Вызывается из основного изолята после
 /// того, как версия и ABI сохранены в prefs.
 ///

@@ -40,8 +40,23 @@ class _WindowedColumnState extends State<WindowedColumn> {
 
   ScrollPosition? _position;
   bool _measured = false;
+
+  /// Один запланированный пересчёт окна на кадр: `build` может пройти
+  /// несколько раз до первого post-frame (родитель пересобирается), и без
+  /// этого флага каждый такой проход вешал свой колбэк — лишние
+  /// `localToGlobal` и `setState` в одном кадре.
+  bool _syncScheduled = false;
   int _first = 0;
   int _last = 0;
+
+  void _scheduleSync() {
+    if (_syncScheduled) return;
+    _syncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncScheduled = false;
+      _syncWindow();
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -60,7 +75,7 @@ class _WindowedColumnState extends State<WindowedColumn> {
     // Строк стало больше или меньше — окно пересчитываем после раскладки:
     // иначе после удаления трека оно смотрело бы за конец списка.
     if (oldWidget.itemCount != widget.itemCount) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _syncWindow());
+      _scheduleSync();
     }
   }
 
@@ -108,7 +123,7 @@ class _WindowedColumnState extends State<WindowedColumn> {
       // Окна ещё нет: строим начало списка и уточняем после раскладки.
       _first = 0;
       _last = count < _firstFrameRows ? count : _firstFrameRows;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _syncWindow());
+      _scheduleSync();
     }
     // Окно могло остаться от прежнего, более длинного списка — обрезаем по
     // актуальному количеству, чтобы не строить несуществующие строки.

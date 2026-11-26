@@ -323,6 +323,9 @@ class ProfileService extends ChangeNotifier {
       'avatarImage': _avatarImagePath,
       'friends': _friends.map((f) => f.toJson()).toList(),
     });
+    // Ничего не изменилось (forceSave по таймеру автосохранения, повторный
+    // вызов сеттера с тем же значением) — не читаем и не пишем файл зря.
+    if (_snapshot != null && value == _snapshot) return;
     final resolved = await JsonFile.writeWithSnapshotRetrying(
       _fileKey,
       value,

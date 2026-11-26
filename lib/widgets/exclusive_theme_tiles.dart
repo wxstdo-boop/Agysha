@@ -133,8 +133,14 @@ class _ExclusiveThemeTileState extends State<_ExclusiveThemeTile>
   @override
   void initState() {
     super.initState();
+    // «Ток» по рамке — медленный декор: тик через MotionPrefs.ambient,
+    // как у фонов тем. Полная частота экрана тут не видна глазом, но
+    // стоит двух перерисовок плитки каждый кадр на экране настроек.
     _pulse = ambientRepeat(
-      AnimationController(vsync: this, duration: const Duration(seconds: 3)),
+      AnimationController(
+        vsync: MotionPrefs.ambient(this),
+        duration: const Duration(seconds: 3),
+      ),
     );
     if (widget.active) _pulse.repeat();
   }

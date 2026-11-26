@@ -285,7 +285,9 @@ class _AlarmsScreenState extends State<AlarmsScreen>
     ).push<AppTimer>(slideUpRoute(const AddTimerScreen()));
     if (result != null) {
       _timerSvc.add(result);
-      if (_lastTimerGoing) setState(() => _lastTimerGoing = false);
+      // Таймер сохраняем всегда, а перерисовку — только если экран ещё жив:
+      // форма могла закрыться вместе с разделом, пока шёл push.
+      if (_lastTimerGoing && mounted) setState(() => _lastTimerGoing = false);
     }
   }
 
@@ -1147,7 +1149,10 @@ class _AlarmsScreenState extends State<AlarmsScreen>
         // Последний таймер: пустой текст подкладываем ДО начала схлопывания,
         // иначе секция ужимается до нуля, а потом вырастает до текста —
         // контент под ней проваливается вниз и возвращается.
-        if (ok == true && _timerSvc.timers.length == 1 && !_lastTimerGoing) {
+        if (mounted &&
+            ok == true &&
+            _timerSvc.timers.length == 1 &&
+            !_lastTimerGoing) {
           setState(() => _lastTimerGoing = true);
         }
         return ok;

@@ -453,7 +453,9 @@ Future<void> _prepareBackgroundUpdateCheck() async {
   } catch (error) {
     debugPrint('background update abi cache failed: $error');
   }
-  await registerBackgroundUpdateCheck();
+  // Не `registerBackgroundUpdateCheck` напрямую: если человек выключил
+  // уведомления об обновлениях, задача должна БЫТЬ СНЯТА, а не тикать вхолостую.
+  await syncBackgroundUpdateRegistration();
 }
 
 /// Показывает итог, дожидаясь готовности дерева.

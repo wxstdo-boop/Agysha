@@ -610,25 +610,26 @@ class _TypingIndicator extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // «Сочиняю» — плавно дышит непрерывной синусоидой без мигания
+                // «Сочиняю» — плавно дышит непрерывной синусоидой без мигания.
+                // Строка собрана один раз (`child`) и лишь её прозрачность
+                // едет за анимацией: иначе каждый кадр создавался новый Text
+                // со своим TextStyle, и текст пере-раскладывался.
                 AnimatedBuilder(
                   animation: animation,
-                  builder: (context, _) {
+                  builder: (context, child) {
                     final wave =
                         0.5 + 0.5 * math.sin(animation.value * 2 * math.pi);
                     final pulse = 0.78 + 0.22 * wave;
-                    return Opacity(
-                      opacity: pulse,
-                      child: Text(
-                        Translations.t('aiComposing', context),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    );
+                    return Opacity(opacity: pulse, child: child);
                   },
+                  child: Text(
+                    Translations.t('aiComposing', context),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 7),
                 Row(

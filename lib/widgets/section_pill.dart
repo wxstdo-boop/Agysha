@@ -973,17 +973,20 @@ class _PillLabelState extends State<_PillLabel>
                     textAlign: TextAlign.center,
                     style: baseStyle,
                   ),
+                  // Текст верхнего слоя собран ОДИН раз и приходит в
+                  // `child`: иначе каждый кадр кросс-фейда создавал новый
+                  // Text/TextSpan, и Flutter заново раскладывал подпись —
+                  // ровно то, чего этот файл старается избегать.
                   AnimatedBuilder(
                     animation: _ctrl,
-                    builder: (context, _) => Opacity(
-                      opacity: _value.clamp(0.0, 1.0),
-                      child: Text(
-                        widget.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: activeStyle,
-                      ),
+                    builder: (context, child) =>
+                        Opacity(opacity: _value.clamp(0.0, 1.0), child: child),
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: activeStyle,
                     ),
                   ),
                 ],

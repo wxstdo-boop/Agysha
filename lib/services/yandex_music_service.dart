@@ -218,6 +218,15 @@ class YandexMusicService extends ChangeNotifier {
   String? _uid;
   List<YandexTrack>? _tracks;
 
+  /// Загрузка библиотеки, которая уже идёт. Экран зовёт [loadLikedTracks] из
+  /// initState, pull-to-refresh и кнопки «обновить» — без этой ссылки два
+  /// одновременных вызова листали ВСЕ страницы библиотеки дважды.
+  Future<List<YandexTrack>>? _tracksJob;
+
+  /// Счётчик смены аккаунта: загрузка, начатая до [link]/[unlink], не имеет
+  /// права записать свой результат в кэш уже другого аккаунта.
+  int _tracksGeneration = 0;
+
   /// Подмена транспорта в уже созданном экземпляре (второй способ инъекции).
   @visibleForTesting
   set client(http.Client client) => _client = client;
@@ -273,6 +282,7 @@ class YandexMusicService extends ChangeNotifier {
     _uid = uid;
     _login = account.login;
     _tracks = null;
+    _tracksGeneration++;
     notifyListeners();
   }
 
@@ -301,6 +311,7 @@ class YandexMusicService extends ChangeNotifier {
     _uid = null;
     _login = null;
     _tracks = null;
+    _tracksGeneration++;
     notifyListeners();
   }
 
@@ -308,10 +319,28 @@ class YandexMusicService extends ChangeNotifier {
   ///
   /// [refresh] = true игнорирует кэш в памяти. Дубли между страницами
   /// отбрасываются: сервис иногда отдаёт один и тот же трек дважды.
+  ///
+  /// Повторный вызов, пока прошлая загрузка ещё идёт, отдаёт ЕЁ future:
+  /// иначе «обновить» поверх открывающегося экрана заказывало всю
+  /// библиотеку второй раз (десятки запросов и мегабайты трафика).
   Future<List<YandexTrack>> loadLikedTracks({bool refresh = false}) async {
     final cached = _tracks;
     if (!refresh && cached != null) return cached;
 
+    final running = _tracksJob;
+    if (running != null) return running;
+
+    final job = _loadLikedTracksPages();
+    _tracksJob = job;
+    try {
+      return await job;
+    } finally {
+      if (identical(_tracksJob, job)) _tracksJob = null;
+    }
+  }
+
+  Future<List<YandexTrack>> _loadLikedTracksPages() async {
+    final generation = _tracksGeneration;
     final token = await _ensureToken();
     if (token == null) throw const YandexMusicAuthException(_kNotLinked);
 
@@ -365,8 +394,10 @@ class YandexMusicService extends ChangeNotifier {
       offset += _pageSize;
     }
 
-    _tracks = List<YandexTrack>.unmodifiable(collected);
-    return _tracks!;
+    final result = List<YandexTrack>.unmodifiable(collected);
+    // Пока листали страницы, аккаунт сменили — этот список уже чужой.
+    if (generation == _tracksGeneration) _tracks = result;
+    return result;
   }
 
   /// Прямая ссылка на mp3 с высшим битрейтом.

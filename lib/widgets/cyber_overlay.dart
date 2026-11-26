@@ -43,8 +43,15 @@ class _CyberBackdropState extends State<CyberBackdrop>
   void initState() {
     super.initState();
     _scene = _Scene.build(math.Random(20770613));
+    // Тик раз в несколько кадров, как у остальных эксклюзивных фонов
+    // (Resident/IT-шник/Mutilated): 22-секундный цикл на полной частоте
+    // экрана — это 120 перерисовок в секунду ради дождя, который глазом
+    // читается и на 20.
     _ctrl = ambientRepeat(
-      AnimationController(vsync: this, duration: const Duration(seconds: 22)),
+      AnimationController(
+        vsync: MotionPrefs.ambient(this),
+        duration: const Duration(seconds: 22),
+      ),
     );
     _ctrl.addListener(() {
       // Шаг 1/660 ≈ 30 кадров в секунду на весь 22-секундный цикл: дождь

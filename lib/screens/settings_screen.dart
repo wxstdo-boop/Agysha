@@ -27,6 +27,7 @@ import '../theme/cyber_theme.dart';
 import '../theme/itshnik_theme.dart';
 import '../utils/design_tokens.dart';
 import '../services/action_log.dart';
+import '../services/background_update_check.dart';
 import '../services/debug_service.dart';
 import '../services/timer_service.dart';
 import '../services/prefs.dart';
@@ -442,6 +443,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (mounted) setState(() => _updateNotifications = value);
     try {
       await SettingsService.saveUpdateNotificationsEnabled(value);
+      // Расписание WorkManager следует за тумблером: выключили — снимаем
+      // задачу, чтобы она не будила устройство впустую; включили — ставим.
+      unawaited(syncBackgroundUpdateRegistration());
     } catch (_) {
       if (mounted) setState(() => _updateNotifications = !value);
     }

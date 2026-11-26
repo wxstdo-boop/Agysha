@@ -154,29 +154,45 @@ class UpdateService {
     'X-GitHub-Api-Version': '2022-11-28',
   };
 
+  /// Идущие запросы релиза по каналам (стабильный/бета). Тихая стартовая
+  /// проверка, тап «Проверить обновления» и фоновая задача могли уйти в сеть
+  /// одновременно: два одинаковых запроса и два списания из лимита GitHub
+  /// (60 в час на IP). Второй вызов ждёт тот же ответ.
+  static final Map<bool, Future<Map<String, dynamic>?>> _releaseInFlight = {};
+
   /// Тело релиза для нужного канала: стабильного (`releases/latest`) или
   /// бета-канала тестеров — самый свежий не черновик из списка, пре-релизы
   /// включены. Пусто — значит сети нет или GitHub отказал.
-  static Future<Map<String, dynamic>?> _releaseJson({
+  static Future<Map<String, dynamic>?> _releaseJson({required bool beta}) {
+    final active = _releaseInFlight[beta];
+    if (active != null) return active;
+    return _releaseInFlight[beta] = _fetchReleaseJson(beta: beta);
+  }
+
+  static Future<Map<String, dynamic>?> _fetchReleaseJson({
     required bool beta,
   }) async {
-    final path = beta ? 'releases?per_page=15' : 'releases/latest';
-    final uri = Uri.parse(
-      'https://api.github.com/repos/$kUpdateRepoOwner/$kUpdateRepoName/$path',
-    );
-    final res = await http
-        .get(uri, headers: _ghHeaders)
-        // Таймаут обязателен: без него зависшая сеть держит кнопку «Проверить
-        // обновления» в состоянии загрузки бесконечно.
-        .timeout(const Duration(seconds: 14));
-    if (res.statusCode != 200) return null;
-    final decoded = jsonDecode(res.body);
-    if (!beta) return decoded is Map<String, dynamic> ? decoded : null;
-    if (decoded is! List) return null;
-    for (final item in decoded) {
-      if (item is Map<String, dynamic> && item['draft'] != true) return item;
+    try {
+      final path = beta ? 'releases?per_page=15' : 'releases/latest';
+      final uri = Uri.parse(
+        'https://api.github.com/repos/$kUpdateRepoOwner/$kUpdateRepoName/$path',
+      );
+      final res = await http
+          .get(uri, headers: _ghHeaders)
+          // Таймаут обязателен: без него зависшая сеть держит кнопку «Проверить
+          // обновления» в состоянии загрузки бесконечно.
+          .timeout(const Duration(seconds: 14));
+      if (res.statusCode != 200) return null;
+      final decoded = jsonDecode(res.body);
+      if (!beta) return decoded is Map<String, dynamic> ? decoded : null;
+      if (decoded is! List) return null;
+      for (final item in decoded) {
+        if (item is Map<String, dynamic> && item['draft'] != true) return item;
+      }
+      return null;
+    } finally {
+      _releaseInFlight.remove(beta);
     }
-    return null;
   }
 
   /// Релиз новее установленного?
@@ -230,6 +246,10 @@ class UpdateService {
   // ушло на 1.6.104, и «элитная» мелочь — живой changelog — читалась как
   // брошенная. Источник тот же, что у автообновления: публичные релизы.
 
+  /// Идущая загрузка журнала: повторный тап «Обновить» ждёт тот же ответ,
+  /// а не дёргает GitHub второй раз (у анонимных запросов лимит 60 в час).
+  static Future<List<ChangelogEntry>?>? _changelogInFlight;
+
   /// Забирает последние релизы и превращает их в записи журнала.
   ///
   /// Три источника по очереди, потому что один GitHub API — ненадёжный:
@@ -260,27 +280,36 @@ class UpdateService {
         now.difference(cachedAt) < _changelogTtl) {
       return _changelogCache;
     }
-    final fromApi = await _fetchChangelogFromApi(limit);
-    if (fromApi != null) {
-      _changelogCache = fromApi;
-      _changelogCacheAt = now;
-      saveChangelogCache(fromApi);
-      return fromApi;
+    return _changelogInFlight ??= _fetchChangelog(limit);
+  }
+
+  Future<List<ChangelogEntry>?> _fetchChangelog(int limit) async {
+    try {
+      final now = DateTime.now();
+      final fromApi = await _fetchChangelogFromApi(limit);
+      if (fromApi != null) {
+        _changelogCache = fromApi;
+        _changelogCacheAt = now;
+        saveChangelogCache(fromApi);
+        return fromApi;
+      }
+      final fromAtom = await _fetchChangelogFromAtom();
+      if (fromAtom != null) {
+        _changelogCache = fromAtom;
+        _changelogCacheAt = now;
+        saveChangelogCache(fromAtom);
+        return fromAtom;
+      }
+      final stored = loadChangelogCache();
+      if (stored != null) {
+        _changelogCache = stored;
+        _changelogCacheAt = now;
+        return stored;
+      }
+      return null;
+    } finally {
+      _changelogInFlight = null;
     }
-    final fromAtom = await _fetchChangelogFromAtom();
-    if (fromAtom != null) {
-      _changelogCache = fromAtom;
-      _changelogCacheAt = now;
-      saveChangelogCache(fromAtom);
-      return fromAtom;
-    }
-    final stored = loadChangelogCache();
-    if (stored != null) {
-      _changelogCache = stored;
-      _changelogCacheAt = now;
-      return stored;
-    }
-    return null;
   }
 
   Future<List<ChangelogEntry>?> _fetchChangelogFromApi(int limit) async {

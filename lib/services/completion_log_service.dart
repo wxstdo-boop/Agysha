@@ -74,8 +74,14 @@ class CompletionLogService extends ChangeNotifier {
     final list = _log.values.map((d) => d.toJson()).toList()
       ..sort((a, b) => (a['d'] as String).compareTo(b['d'] as String));
     final value = jsonEncode(list);
-    final resolved = await JsonFile.writeWithSnapshot(_key, value, _snapshot);
-    if (resolved == value) _snapshot = resolved;
+    // Снимок принимаем ВСЕГДА, как в задачах и привычках: иначе после
+    // слияния с чужим изменением (плавающее окошко) он остаётся устаревшим,
+    // каждая следующая запись конфликтует так же, а лог молча не пишется.
+    _snapshot = await JsonFile.writeWithSnapshotRetrying(
+      _key,
+      value,
+      _snapshot,
+    );
   }
 
   /// Записывает/обновляет «сегодня» и сохраняет. Вызывается при каждом

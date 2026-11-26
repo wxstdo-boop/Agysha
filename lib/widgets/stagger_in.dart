@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 /// Каскадное появление блока при открытии экрана.
@@ -53,6 +55,11 @@ class _StaggerInState extends State<StaggerIn>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
+  /// Задержка входа. Именно `Timer`, а не `Future.delayed`: таймер можно
+  /// отменить в `dispose`, и ушедший из списка элемент не держит своё
+  /// состояние живым до конца задержки (до 600 мс).
+  Timer? _delay;
+
   @override
   void initState() {
     super.initState();
@@ -69,13 +76,14 @@ class _StaggerInState extends State<StaggerIn>
     final raw = widget.index * widget.step.inMilliseconds;
     final capped = raw > 600 ? 600 : raw;
     final delay = capped + widget.extraDelay.inMilliseconds;
-    Future.delayed(Duration(milliseconds: delay), () {
+    _delay = Timer(Duration(milliseconds: delay), () {
       if (mounted) _ctrl.forward();
     });
   }
 
   @override
   void dispose() {
+    _delay?.cancel();
     _ctrl.dispose();
     super.dispose();
   }
