@@ -586,8 +586,14 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                 child: PressScale(
                   // Плитка времени — плавная отдача-«вдавливание» всей карточки целиком.
                   pressedScale: 0.94,
-                  duration: const Duration(milliseconds: 140),
-                  releaseDuration: const Duration(milliseconds: 220),
+                  // Фон отдачи набирается ПЛАВНО, а не вспышкой: при
+                  // easeOut и 140 мс тинт выходил на полную за первые 30 мс и
+                  // читался мгновенным. Симметричная кривая и 280 мс дают
+                  // мягкое «набухание» под пальцем.
+                  curve: Curves.easeInOutCubic,
+                  releaseCurve: Curves.easeInOutCubic,
+                  duration: const Duration(milliseconds: 280),
+                  releaseDuration: const Duration(milliseconds: 340),
                   // Ровно та же отдача фона, что у строки «Вибрация»: слой
                   // ПОВЕРХ карточки, сквозь который видно её собственную
                   // поверхность. Без него нажатие читалось только сжатием, а
@@ -845,8 +851,14 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                 child: PressScale(
                   // Строка «Вибрация» — плавная отдача-«вдавливание» всей карточки целиком.
                   pressedScale: 0.94,
-                  duration: const Duration(milliseconds: 140),
-                  releaseDuration: const Duration(milliseconds: 220),
+                  // Фон отдачи набирается ПЛАВНО, а не вспышкой: при
+                  // easeOut и 140 мс тинт выходил на полную за первые 30 мс и
+                  // читался мгновенным. Симметричная кривая и 280 мс дают
+                  // мягкое «набухание» под пальцем.
+                  curve: Curves.easeInOutCubic,
+                  releaseCurve: Curves.easeInOutCubic,
+                  duration: const Duration(milliseconds: 280),
+                  releaseDuration: const Duration(milliseconds: 340),
                   // Card ниже залит непрозрачной поверхностью, поэтому
                   // pressTint под содержимым не виден. Отдача фона — слоем
                   // ПОВЕРХ карточки: под пальцем она темнеет красноватым,
@@ -995,6 +1007,13 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                                     // таблетки перетекает без «толчка» на
                                     // старте и без рывка на финише.
                                     curve: Curves.easeInOutCubic,
+                                    // Карточка заполняет ячейку карусели. Без
+                                    // этого AnimatedContainer сжимался по
+                                    // тексту (118 px из 248) и Align внутри
+                                    // ItemReveal прижимал его влево — владелец
+                                    // видел «скукоженные квадратики слева, не
+                                    // по центру».
+                                    width: double.infinity,
                                     margin: const EdgeInsets.symmetric(
                                       horizontal: 3,
                                       vertical: 4,

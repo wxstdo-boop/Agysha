@@ -1233,6 +1233,14 @@ class _HabitsScreenState extends State<HabitsScreen>
       onDismissed: (_) => _service.remove(habit.id),
       child: PressScale(
         pressedScale: 0.985,
+        // Та же плавная отдача фона, что у карточек будильников: мягкий
+        // smoothstep-тинт под пальцем, а не «вспышка» карточки.
+        pressOverlay: pressTintOverlay(
+          BorderRadius.circular(20),
+          strength: 0.06,
+        ),
+        duration: const Duration(milliseconds: 240),
+        releaseDuration: const Duration(milliseconds: 340),
         child: Card(
           key: ValueKey('card_${habit.id}'),
           elevation: 0,

@@ -644,10 +644,14 @@ Widget Function(BuildContext context, double progress) pressTintOverlay(
   return (context, progress) {
     if (progress <= 0) return const SizedBox.shrink();
     final tint = color ?? Theme.of(context).colorScheme.primary;
+    // Плавный старт (smoothstep): прогресс нажатия идёт по easeOut, то есть
+    // первые кадры уже дают треть тона — фон «вспыхивал» под пальцем
+    // мгновенно. Квадратичный разгон в начале гасит этот скачок.
+    final t = progress * progress * (3.0 - 2.0 * progress);
     return IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: tint.withValues(alpha: (strength * progress).clamp(0.0, 1.0)),
+          color: tint.withValues(alpha: (strength * t).clamp(0.0, 1.0)),
           borderRadius: radius,
         ),
       ),

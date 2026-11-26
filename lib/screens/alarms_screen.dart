@@ -763,14 +763,15 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             // Альфа считается от того же прогресса нажатия, что и
             // вдавливание, поэтому выделение разгорается и гаснет по кривой
             // отдачи — без вспышки в первом кадре и без мигания.
-            pressOverlay: (context, v) => DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.05 * v),
-                borderRadius: BorderRadius.circular(20),
-              ),
+            // Общая подложка отдачи (как у времени/вибрации в окне
+            // будильника): мягкий smoothstep-разгон, поэтому фон набухает
+            // из-под пальца, а не вспыхивает первым кадром.
+            pressOverlay: pressTintOverlay(
+              BorderRadius.circular(20),
+              strength: 0.06,
             ),
-            duration: const Duration(milliseconds: 200),
-            releaseDuration: const Duration(milliseconds: 320),
+            duration: const Duration(milliseconds: 240),
+            releaseDuration: const Duration(milliseconds: 340),
             child: Card(
               key: ValueKey('card_${alarm.id}'),
               clipBehavior: Clip.antiAlias,

@@ -140,6 +140,55 @@ void main() {
     },
   );
 
+  testWidgets(
+    'карточка звука занимает ячейку карусели целиком (не сжимается слева)',
+    (WidgetTester tester) async {
+      // Высокий экран: карточка звука живёт внизу формы, а ListView строит
+      // детей лениво — на обычной высоте её просто нет в дереве.
+      tester.view.physicalSize = const Size(1080, 4200);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        LocaleProvider(
+          locale: const Locale('ru'),
+          child: const MaterialApp(home: AddAlarmScreen()),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 1200));
+
+      final picker = find.byWidgetPredicate(
+        (w) => w.runtimeType.toString().startsWith('SlidingPicker'),
+      );
+      expect(picker, findsOneWidget, reason: 'карусель звуков должна быть');
+
+      final pickerRect = tester.getRect(picker);
+      final cells = find.descendant(
+        of: picker,
+        matching: find.byType(AnimatedContainer),
+      );
+      expect(cells, findsWidgets);
+
+      // Раньше AnimatedContainer сжимался по тексту (~118 px из 248), а
+      // Align в ItemReveal прижимал его к левому краю ячейки — владелец
+      // видел «скукоженные квадратики слева, не по центру».
+      final first = tester.getRect(cells.first);
+      expect(
+        first.width,
+        greaterThan(pickerRect.width * 0.8),
+        reason: 'карточка звука должна занимать почти всю ячейку',
+      );
+      expect(
+        (first.center.dx - pickerRect.center.dx).abs(),
+        lessThan(2.0),
+        reason: 'выбранная карточка звука должна стоять по центру',
+      );
+    },
+  );
+
   testWidgets('в AlarmsScreen кнопка теста есть у каждого будильника', (
     WidgetTester tester,
   ) async {
@@ -192,15 +241,17 @@ void main() {
     // Card рисует свою непрозрачную заливку поверх pressTint, поэтому
     // затемнение под пальцем было видно только рывком — на отпускании.
     expect(
-      src.contains('pressOverlay: (context, v) =>'),
+      src.contains('pressOverlay: pressTintOverlay('),
       isTrue,
       reason: 'выделение рисуется над заливкой карточки',
     );
+    // Мягкий старт тинта (smoothstep) живёт в общей подложке: прогресс
+    // нажатия идёт по easeOut, и без разгона фон вспыхивал первым кадром.
+    final press = File('lib/widgets/press_scale.dart').readAsStringSync();
     expect(
-      src.contains('alpha: 0.05 * v'),
+      press.contains('progress * progress * (3.0 - 2.0 * progress)'),
       isTrue,
-      reason:
-          'прозрачность ведёт прогресс нажатия: вспышки на первом кадре нет',
+      reason: 'подложка отдачи включается мягко, без вспышки',
     );
     expect(
       src.contains('pressTint:'),

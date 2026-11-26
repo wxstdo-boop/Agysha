@@ -12,12 +12,38 @@ import 'package:agysha/screens/tasks_screen.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/task_service.dart';
+import 'package:agysha/widgets/press_scale.dart';
 
 /// Активные задачи идут одним списком БЕЗ заголовка. Как только появляется
 /// хотя бы одна выполненная, внизу вырастает архивная полка с заголовком
 /// «Архивные» (как Полезные/Вредные в привычках). Галка СНИМАЕТСЯ: повторный
 /// тап по выполненной задаче возвращает её в активные, а опустевшая полка
 /// «Архивные» плавно сворачивается.
+
+/// «Уезжающая» копия обёрнута в IgnorePointer СНАРУЖИ отдачи карточки.
+/// Внутри PressScale тоже есть IgnorePointer — это подложка и блик нажатия,
+/// и раньше они принимались за «уезжающую» копию: обе копии отбрасывались,
+/// и переезд нечем было измерить.
+bool _hasLeavingPointer(Finder frame) {
+  final frameEl = frame.evaluate().first;
+  for (final el
+      in find
+          .descendant(of: frame, matching: find.byType(IgnorePointer))
+          .evaluate()) {
+    var insidePress = false;
+    el.visitAncestorElements((a) {
+      if (a == frameEl) return false;
+      if (a.widget is PressScale) {
+        insidePress = true;
+        return false;
+      }
+      return true;
+    });
+    if (!insidePress) return true;
+  }
+  return false;
+}
+
 void main() {
   late Directory tmpDir;
 
@@ -357,11 +383,7 @@ void main() {
         if (frame.evaluate().isEmpty) continue;
         // Уезжающая копия в активной полке обёрнута в IgnorePointer прямо
         // под своей рамкой — её схлопывание не меряем.
-        final leaving = find
-            .descendant(of: frame.first, matching: find.byType(IgnorePointer))
-            .evaluate()
-            .isNotEmpty;
-        if (leaving) continue;
+        if (_hasLeavingPointer(frame.first)) continue;
         if (dy > maxDy) {
           maxDy = dy;
           height = tester.getSize(frame.first).height;
@@ -576,11 +598,7 @@ void main() {
             matching: find.byType(SizeTransition),
           );
           if (frame.evaluate().isEmpty) continue;
-          final leaving = find
-              .descendant(of: frame.first, matching: find.byType(IgnorePointer))
-              .evaluate()
-              .isNotEmpty;
-          if (leaving) continue;
+          if (_hasLeavingPointer(frame.first)) continue;
           return tester
               .renderObject<RenderBox>(one)
               .localToGlobal(Offset.zero)

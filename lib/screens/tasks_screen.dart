@@ -1099,6 +1099,14 @@ class _TasksScreenState extends State<TasksScreen>
       onDismissed: (_) => _service.remove(task.id),
       child: PressScale(
         pressedScale: 0.985,
+        // Та же плавная отдача фона, что у карточек будильников: мягкий
+        // smoothstep-тинт под пальцем, а не «вспышка» карточки.
+        pressOverlay: pressTintOverlay(
+          BorderRadius.circular(20),
+          strength: 0.06,
+        ),
+        duration: const Duration(milliseconds: 240),
+        releaseDuration: const Duration(milliseconds: 340),
         child: _TaskHoldNote(
           onHold: () => _showTaskNote(task),
           child: Card(
