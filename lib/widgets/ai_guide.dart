@@ -970,13 +970,20 @@ class _AiChatBodyState extends State<_AiChatBody>
   }
 
   void _expandKeyboard() {
-    if (_keyboardOpen) {
-      _inputFocus.requestFocus();
-      return;
-    }
     Haptics.light();
-    setState(() => _keyboardOpen = true);
-    _inputFocus.requestFocus();
+    if (!_keyboardOpen) setState(() => _keyboardOpen = true);
+    _focusInputSoon();
+  }
+
+  /// Фокус — после кадра, в котором панель уже построена, и с парой повторов:
+  /// если поле в этом кадре ещё перестраивалось, `requestFocus` терялся и
+  /// клавиатура открывалась только со второго тапа.
+  void _focusInputSoon([int attempt = 0]) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_keyboardOpen || _inputFocus.hasFocus) return;
+      _inputFocus.requestFocus();
+      if (!_inputFocus.hasFocus && attempt < 2) _focusInputSoon(attempt + 1);
+    });
   }
 
   void _onInputFocus() {

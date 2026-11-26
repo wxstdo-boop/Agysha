@@ -64,7 +64,7 @@ class InlineKeyboard extends StatefulWidget {
 }
 
 class _InlineKeyboardState extends State<InlineKeyboard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// Регистр включён: следующая буква уйдёт ЗАГЛАВНОЙ, после чего гаснет.
   bool _shift = false;
 
@@ -78,10 +78,64 @@ class _InlineKeyboardState extends State<InlineKeyboard>
     curve: Curves.easeInOutCubic,
   );
 
+  /// Сколько панель уехала вниз за ручку. Пока палец ведёт ручку, панель
+  /// идёт за ним кадр в кадр; отпустил — доезжает либо обратно, либо вниз.
+  double _drag = 0;
+
+  /// До этой величины тянем — панель возвращается; дальше — уезжает.
+  static const double _collapseThreshold = 34;
+
+  /// Куда панель уезжает при сворачивании: чуть ниже собственной высоты.
+  static const double _offscreen = 160;
+
+  bool _closing = false;
+  double _settleFrom = 0;
+  double _settleTarget = 0;
+  late final AnimationController _settleAnim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 180),
+  )..addListener(() {
+      final t = Curves.easeOutCubic.transform(_settleAnim.value);
+      setState(() => _drag = _settleFrom + (_settleTarget - _settleFrom) * t);
+    })..addStatusListener((status) {
+      if (status != AnimationStatus.completed || !_closing) return;
+      _closing = false;
+      widget.onCollapse?.call();
+    });
+
   @override
   void dispose() {
     _caseAnim.dispose();
+    _settleAnim.dispose();
     super.dispose();
+  }
+
+  /// Ручка под пальцем: панель идёт за ним, без рывков и «догоняний».
+  void _onHandleDrag(double dy) {
+    if (_settleAnim.isAnimating) _settleAnim.stop();
+    setState(() => _drag = (_drag + dy).clamp(0.0, _offscreen));
+  }
+
+  /// Отпустили ручку: короткий доезд — вниз и закрыть либо назад на место.
+  void _onHandleRelease() {
+    if (_drag > _collapseThreshold) {
+      _closing = true;
+      _settleTo(_offscreen);
+    } else {
+      _closing = false;
+      _settleTo(0);
+    }
+  }
+
+  void _onHandleTap() {
+    _closing = true;
+    _settleTo(_offscreen);
+  }
+
+  void _settleTo(double target) {
+    _settleFrom = _drag;
+    _settleTarget = target;
+    _settleAnim.forward(from: 0);
   }
 
   void _setShift(bool on) {
@@ -215,7 +269,7 @@ class _InlineKeyboardState extends State<InlineKeyboard>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
+    final Widget panel = Container(
       // Бока — минимальные: 11 клавиш в ряду на узком экране упирались
       // в скруглённые углы листа (владелец: «по бокам не влезает»).
       // Вертикаль оставляем воздушной.
@@ -247,7 +301,12 @@ class _InlineKeyboardState extends State<InlineKeyboard>
         mainAxisSize: MainAxisSize.min,
         children: [
           if (widget.onCollapse != null)
-            _CollapseHandle(theme: theme, onCollapse: widget.onCollapse!),
+            _CollapseHandle(
+              theme: theme,
+              onTap: _onHandleTap,
+              onDrag: _onHandleDrag,
+              onRelease: _onHandleRelease,
+            ),
           _row(theme, _digits, widget.keyHeight),
           const SizedBox(height: 6),
           // Смена раскладки — чистый кросс-фейд БЕЗ сдвига. Раньше новые
@@ -368,6 +427,11 @@ class _InlineKeyboardState extends State<InlineKeyboard>
           ),
         ],
       ),
+    );
+    final out = 1 - (_drag / (_offscreen * 1.25)).clamp(0.0, 1.0);
+    return Opacity(
+      opacity: out,
+      child: Transform.translate(offset: Offset(0, _drag), child: panel),
     );
   }
 
@@ -502,18 +566,18 @@ enum _KeyboardLayout {
 
 /// Полоска над клавишами: тянется вниз или нажимается — клавиатура уезжает.
 /// Отдельная маленькая зона, чтобы не отнимать место у клавиш.
-class _CollapseHandle extends StatefulWidget {
+class _CollapseHandle extends StatelessWidget {
   final ThemeData theme;
-  final VoidCallback onCollapse;
+  final VoidCallback onTap;
+  final ValueChanged<double> onDrag;
+  final VoidCallback onRelease;
 
-  const _CollapseHandle({required this.theme, required this.onCollapse});
-
-  @override
-  State<_CollapseHandle> createState() => _CollapseHandleState();
-}
-
-class _CollapseHandleState extends State<_CollapseHandle> {
-  double _drag = 0;
+  const _CollapseHandle({
+    required this.theme,
+    required this.onTap,
+    required this.onDrag,
+    required this.onRelease,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -521,17 +585,14 @@ class _CollapseHandleState extends State<_CollapseHandle> {
       behavior: HitTestBehavior.opaque,
       onTap: () {
         Haptics.light();
-        widget.onCollapse();
+        onTap();
       },
-      onVerticalDragStart: (_) => _drag = 0,
-      onVerticalDragUpdate: (d) => _drag += d.delta.dy,
-      onVerticalDragEnd: (_) {
-        if (_drag > 6) {
-          Haptics.light();
-          widget.onCollapse();
-        }
-        _drag = 0;
-      },
+      // Панель ведёт себя как окно Ады за маркер: идёт за пальцем, а на
+      // отпускании коротко доезжает вниз или возвращается на место.
+      onVerticalDragStart: (_) => Haptics.light(),
+      onVerticalDragUpdate: (d) => onDrag(d.delta.dy),
+      onVerticalDragEnd: (_) => onRelease(),
+      onVerticalDragCancel: onRelease,
       child: SizedBox(
         height: 26,
         child: Center(
@@ -540,9 +601,7 @@ class _CollapseHandleState extends State<_CollapseHandle> {
             width: 46,
             height: 4,
             decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -604,7 +663,7 @@ class InlineKeyboardShelf extends StatelessWidget {
         child: open
             ? Padding(
                 key: const ValueKey('inline_kb_open'),
-                padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
+                padding: const EdgeInsets.fromLTRB(4, 2, 4, 12),
                 child: InlineKeyboard(
                   keyHeight: keyHeight,
                   onChar: onChar,
@@ -919,16 +978,18 @@ class _CaseGlyph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressScale(
-      pressedScale: 0.86,
-      duration: const Duration(milliseconds: 190),
-      releaseDuration: const Duration(milliseconds: 340),
-      // Та же отдача, что у служебных клавиш: буквы не должны «отдавать»
-      // иначе, чем «стереть» и «пробел». Блик убран по той же причине, что
-      // и у служебных клавиш — светлая полоса ложилась поверх буквы.
-      maxTiltAngle: 0.13,
-      pressOverlay: null,
-      child: GestureDetector(
+    // Геометрия и отдача ровно как у служебных клавиш: раньше буквы были
+    // на 2 px выше шляпок и «отдавали» сильнее, из-за чего ряд читался
+    // съехавшим вниз, а наклон под пальцем двигал сами буквы.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0.25, vertical: 1),
+      child: PressScale(
+        pressedScale: 0.90,
+        duration: const Duration(milliseconds: 150),
+        releaseDuration: const Duration(milliseconds: 260),
+        enableTilt: false,
+        pressOverlay: null,
+        child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
           Haptics.select();
@@ -977,6 +1038,7 @@ class _CaseGlyph extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -986,7 +1048,9 @@ class _CaseGlyph extends StatelessWidget {
       // Крупнее системного titleMedium: на 46-пиксельных клавишах буква
       // должна читаться с ходу, а не выглядеть мелкой нашлёпкой.
       fontSize: 22,
-      fontWeight: Weights.medium,
+      // Тот же вес, что у «пробела» и «стереть»: буквы больше не выглядят
+      // тоньше служебных клавиш.
+      fontWeight: Weights.semibold,
       letterSpacing: 0.2,
       color: theme.colorScheme.onSurface,
     ),
