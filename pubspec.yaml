@@ -17,7 +17,6 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  intl: ^0.20.2
   # Набор версий подобран под Flutter 3.50 / Dart 3.14. file_picker 13 и
   # flutter_local_notifications 23 требуют win32 ^6 — возврат file_picker к ^10
   # ломает solve, не откатывать без нужды.

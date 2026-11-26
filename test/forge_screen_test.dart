@@ -922,7 +922,13 @@ void main() {
     );
     await tester.runAsync(() async {
       send.onPressed!();
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      // Ждём именно запуска хода, а не фиксированные 60 мс: под нагрузкой
+      // полного прогона тестов этот срок успевал истечь раньше, чем ход
+      // начинался, и тест падал не из-за продукта.
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (!runner.running && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
     });
     await tester.pump();
 

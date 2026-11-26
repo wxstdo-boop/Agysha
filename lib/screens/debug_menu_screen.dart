@@ -4,12 +4,16 @@ import '../l10n/translations.dart';
 import '../services/action_log.dart';
 import '../services/app_version.dart';
 import '../services/debug_service.dart';
+import '../services/error_log.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import 'action_log_screen.dart';
+import 'debug_checks_screen.dart';
 import 'debug_diagnostics_card.dart';
-import 'tester_mode_screen.dart';
+import 'debug_errors_screen.dart';
+import 'debug_logs_screen.dart';
+import 'debug_system_screen.dart';
 
-/// Меню отладки: служебные переключатели и входы в проверки и журнал.
+/// Меню отладки: служебные переключатели и входы в инструменты диагностики.
 ///
 /// Открывается только по коду из настроек ([kDebugAccessCode]). Логирование
 /// здесь выключено по умолчанию — включается отдельным переключателем и
@@ -76,6 +80,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
             ),
           ),
           const SizedBox(height: 12),
+          // Режим и логирование: два независимых переключателя.
           Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
@@ -116,48 +121,6 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                 ),
                 const Divider(height: 1),
                 ValueListenableBuilder<bool>(
-                  valueListenable: DebugService.testerMode,
-                  builder: (context, value, _) => SwitchListTile(
-                    value: value,
-                    onChanged: (next) async {
-                      await DebugService.setTesterMode(next);
-                      ActionLog.record(
-                        'отладка',
-                        next
-                            ? 'режим тестера включён'
-                            : 'режим тестера выключен',
-                      );
-                      if (mounted) setState(() {});
-                    },
-                    secondary: const Icon(Icons.rule_rounded),
-                    title: Text(
-                      Translations.t(
-                        'testerModeTitle',
-                        context,
-                        'Режим тестера',
-                      ),
-                    ),
-                    subtitle: Text(
-                      Translations.t(
-                        'testerModeSubtitle',
-                        context,
-                        'Проверка работы разделов приложения',
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ValueListenableBuilder<bool>(
                   valueListenable: ActionLog.enabled,
                   builder: (context, value, _) => SwitchListTile(
                     value: value,
@@ -179,6 +142,82 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                         context,
                         'По умолчанию выключено: журнал пишется только пока включён',
                       ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Инструменты диагностики — списком тех же плиток, что и
+          // остальные пункты Agysha.
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.memory_rounded),
+                  title: Text(
+                    Translations.t(
+                      'debugSystemTitle',
+                      context,
+                      'Системная информация',
+                    ),
+                  ),
+                  subtitle: Text(
+                    Translations.t(
+                      'debugSystemSubtitle',
+                      context,
+                      'Устройство, версии, память и живой FPS',
+                    ),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const DebugSystemScreen(),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.fact_check_outlined),
+                  title: Text(
+                    Translations.t('debugChecksTitle', context, 'Проверки'),
+                  ),
+                  subtitle: Text(
+                    Translations.t(
+                      'debugChecksSubtitle',
+                      context,
+                      'Хранилище, данные, уведомления, переводы, часы',
+                    ),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const DebugChecksScreen(),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.list_alt_rounded),
+                  title: Text(
+                    Translations.t('debugLogsTitle', context, 'Логи'),
+                  ),
+                  subtitle: Text(
+                    Translations.t(
+                      'debugLogsSubtitle',
+                      context,
+                      'INFO, WARNING, ERROR: поиск, фильтр и отчёт',
+                    ),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const DebugLogsScreen(),
                     ),
                   ),
                 ),
@@ -210,37 +249,35 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                     ),
                   ),
                 ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.error_outline_rounded),
+                  title: Text(
+                    Translations.t('debugErrorsTitle', context, 'Ошибки'),
+                  ),
+                  trailing: ValueListenableBuilder<int>(
+                    valueListenable: ErrorLog.revision,
+                    builder: (context, _, _) => Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${ErrorLog.entries.length}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                      ],
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const DebugErrorsScreen(),
+                    ),
+                  ),
+                ),
               ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: ListTile(
-              leading: const Icon(Icons.fact_check_outlined),
-              title: Text(
-                Translations.t(
-                  'testerChecksTitle',
-                  context,
-                  'Проверка функционала',
-                ),
-              ),
-              subtitle: Text(
-                Translations.t(
-                  'testerChecksSubtitle',
-                  context,
-                  'Хранилище, данные, уведомления, переводы, часы',
-                ),
-              ),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const TesterModeScreen(),
-                ),
-              ),
             ),
           ),
           const SizedBox(height: 12),

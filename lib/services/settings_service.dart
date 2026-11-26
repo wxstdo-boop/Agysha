@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:characters/characters.dart';
-import 'debug_service.dart';
 import 'prefs.dart';
 import 'json_file.dart';
 import 'new_year_event_service.dart';
@@ -32,8 +31,6 @@ class SettingsService {
   static const _keyPerfectionism = 'perfectionism_mode';
   static const _keyBerserk = 'berserk_mode';
   static const _keyTaskNotes = 'task_quick_notes_mode';
-  static const _keyTesterMode = 'tester_mode';
-  static const _keyYandexMusic = 'setting_yandex_music';
   static const _keyUpdateNotifications = 'setting_update_notifications';
   static const _settingsFile = 'app_settings';
 
@@ -526,21 +523,6 @@ class SettingsService {
     await _saveSettings(map);
   }
 
-  /// Привязка Яндекс Музыки в профиле — отдельная функция, и по умолчанию
-  /// она ВЫКЛЮЧЕНА: карточка в профиле не появляется, пока человек сам не
-  /// включит её в настройках. Ключ читается и пишется тем же путём, что и
-  /// остальные переключатели.
-  static Future<bool> loadYandexMusicEnabled() async {
-    final map = await _loadSettings();
-    return _bool(map[_keyYandexMusic], false);
-  }
-
-  static Future<void> saveYandexMusicEnabled(bool value) async {
-    final map = await _loadSettings();
-    map[_keyYandexMusic] = value;
-    await _saveSettings(map);
-  }
-
   /// Уведомления о новых выпусках (шторка и плашка в приложении).
   /// Читается синхронно из [globalPrefs]: фоновый изолят не должен
   /// поднимать файл настроек ради одного флага.
@@ -638,37 +620,6 @@ class SettingsService {
     await _saveSettings(map);
     perfectionismEnabled.value = value;
   }
-
-  /// Режим тестера: человек соглашается на бета-канал — обновления
-  /// приходят в том числе из пре-релизов, а в «О приложении» рядом с
-  /// версией стоит отметка «тестер».
-  ///
-  /// Хранится в prefs через [DebugService], чтобы переключатели в уголке
-  /// разработчика, в меню отладки и в настройках видели одно состояние.
-  static ValueNotifier<bool> get testerModeEnabled => DebugService.testerMode;
-
-  static Future<bool> loadTesterMode() async {
-    // Старое значение из карты настроек переносим в prefs: там режим живёт
-    // вместе с режимом отладки и переживает перезапуск.
-    try {
-      final map = await _loadSettings();
-      if (map.containsKey(_keyTesterMode)) {
-        await DebugService.setTesterMode(_bool(map[_keyTesterMode], false));
-        return DebugService.testerMode.value;
-      }
-    } catch (_) {
-      // Настройки недоступны (например, в тесте) — остаётся значение prefs.
-    }
-    try {
-      DebugService.testerMode.value =
-          globalPrefs.getBool('tester_mode_enabled') ??
-          DebugService.testerMode.value;
-    } catch (_) {}
-    return DebugService.testerMode.value;
-  }
-
-  static Future<void> saveTesterMode(bool value) =>
-      DebugService.setTesterMode(value);
 
   /// Разблокированный режим BERSERK — общий живой флаг для настроек и FAB.
   static final ValueNotifier<bool> berserkEnabled = ValueNotifier<bool>(false);

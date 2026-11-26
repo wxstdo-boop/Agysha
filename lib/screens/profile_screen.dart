@@ -21,8 +21,6 @@ import '../services/phonk_filter.dart';
 import '../services/new_year_event_service.dart';
 import '../services/profile_service.dart';
 import '../services/score_service.dart';
-import '../services/settings_service.dart';
-import '../services/yandex_music_service.dart';
 import '../utils/context_menu.dart';
 import '../utils/design_tokens.dart';
 import '../utils/motion_prefs.dart';
@@ -41,7 +39,6 @@ import '../widgets/smooth_tooltip.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/volumetric_switch.dart';
 import '../widgets/windowed_column.dart';
-import 'profile_yandex_music.dart';
 
 // Экран разбит на part-файлы по подсистемам: сам экран остаётся здесь,
 // а события, друзья, музыкальные дорожки, талисманы и каталог фонка лежат
@@ -58,7 +55,6 @@ part 'profile_tracks.dart';
 part 'profile_talisman.dart';
 part 'profile_phonk.dart';
 part 'profile_cards.dart';
-part 'profile_yandex.dart';
 
 /// Страница проекта на GitHub. Здесь — события Agysha; список кэшируется
 /// локально, а пункты открываются в браузере.
@@ -158,16 +154,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   final Set<String> _newTrackIds = {};
   bool _isSearchingHardtekk = false;
 
-  /// Яндекс Музыка живёт в профиле: флаг включает карточку, остальное —
-  /// состояние привязки и избранного. Пока флаг выключен в настройках,
-  /// карточка не строится и сеть не трогается.
-  final _yandex = YandexMusicService();
-  bool _yandexMusicEnabled = false;
-  bool _yandexLinked = false;
-  bool _yandexLoading = false;
-  String? _yandexLogin;
-  String? _yandexError;
-  List<YandexTrack> _yandexTracks = const <YandexTrack>[];
   bool _isPrestigePickerOpen = false;
 
   /// Едет ли полоса артефактов: пока да, карточки не наклоняются.
@@ -184,10 +170,6 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   /// Фокус поля имени: подсказка живёт ровно столько, сколько поле закрыто.
   final _nameFocus = FocusNode();
-
-  /// Пересборка из extension-части профиля: `setState` защищён для вызовов
-  /// вне класса, поэтому часть экрана просит обновление через этот метод.
-  void _applyYandexState(VoidCallback fn) => setState(fn);
 
   void _syncHint() {
     // Подсказка видна, пока поле ЗАКРЫТО и пусто: открыл поле — гаснет,
@@ -233,7 +215,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     _nameCtrl.text = _service.name;
     _nameCtrl.addListener(_syncHint);
     _nameFocus.addListener(_syncHint);
-    _loadYandexMusic();
     // Клавиатура не должна «приезжать» в профиль вместе с экраном. Если
     // предыдущий экран оставил открытое поле (или фокус), система поднимает
     // IME сразу при появлении роута — пользователь видит «автовызов
@@ -1862,20 +1843,6 @@ class _ProfileScreenState extends State<ProfileScreen>
           title: Text(Translations.t('profile', context, 'Профиль')),
           leading: const BackButtonTooltip(),
           centerTitle: true,
-          actions: [
-            // Отдельная кнопка профиля для Яндекс Музыки: открывает полный
-            // экран избранного независимо от того, прокручена ли карточка.
-            if (_yandexMusicEnabled)
-              IconButton(
-                tooltip: Translations.t(
-                  'yandexMusicTitle',
-                  context,
-                  'Яндекс Музыка',
-                ),
-                icon: const Icon(Icons.library_music_rounded),
-                onPressed: _openYandexMusic,
-              ),
-          ],
         ),
         // Ленивый список, а НЕ список готовых детей: раньше все девять
         // карточек (вместе с сотнями строк треков и полусотней строк
@@ -1897,7 +1864,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       _nameCard,
       _onlineCard,
       _musicCard,
-      if (_yandexMusicEnabled) _yandexMusicCard,
       _leaderboardCard,
       // Очки — сразу после рейтинга: «за что» читается рядом с «кто
       // сколько», а карточки музыки и рейтинга остаются на своих местах.

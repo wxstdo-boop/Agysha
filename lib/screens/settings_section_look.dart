@@ -155,27 +155,15 @@ extension _SettingsSectionLook on _SettingsScreenState {
                   // в одном месте с номером, а название «Agysha FOSS»
                   // остаётся чистым.
                   const SizedBox(width: 6),
-                  // Режим тестера из уголка разработчика читается здесь же:
-                  // канал сборки и роль — в одной строке с версией.
-                  ValueListenableBuilder<bool>(
-                    valueListenable: SettingsService.testerModeEnabled,
-                    builder: (context, tester, _) => AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 240),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      child: Text(
-                        tester ? 'beta · тестер' : 'beta',
-                        key: ValueKey<bool>(tester),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: tester
-                              ? const Color(0xFF64B5F6).withValues(alpha: 0.9)
-                              : theme.colorScheme.onSurfaceVariant.withValues(
-                                  alpha: 0.62,
-                                ),
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.8,
-                        ),
+                  // Канал сборки — в одной строке с версией.
+                  Text(
+                    'beta',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.62,
                       ),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
                     ),
                   ),
                   const Spacer(),

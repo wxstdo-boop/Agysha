@@ -84,6 +84,7 @@ import 'utils/snackbar.dart';
 import 'utils/jank_probe.dart';
 import 'services/action_log.dart';
 import 'services/debug_service.dart';
+import 'services/error_log.dart';
 import 'services/update_service.dart';
 import 'services/update_notice.dart';
 import 'services/installer.dart';
@@ -962,9 +963,9 @@ Future<void> _predecodeSplashLogo() async {
 Future<_StartupState> _loadStartupState() async {
   // Инициализируем SharedPreferences ОДИН раз ДО всего.
   await initPrefs();
-  // Служебные режимы и журнал читаются сразу после prefs: логирование и
-  // «режим тестера» должны быть известны до первого действия пользователя,
-  // иначе первые записи потерялись бы. Оба по умолчанию выключены.
+  // Режим отладки и журнал читаются сразу после prefs: логирование должно
+  // быть известно до первого действия пользователя, иначе первые записи
+  // потерялись бы. Оба по умолчанию выключены.
   DebugService.init();
   ActionLog.init();
   ActionLog.record('приложение', 'запуск', data: {'версия': kAppVersion});
@@ -1061,7 +1062,6 @@ Future<_StartupState> _loadStartupState() async {
   final modes = Future.wait<void>([
     SettingsService.loadPerfectionism(),
     SettingsService.loadBerserk(),
-    SettingsService.loadTesterMode(),
     SettingsService.loadHaptics().then((v) => Haptics.enabled = v),
     SettingsService.loadSounds().then((v) => Sounds.enabled = v),
     SettingsService.loadOptimize().then((v) => PerfPrefs.enabled.value = v),
@@ -1248,8 +1248,19 @@ void main() async {
   };
   // Необработанные асинхронные ошибки логируем, но НЕ роняем главный
   // изолят: падение изолята тоже читается как вечный белый экран.
+  // Первопричина сбоя видна только здесь: после `true` приложение живёт
+  // дальше, и без записи в журнал от неё не остаётся следа.
+  FlutterError.onError = (details) {
+    ErrorLog.record(
+      details.exception,
+      details.stack,
+      context: details.context?.toString(),
+    );
+    FlutterError.presentError(details);
+  };
   ui.PlatformDispatcher.instance.onError = (error, stack) {
     debugPrint('Uncaught async error: $error\n$stack');
+    ErrorLog.record(error, stack, context: 'необработанная async-ошибка', critical: true);
     return true;
   };
   // Фоновый аудиоплагин и стартовое состояние не зависят друг от друга —

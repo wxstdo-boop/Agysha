@@ -173,7 +173,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _haptics = true;
   bool _sounds = false;
   bool _optimize = false;
-  bool _yandexMusic = false;
   bool _updateNotifications = true;
   bool _permissionWarningDismissed = false;
   bool _grantPressed = false; // Состояние зажатия кнопки «Выдать»
@@ -257,7 +256,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       _loadHaptics(),
       _loadSounds(),
       _loadOptimize(),
-      _loadYandexMusic(),
       _loadUpdateNotifications(),
       _checkPermissionWarning(),
       _checkNotificationsEnabled(),
@@ -435,10 +433,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     PerfPrefs.enabled.value = _optimize;
   }
 
-  Future<void> _loadYandexMusic() async {
-    _yandexMusic = await SettingsService.loadYandexMusicEnabled();
-  }
-
   Future<void> _loadUpdateNotifications() async {
     _updateNotifications = SettingsService.readUpdateNotificationsEnabled();
   }
@@ -452,15 +446,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       unawaited(syncBackgroundUpdateRegistration());
     } catch (_) {
       if (mounted) setState(() => _updateNotifications = !value);
-    }
-  }
-
-  Future<void> _setYandexMusic(bool value) async {
-    if (mounted) setState(() => _yandexMusic = value);
-    try {
-      await SettingsService.saveYandexMusicEnabled(value);
-    } catch (_) {
-      if (mounted) setState(() => _yandexMusic = !value);
     }
   }
 

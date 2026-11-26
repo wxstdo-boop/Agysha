@@ -21,12 +21,12 @@ import 'settings_service.dart';
 import 'task_service.dart';
 import 'update_service.dart';
 
-enum TesterStatus { pass, fail, skip }
+enum DebugCheckStatus { pass, fail, skip }
 
 /// Результат одной проверки функционала.
 @immutable
-class TesterCheckResult {
-  const TesterCheckResult({
+class DebugCheckResult {
+  const DebugCheckResult({
     required this.id,
     required this.title,
     required this.status,
@@ -35,25 +35,25 @@ class TesterCheckResult {
 
   final String id;
   final String title;
-  final TesterStatus status;
+  final DebugCheckStatus status;
   final String detail;
 
-  bool get ok => status != TesterStatus.fail;
+  bool get ok => status != DebugCheckStatus.fail;
 }
 
-/// Самопроверка приложения в режиме тестера.
+/// Самопроверка приложения в режиме отладкаа.
 ///
 /// Все проверки только читают настоящее состояние и, где нужно убедиться в
 /// записи, пишут и тут же удаляют пробный ключ. Данные человека не меняются.
-class TesterChecks {
-  TesterChecks._();
+class DebugChecks {
+  DebugChecks._();
 
-  static const String _probeKey = 'tester_probe_key';
+  static const String _probeKey = 'debug_probe_key';
 
-  static Future<List<TesterCheckResult>> runAll({
-    void Function(TesterCheckResult result)? onResult,
+  static Future<List<DebugCheckResult>> runAll({
+    void Function(DebugCheckResult result)? onResult,
   }) async {
-    final results = <TesterCheckResult>[];
+    final results = <DebugCheckResult>[];
     for (final entry in _checks) {
       final result = await entry();
       results.add(result);
@@ -62,7 +62,7 @@ class TesterChecks {
     return results;
   }
 
-  static final List<Future<TesterCheckResult> Function()> _checks = [
+  static final List<Future<DebugCheckResult> Function()> _checks = [
     _prefsCheck,
     _storageCheck,
     _tasksCheck,
@@ -87,26 +87,27 @@ class TesterChecks {
     _translationParityCheck,
     _remindersCheck,
     _timeZoneCheck,
+    _networkCheck,
     _updateChannelCheck,
     _dataIntegrityCheck,
   ];
 
-  static TesterCheckResult _result(
+  static DebugCheckResult _result(
     String id,
     String title,
     bool passed,
     String detail, {
     bool skipped = false,
-  }) => TesterCheckResult(
+  }) => DebugCheckResult(
     id: id,
     title: title,
     status: skipped
-        ? TesterStatus.skip
-        : (passed ? TesterStatus.pass : TesterStatus.fail),
+        ? DebugCheckStatus.skip
+        : (passed ? DebugCheckStatus.pass : DebugCheckStatus.fail),
     detail: detail,
   );
 
-  static Future<TesterCheckResult> _prefsCheck() async {
+  static Future<DebugCheckResult> _prefsCheck() async {
     try {
       await globalPrefs.setString(_probeKey, 'ok');
       final echoed = globalPrefs.getString(_probeKey);
@@ -122,7 +123,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _storageCheck() async {
+  static Future<DebugCheckResult> _storageCheck() async {
     try {
       await JsonFile.write(_probeKey, '{"probe":1}');
       final raw = await JsonFile.read(_probeKey);
@@ -140,7 +141,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _tasksCheck() async {
+  static Future<DebugCheckResult> _tasksCheck() async {
     try {
       final service = TaskService();
       final loaded = service.isLoaded;
@@ -158,7 +159,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _habitsCheck() async {
+  static Future<DebugCheckResult> _habitsCheck() async {
     try {
       final service = HabitService();
       final loaded = service.isLoaded;
@@ -176,7 +177,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _notificationsCheck() async {
+  static Future<DebugCheckResult> _notificationsCheck() async {
     try {
       final service = NotificationService();
       return _result(
@@ -191,7 +192,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _pinCheck() async {
+  static Future<DebugCheckResult> _pinCheck() async {
     try {
       final hasPin = await PinService.hasPin();
       return _result(
@@ -205,7 +206,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _localizationCheck() async {
+  static Future<DebugCheckResult> _localizationCheck() async {
     try {
       final data = Translations.rawData;
       final base = data['en'];
@@ -237,7 +238,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _updatesCheck() async {
+  static Future<DebugCheckResult> _updatesCheck() async {
     try {
       final update = pendingUpdate.value;
       final selfUpdate = kSelfUpdateEnabled
@@ -256,7 +257,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _clockCheck() async {
+  static Future<DebugCheckResult> _clockCheck() async {
     try {
       final now = DateTime.now();
       final sane = now.year >= 2024 && now.year <= 2100;
@@ -272,7 +273,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _actionLogCheck() async {
+  static Future<DebugCheckResult> _actionLogCheck() async {
     try {
       final on = ActionLog.enabled.value;
       return _result(
@@ -286,7 +287,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _alarmsCheck() async {
+  static Future<DebugCheckResult> _alarmsCheck() async {
     try {
       final service = AlarmService();
       final loaded = service.isLoaded;
@@ -306,7 +307,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _alarmPermissionsCheck() async {
+  static Future<DebugCheckResult> _alarmPermissionsCheck() async {
     try {
       final snapshot = await AlarmHealth.probe(NotificationService());
       final denied = <String>[
@@ -332,7 +333,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _nutritionCheck() async {
+  static Future<DebugCheckResult> _nutritionCheck() async {
     try {
       final meals = NutritionService().meals;
       return _result(
@@ -346,7 +347,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _scoreCheck() async {
+  static Future<DebugCheckResult> _scoreCheck() async {
     try {
       final service = ScoreService();
       final loaded = service.loaded;
@@ -362,7 +363,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _profileCheck() async {
+  static Future<DebugCheckResult> _profileCheck() async {
     try {
       final service = ProfileService();
       final loaded = service.loaded;
@@ -380,7 +381,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _installerCheck() async {
+  static Future<DebugCheckResult> _installerCheck() async {
     try {
       final allowed = await Installer.canInstall();
       return _result(
@@ -396,7 +397,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _notificationPermissionCheck() async {
+  static Future<DebugCheckResult> _notificationPermissionCheck() async {
     try {
       final service = NotificationService();
       if (!service.isInitialized) {
@@ -425,7 +426,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _settingsCheck() async {
+  static Future<DebugCheckResult> _settingsCheck() async {
     try {
       final theme = await SettingsService.loadThemeMode();
       final font = await SettingsService.loadFontFamily();
@@ -443,7 +444,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _aiKeysCheck() async {
+  static Future<DebugCheckResult> _aiKeysCheck() async {
     try {
       final key = await SettingsService.loadProviderKey();
       final model = await SettingsService.loadForgeModel();
@@ -461,7 +462,7 @@ class TesterChecks {
     }
   }
 
-  static Future<TesterCheckResult> _backupCheck() async {
+  static Future<DebugCheckResult> _backupCheck() async {
     try {
       final enabled = SettingsService.autoSaveEnabled.value;
       final last = SettingsService.autoSaveLastOk.value;
@@ -485,7 +486,7 @@ class TesterChecks {
   /// Проверка ловит не «место кончилось», а битое хранилище: каталог не
   /// читается, отдельные файлы не отдают размер. Всё считается только на
   /// чтение, ничего не пишется и не удаляется.
-  static Future<TesterCheckResult> _storageIntegrityCheck() async {
+  static Future<DebugCheckResult> _storageIntegrityCheck() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       var files = 0;
@@ -526,7 +527,7 @@ class TesterChecks {
   }
 
   /// Паритет переводов: одинаковый набор ключей в en, ru и fr.
-  static Future<TesterCheckResult> _translationParityCheck() async {
+  static Future<DebugCheckResult> _translationParityCheck() async {
     try {
       final data = Translations.rawData;
       final en = data['en'] ?? const <String, String>{};
@@ -560,7 +561,7 @@ class TesterChecks {
   }
 
   /// Сколько напоминаний реально поставлено: привычки, будильники и служба.
-  static Future<TesterCheckResult> _remindersCheck() async {
+  static Future<DebugCheckResult> _remindersCheck() async {
     try {
       final habits = HabitService();
       final alarms = AlarmService();
@@ -600,7 +601,7 @@ class TesterChecks {
   /// Смещение сверяем с реальным поясом (|смещение| ≤ 14 ч), а перевод ищем
   /// по локальным правилам Dart: сравниваем смещение «сейчас» со смещением
   /// в тот же день через 1…12 месяцев. Ничего не меняем и не пишем.
-  static Future<TesterCheckResult> _timeZoneCheck() async {
+  static Future<DebugCheckResult> _timeZoneCheck() async {
     try {
       final now = DateTime.now();
       final offset = now.timeZoneOffset;
@@ -638,10 +639,41 @@ class TesterChecks {
   }
 
   /// Автообновление и канал, с которого приходит обновление.
-  static Future<TesterCheckResult> _updateChannelCheck() async {
+  /// Доступность сети: приложению нужен GitHub только для обновлений, но
+  /// обрыв связи ломает и их, и «Кузницу». Проверка короткая и тихая.
+  static Future<DebugCheckResult> _networkCheck() async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 5);
     try {
-      final tester = SettingsService.testerModeEnabled.value;
-      final channel = tester ? 'бета (режим тестера)' : 'стабильный';
+      final request = await client.headUrl(
+        Uri.parse('https://api.github.com/'),
+      );
+      final response = await request.close().timeout(
+        const Duration(seconds: 8),
+      );
+      await response.drain<void>();
+      final reachable = response.statusCode < 500;
+      return _result(
+        'network',
+        'Доступность сети',
+        reachable,
+        'api.github.com ответил ${response.statusCode}',
+      );
+    } catch (error) {
+      return _result(
+        'network',
+        'Доступность сети',
+        false,
+        'нет связи или запрос отклонён: $error',
+      );
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static Future<DebugCheckResult> _updateChannelCheck() async {
+    try {
+      const channel = 'стабильный';
       final update = pendingUpdate.value;
       final detail =
           '${kSelfUpdateEnabled ? 'самообновление включено' : 'самообновление выключено'}, '
@@ -659,7 +691,7 @@ class TesterChecks {
   }
 
   /// Целостность накоплений: очки и карма не отрицательны и читаются.
-  static Future<TesterCheckResult> _dataIntegrityCheck() async {
+  static Future<DebugCheckResult> _dataIntegrityCheck() async {
     try {
       final score = ScoreService();
       final profile = ProfileService();
@@ -699,15 +731,15 @@ class TesterChecks {
   }
 
   /// Отчёт о прогоне для буфера обмена: одна строка на проверку.
-  static String report(List<TesterCheckResult> results) {
+  static String report(List<DebugCheckResult> results) {
     final buffer = StringBuffer()
       ..writeln('Agysha v$kAppVersion — проверка функционала')
       ..writeln(DateTime.now().toIso8601String());
     for (final result in results) {
       final mark = switch (result.status) {
-        TesterStatus.pass => 'OK',
-        TesterStatus.fail => 'ОШИБКА',
-        TesterStatus.skip => 'ПРОПУСК',
+        DebugCheckStatus.pass => 'OK',
+        DebugCheckStatus.fail => 'ОШИБКА',
+        DebugCheckStatus.skip => 'ПРОПУСК',
       };
       buffer.writeln('[$mark] ${result.title}: ${result.detail}');
     }

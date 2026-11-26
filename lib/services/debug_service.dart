@@ -6,45 +6,38 @@ import 'prefs.dart';
 /// случайного нажатия: код лежит в открытом виде в самом приложении.
 const String kDebugAccessCode = '0625';
 
-/// Состояние служебных режимов: «режим отладки» и «режим тестера».
+/// Состояние режима отладки.
 ///
-/// Оба выключены по умолчанию и включаются только вручную из меню отладки,
-/// поэтому обычный пользователь их никогда не видит.
+/// Выключен по умолчанию и включается только вручную из меню отладки,
+/// поэтому обычный пользователь его никогда не видит.
 class DebugService {
   DebugService._();
 
   static const _keyDebugMode = 'debug_mode_enabled';
-  static const _keyTesterMode = 'tester_mode_enabled';
 
   static final ValueNotifier<bool> debugEnabled = ValueNotifier<bool>(false);
 
-  /// Живой флаг режима тестера: единственный источник правды для бета-канала,
-  /// уголка разработчика и меню отладки.
-  static final ValueNotifier<bool> testerMode = ValueNotifier<bool>(false);
-
-  /// Читает сохранённые режимы. Вызывается после `initPrefs()`.
+  /// Читает сохранённый режим. Вызывается после `initPrefs()`.
   static void init() {
     debugEnabled.value = _read(_keyDebugMode);
-    testerMode.value = _read(_keyTesterMode);
   }
 
   static bool _read(String key) {
     try {
       return globalPrefs.getBool(key) ?? false;
     } catch (_) {
-      // prefs ещё не готовы — режимы просто остаются выключенными.
+      // prefs ещё не готовы — режим просто остаётся выключенным.
       return false;
     }
   }
 
   static bool checkCode(String input) => input.trim() == kDebugAccessCode;
 
-  /// Нужен ли код, чтобы открыть проверки функционала.
+  /// Нужен ли код, чтобы открыть служебные экраны.
   ///
   /// Вход по коду сам включает режим отладки, поэтому пока его не выключили
-  /// вручную, следующий заход в «режим тестера» идёт без пароля. Выключили
-  /// отладку — код снова спрашивается.
-  static bool get testerNeedsCode => !debugEnabled.value;
+  /// вручную, следующий заход идёт без пароля.
+  static bool get debugNeedsCode => !debugEnabled.value;
 
   /// Вход в служебные экраны: код засчитывается и сразу включает отладку,
   /// чтобы не спрашивать его каждый раз.
@@ -57,18 +50,8 @@ class DebugService {
     await globalPrefs.setBool(_keyDebugMode, value);
   }
 
-  static Future<void> setTesterMode(bool value) async {
-    testerMode.value = value;
-    try {
-      await globalPrefs.setBool(_keyTesterMode, value);
-    } catch (_) {
-      // prefs ещё не готовы — флаг живёт до перезапуска.
-    }
-  }
-
   @visibleForTesting
   static void resetForTesting() {
     debugEnabled.value = false;
-    testerMode.value = false;
   }
 }

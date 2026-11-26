@@ -6,11 +6,11 @@ import 'package:agysha/l10n/locale_provider.dart';
 import 'package:agysha/screens/action_log_screen.dart';
 import 'package:agysha/screens/debug_menu_screen.dart';
 import 'package:agysha/screens/developer_corner_screen.dart';
-import 'package:agysha/screens/tester_mode_screen.dart';
+import 'package:agysha/screens/debug_checks_screen.dart';
 import 'package:agysha/services/action_log.dart';
 import 'package:agysha/services/debug_service.dart';
 import 'package:agysha/services/prefs.dart';
-import 'package:agysha/services/tester_checks.dart';
+import 'package:agysha/services/debug_checks.dart';
 
 Widget _app(Widget child) => LocaleProvider(
   locale: const Locale('ru'),
@@ -69,7 +69,6 @@ void main() {
 
   test('журнал и режимы переживают перезапуск', () async {
     await DebugService.setDebugEnabled(true);
-    await DebugService.setTesterMode(true);
     await ActionLog.setEnabled(true);
     ActionLog.record('тест', 'до перезапуска');
     await ActionLog.flushForTesting();
@@ -81,7 +80,6 @@ void main() {
     ActionLog.init();
 
     expect(DebugService.debugEnabled.value, isTrue);
-    expect(DebugService.testerMode.value, isTrue);
     expect(ActionLog.enabled.value, isTrue);
     expect(ActionLog.entries.map((e) => e.message), contains('до перезапуска'));
   });
@@ -98,35 +96,38 @@ void main() {
     expect(ActionLog.entries, isEmpty, reason: 'на диске тоже пусто');
   });
 
-  testWidgets('в меню отладки три переключателя, все выключены', (
+  testWidgets('в меню отладки два переключателя, все выключены', (
     tester,
   ) async {
     await tester.pumpWidget(_app(const DebugMenuScreen()));
     await tester.pumpAndSettle();
 
     expect(find.text('Режим отладки'), findsWidgets);
-    expect(find.text('Режим тестера'), findsOneWidget);
     expect(find.text('Логирование действий'), findsOneWidget);
     expect(find.text('Журнал действий'), findsOneWidget);
-    expect(find.text('Проверка функционала'), findsOneWidget);
-    await tester.drag(find.byType(ListView), const Offset(0, -400));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('служебная сборка'), findsOneWidget);
 
     final switches = tester.widgetList<SwitchListTile>(
       find.byType(SwitchListTile),
     );
-    expect(switches.length, 3);
+    expect(switches.length, 2);
     expect(switches.every((s) => s.value == false), isTrue);
+
+    await tester.scrollUntilVisible(
+      find.textContaining('служебная сборка'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('служебная сборка'), findsOneWidget);
   });
 
   testWidgets('проверки функционала возвращают результат по каждому пункту', (
     tester,
   ) async {
     final seen = <String>[];
-    late final List<TesterCheckResult> results;
+    late final List<DebugCheckResult> results;
     await tester.runAsync(() async {
-      results = await TesterChecks.runAll(
+      results = await DebugChecks.runAll(
         onResult: (result) => seen.add(result.id),
       );
     });
@@ -141,20 +142,20 @@ void main() {
     );
     // Проверка журнала честно сообщает, что логирование выключено.
     final log = results.firstWhere((r) => r.id == 'log');
-    expect(log.status, TesterStatus.pass);
+    expect(log.status, DebugCheckStatus.pass);
     expect(log.detail, contains('выключен'));
 
     // Повторный запуск не падает и не оставляет мусора в prefs.
-    await tester.runAsync(() => TesterChecks.runAll());
-    expect(globalPrefs.containsKey('tester_probe_key'), isFalse);
+    await tester.runAsync(() => DebugChecks.runAll());
+    expect(globalPrefs.containsKey('debug_probe_key'), isFalse);
   });
 
-  testWidgets('экран тестера сразу показывает заголовок и кнопку запуска', (
+  testWidgets('экран отладкаа сразу показывает заголовок и кнопку запуска', (
     tester,
   ) async {
     // Прогон проверок трогает плагины и потому не завершается в fake-async;
     // здесь важно, что экран открывается и не пустой.
-    await tester.pumpWidget(_app(const TesterModeScreen()));
+    await tester.pumpWidget(_app(const DebugChecksScreen()));
     await tester.pump();
 
     expect(find.text('Проверка функционала'), findsOneWidget);
@@ -183,44 +184,48 @@ void main() {
     'проверки спрашивают код только при выключенной отладке',
     () async {
       expect(
-        DebugService.testerNeedsCode,
+        DebugService.debugNeedsCode,
         isTrue,
         reason: 'по умолчанию отладка выключена',
       );
 
       await DebugService.rememberUnlock();
       expect(DebugService.debugEnabled.value, isTrue, reason: 'первый вход');
-      expect(DebugService.testerNeedsCode, isFalse, reason: 'кода больше нет');
+      expect(DebugService.debugNeedsCode, isFalse, reason: 'кода больше нет');
 
       // Настройка переживает «перезапуск»: состояние читается из prefs.
       DebugService.resetForTesting();
       DebugService.init();
       expect(DebugService.debugEnabled.value, isTrue);
-      expect(DebugService.testerNeedsCode, isFalse);
+      expect(DebugService.debugNeedsCode, isFalse);
 
       await DebugService.setDebugEnabled(false);
-      expect(DebugService.testerNeedsCode, isTrue, reason: 'выключили — код снова нужен');
+      expect(
+        DebugService.debugNeedsCode,
+        isTrue,
+        reason: 'выключили — код снова нужен',
+      );
     },
   );
 
-  test('отчёт тестера перечисляет проверки без секретов', () {
-    final report = TesterChecks.report(const [
-      TesterCheckResult(
+  test('отчёт отладкаа перечисляет проверки без секретов', () {
+    final report = DebugChecks.report(const [
+      DebugCheckResult(
         id: 'storage',
         title: 'Хранилище',
-        status: TesterStatus.pass,
+        status: DebugCheckStatus.pass,
         detail: 'запись и чтение в порядке',
       ),
-      TesterCheckResult(
+      DebugCheckResult(
         id: 'pin',
         title: 'PIN',
-        status: TesterStatus.fail,
+        status: DebugCheckStatus.fail,
         detail: 'не настроен',
       ),
-      TesterCheckResult(
+      DebugCheckResult(
         id: 'alarms',
         title: 'Будильники',
-        status: TesterStatus.skip,
+        status: DebugCheckStatus.skip,
         detail: 'данные ещё не загружены',
       ),
     ]);
@@ -233,10 +238,10 @@ void main() {
     expect(report.split('\n').where((l) => l.startsWith('[')).length, 3);
   });
 
-  testWidgets('у тестера есть свои функции: отчёт, уведомление, журнал', (
+  testWidgets('у отладкаа есть свои функции: отчёт, уведомление, журнал', (
     tester,
   ) async {
-    await tester.pumpWidget(_app(const TesterModeScreen()));
+    await tester.pumpWidget(_app(const DebugChecksScreen()));
     await tester.pump();
 
     expect(find.text('Ещё функции'), findsOneWidget);

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui show Picture, PictureRecorder;
 
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:material_ui/material_ui.dart';
@@ -256,6 +257,74 @@ class _ItshnikCache {
   /// поэтому объект живёт здесь, а не создаётся десятки раз за кадр.
   final Paint snowPaint = Paint();
 
+  /// Скан-линии статичны: путь на 585 прямоугольников записывается один раз
+  /// на размер и дальше отдаётся одним `drawPicture`.
+  ui.Picture? _scanlines;
+  Size? _scanlinesSize;
+
+  /// Шейдер «дыхания» зависит только от размера и квантованной фазы:
+  /// создавать `RadialGradient.createShader` каждый кадр — самая дорогая
+  /// операция в слое, а пульс меняется медленно.
+  Paint? _breath;
+  Size? _breathSize;
+  Color? _breathColor;
+  int _breathStep = -1;
+
+  /// Кончик пиксельного сердца от начала координат: один путь на размер,
+  /// дальше только `translate` — раньше `Path` собирался 9 раз за кадр.
+  final Map<double, Path> _heartTips = <double, Path>{};
+
+  ui.Picture scanlines(Size size) {
+    if (_scanlines != null && _scanlinesSize == size) return _scanlines!;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint()..color = const Color(0x14000000);
+    for (var y = 0.0; y < size.height; y += 4) {
+      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 1), paint);
+    }
+    final picture = recorder.endRecording();
+    _scanlines?.dispose();
+    _scanlines = picture;
+    _scanlinesSize = size;
+    return picture;
+  }
+
+  Paint breath(Size size, double pulse, Color accent) {
+    final step = (pulse * 24).round();
+    if (_breath != null &&
+        _breathSize == size &&
+        _breathStep == step &&
+        _breathColor == accent) {
+      return _breath!;
+    }
+    final p = step / 24;
+    _breath = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          accent.withValues(alpha: 0.02 + 0.035 * p),
+          accent.withValues(alpha: 0.0),
+        ],
+      ).createShader(
+        Rect.fromCircle(
+          center: Offset(size.width * 0.5, size.height * 0.46),
+          radius: size.shortestSide * (0.55 + 0.06 * p),
+        ),
+      );
+    _breathSize = size;
+    _breathStep = step;
+    _breathColor = accent;
+    return _breath!;
+  }
+
+  Path heartTip(double s) => _heartTips.putIfAbsent(
+    s,
+    () => Path()
+      ..moveTo(-s * 0.53, s * 0.12)
+      ..lineTo(0, s * 0.72)
+      ..lineTo(s * 0.53, s * 0.12)
+      ..close(),
+  );
+
   void prepare(
     Size size, {
     ItshnikVariant variant = ItshnikVariant.phosphor,
@@ -362,6 +431,13 @@ class _ItshnikCache {
     _vignette = null;
     _glowTop = null;
     _glowBottom = null;
+    _scanlines?.dispose();
+    _scanlines = null;
+    _scanlinesSize = null;
+    _breath = null;
+    _breathSize = null;
+    _breathStep = -1;
+    _heartTips.clear();
   }
 }
 
@@ -506,40 +582,27 @@ class _ItshnikPainter extends CustomPainter {
       // Два кружка и треугольник — пиксельное сердце Миты.
       canvas.drawCircle(Offset(x - s * 0.24, y * size.height), s * 0.30, paint);
       canvas.drawCircle(Offset(x + s * 0.24, y * size.height), s * 0.30, paint);
-      final tip = Path()
-        ..moveTo(x - s * 0.53, y * size.height + s * 0.12)
-        ..lineTo(x, y * size.height + s * 0.72)
-        ..lineTo(x + s * 0.53, y * size.height + s * 0.12)
-        ..close();
-      canvas.drawPath(tip, paint);
+      // Путь кэширован от нуля: сдвиг холста дешевле сборки `Path` за кадр.
+      canvas.save();
+      canvas.translate(x, y * size.height);
+      canvas.drawPath(cache.heartTip(s), paint);
+      canvas.restore();
     }
   }
 
   void _paintBreath(Canvas canvas, Size size, double t) {
-    // Медленное «дыхание» экрана: яркий центр чуть пульсирует.
+    // Медленное «дыхание» экрана: яркий центр чуть пульсирует. Шейдер
+    // кэшируется по квантованной фазе (24 шага на цикл) — визуально это
+    // те же 2.5 % яркости, но `createShader` больше не вызывается каждый кадр.
     final pulse = 0.5 + 0.5 * math.sin(t * math.pi * 2);
-    final paint = Paint()
-      ..shader =
-          RadialGradient(
-            colors: [
-              skin.accent.withValues(alpha: 0.02 + 0.035 * pulse),
-              skin.accent.withValues(alpha: 0.0),
-            ],
-          ).createShader(
-            Rect.fromCircle(
-              center: Offset(size.width * 0.5, size.height * 0.46),
-              radius: size.shortestSide * (0.55 + 0.06 * pulse),
-            ),
-          );
-    canvas.drawRect(Offset.zero & size, paint);
+    canvas.drawRect(Offset.zero & size, cache.breath(size, pulse, skin.accent));
   }
 
   void _paintScanlines(Canvas canvas, Size size, double t) {
     // Постоянные скан-линии: редкие, чтобы не «рябили» на тексте.
-    final line = Paint()..color = const Color(0x14000000);
-    for (var y = 0.0; y < size.height; y += 4) {
-      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 1), line);
-    }
+    // Записаны одной картинкой на размер — 585 `drawRect` за кадр заметно
+    // грели UI-поток на слабых телефонах.
+    canvas.drawPicture(cache.scanlines(size));
 
     // Бегущий блик: раз в цикл проходит сверху вниз.
     final sweepY = (t * 1.35 - 0.2) * size.height;

@@ -6,11 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:agysha/l10n/locale_provider.dart';
-import 'package:agysha/screens/tester_mode_screen.dart';
+import 'package:agysha/screens/debug_checks_screen.dart';
 import 'package:agysha/services/action_log.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
-import 'package:agysha/services/tester_checks.dart';
+import 'package:agysha/services/debug_checks.dart';
 
 Widget _app(Widget child) => LocaleProvider(
   locale: const Locale('ru'),
@@ -50,7 +50,7 @@ void main() {
   test(
     'новые проверки попадают в прогон, а в отчёте нет кода отладки',
     () async {
-      final results = await TesterChecks.runAll();
+      final results = await DebugChecks.runAll();
       final ids = results.map((r) => r.id).toSet();
 
       expect(
@@ -68,7 +68,7 @@ void main() {
       expect(ids.length, results.length, reason: 'id не повторяются');
       expect(results.every((r) => r.title.isNotEmpty), isTrue);
 
-      final report = TesterChecks.report(results);
+      final report = DebugChecks.report(results);
       expect(report, isNot(contains('0625')));
       expect(
         report.split('\n').where((line) => line.startsWith('[')).length,
@@ -82,23 +82,23 @@ void main() {
   );
 
   test('отчёт помечает OK, ОШИБКА и ПРОПУСК', () {
-    final report = TesterChecks.report(const [
-      TesterCheckResult(
+    final report = DebugChecks.report(const [
+      DebugCheckResult(
         id: 'ok',
         title: 'Хранилище',
-        status: TesterStatus.pass,
+        status: DebugCheckStatus.pass,
         detail: 'в порядке',
       ),
-      TesterCheckResult(
+      DebugCheckResult(
         id: 'bad',
         title: 'Профиль',
-        status: TesterStatus.fail,
+        status: DebugCheckStatus.fail,
         detail: 'не читается',
       ),
-      TesterCheckResult(
+      DebugCheckResult(
         id: 'skip',
         title: 'Задачи',
-        status: TesterStatus.skip,
+        status: DebugCheckStatus.skip,
         detail: 'ещё не загружены',
       ),
     ]);
@@ -108,8 +108,8 @@ void main() {
     expect(report, contains('[ПРОПУСК] Задачи: ещё не загружены'));
   });
 
-  testWidgets('старые функции тестера на месте', (tester) async {
-    await tester.pumpWidget(_app(const TesterModeScreen()));
+  testWidgets('старые функции отладкаа на месте', (tester) async {
+    await tester.pumpWidget(_app(const DebugChecksScreen()));
     await tester.pump();
 
     expect(find.text('Отчёт в буфер'), findsOneWidget);
@@ -117,8 +117,8 @@ void main() {
     expect(find.text('Журнал действий'), findsOneWidget);
   });
 
-  testWidgets('на экране тестера видны новые кнопки', (tester) async {
-    await tester.pumpWidget(_app(const TesterModeScreen()));
+  testWidgets('на экране отладкаа видны новые кнопки', (tester) async {
+    await tester.pumpWidget(_app(const DebugChecksScreen()));
     await tester.pump();
 
     expect(find.text('Ещё функции'), findsOneWidget);
@@ -133,7 +133,7 @@ void main() {
     ActionLog.record('тест', 'запись для очистки');
     expect(ActionLog.entries, isNotEmpty);
 
-    await tester.pumpWidget(_app(const TesterModeScreen()));
+    await tester.pumpWidget(_app(const DebugChecksScreen()));
     await tester.pump();
 
     final clear = find.widgetWithText(OutlinedButton, 'Очистить журнал');

@@ -4,25 +4,25 @@ import 'package:flutter/services.dart';
 import '../l10n/translations.dart';
 import '../services/action_log.dart';
 import '../services/notification_service.dart';
-import '../services/tester_checks.dart';
+import '../services/debug_checks.dart';
 import '../utils/snackbar.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import 'action_log_screen.dart';
 
-/// Режим тестера: прогон проверок функционала и их результаты.
+/// Режим отладкаа: прогон проверок функционала и их результаты.
 ///
 /// Проверки идут по очереди и только читают состояние приложения (пробные
 /// ключи пишутся и сразу удаляются), поэтому запускать можно сколько угодно
 /// раз — данные человека не меняются.
-class TesterModeScreen extends StatefulWidget {
-  const TesterModeScreen({super.key});
+class DebugChecksScreen extends StatefulWidget {
+  const DebugChecksScreen({super.key});
 
   @override
-  State<TesterModeScreen> createState() => _TesterModeScreenState();
+  State<DebugChecksScreen> createState() => _DebugChecksScreenState();
 }
 
-class _TesterModeScreenState extends State<TesterModeScreen> {
-  final List<TesterCheckResult> _results = <TesterCheckResult>[];
+class _DebugChecksScreenState extends State<DebugChecksScreen> {
+  final List<DebugCheckResult> _results = <DebugCheckResult>[];
   bool _running = false;
   DateTime? _lastRunAt;
 
@@ -38,17 +38,17 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
       _running = true;
       _results.clear();
     });
-    ActionLog.record('тестер', 'запущены проверки функционала');
-    final results = await TesterChecks.runAll(
+    ActionLog.record('отладка', 'запущены проверки функционала');
+    final results = await DebugChecks.runAll(
       onResult: (result) {
         if (!mounted) return;
         setState(() => _results.add(result));
       },
     );
     if (!mounted) return;
-    final failed = results.where((r) => r.status == TesterStatus.fail).length;
+    final failed = results.where((r) => r.status == DebugCheckStatus.fail).length;
     ActionLog.record(
-      'тестер',
+      'отладка',
       'проверки завершены',
       data: {'всего': results.length, 'ошибок': failed},
     );
@@ -58,11 +58,11 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
     });
   }
 
-  /// Инструменты тестера: отчёт в буфер, живое уведомление, журнал.
+  /// Инструменты отладкаа: отчёт в буфер, живое уведомление, журнал.
   Future<void> _copyReport() async {
     if (_results.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: TesterChecks.report(_results)));
-    ActionLog.record('тестер', 'отчёт скопирован в буфер');
+    await Clipboard.setData(ClipboardData(text: DebugChecks.report(_results)));
+    ActionLog.record('отладка', 'отчёт скопирован в буфер');
     if (!mounted) return;
     showBeautifulSnackBar(
       context,
@@ -77,12 +77,12 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
   /// Список только ошибок последнего прогона — для багрепорта.
   Future<void> _copyErrors() async {
     final failed = _results
-        .where((r) => r.status == TesterStatus.fail)
+        .where((r) => r.status == DebugCheckStatus.fail)
         .toList();
     if (failed.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: TesterChecks.report(failed)));
+    await Clipboard.setData(ClipboardData(text: DebugChecks.report(failed)));
     ActionLog.record(
-      'тестер',
+      'отладка',
       'список ошибок скопирован в буфер',
       data: {'ошибок': failed.length},
     );
@@ -99,7 +99,7 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
 
   Future<void> _clearLog() async {
     await ActionLog.clear();
-    ActionLog.record('тестер', 'журнал действий очищен');
+    ActionLog.record('отладка', 'журнал действий очищен');
     if (!mounted) return;
     setState(() {});
     showBeautifulSnackBar(
@@ -111,15 +111,15 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
   /// Сводка по последнему прогону: сколько OK, ошибок и пропусков.
   void _showSummary() {
     if (_results.isEmpty) return;
-    final ok = _results.where((r) => r.status == TesterStatus.pass).length;
-    final failed = _results.where((r) => r.status == TesterStatus.fail).length;
-    final skipped = _results.where((r) => r.status == TesterStatus.skip).length;
+    final ok = _results.where((r) => r.status == DebugCheckStatus.pass).length;
+    final failed = _results.where((r) => r.status == DebugCheckStatus.fail).length;
+    final skipped = _results.where((r) => r.status == DebugCheckStatus.skip).length;
     final last = _lastRunAt;
     final lastLabel = last == null
         ? 'ещё не завершён'
         : '${_two(last.day)}.${_two(last.month)}.${last.year} '
               '${_two(last.hour)}:${_two(last.minute)}:${_two(last.second)}';
-    ActionLog.record('тестер', 'открыта сводка проверок');
+    ActionLog.record('отладка', 'открыта сводка проверок');
     showDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -199,7 +199,7 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
         'Если вы это видите — уведомления работают.',
       ),
     );
-    ActionLog.record('тестер', 'отправлено тестовое уведомление');
+    ActionLog.record('отладка', 'отправлено тестовое уведомление');
     if (!mounted) return;
     showBeautifulSnackBar(
       context,
@@ -215,13 +215,13 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final failed = _results.where((r) => r.status == TesterStatus.fail).length;
+    final failed = _results.where((r) => r.status == DebugCheckStatus.fail).length;
     final done = !_running && _results.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          Translations.t('testerChecksTitle', context, 'Проверка функционала'),
+          Translations.t('debugChecksTitle', context, 'Проверка функционала'),
         ),
         leading: const BackButtonTooltip(),
         centerTitle: true,
@@ -299,7 +299,7 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          // Ещё функции тестера: забрать отчёт, проверить шторку живьём,
+          // Ещё функции отладкаа: забрать отчёт, проверить шторку живьём,
           // посмотреть журнал — всё в одном ряду под сводкой.
           Card(
             shape: RoundedRectangleBorder(
@@ -414,26 +414,26 @@ class _TesterModeScreenState extends State<TesterModeScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          ..._results.map((result) => _TesterRow(result: result)),
+          ..._results.map((result) => _DebugCheckRow(result: result)),
         ],
       ),
     );
   }
 }
 
-class _TesterRow extends StatelessWidget {
-  const _TesterRow({required this.result});
+class _DebugCheckRow extends StatelessWidget {
+  const _DebugCheckRow({required this.result});
 
-  final TesterCheckResult result;
+  final DebugCheckResult result;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final (icon, color) = switch (result.status) {
-      TesterStatus.pass => (Icons.check_rounded, colors.primary),
-      TesterStatus.fail => (Icons.close_rounded, colors.error),
-      TesterStatus.skip => (Icons.remove_rounded, colors.onSurfaceVariant),
+      DebugCheckStatus.pass => (Icons.check_rounded, colors.primary),
+      DebugCheckStatus.fail => (Icons.close_rounded, colors.error),
+      DebugCheckStatus.skip => (Icons.remove_rounded, colors.onSurfaceVariant),
     };
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),

@@ -175,9 +175,23 @@ class _StyleWallpaperLayerState extends State<StyleWallpaperLayer>
         fit: BoxFit.cover,
         gaplessPlayback: true,
         filterQuality: FilterQuality.medium,
+        // Телефонное фото 12 Мп в памяти — это ~48 МБ на кадр. Декодируем
+        // ровно столько, сколько может показать экран даже при максимальном
+        // увеличении (2.2x), остальное отбрасывает сам декодер: картинка та
+        // же, а пиксельная память меньше в разы.
+        cacheWidth: _decodeWidth(context),
         errorBuilder: (_, _, _) => const SizedBox.expand(),
       ),
     );
+  }
+
+  /// Ширина декодирования: экран в физических пикселях с запасом на
+  /// максимальный масштаб подгонки ([StyleWallpaperChoice.maxScale]).
+  int _decodeWidth(BuildContext context) {
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final width = MediaQuery.sizeOf(context).width * dpr;
+    final needed = width * StyleWallpaperChoice.maxScale;
+    return needed.isFinite && needed > 0 ? needed.round() : 1080;
   }
 
   /// Подгонка обоев: кадр всегда закрывает экран целиком, масштаб только
