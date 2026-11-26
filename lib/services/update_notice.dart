@@ -7,6 +7,7 @@ import '../main.dart' show navigatorKey;
 import '../utils/snackbar.dart';
 import 'notification_service.dart';
 import 'prefs.dart';
+import 'settings_service.dart';
 import 'update_service.dart';
 
 /// Уведомление «вышла новая версия» внутри приложения.
@@ -37,6 +38,14 @@ class UpdateNotice {
 
   bool _announcing = false;
 
+  /// Когда и о какой версии плашку показали принудительно ([announce] с
+  /// `force`). Тап по баннеру приходит ДВУМЯ путями (плагин уведомлений и
+  /// канал MainActivity), поэтому второй вызов в пределах пары секунд —
+  /// это тот же тап, а не новое намерение пользователя.
+  static String? _lastForceVersion;
+  static DateTime? _lastForceAt;
+  static const Duration _forceDedupeWindow = Duration(seconds: 3);
+
   /// Версия, о которой баннер уже поставлен в очередь: защищает от двух
   /// баннеров, если проверки совпадут по времени.
   static String? _shadeQueued;
@@ -58,6 +67,7 @@ class UpdateNotice {
   /// остаётся в шторке и после сворачивания, поэтому о выпуске узнаёшь,
   /// даже если не смотрел на приложение в момент проверки.
   void _notifyShade(UpdateInfo info) {
+    if (!SettingsService.readUpdateNotificationsEnabled()) return;
     if (!shouldNotifyShade(info.versionName)) return;
     if (_shadeQueued == info.versionName) return;
     _shadeQueued = info.versionName;
@@ -67,6 +77,8 @@ class UpdateNotice {
     unawaited(() async {
       final shown = await NotificationService().showUpdateAvailable(
         info.versionName,
+        notes: info.notes,
+        releaseName: info.releaseName,
       );
       if (shown) {
         await globalPrefs.setString(notifiedVersionKey, info.versionName);
@@ -88,7 +100,22 @@ class UpdateNotice {
     bool force = false,
   }) async {
     if (info == null || !kSelfUpdateEnabled) return false;
+    // Выключенные уведомления гасят и шторку, и плашку в приложении.
+    // Таблетка «доступно обновление» в настройках остаётся: это статус,
+    // а не всплывающее сообщение.
+    if (!SettingsService.readUpdateNotificationsEnabled()) return false;
     _notifyShade(info);
+    if (force) {
+      final now = DateTime.now();
+      final last = _lastForceAt;
+      if (_lastForceVersion == info.versionName &&
+          last != null &&
+          now.difference(last) < _forceDedupeWindow) {
+        return false;
+      }
+      _lastForceVersion = info.versionName;
+      _lastForceAt = now;
+    }
     if (_announcing) return false;
     if (!force && !shouldAnnounce(info.versionName)) return false;
     // Старт приложения: проверка обновлений стартует сразу после runApp, и

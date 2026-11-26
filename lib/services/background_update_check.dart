@@ -5,6 +5,7 @@ import 'package:workmanager/workmanager.dart';
 
 import 'notification_service.dart';
 import 'prefs.dart';
+import 'settings_service.dart';
 import 'update_service.dart';
 
 /// Фоновая проверка релизов через WorkManager.
@@ -66,26 +67,69 @@ void backgroundUpdateDispatcher() {
   });
 }
 
+/// Периодическая и догоняющая задачи могут совпасть по времени: второй
+/// прогон в этом же изоляте ничего не выигрывает, а два баннера подряд
+/// поставить может.
+bool _checkInFlight = false;
+
 /// Один прогон проверки: сравнить релиз с установленной версией и, если
 /// выпуск новее, поставить баннер в шторку.
 ///
 /// Возвращает `true`, если баннер действительно поставлен. Отметку «уже
 /// сообщили» пишем ТОЛЬКО тогда: при запрещённых уведомлениях или сбое
 /// плагина выпуск остаётся неотмеченным и дойдёт в следующий раз.
+///
+/// [find] и [notify] подменяются в тестах: настоящая проверка ходит в сеть
+/// и в плагин уведомлений, а нам нужно проверить именно решение «сообщать
+/// или нет» и запись отметки.
 @visibleForTesting
-Future<bool> runBackgroundUpdateCheck() async {
-  final info = await findBackgroundUpdate();
-  if (info == null) return false;
-  if (globalPrefs.getString(kNotifiedVersionKey) == info.versionName) {
+Future<bool> runBackgroundUpdateCheck({
+  Future<UpdateInfo?> Function()? find,
+  Future<bool> Function(UpdateInfo info)? notify,
+}) async {
+  // Тумблер в настройках: человек попросил не беспокоить. Проверку версии
+  // в приложении это не выключает — только баннер в шторке.
+  if (!SettingsService.readUpdateNotificationsEnabled()) return false;
+  if (_checkInFlight) return false;
+  _checkInFlight = true;
+  try {
+    UpdateInfo? info;
+    try {
+      info = await (find ?? findBackgroundUpdate)();
+    } catch (error) {
+      // Нет сети, таймаут, 403 rate limit GitHub — это НЕ «обновления нет».
+      // Выпуск остаётся неотмеченным, следующий прогон попробует снова.
+      debugPrint('background update fetch failed: $error');
+      return false;
+    }
+    if (info == null) return false;
+    if (globalPrefs.getString(kNotifiedVersionKey) == info.versionName) {
+      return false;
+    }
+    final shown = await (notify ?? _showShadeNotification)(info);
+    if (shown) {
+      await globalPrefs.setString(kNotifiedVersionKey, info.versionName);
+    }
+    return shown;
+  } finally {
+    _checkInFlight = false;
+  }
+}
+
+/// Баннер в шторку о [info]: версия, название выпуска и краткое описание.
+Future<bool> _showShadeNotification(UpdateInfo info) async {
+  try {
+    return await NotificationService().showUpdateAvailable(
+      info.versionName,
+      notes: info.notes,
+      releaseName: info.releaseName,
+    );
+  } catch (error) {
+    // Сбой плагина в фоне не должен валить задачу WorkManager: выпуск
+    // просто останется неотмеченным.
+    debugPrint('background update notify failed: $error');
     return false;
   }
-  final shown = await NotificationService().showUpdateAvailable(
-    info.versionName,
-  );
-  if (shown) {
-    await globalPrefs.setString(kNotifiedVersionKey, info.versionName);
-  }
-  return shown;
 }
 
 /// Сверяет последний релиз GitHub с версией, сохранённой при запуске.

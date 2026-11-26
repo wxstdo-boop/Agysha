@@ -92,13 +92,18 @@ class YandexTrack {
         '${seconds.toString().padLeft(2, '0')}';
   }
 
+  /// В `likes/tracks` элемент бывает «обёрткой» вида
+  /// `{id, albumId, timestamp, track: {...}}` — тогда данные лежат в `track`.
   factory YandexTrack.fromJson(Map<String, dynamic> json) {
+    final inner = json['track'];
+    final data = inner is Map ? Map<String, dynamic>.from(inner) : json;
+    final id = _text(json['id']);
     return YandexTrack(
-      id: _text(json['id']),
-      title: _orFallback(_text(json['title']), 'Без названия'),
-      artist: _orFallback(_artists(json['artists']), 'Неизвестный исполнитель'),
-      durationMs: _integer(json['durationMs']),
-      coverUrl: _cover(json['albums']),
+      id: id.isNotEmpty ? id : _text(data['id']),
+      title: _orFallback(_text(data['title']), 'Без названия'),
+      artist: _orFallback(_artists(data['artists']), 'Неизвестный исполнитель'),
+      durationMs: _integer(data['durationMs']),
+      coverUrl: _cover(data['albums']),
     );
   }
 
@@ -269,6 +274,24 @@ class YandexMusicService extends ChangeNotifier {
     _login = account.login;
     _tracks = null;
     notifyListeners();
+  }
+
+  /// Проверяет токен, не сохраняя его: нужен кнопке «Проверить токен»,
+  /// чтобы человек увидел результат до привязки.
+  ///
+  /// Возвращает логин аккаунта (может быть null, если сервис его не отдал).
+  /// Бросает те же исключения, что и [link]: недействительный токен,
+  /// отсутствие сети, ошибка сервиса.
+  Future<String?> validateToken(String rawToken) async {
+    final token = _cleanToken(rawToken);
+    if (token.isEmpty) {
+      throw const YandexMusicAuthException(_kEmptyToken);
+    }
+    final account = await _requestAccount(token);
+    if ((account.uid ?? '').isEmpty) {
+      throw const YandexMusicAuthException(_kInvalidToken);
+    }
+    return account.login;
   }
 
   /// Отвязывает аккаунт: токен, uid, логин и кэш треков.

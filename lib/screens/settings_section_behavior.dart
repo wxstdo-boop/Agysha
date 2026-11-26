@@ -329,6 +329,42 @@ extension _SettingsSectionBehavior on _SettingsScreenState {
                 ),
               ),
             ),
+            const Divider(height: 1),
+            // Уведомления о выпусках: выключенный тумблер гасит и шторку,
+            // и плашку внутри приложения, но сама проверка версии и кнопка
+            // «Скачать» в настройках остаются — человек сам решает, когда
+            // обновляться.
+            PressScale(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                leading: Icon(
+                  Icons.notifications_active_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                title: Text(
+                  Translations.t('updateNotificationsTitle', context),
+                ),
+                subtitle: Text(
+                  Translations.t('updateNotificationsDesc', context),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                onTap: () => _setUpdateNotifications(!_updateNotifications),
+                trailing: VolumetricSwitch(
+                  value: _updateNotifications,
+                  onChanged: _setUpdateNotifications,
+                  activeColor: theme.colorScheme.primary,
+                  semanticLabel: Translations.t(
+                    'updateNotificationsTitle',
+                    context,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

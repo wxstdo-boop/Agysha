@@ -32,7 +32,19 @@ class SettingsService {
   static const _keyTaskNotes = 'task_quick_notes_mode';
   static const _keyTesterMode = 'tester_mode';
   static const _keyYandexMusic = 'setting_yandex_music';
+  static const _keyUpdateNotifications = 'setting_update_notifications';
   static const _settingsFile = 'app_settings';
+
+  /// Чтение флага оформления на первом кадре: [initPrefs] к этому моменту
+  /// может ещё не выполниться (тесты, самый первый запуск), и LateError
+  /// уронил бы всё дерево. Значение по умолчанию — «включено».
+  static bool _readBoolSafe(String key) {
+    try {
+      return globalPrefs.getBool(key) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
 
   /// Безопасное чтение bool из SharedPreferences: принимает true/false
   /// (bool) и 0/1 (int), иначе возвращает [defaultValue].
@@ -161,6 +173,10 @@ class SettingsService {
   static const _keyItshnikFont = 'itshnik_font';
   static const _keyItshnikWallpaper = 'itshnik_wallpaper';
   static const _keyItshnikWallpaperVideo = 'itshnik_wallpaper_is_video';
+  // Совпадают с ItshnikBackdrop.newYear*PrefsKey — дублируем литералы,
+  // чтобы сервис не тянул виджеты.
+  static const _keyItshnikNewYearSnow = 'itshnik_new_year_snow';
+  static const _keyItshnikNewYearGarland = 'itshnik_new_year_garland';
 
   /// Вариант «IT-шника»: 'phosphor' | 'magenta' | 'frost' | 'new_year'.
   static Future<String> loadItshnikVariant() async {
@@ -183,6 +199,19 @@ class SettingsService {
     map[_keyItshnikVariant] = key;
     await _saveSettings(map);
   }
+
+  /// Тумблеры новогодних слоёв «IT-шника» (Вид → Новый год).
+  /// Читаются синхронно: фон рисуется на первом же кадре.
+  static bool readItshnikNewYearSnow() => _readBoolSafe(_keyItshnikNewYearSnow);
+
+  static bool readItshnikNewYearGarland() =>
+      _readBoolSafe(_keyItshnikNewYearGarland);
+
+  static Future<void> saveItshnikNewYearSnow(bool value) =>
+      globalPrefs.setBool(_keyItshnikNewYearSnow, value);
+
+  static Future<void> saveItshnikNewYearGarland(bool value) =>
+      globalPrefs.setBool(_keyItshnikNewYearGarland, value);
 
   /// Шрифт «IT-шника»: 'pixel' | 'digits' | 'dash'.
   static Future<String> loadItshnikFont() async {
@@ -420,6 +449,15 @@ class SettingsService {
     map[_keyYandexMusic] = value;
     await _saveSettings(map);
   }
+
+  /// Уведомления о новых выпусках (шторка и плашка в приложении).
+  /// Читается синхронно из [globalPrefs]: фоновый изолят не должен
+  /// поднимать файл настроек ради одного флага.
+  static bool readUpdateNotificationsEnabled() =>
+      _readBoolSafe(_keyUpdateNotifications);
+
+  static Future<void> saveUpdateNotificationsEnabled(bool value) =>
+      globalPrefs.setBool(_keyUpdateNotifications, value);
 
   static Future<bool> loadOptimize() async {
     final map = await _loadSettings();

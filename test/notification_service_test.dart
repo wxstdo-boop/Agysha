@@ -137,6 +137,43 @@ void main() {
     },
   );
 
+  test('баннер об обновлении несёт описание и действие «Обновить»', () async {
+    final service = NotificationService();
+    pluginCalls.clear();
+    final shown = await service.showUpdateAvailable(
+      '9.9.9+99999',
+      releaseName: 'Осеннее обновление',
+      notes:
+          '### Что нового\n'
+          '- Починен будильник\n'
+          '- Ускорен старт\n'
+          '- Мелочи ([PR](https://example.com/pr/1))',
+    );
+    expect(shown, isTrue);
+    final call = pluginCalls.firstWhere((c) => c.method == 'show');
+    final args = (call.arguments as Map).cast<Object?, Object?>();
+    // Тот же payload, что разбирает main.dart: тап по баннеру и по действию
+    // «Обновить» ведут в один обработчик.
+    expect(args['payload'], 'update:9.9.9+99999');
+    expect(args['title'], 'Осеннее обновление');
+    final body = args['body']! as String;
+    expect(body, contains('9.9.9+99999'));
+    expect(body, contains('Починен будильник'));
+    expect(body, isNot(contains('###')));
+    expect(body, isNot(contains('https://')));
+    final specifics = (args['platformSpecifics']! as Map)
+        .cast<Object?, Object?>();
+    expect(specifics['channelId'], 'agysha_updates');
+    expect(specifics['importance'], isNotNull);
+    expect(specifics['largeIcon'], 'ic_notification_large');
+    final actions = (specifics['actions']! as List)
+        .cast<Map<Object?, Object?>>();
+    expect(actions.map((a) => a['id']), contains('update'));
+    final updateAction = actions.firstWhere((a) => a['id'] == 'update');
+    expect(updateAction['showsUserInterface'], isTrue);
+    expect(updateAction['title'], isNotEmpty);
+  });
+
   Alarm makeAlarm({
     int hour = 7,
     int minute = 30,

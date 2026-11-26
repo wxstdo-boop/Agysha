@@ -169,6 +169,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _sounds = false;
   bool _optimize = false;
   bool _yandexMusic = false;
+  bool _updateNotifications = true;
   bool _permissionWarningDismissed = false;
   bool _grantPressed = false; // Состояние зажатия кнопки «Выдать»
   bool? _notificationsEnabled; // Кэш статуса уведомлений
@@ -252,6 +253,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _loadSounds(),
       _loadOptimize(),
       _loadYandexMusic(),
+      _loadUpdateNotifications(),
       _checkPermissionWarning(),
       _checkNotificationsEnabled(),
       _checkFullScreenGrant(),
@@ -430,6 +432,19 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Future<void> _loadYandexMusic() async {
     _yandexMusic = await SettingsService.loadYandexMusicEnabled();
+  }
+
+  Future<void> _loadUpdateNotifications() async {
+    _updateNotifications = SettingsService.readUpdateNotificationsEnabled();
+  }
+
+  Future<void> _setUpdateNotifications(bool value) async {
+    if (mounted) setState(() => _updateNotifications = value);
+    try {
+      await SettingsService.saveUpdateNotificationsEnabled(value);
+    } catch (_) {
+      if (mounted) setState(() => _updateNotifications = !value);
+    }
   }
 
   Future<void> _setYandexMusic(bool value) async {

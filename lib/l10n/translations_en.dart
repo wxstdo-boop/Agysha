@@ -109,6 +109,9 @@ const Map<String, String> _en = {
   'itshnikVariantMagenta': 'Magenta',
   'itshnikVariantFrost': 'Frost',
   'itshnikVariantNewYear': 'New Year',
+  'itshnikNewYearEffects': 'NEW YEAR EFFECTS',
+  'itshnikNewYearSnow': 'Snow, snowflakes and sparks',
+  'itshnikNewYearGarland': 'Garlands, toys and lights',
   'itshnikFontPixel': 'Pixel',
   'itshnikFontDigits': 'Terminal',
   'itshnikFontDash': 'Stroke',
@@ -1099,6 +1102,9 @@ const Map<String, String> _en = {
   'notifUpdateChannel': 'Agysha updates',
   'notifUpdateChannelDesc': 'Notice about a released new version',
   'notifUpdateTitle': 'Agysha update available',
+  'updateNotificationsTitle': 'Update notifications',
+  'updateNotificationsDesc':
+      'A shade banner and an in-app notice when a release comes out. Version checks keep running either way.',
   'notifUpdateBody': 'Version {v} is out. Tap to update.',
   'notifHabitChannel': 'Habit reminders',
   'notifHabitChannelDesc': '“Remember everything” habit reminder',
@@ -1180,8 +1186,39 @@ const Map<String, String> _en = {
   'yandexMusicLinkBody':
       'We will show everything you marked as liked. The app needs no password, only a token.',
   'yandexMusicStep1': 'Sign in to your Yandex account and open the token page.',
-  'yandexMusicStep2': 'Allow access to music and copy the token.',
-  'yandexMusicStep3': 'Paste the token below and tap "Link".',
+  'yandexMusicStep2':
+      'On the Yandex page tap "Allow": access is needed only for your music and login.',
+  'yandexMusicStep3':
+      'Copy the token — the string after "access_token=" in the page address or on the page itself.',
+  'yandexMusicStep4':
+      'Paste the token into the field below and tap "Check token".',
+  'yandexMusicStep5':
+      'Tap "Link": Agysha keeps the token only in the device secure storage.',
+  'yandexMusicOpenTokenPage': 'Open the Yandex page',
+  'yandexMusicCopyLink': 'Copy link',
+  'yandexMusicLinkCopied': 'Link copied',
+  'yandexMusicOpenLinkFailed':
+      'Could not open the browser. You can copy the link instead.',
+  'yandexMusicValidate': 'Check token',
+  'yandexMusicTokenValid': 'Token is valid',
+  'yandexMusicCancelReplace': 'Cancel',
+  'yandexMusicReplace': 'Replace',
+  'yandexMusicPrivacyTitle': 'The token is the key to your account',
+  'yandexMusicPrivacyWarning':
+      'Do not forward or publish the token. Agysha keeps it only in the device secure storage and never writes it to logs.',
+  'yandexMusicHowToTitle': 'How to get a Yandex Music token?',
+  'yandexMusicReplaceTitle': 'Replace the token',
+  'yandexMusicTokenToolTitle': 'Quick way: ym-token.marshal.dev',
+  'yandexMusicTokenToolHint':
+      'Open the service, sign in to Yandex and copy the ready token — you will not have to copy it from the address bar.',
+  'yandexMusicOpenTokenTool': 'Get a token on ym-token.marshal.dev',
+  'yandexMusicAboutTitle': 'If something does not work',
+  'yandexMusicAboutToken':
+      'An OAuth token is a permission string for your music. Agysha never sees or stores your password.',
+  'yandexMusicTokenExpired':
+      'Token invalid or expired? Get a new one on the Yandex page and tap "Replace token".',
+  'yandexMusicNoNetworkHint':
+      'No network or the service is not answering? Check the connection and retry — the token is kept.',
   'yandexMusicTokenLabel': 'Token',
   'yandexMusicTokenHint': 'Paste the token from the clipboard',
   'yandexMusicLink': 'Link',

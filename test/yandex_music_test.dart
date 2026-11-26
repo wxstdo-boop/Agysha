@@ -169,6 +169,36 @@ void main() {
       expect(second.coverUrl, isNull);
     });
 
+    test('элемент-обёртка likes/tracks: данные берутся из track', () {
+      final wrapped = {
+        'id': 555,
+        'albumId': 900,
+        'timestamp': '2026-01-01T00:00:00+03:00',
+        'track': {
+          'id': 555,
+          'title': 'Обёрнутый трек',
+          'durationMs': 200000,
+          'artists': [
+            {'name': 'Исполнитель'},
+          ],
+          'albums': [
+            {'coverUri': 'avatars.yandex.net/get-music-content/1/a/%%'},
+          ],
+        },
+      };
+
+      final track = YandexTrack.fromJson(wrapped);
+
+      expect(track.id, '555');
+      expect(track.title, 'Обёрнутый трек');
+      expect(track.artist, 'Исполнитель');
+      expect(track.durationLabel, '03:20');
+      expect(
+        track.coverUrl,
+        'https://avatars.yandex.net/get-music-content/1/a/400x400',
+      );
+    });
+
     test('не падает на пустом и битом объекте', () {
       final empty = YandexTrack.fromJson(const <String, dynamic>{});
       expect(empty.id, isEmpty);
@@ -245,6 +275,62 @@ void main() {
         expect(await service.accountLogin, 'nochnoy');
       },
     );
+
+    test(
+      'validateToken: хороший токен отдаёт логин и не сохраняет его',
+      () async {
+        final store = _MemoryStore();
+        final service = YandexMusicService.forTesting(
+          store: store,
+          client: MockClient((request) async => _json(_accountBody())),
+        );
+
+        expect(await service.validateToken('  tok_ok \n'), 'nochnoy');
+        expect(store.value, isNull);
+        expect(store.writes, 0);
+        expect(service.linked, isFalse);
+      },
+    );
+
+    test('validateToken: пустой токен — ошибка без запроса', () async {
+      var requests = 0;
+      final service = YandexMusicService.forTesting(
+        store: _MemoryStore(),
+        client: MockClient((request) async {
+          requests++;
+          return _json(_accountBody());
+        }),
+      );
+
+      await expectLater(
+        service.validateToken('   '),
+        throwsA(isA<YandexMusicAuthException>()),
+      );
+      expect(requests, 0);
+    });
+
+    test('validateToken: 401 — понятная ошибка, токен не сохранён', () async {
+      final store = _MemoryStore();
+      final service = YandexMusicService.forTesting(
+        store: store,
+        client: MockClient(
+          (request) async => _json({'error': 'unauthorized'}, 401),
+        ),
+      );
+
+      await expectLater(
+        service.validateToken('bad'),
+        throwsA(
+          isA<YandexMusicAuthException>().having(
+            (error) => error.message,
+            'message',
+            contains('недействителен'),
+          ),
+        ),
+      );
+      expect(store.value, isNull);
+      expect(store.writes, 0);
+    });
 
     test('loadLikedTracks: две страницы склеиваются без дублей', () async {
       final store = _MemoryStore(value: 'tok');
@@ -673,6 +759,99 @@ void main() {
 
       expect(find.text('Возврат'), findsOneWidget);
       expect(find.textContaining('(код 500)'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('инструкция: заголовок, пять шагов и ссылка на ym-token', (
+      tester,
+    ) async {
+      final unlinked = _unlinkedService();
+      ProfileYandexMusicScreen.debugService = unlinked.service;
+      addTearDown(() => ProfileYandexMusicScreen.debugService = null);
+
+      await tester.pumpWidget(_app(const ProfileYandexMusicScreen()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      await tester.scrollUntilVisible(
+        find.text('Получить токен на ym-token.marshal.dev'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+
+      expect(find.text('Как получить токен Яндекс Музыки?'), findsOneWidget);
+      expect(find.textContaining('«Разрешить»'), findsOneWidget);
+      expect(find.textContaining('access_token'), findsOneWidget);
+      expect(
+        find.text('Получить токен на ym-token.marshal.dev'),
+        findsOneWidget,
+      );
+      expect(find.text('Открыть страницу Яндекса'), findsOneWidget);
+      expect(find.textContaining('Не пересылайте токен'), findsOneWidget);
+      expect(unlinked.paths, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('«Проверить токен» показывает логин и не сохраняет токен', (
+      tester,
+    ) async {
+      final store = _MemoryStore();
+      final service = YandexMusicService.forTesting(
+        store: store,
+        client: MockClient((request) async => _json(_accountBody())),
+      );
+      ProfileYandexMusicScreen.debugService = service;
+      addTearDown(() => ProfileYandexMusicScreen.debugService = null);
+
+      await tester.pumpWidget(_app(const ProfileYandexMusicScreen()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      await tester.enterText(find.byType(TextField), 'tok_ok');
+      await tester.tap(find.text('Проверить токен'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.textContaining('Токен действителен'), findsOneWidget);
+      expect(find.textContaining('@nochnoy'), findsOneWidget);
+      expect(store.value, isNull);
+      expect(store.writes, 0);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('привязано: «Заменить» открывает форму с инструкцией', (
+      tester,
+    ) async {
+      final service = YandexMusicService.forTesting(
+        store: _MemoryStore(value: 'tok'),
+        client: MockClient((request) async {
+          if (request.url.path == '/account/status') {
+            return _json(_accountBody());
+          }
+          return _json(
+            _likesPage([_trackJson(31, title: 'Замена', artist: 'Токен')]),
+          );
+        }),
+      );
+      ProfileYandexMusicScreen.debugService = service;
+      addTearDown(() => ProfileYandexMusicScreen.debugService = null);
+
+      await tester.pumpWidget(_app(const ProfileYandexMusicScreen()));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Заменить'), findsOneWidget);
+      await tester.tap(find.text('Заменить'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Заменить токен'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.text('Отмена'), findsOneWidget);
+      expect(find.textContaining('мне нравится'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

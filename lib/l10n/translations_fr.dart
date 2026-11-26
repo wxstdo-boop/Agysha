@@ -117,6 +117,9 @@ const Map<String, String> _fr = {
   'itshnikVariantMagenta': 'Magenta',
   'itshnikVariantFrost': 'Givre',
   'itshnikVariantNewYear': 'Nouvel an',
+  'itshnikNewYearEffects': 'EFFETS DU NOUVEL AN',
+  'itshnikNewYearSnow': 'Neige, flocons et étincelles',
+  'itshnikNewYearGarland': 'Guirlandes, boules et lumières',
   'itshnikFontPixel': 'Pixel',
   'itshnikFontDigits': 'Terminal',
   'itshnikFontDash': 'Trait',
@@ -1151,6 +1154,9 @@ const Map<String, String> _fr = {
   'notifUpdateChannel': 'Mises à jour Agysha',
   'notifUpdateChannelDesc': 'Annonce d’une nouvelle version',
   'notifUpdateTitle': 'Mise à jour Agysha disponible',
+  'updateNotificationsTitle': 'Notifications de mise à jour',
+  'updateNotificationsDesc':
+      'Bannière et avis dans l’app lors d’une nouvelle version. La vérification des versions reste active.',
   'notifUpdateBody': 'La version {v} est sortie. Touchez pour mettre à jour.',
   'notifHabitChannel': 'Rappels d’habitudes',
   'notifHabitChannelDesc': 'Rappel d’habitude « Se souvenir de tout »',
@@ -1235,8 +1241,39 @@ const Map<String, String> _fr = {
       "Nous afficherons tout ce que vous avez marqué « j'aime ». L'application n'a pas besoin de mot de passe, seulement d'un jeton.",
   'yandexMusicStep1':
       'Connectez-vous à votre compte Yandex et ouvrez la page du jeton.',
-  'yandexMusicStep2': "Autorisez l'accès à la musique et copiez le jeton.",
-  'yandexMusicStep3': 'Collez le jeton ci-dessous et appuyez sur « Associer ».',
+  'yandexMusicStep2':
+      'Sur la page Yandex, touchez « Autoriser » : l’accès ne concerne que votre musique et votre identifiant.',
+  'yandexMusicStep3':
+      'Copiez le jeton — la chaîne après « access_token= » dans l’adresse de la page ou sur la page.',
+  'yandexMusicStep4':
+      'Collez le jeton dans le champ ci-dessous et touchez « Vérifier le jeton ».',
+  'yandexMusicStep5':
+      'Touchez « Lier » : Agysha ne garde le jeton que dans le stockage sécurisé de l’appareil.',
+  'yandexMusicOpenTokenPage': 'Ouvrir la page Yandex',
+  'yandexMusicCopyLink': 'Copier le lien',
+  'yandexMusicLinkCopied': 'Lien copié',
+  'yandexMusicOpenLinkFailed':
+      'Impossible d’ouvrir le navigateur. Vous pouvez copier le lien.',
+  'yandexMusicValidate': 'Vérifier le jeton',
+  'yandexMusicTokenValid': 'Jeton valide',
+  'yandexMusicCancelReplace': 'Annuler',
+  'yandexMusicReplace': 'Remplacer',
+  'yandexMusicPrivacyTitle': 'Le jeton est la clé de votre compte',
+  'yandexMusicPrivacyWarning':
+      'Ne transmettez pas le jeton et ne le publiez pas. Agysha ne le garde que dans le stockage sécurisé de l’appareil et ne l’écrit jamais dans les journaux.',
+  'yandexMusicHowToTitle': 'Comment obtenir un jeton Yandex Musique ?',
+  'yandexMusicReplaceTitle': 'Remplacer le jeton',
+  'yandexMusicTokenToolTitle': 'Moyen rapide : ym-token.marshal.dev',
+  'yandexMusicTokenToolHint':
+      'Ouvrez le service, connectez-vous à Yandex et copiez le jeton prêt — inutile de le recopier depuis la barre d’adresse.',
+  'yandexMusicOpenTokenTool': 'Obtenir un jeton sur ym-token.marshal.dev',
+  'yandexMusicAboutTitle': 'Si quelque chose ne fonctionne pas',
+  'yandexMusicAboutToken':
+      'Un jeton OAuth est une autorisation d’accès à votre musique. Agysha ne voit ni ne stocke votre mot de passe.',
+  'yandexMusicTokenExpired':
+      'Jeton invalide ou expiré ? Obtenez-en un nouveau sur la page Yandex et touchez « Remplacer le jeton ».',
+  'yandexMusicNoNetworkHint':
+      'Pas de réseau ou le service ne répond pas ? Vérifiez la connexion et réessayez — le jeton est conservé.',
   'yandexMusicTokenLabel': 'Jeton',
   'yandexMusicTokenHint': 'Collez le jeton depuis le presse-papiers',
   'yandexMusicLink': 'Associer',

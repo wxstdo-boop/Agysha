@@ -1,11 +1,23 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/translations.dart';
 import '../services/haptics.dart';
 import '../services/yandex_music_service.dart';
 import '../utils/design_tokens.dart';
 import '../utils/snackbar.dart';
-import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
+import '../widgets/smooth_tooltip.dart';
+
+/// Официальная страница выдачи OAuth-токена для Яндекс Музыки: клиент
+/// «Яндекс Музыка», неявный режим (`response_type=token`). Своей OAuth-заявки
+/// у Agysha нет, поэтому это единственный поддерживаемый способ входа.
+const String _tokenPageUrl =
+    'https://oauth.yandex.ru/authorize?response_type=token'
+    '&client_id=23cabbbdc6cd418abb4b39c32c41195d';
+
+/// Наглядный помощник: сам проводит через вход в Яндекс и показывает токен.
+const String _tokenToolUrl = 'https://ym-token.marshal.dev/#tool';
 
 /// Привязка Яндекс Музыки в профиле.
 ///
@@ -44,6 +56,13 @@ class _ProfileYandexMusicScreenState extends State<ProfileYandexMusicScreen> {
 
   String? _login;
   String? _tokenError;
+
+  /// Результат кнопки «Проверить токен»: логин, если токен валиден.
+  String? _validatedLogin;
+  bool _validating = false;
+
+  /// Привязано, но человек открыл форму, чтобы заменить токен.
+  bool _showForm = false;
   String? _listError;
   List<YandexTrack> _tracks = const <YandexTrack>[];
 
@@ -127,6 +146,8 @@ class _ProfileYandexMusicScreenState extends State<ProfileYandexMusicScreen> {
       setState(() {
         _busy = false;
         _linked = true;
+        _showForm = false;
+        _validatedLogin = null;
         _login = _svc.login;
         _tracks = const <YandexTrack>[];
         _listError = null;
@@ -190,6 +211,8 @@ class _ProfileYandexMusicScreenState extends State<ProfileYandexMusicScreen> {
     setState(() {
       _busy = false;
       _linked = false;
+      _showForm = false;
+      _validatedLogin = null;
       _login = null;
       _tracks = const <YandexTrack>[];
       _listError = null;
@@ -262,10 +285,99 @@ class _ProfileYandexMusicScreenState extends State<ProfileYandexMusicScreen> {
       ),
       body: !_booted
           ? const Center(child: CircularProgressIndicator())
-          : _linked
+          : _linked && !_showForm
           ? _buildLinked(context)
           : _buildLinkForm(context),
     );
+  }
+
+  /// Проверяет токен до привязки и показывает результат под полем.
+  Future<void> _validateToken() async {
+    if (_validating || _busy) return;
+    FocusScope.of(context).unfocus();
+    Haptics.select();
+    setState(() {
+      _validating = true;
+      _tokenError = null;
+      _validatedLogin = null;
+    });
+    try {
+      final login = await _svc.validateToken(_tokenCtrl.text);
+      if (!mounted) return;
+      setState(() {
+        _validating = false;
+        _validatedLogin = (login == null || login.trim().isEmpty)
+            ? ''
+            : login.trim();
+      });
+    } on YandexMusicException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _validating = false;
+        _tokenError = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _validating = false;
+        _tokenError = _genericError(context);
+      });
+    }
+  }
+
+  Future<void> _copyTokenPageLink() async {
+    await Clipboard.setData(const ClipboardData(text: _tokenPageUrl));
+    if (!mounted) return;
+    Haptics.select();
+    showBeautifulSnackBar(
+      context,
+      message: Translations.t(
+        'yandexMusicLinkCopied',
+        context,
+        'Ссылка скопирована',
+      ),
+    );
+  }
+
+  Future<void> _openTokenTool() async {
+    final uri = Uri.parse(_tokenToolUrl);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) _showOpenFailed();
+    } catch (_) {
+      _showOpenFailed();
+    }
+  }
+
+  void _showOpenFailed() {
+    if (!mounted) return;
+    showBeautifulSnackBar(
+      context,
+      icon: Icons.link_off_rounded,
+      message: Translations.t(
+        'yandexMusicOpenLinkFailed',
+        context,
+        'Не удалось открыть браузер. Ссылку можно скопировать.',
+      ),
+    );
+  }
+
+  Future<void> _openTokenPage() async {
+    final uri = Uri.parse(_tokenPageUrl);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw StateError('launch failed');
+    } catch (_) {
+      if (!mounted) return;
+      showBeautifulSnackBar(
+        context,
+        message: Translations.t(
+          'yandexMusicOpenLinkFailed',
+          context,
+          'Не удалось открыть браузер. Ссылку можно скопировать.',
+        ),
+      );
+    }
   }
 
   // --- Не привязано -------------------------------------------------------
@@ -300,11 +412,17 @@ class _ProfileYandexMusicScreenState extends State<ProfileYandexMusicScreen> {
                     const SizedBox(width: Spacing.xs),
                     Expanded(
                       child: Text(
-                        Translations.t(
-                          'yandexMusicLinkTitle',
-                          context,
-                          'Привязать Яндекс Музыку',
-                        ),
+                        _linked
+                            ? Translations.t(
+                                'yandexMusicReplaceTitle',
+                                context,
+                                'Заменить токен',
+                              )
+                            : Translations.t(
+                                'yandexMusicLinkTitle',
+                                context,
+                                'Привязать Яндекс Музыку',
+                              ),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: Weights.bold,
                         ),
@@ -312,7 +430,7 @@ class _ProfileYandexMusicScreenState extends State<ProfileYandexMusicScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: Spacing.sm),
+                const SizedBox(height: Spacing.xs),
                 Text(
                   Translations.t(
                     'yandexMusicLinkBody',
@@ -325,87 +443,456 @@ class _ProfileYandexMusicScreenState extends State<ProfileYandexMusicScreen> {
                   ),
                 ),
                 const SizedBox(height: Spacing.md),
-                _step(
-                  context,
-                  1,
-                  Translations.t(
-                    'yandexMusicStep1',
-                    context,
-                    'Войдите в аккаунт Яндекс и откройте страницу выдачи токена.',
+                TextField(
+                  controller: _tokenCtrl,
+                  enabled: !_busy,
+                  obscureText: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  keyboardType: TextInputType.visiblePassword,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _link(),
+                  decoration: InputDecoration(
+                    labelText: Translations.t(
+                      'yandexMusicTokenLabel',
+                      context,
+                      'Токен',
+                    ),
+                    hintText: Translations.t(
+                      'yandexMusicTokenHint',
+                      context,
+                      'Вставьте токен из буфера',
+                    ),
+                    errorText: _tokenError,
+                    errorMaxLines: 3,
+                    border: const OutlineInputBorder(borderRadius: Radii.mdAll),
                   ),
                 ),
-                _step(
-                  context,
-                  2,
-                  Translations.t(
-                    'yandexMusicStep2',
-                    context,
-                    'Разрешите доступ к музыке и скопируйте токен.',
+                if (_validatedLogin != null) ...[
+                  const SizedBox(height: Spacing.xs),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.verified_rounded,
+                        size: 18,
+                        color: colors.primary,
+                      ),
+                      const SizedBox(width: Spacing.xs),
+                      Expanded(
+                        child: Text(
+                          _validatedLogin!.isEmpty
+                              ? Translations.t(
+                                  'yandexMusicTokenValid',
+                                  context,
+                                  'Токен действителен',
+                                )
+                              : '${Translations.t('yandexMusicTokenValid', context, 'Токен действителен')} · @$_validatedLogin',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                ],
+                const SizedBox(height: Spacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: (_busy || _validating)
+                            ? null
+                            : _validateToken,
+                        icon: _validating
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.fact_check_outlined, size: 18),
+                        label: Text(
+                          Translations.t(
+                            'yandexMusicValidate',
+                            context,
+                            'Проверить токен',
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: Spacing.xs),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _busy ? null : _link,
+                        icon: _busy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.link_rounded, size: 18),
+                        label: Text(
+                          _busy
+                              ? Translations.t(
+                                  'yandexMusicLinking',
+                                  context,
+                                  'Привязываем…',
+                                )
+                              : Translations.t(
+                                  'yandexMusicLink',
+                                  context,
+                                  'Привязать',
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                _step(
-                  context,
-                  3,
-                  Translations.t(
-                    'yandexMusicStep3',
-                    context,
-                    'Вставьте токен в поле ниже и нажмите «Привязать».',
+                if (_linked) ...[
+                  const SizedBox(height: Spacing.xs),
+                  Align(
+                    alignment: Alignment.center,
+                    child: TextButton(
+                      onPressed: _busy ? null : _cancelReplace,
+                      child: Text(
+                        Translations.t(
+                          'yandexMusicCancelReplace',
+                          context,
+                          'Отмена',
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
         ),
         const SizedBox(height: Spacing.md),
-        TextField(
-          controller: _tokenCtrl,
-          enabled: !_busy,
-          obscureText: true,
-          autocorrect: false,
-          enableSuggestions: false,
-          keyboardType: TextInputType.visiblePassword,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _link(),
-          decoration: InputDecoration(
-            labelText: Translations.t(
-              'yandexMusicTokenLabel',
-              context,
-              'Токен',
-            ),
-            hintText: Translations.t(
-              'yandexMusicTokenHint',
-              context,
-              'Вставьте токен из буфера',
-            ),
-            errorText: _tokenError,
-            errorMaxLines: 3,
-            border: const OutlineInputBorder(borderRadius: Radii.mdAll),
-          ),
-        ),
+        _howToCard(context),
         const SizedBox(height: Spacing.md),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: _busy ? null : _link,
-            icon: _busy
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.link_rounded),
-            label: Text(
-              _busy
-                  ? Translations.t(
-                      'yandexMusicLinking',
+        _privacyWarning(context),
+        const SizedBox(height: Spacing.md),
+        _aboutToken(context),
+      ],
+    );
+  }
+
+  void _cancelReplace() {
+    setState(() {
+      _showForm = false;
+      _tokenCtrl.clear();
+      _tokenError = null;
+      _validatedLogin = null;
+    });
+  }
+
+  /// «Как получить токен Яндекс Музыки?» — пошаговая инструкция.
+  Widget _howToCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.lgAll),
+      child: Padding(
+        padding: Spacing.cardPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.help_outline_rounded,
+                  size: 20,
+                  color: colors.primary,
+                ),
+                const SizedBox(width: Spacing.xs),
+                Expanded(
+                  child: Text(
+                    Translations.t(
+                      'yandexMusicHowToTitle',
                       context,
-                      'Привязываем…',
-                    )
-                  : Translations.t('yandexMusicLink', context, 'Привязать'),
+                      'Как получить токен Яндекс Музыки?',
+                    ),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: Weights.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: Spacing.sm),
+            _step(
+              context,
+              1,
+              Translations.t(
+                'yandexMusicStep1',
+                context,
+                'Войдите в аккаунт Яндекс и откройте страницу выдачи токена.',
+              ),
+            ),
+            _step(
+              context,
+              2,
+              Translations.t(
+                'yandexMusicStep2',
+                context,
+                'На странице Яндекса нажмите «Разрешить»: доступ нужен '
+                    'только к музыке и вашему логину.',
+              ),
+            ),
+            _step(
+              context,
+              3,
+              Translations.t(
+                'yandexMusicStep3',
+                context,
+                'Скопируйте токен — строку после «access_token=» в адресе '
+                    'страницы или на самой странице.',
+              ),
+            ),
+            _step(
+              context,
+              4,
+              Translations.t(
+                'yandexMusicStep4',
+                context,
+                'Вставьте токен в поле выше и нажмите «Проверить токен».',
+              ),
+            ),
+            _step(
+              context,
+              5,
+              Translations.t(
+                'yandexMusicStep5',
+                context,
+                'Нажмите «Привязать»: Agysha сохранит токен в защищённом '
+                    'хранилище устройства.',
+              ),
+            ),
+            const SizedBox(height: Spacing.sm),
+            Container(
+              padding: const EdgeInsets.all(Spacing.sm),
+              decoration: BoxDecoration(
+                color: colors.primaryContainer.withValues(alpha: 0.45),
+                borderRadius: Radii.mdAll,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    Translations.t(
+                      'yandexMusicTokenToolTitle',
+                      context,
+                      'Быстрый способ: ym-token.marshal.dev',
+                    ),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: Weights.bold,
+                    ),
+                  ),
+                  const SizedBox(height: Spacing.xxs),
+                  Text(
+                    Translations.t(
+                      'yandexMusicTokenToolHint',
+                      context,
+                      'Откройте сервис, войдите в Яндекс и скопируйте готовый '
+                          'токен — вставлять его вручную из адреса не придётся.',
+                    ),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: Spacing.xs),
+                  FilledButton.icon(
+                    onPressed: _openTokenTool,
+                    icon: const Icon(Icons.key_rounded, size: 18),
+                    label: Text(
+                      Translations.t(
+                        'yandexMusicOpenTokenTool',
+                        context,
+                        'Получить токен на ym-token.marshal.dev',
+                      ),
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: Spacing.xs),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: _openTokenPage,
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: Text(
+                      Translations.t(
+                        'yandexMusicOpenTokenPage',
+                        context,
+                        'Открыть страницу Яндекса',
+                      ),
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: Spacing.xs),
+                SmoothTooltip(
+                  message: Translations.t(
+                    'yandexMusicCopyLink',
+                    context,
+                    'Скопировать ссылку',
+                  ),
+                  child: IconButton.outlined(
+                    onPressed: _copyTokenPageLink,
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Предупреждение о конфиденциальности токена прямо под инструкцией.
+  Widget _privacyWarning(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      padding: Spacing.cardPadding,
+      decoration: BoxDecoration(
+        color: colors.errorContainer.withValues(alpha: 0.35),
+        borderRadius: Radii.lgAll,
+        border: Border.all(color: colors.error.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_outline_rounded, size: 18, color: colors.error),
+          const SizedBox(width: Spacing.xs),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Translations.t(
+                    'yandexMusicPrivacyTitle',
+                    context,
+                    'Токен — ключ к аккаунту',
+                  ),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: Weights.semibold,
+                    color: colors.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  Translations.t(
+                    'yandexMusicPrivacyWarning',
+                    context,
+                    'Не пересылайте токен другим и не публикуйте его. '
+                        'Agysha хранит токен только в защищённом хранилище '
+                        'устройства и не пишет его в журналы.',
+                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Короткие объяснения: что такое токен и что делать, если он не работает.
+  Widget _aboutToken(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.lgAll),
+      child: Padding(
+        padding: Spacing.cardPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              Translations.t(
+                'yandexMusicAboutTitle',
+                context,
+                'Если что-то не работает',
+              ),
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: Weights.semibold,
+              ),
+            ),
+            const SizedBox(height: Spacing.xs),
+            _aboutLine(
+              context,
+              Icons.info_outline_rounded,
+              Translations.t(
+                'yandexMusicAboutToken',
+                context,
+                'OAuth-токен — строка-разрешение на доступ к вашей музыке. '
+                    'Пароль Agysha не видит и не хранит.',
+              ),
+            ),
+            _aboutLine(
+              context,
+              Icons.sync_problem_rounded,
+              Translations.t(
+                'yandexMusicTokenExpired',
+                context,
+                'Токен недействителен или истёк? Получите новый на странице '
+                    'Яндекса и нажмите «Заменить токен».',
+              ),
+            ),
+            _aboutLine(
+              context,
+              Icons.wifi_off_rounded,
+              Translations.t(
+                'yandexMusicNoNetworkHint',
+                context,
+                'Нет сети или GitHub/Яндекс не отвечает? Проверьте '
+                    'подключение и повторите — токен при этом не теряется.',
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _aboutLine(BuildContext context, IconData icon, String text) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 16, color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(width: Spacing.xs),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -480,56 +967,92 @@ class _ProfileYandexMusicScreenState extends State<ProfileYandexMusicScreen> {
       shape: const RoundedRectangleBorder(borderRadius: Radii.lgAll),
       child: Padding(
         padding: Spacing.cardPadding,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: colors.primaryContainer,
-              child: Icon(
-                Icons.music_note_rounded,
-                size: 20,
-                color: colors.onPrimaryContainer,
-              ),
-            ),
-            const SizedBox(width: Spacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    Translations.t('yandexMusicLinkedAs', context, 'Привязано'),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: colors.primaryContainer,
+                  child: Icon(
+                    Icons.music_note_rounded,
+                    size: 20,
+                    color: colors.onPrimaryContainer,
                   ),
-                  Text(
-                    hasName
-                        ? '@$name'
-                        : Translations.t(
-                            'yandexMusicAccount',
-                            context,
-                            'Аккаунт Яндекс',
-                          ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: Weights.semibold,
-                    ),
+                ),
+                const SizedBox(width: Spacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        Translations.t(
+                          'yandexMusicLinkedAs',
+                          context,
+                          'Привязано',
+                        ),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(
+                        hasName
+                            ? '@$name'
+                            : Translations.t(
+                                'yandexMusicAccount',
+                                context,
+                                'Аккаунт Яндекс',
+                              ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: Weights.semibold,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: Spacing.xs),
-            TextButton(
-              onPressed: _busy ? null : _unlink,
-              child: Text(
-                Translations.t('yandexMusicUnlink', context, 'Отвязать'),
-              ),
-            ),
+            const SizedBox(height: Spacing.sm),
+            _accountActions(context),
           ],
         ),
       ),
+    );
+  }
+
+  /// Кнопки «Заменить» и «Отвязать» отдельной строкой: в одну строку
+  /// с логином они не влезают на узких экранах.
+  Widget _accountActions(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () => setState(() {
+                    _showForm = true;
+                    _tokenError = null;
+                    _validatedLogin = null;
+                  }),
+            child: Text(
+              Translations.t('yandexMusicReplace', context, 'Заменить'),
+            ),
+          ),
+        ),
+        const SizedBox(width: Spacing.xs),
+        Expanded(
+          child: TextButton(
+            onPressed: _busy ? null : _unlink,
+            child: Text(
+              Translations.t('yandexMusicUnlink', context, 'Отвязать'),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

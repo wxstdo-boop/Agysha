@@ -41,6 +41,7 @@ class UpdateInfo {
     required this.sha256,
     required this.size,
     required this.notes,
+    this.releaseName = '',
   });
 
   final int versionCode;
@@ -51,6 +52,10 @@ class UpdateInfo {
   final String sha256;
   final int size;
   final String notes;
+
+  /// Заголовок релиза GitHub (`name`). Обычно совпадает с версией, но иногда
+  /// это человеческое название выпуска — его и показываем в баннере.
+  final String releaseName;
 }
 
 /// Найденное обновление (или null): таблетка в Настройках слушает реактивно.
@@ -138,6 +143,7 @@ class UpdateService {
       sha256: sha,
       size: (apk['size'] as num?)?.toInt() ?? 0,
       notes: (json['body'] as String?) ?? '',
+      releaseName: (json['name'] as String?) ?? '',
     );
   }
 

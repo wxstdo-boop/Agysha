@@ -111,6 +111,9 @@ const Map<String, String> _ru = {
   'itshnikVariantMagenta': 'Магента',
   'itshnikVariantFrost': 'Мороз',
   'itshnikVariantNewYear': 'Новый год',
+  'itshnikNewYearEffects': 'НОВОГОДНИЕ ЭФФЕКТЫ',
+  'itshnikNewYearSnow': 'Снег, снежинки и искры',
+  'itshnikNewYearGarland': 'Гирлянды, игрушки и огоньки',
   'itshnikFontPixel': 'Пиксель',
   'itshnikFontDigits': 'Терминал',
   'itshnikFontDash': 'Штрих',
@@ -1104,6 +1107,9 @@ const Map<String, String> _ru = {
   'notifUpdateChannel': 'Обновления Agysha',
   'notifUpdateChannelDesc': 'Сообщение о вышедшей новой версии',
   'notifUpdateTitle': 'Доступно обновление Agysha',
+  'updateNotificationsTitle': 'Уведомления об обновлениях',
+  'updateNotificationsDesc':
+      'Шторка и плашка, когда выходит новый релиз. Сама проверка версии продолжает работать.',
   'notifUpdateBody': 'Версия {v} уже вышла. Нажмите, чтобы обновить.',
   'notifHabitChannel': 'Напоминания привычек',
   'notifHabitChannelDesc': 'Напоминание «Вспомнить всё» о привычках',
@@ -1186,8 +1192,38 @@ const Map<String, String> _ru = {
       'Покажем всё, что вы отметили «мне нравится». Пароль приложению не нужен: только токен.',
   'yandexMusicStep1':
       'Войдите в аккаунт Яндекс и откройте страницу выдачи токена.',
-  'yandexMusicStep2': 'Разрешите доступ к музыке и скопируйте токен.',
-  'yandexMusicStep3': 'Вставьте токен в поле ниже и нажмите «Привязать».',
+  'yandexMusicStep2':
+      'На странице Яндекса нажмите «Разрешить»: доступ нужен только к музыке и вашему логину.',
+  'yandexMusicStep3':
+      'Скопируйте токен — строку после «access_token=» в адресе страницы или на самой странице.',
+  'yandexMusicStep4': 'Вставьте токен в поле ниже и нажмите «Проверить токен».',
+  'yandexMusicStep5':
+      'Нажмите «Привязать»: Agysha сохранит токен в защищённом хранилище устройства.',
+  'yandexMusicOpenTokenPage': 'Открыть страницу Яндекса',
+  'yandexMusicCopyLink': 'Скопировать ссылку',
+  'yandexMusicLinkCopied': 'Ссылка скопирована',
+  'yandexMusicOpenLinkFailed':
+      'Не удалось открыть браузер. Ссылку можно скопировать.',
+  'yandexMusicValidate': 'Проверить токен',
+  'yandexMusicTokenValid': 'Токен действителен',
+  'yandexMusicCancelReplace': 'Отмена',
+  'yandexMusicReplace': 'Заменить',
+  'yandexMusicPrivacyTitle': 'Токен — ключ к аккаунту',
+  'yandexMusicPrivacyWarning':
+      'Не пересылайте токен другим и не публикуйте его. Agysha хранит токен только в защищённом хранилище устройства и не пишет его в журналы.',
+  'yandexMusicHowToTitle': 'Как получить токен Яндекс Музыки?',
+  'yandexMusicReplaceTitle': 'Заменить токен',
+  'yandexMusicTokenToolTitle': 'Быстрый способ: ym-token.marshal.dev',
+  'yandexMusicTokenToolHint':
+      'Откройте сервис, войдите в Яндекс и скопируйте готовый токен — вставлять его вручную из адреса не придётся.',
+  'yandexMusicOpenTokenTool': 'Получить токен на ym-token.marshal.dev',
+  'yandexMusicAboutTitle': 'Если что-то не работает',
+  'yandexMusicAboutToken':
+      'OAuth-токен — строка-разрешение на доступ к вашей музыке. Пароль Agysha не видит и не хранит.',
+  'yandexMusicTokenExpired':
+      'Токен недействителен или истёк? Получите новый на странице Яндекса и нажмите «Заменить токен».',
+  'yandexMusicNoNetworkHint':
+      'Нет сети или сервис не отвечает? Проверьте подключение и повторите — токен при этом не теряется.',
   'yandexMusicTokenLabel': 'Токен',
   'yandexMusicTokenHint': 'Вставьте токен из буфера',
   'yandexMusicLink': 'Привязать',

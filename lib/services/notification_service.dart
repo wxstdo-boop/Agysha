@@ -13,6 +13,7 @@ import '../utils/time_format.dart';
 import 'alarm_black_box.dart';
 import 'alarm_scheduler.dart';
 import 'prefs.dart';
+import 'update_note_text.dart';
 
 class NotificationService extends ChangeNotifier {
   static final NotificationService _instance = NotificationService._();
@@ -166,8 +167,14 @@ class NotificationService extends ChangeNotifier {
     // аргументы: первый позиционный параметр переименован в `settings:`.
     await _plugin.initialize(
       settings: initSettings,
-      onDidReceiveNotificationResponse: (response) =>
-          onNotificationTap?.call(response.payload),
+      onDidReceiveNotificationResponse: (response) {
+        // Действия баннера обновления: «Обновить» — тот же путь, что и тап по
+        // самому баннеру; «Позже» лишь убирает строку из шторки и не должно
+        // открывать экран обновления. У обычных уведомлений actionId == null.
+        final actionId = response.actionId;
+        if (actionId != null && actionId != _updateActionId) return;
+        onNotificationTap?.call(response.payload);
+      },
     );
     await _createChannels();
     // After reinstall, SharedPreferences may survive via Android auto-backup
@@ -684,15 +691,26 @@ class NotificationService extends ChangeNotifier {
   /// а не копит строки в шторке.
   static const int updateNotificationId = 4242;
 
+  /// id действия «Обновить» на баннере версии.
+  static const String _updateActionId = 'update';
+
   /// Баннер в шторке о новой версии.
   ///
-  /// Тап открывает приложение, где [UpdateNotice] показывает плашку с
-  /// кнопкой установки (payload `update:<версия>` разбирает main.dart).
+  /// Тап по баннеру и по действию «Обновить» открывает приложение с тем же
+  /// payload `update:<версия>` (его разбирает main.dart), где [UpdateNotice]
+  /// показывает плашку с кнопкой установки. Описание релиза [notes] (markdown
+  /// из GitHub) и human-название выпуска [releaseName] необязательны: без них
+  /// баннер выглядит как раньше — версия и призыв обновиться.
+  ///
   /// Возвращает `true`, только если баннер действительно поставлен: по этому
   /// признаку вызывающий решает, помечать ли выпуск как «уже сообщённый».
   /// Иначе один сбой (нет разрешения, плагин не поднялся в фоновом изоляте)
   /// навсегда глушил бы уведомления об этом выпуске.
-  Future<bool> showUpdateAvailable(String version) async {
+  Future<bool> showUpdateAvailable(
+    String version, {
+    String notes = '',
+    String releaseName = '',
+  }) async {
     if (!_enabled) return false;
     if (!_initialized) {
       try {
@@ -700,7 +718,34 @@ class NotificationService extends ChangeNotifier {
       } catch (_) {}
     }
     if (!_enabled || !_initialized || !_supported) return false;
+    // Тумблер в приложении — это НАМЕРЕНИЕ, а разрешение ОС могло слететь
+    // (переустановка APK, отзыв в системных настройках). Без этой проверки
+    // show() тихо ничего не покажет, а вызывающий пометит выпуск как
+    // «сообщённый» — и новость больше не вернётся. Кэш сбрасываем: право
+    // могли выдать/отозвать уже после init().
+    _notificationsEnabledCached = null;
+    try {
+      if (!await areNotificationsEnabled()) return false;
+    } catch (_) {
+      // Канал недоступен (фоновый изолят без Activity) — не отказываемся
+      // заранее: show() сам вернёт ошибку, если баннер не поставить.
+    }
     final lang = globalPrefs.getString('setting_locale') ?? 'ru';
+    final text = buildUpdateNotificationText(
+      version: version,
+      notes: notes,
+      releaseName: releaseName,
+      defaultTitle: Translations.tFor(
+        lang,
+        'notifUpdateTitle',
+        'Доступно обновление Agysha',
+      ),
+      bodyTemplate: Translations.tFor(
+        lang,
+        'notifUpdateBody',
+        'Версия {v} уже вышла. Нажмите, чтобы обновить.',
+      ),
+    );
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
         'agysha_updates',
@@ -715,22 +760,34 @@ class NotificationService extends ChangeNotifier {
         colorized: true,
         color: _lightBg,
         largeIcon: const DrawableResourceAndroidBitmap('ic_notification_large'),
+        // Развёрнутая шторка показывает всё описание (до ~200 символов),
+        // а не две строки, обрезанные системой.
+        styleInformation: BigTextStyleInformation(text.body),
+        actions: <AndroidNotificationAction>[
+          // showsUserInterface: action открывает MainActivity с payload в
+          // интенте — это тот же путь, что и тап по самому баннеру.
+          AndroidNotificationAction(
+            _updateActionId,
+            Translations.tFor(lang, 'updateNoticeAction', 'Обновить'),
+            showsUserInterface: true,
+            cancelNotification: true,
+          ),
+          // «Позже» просто убирает баннер: версия останется неотмеченной
+          // только если пользователь не увидел её, поэтому отметку ставим
+          // по факту показа, а не по тапу.
+          AndroidNotificationAction(
+            'dismiss',
+            _updateLaterLabel(lang),
+            cancelNotification: true,
+          ),
+        ],
       ),
     );
-    final body = Translations.tFor(
-      lang,
-      'notifUpdateBody',
-      'Версия {v} уже вышла. Нажмите, чтобы обновить.',
-    ).replaceAll('{v}', version);
     try {
       await _plugin.show(
         id: updateNotificationId,
-        title: Translations.tFor(
-          lang,
-          'notifUpdateTitle',
-          'Доступно обновление Agysha',
-        ),
-        body: body,
+        title: text.title,
+        body: text.body,
         notificationDetails: details,
         payload: 'update:$version',
       );
@@ -739,6 +796,19 @@ class NotificationService extends ChangeNotifier {
       // Баннер — приятный бонус к плашке в приложении: его сбой не должен
       // ломать саму проверку обновлений.
       return false;
+    }
+  }
+
+  /// Подпись действия «Позже». Отдельного ключа в l10n нет, а новые ключи в
+  /// translations_*.dart этой задачей трогать нельзя — держим три языка здесь.
+  static String _updateLaterLabel(String lang) {
+    switch (lang.split(RegExp(r'[_-]')).first) {
+      case 'en':
+        return 'Later';
+      case 'fr':
+        return 'Plus tard';
+      default:
+        return 'Позже';
     }
   }
 
