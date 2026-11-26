@@ -34,6 +34,7 @@ import 'agysha_confirm_dialog.dart';
 import '../utils/design_tokens.dart';
 import '../widgets/smooth_caret.dart';
 import '../widgets/inline_keyboard.dart';
+import '../utils/app_sheet_style.dart';
 
 export 'berserk_sheet.dart';
 part 'ai_guide_bubbles.dart';
@@ -322,12 +323,7 @@ Future<void> showAiGuideChat(BuildContext context) {
     isDismissible: false,
     enableDrag: false,
     // Плавный выезд и мягкое закрытие с естественным затуханием (easeOutCubic / easeInCubic)
-    sheetAnimationStyle: AnimationStyle(
-      curve: Curves.easeOutCubic,
-      duration: const Duration(milliseconds: 360),
-      reverseCurve: Curves.easeInCubic,
-      reverseDuration: const Duration(milliseconds: 280),
-    ),
+    sheetAnimationStyle: appSheetStyle(),
     // Отделяем тяжёлую ленту чата в отдельный composited layer: во время
     // выезда bottom sheet Android двигает готовый слой, а не перерисовывает
     // весь экран и все карточки под ним на каждом кадре.
@@ -1902,7 +1898,9 @@ class _AiChatBodyState extends State<_AiChatBody>
       for (var i = 0; i < rewards.length; i++) {
         if (!mounted) return;
         setState(() {
-          _pushMessage(AiMessage(isUser: false, text: rewards[i], ts: _nextTs()));
+          _pushMessage(
+            AiMessage(isUser: false, text: rewards[i], ts: _nextTs()),
+          );
         });
         _scrollToBottom();
         if (i < rewards.length - 1) {

@@ -5,6 +5,7 @@ import '../services/prefs.dart';
 import '../services/settings_service.dart';
 import '../utils/markdown_text.dart';
 import '../utils/date_keys.dart';
+import '../utils/app_sheet_style.dart';
 
 /// Открывает плашку «МАКСИМАЛЬНЫЙ АПГРЕЙД УРОВНЯ BERSERK».
 ///
@@ -52,12 +53,7 @@ Future<void> showBerserkSheet(BuildContext context) async {
     // Лёгкая плавная кривая вместо «пружины» по умолчанию: на слабых
     // телефонах пружинный вход/выход проседает по кадрам и выглядит
     // «дёрганым». Кубическая кривая — дешёвая и очень плавная.
-    sheetAnimationStyle: AnimationStyle(
-      curve: Curves.easeOutCubic,
-      duration: const Duration(milliseconds: 300),
-      reverseCurve: Curves.easeInCubic,
-      reverseDuration: const Duration(milliseconds: 240),
-    ),
+    sheetAnimationStyle: appSheetStyle(),
     builder: (context) {
       return Container(
         constraints: const BoxConstraints(maxHeight: 620),

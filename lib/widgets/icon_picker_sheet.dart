@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import '../l10n/translations.dart';
 import '../utils/icon_map.dart';
 import '../utils/design_tokens.dart';
+import '../utils/app_sheet_style.dart';
 
 class IconPickerSheet extends StatelessWidget {
   final int selectedCodePoint;
@@ -17,12 +18,7 @@ class IconPickerSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       // Та же пружинная шторка, что у мини-чата Ады.
-      sheetAnimationStyle: AnimationStyle(
-        curve: Curves.easeOutBack,
-        duration: const Duration(milliseconds: 380),
-        reverseCurve: Curves.easeInCubic,
-        reverseDuration: const Duration(milliseconds: 240),
-      ),
+      sheetAnimationStyle: appSheetStyle(),
       // Закрываем фокус и НЕ вызываем requestFocus после выбора —
       // иначе системная клавиатура всплывает над списком, куда пользователь
       // вернулся (раньше это «дёргало» глаза после подбора иконки).

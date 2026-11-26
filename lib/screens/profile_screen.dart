@@ -39,6 +39,7 @@ import '../widgets/smooth_tooltip.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/volumetric_switch.dart';
 import '../widgets/windowed_column.dart';
+import '../utils/app_sheet_style.dart';
 
 // Экран разбит на part-файлы по подсистемам: сам экран остаётся здесь,
 // а события, друзья, музыкальные дорожки, талисманы и каталог фонка лежат
@@ -60,20 +61,9 @@ part 'profile_cards.dart';
 /// локально, а пункты открываются в браузере.
 const String kAgyshaSiteUrl = 'https://github.com/wxstdo-boop/Agysha';
 
-/// Плавная шторка листов профиля: кубическая кривая вместо пружины по
-/// умолчанию. Пружина на слабых телефонах проседает по кадрам и читается
-/// дёрганой; кубика дешёвая и мягкая, а вход чуть длиннее — лист «выезжает»,
-/// а не выскакивает.
-AnimationStyle _sheetStyle() => AnimationStyle(
-  // Мягкое всплытие: `easeOutCubic` разгоняется и плавно тормозит ПО ВСЕЙ
-  // дистанции. Прежний `easeOutQuint` проходил почти весь путь в первой
-  // трети и резко «втыкался» в конце — вход читался тормознутым.
-  curve: Curves.easeOutCubic,
-  duration: const Duration(milliseconds: 340),
-  // Выход короче и ровный: лист уходит собранно, не задерживая палец.
-  reverseCurve: Curves.easeInCubic,
-  reverseDuration: const Duration(milliseconds: 240),
-);
+/// Листы профиля открываются тем же движением, что и остальные листы
+/// приложения — один общий стиль на всё приложение (см. [appSheetStyle]).
+AnimationStyle _sheetStyle() => appSheetStyle();
 
 /// Округлая (капсульная) форма кнопок профиля — та же «отдача фоном», что у
 /// кнопок настроек: полное скругление и мягкое вдавливание под пальцем.

@@ -9,6 +9,7 @@ import '../services/haptics.dart';
 import '../services/profile_service.dart';
 import '../utils/design_tokens.dart';
 import '../utils/motion_prefs.dart';
+import '../utils/app_sheet_style.dart';
 import 'press_scale.dart';
 
 /// Интерактивная 3D-карточка коллекционного NFT-артефакта в стиле Cyberpunk / Telegram Gifts.
@@ -1417,12 +1418,7 @@ void showGiftDetailsSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    sheetAnimationStyle: AnimationStyle(
-      curve: Curves.easeOutCubic,
-      duration: const Duration(milliseconds: 340),
-      reverseCurve: Curves.easeInCubic,
-      reverseDuration: const Duration(milliseconds: 240),
-    ),
+    sheetAnimationStyle: appSheetStyle(),
     builder: (ctx) => _GiftDetailsSheet(
       gifts: gifts,
       initialIndex: at < 0 ? 0 : at,
