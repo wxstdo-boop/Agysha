@@ -1,6 +1,6 @@
 import 'package:agysha/models/profile_gift.dart';
 import 'package:agysha/widgets/gift_card_3d.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _gift = ProfileGift(

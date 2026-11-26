@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Единая толщина обводки всех иконок Agysha.
 const double kAgStroke = 2.0;

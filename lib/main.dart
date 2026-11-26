@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'screens/splash_screen.dart';
@@ -1827,6 +1826,18 @@ class AgyshaAppState extends State<AgyshaApp>
   /// быстрый возврат не раздражает, а забытый на столе телефон сам запирается.
   static const Duration kRelockGrace = Duration(minutes: 3);
 
+  /// Системная палитра от `dynamic_color` приходит в типе SDK-овского
+  /// Material, а приложение живёт на `material_ui` — присвоить её напрямую
+  /// нельзя (разные `ColorScheme`). Переносим через seed-цвет: системным
+  /// остаётся основной цвет и его яркость, остальные роли считаются заново.
+  static ColorScheme? _adaptDynamicScheme(dynamic scheme) {
+    if (scheme == null) return null;
+    return ColorScheme.fromSeed(
+      seedColor: scheme.primary as Color,
+      brightness: scheme.brightness as Brightness,
+    );
+  }
+
   /// Подпись последнего применённого системного UI-стиля (яркость +
   /// цвет статуса-бара). Платформ-вызов `setSystemUIOverlayStyle` дёшев,
   /// но в первые кадры после сплэша лишних platform-каналов — как раз
@@ -2427,8 +2438,8 @@ class AgyshaAppState extends State<AgyshaApp>
   Widget _buildApp(BuildContext context) {
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
-        _lightDynamic = lightDynamic;
-        _darkDynamic = darkDynamic;
+        _lightDynamic = _adaptDynamicScheme(lightDynamic);
+        _darkDynamic = _adaptDynamicScheme(darkDynamic);
         final useDynamic = _themeKey == 'system' || _themeKey == 'systemLight';
         final isPeach = _themeKey == 'peach';
         final isGrok = _themeKey == 'grok';

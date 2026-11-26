@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import '../services/haptics.dart';
 import '../services/sounds.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 
 import '../models/habit.dart';

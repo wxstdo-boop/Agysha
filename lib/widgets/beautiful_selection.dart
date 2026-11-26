@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Красивые ручки выделения текста: кружок в цвете темы с белой обводкой
 /// («обводочка») и мягкой тенью — вместо дефолтных тонких полосок.

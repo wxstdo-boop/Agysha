@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../services/haptics.dart';
 
 /// Круглый плавный переключатель вместо кнопки-свитча: маленький кружок,

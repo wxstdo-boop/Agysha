@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Значок «MiDe» — робот Кузницы. СВОЙ вектор, а не шрифтовая иконка:
 /// `Icons.smart_toy` встречается в каждом втором приложении и в мелком

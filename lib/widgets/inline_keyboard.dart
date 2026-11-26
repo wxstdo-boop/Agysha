@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../services/haptics.dart';
 import '../utils/design_tokens.dart';
@@ -274,7 +274,7 @@ class _InlineKeyboardState extends State<InlineKeyboard>
               switchOutCurve: Curves.easeInCubic,
               layoutBuilder: (current, previous) => Stack(
                 alignment: Alignment.center,
-                children: [...previous, if (current != null) current],
+                children: [...previous, ?current],
               ),
               transitionBuilder: (child, animation) =>
                   FadeTransition(opacity: animation, child: child),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../services/haptics.dart';
 import '../l10n/translations.dart';
 import 'press_scale.dart';

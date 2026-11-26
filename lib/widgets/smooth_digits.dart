@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Число, которое меняется ПО ЦИФРАМ: изменившийся разряд проявляется из
 /// прозрачного, старый так же мягко гаснет. Это и есть «плавная смена очков

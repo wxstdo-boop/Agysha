@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../models/reality_check.dart';
 import 'json_file.dart';
 import 'score_service.dart';

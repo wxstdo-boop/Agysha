@@ -4,7 +4,7 @@ import '../services/haptics.dart';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'agysha_bunny.dart';
@@ -2645,7 +2645,7 @@ class _AiChatBodyState extends State<_AiChatBody>
             switchOutCurve: Curves.easeInCubic,
             layoutBuilder: (current, previous) => Stack(
               alignment: Alignment.topCenter,
-              children: [...previous, if (current != null) current],
+              children: [...previous, ?current],
             ),
             transitionBuilder: (child, animation) {
               final t = Curves.easeOutCubic.transform(animation.value);
@@ -2653,7 +2653,7 @@ class _AiChatBodyState extends State<_AiChatBody>
                 opacity: animation,
                 child: SizeTransition(
                   sizeFactor: AlwaysStoppedAnimation(t),
-                  axisAlignment: -1,
+                  alignment: Alignment.topLeft,
                   child: child,
                 ),
               );

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 
 /// Один вид «выполненной записи» для привычек, задач и проверок реальности.

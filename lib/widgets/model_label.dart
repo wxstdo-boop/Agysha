@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Лейбл модели с бейджем PREMIUM у основной модели Ады.
 ///

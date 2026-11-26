@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Плавная отдача карточек: при наведении (desktop/web) и при ЗАЖАТИИ
 /// (touch) карточка мягко увеличивается до [hoverScale], при отпускании —

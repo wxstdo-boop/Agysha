@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
-import 'package:flutter/material.dart' show TimeOfDay;
+import 'package:material_ui/material_ui.dart' show TimeOfDay;
 import 'package:flutter/services.dart';
 // Основной пакет плагина, а не `platform_interface`: класс
 // `AndroidFlutterLocalNotificationsPlugin` экспортируется именно отсюда,

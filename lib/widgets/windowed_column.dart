@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Вертикальный список ОДИНАКОВЫХ по высоте строк, который строит только те
 /// строки, что попали (с запасом) во вьюпорт скролла.

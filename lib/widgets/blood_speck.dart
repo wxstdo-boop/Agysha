@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Кровавые размашистые пятна «под текстом/кнопкой» — общий пейнтер для
 /// бейджа «Сегодня очищено» (habits) и мелких кнопок выбора звука.

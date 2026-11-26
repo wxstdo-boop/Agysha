@@ -9,7 +9,7 @@ import 'package:agysha/services/habit_service.dart';
 import 'package:agysha/services/json_file.dart';
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/task_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -72,6 +72,41 @@ void main() {
   bool ticks(WidgetTester tester, Type screen) => TickerMode.valuesOf(
     tester.element(find.byType(screen, skipOffstage: false)),
   ).enabled;
+
+  testWidgets('на подъезде сосед тикает, в покое снова спит', (tester) async {
+    // Иначе вечные анимации раздела оживали первым кадром на самом финише
+    // доводки — пользователь видел это как «подлаг в конце». Сосед обязан
+    // прогреться пока страница едет и уснуть, когда она встала.
+    await boot(tester);
+    expect(ticks(tester, HabitsScreen), isFalse);
+
+    await tester.fling(
+      find.byType(PageView, skipOffstage: false).first,
+      const Offset(-300, 0),
+      1200,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(
+      ticks(tester, HabitsScreen),
+      isTrue,
+      reason: 'раздел на подъезде должен уже тикать',
+    );
+
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(
+      ticks(tester, HabitsScreen),
+      isTrue,
+      reason: 'после доводки видимый раздел продолжает тикать',
+    );
+    expect(
+      ticks(tester, AlarmsScreen),
+      isFalse,
+      reason: 'после остановки ушедший раздел не должен гонять кадры',
+    );
+  });
 
   testWidgets('в покое тикает только видимый раздел', (tester) async {
     await boot(tester);

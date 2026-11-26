@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Скролл-контроллер, который не «прыгает»: курсор в многострочном поле
 /// просит прокрутить текст каждый раз, когда уезжает на строку ниже или выше,

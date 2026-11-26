@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/scheduler.dart' show Ticker;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 import '../widgets/press_scale.dart';
 import '../utils/motion_prefs.dart';

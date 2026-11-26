@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Чистит текст перед рендером от невидимых символов, которые ломают
 /// перенос строк:

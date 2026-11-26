@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../l10n/translations.dart';
 import '../utils/icon_map.dart';
 import '../utils/design_tokens.dart';

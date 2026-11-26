@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../l10n/translations.dart';
 import '../overlay/overlay_bridge.dart';

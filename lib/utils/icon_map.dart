@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Лёгкий набор дефолтных иконок для привычек и задач.
 /// Полный список строится в HabitTaskIconList ниже, чтобы не дублировать

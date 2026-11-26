@@ -16,7 +16,7 @@ import '../widgets/animated_fab_row.dart'
 import '../widgets/press_scale.dart';
 import '../widgets/ai_guide.dart' show AiGuideFloatingButton, showBerserkSheet;
 import '../widgets/press_splat.dart' show OrganicFab;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'alarms_screen.dart';
 import 'habits_screen.dart';
 import 'reality_checks_screen.dart';
@@ -1095,12 +1095,13 @@ class _PageTickerGate extends StatelessWidget {
       valueListenable: page,
       child: child,
       builder: (context, value, child) {
-        // 1.6, а не 0.98: при 0.98 раздел оживал за сотую долю страницы до
-        // остановки, и его вечные анимации (пульсы, свечения, перекаты цифр)
-        // стартовали ПЕРВЫМ кадром ровно на финише доводки — это и читалось
-        // как «подлаг в конце». Теперь раздел тикает уже на подъезде, к
-        // остановке он прогретый, а дальние страницы по-прежнему спят.
-        final visible = (value - index).abs() < 1.6;
+        // Пока страница едет, соседние разделы тикают уже на подъезде
+        // (порог 1.6): иначе их вечные анимации — пульсы, свечения, перекаты
+        // цифр — стартовали первым кадром ровно на финише доводки, и это
+        // читалось как «подлаг в конце». В покое порог снова 0.98, чтобы
+        // раздел за краем экрана не гонял кадры и телефон уходил в сон.
+        final settling = (value - value.roundToDouble()).abs() > 0.001;
+        final visible = (value - index).abs() < (settling ? 1.6 : 0.98);
         return TickerMode(enabled: visible, child: child!);
       },
     );

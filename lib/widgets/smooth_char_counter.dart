@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Плавный счётчик символов для TextField (buildCounter): цифры мягко
 /// сменяются при вводе вместо резкого «0/150 → 1/150». Единый стиль для

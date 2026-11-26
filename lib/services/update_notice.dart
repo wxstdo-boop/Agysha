@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../l10n/translations.dart';
 import '../main.dart' show navigatorKey;
@@ -99,6 +99,8 @@ class UpdateNotice {
     _announcing = true;
     try {
       await globalPrefs.setString(shownVersionKey, info.versionName);
+      // Строка выше — await: контекст мог размонтироваться за это время.
+      if (!target.mounted) return false;
       showBeautifulSnackBar(
         target,
         message:

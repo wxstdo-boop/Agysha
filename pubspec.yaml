@@ -67,6 +67,7 @@ dependencies:
   workmanager: ^0.10.10
   # Обои «IT-шника»: свой кадр из галереи/камеры и видео-обои.
   video_player: ^2.9.2
+  material_ui: ^1.11.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

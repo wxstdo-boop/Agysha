@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Мягкое появление и исчезновение элемента ряда (чипа категории, таблетки
 /// карусели).

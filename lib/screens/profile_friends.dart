@@ -186,7 +186,7 @@ Widget _friendsKeyboard({
       switchOutCurve: Curves.easeInCubic,
       layoutBuilder: (current, previous) => Stack(
         alignment: Alignment.topCenter,
-        children: [...previous, if (current != null) current],
+        children: [...previous, ?current],
       ),
       transitionBuilder: (child, animation) {
         final t = Curves.easeOutCubic.transform(animation.value);
@@ -194,7 +194,8 @@ Widget _friendsKeyboard({
           opacity: animation,
           child: SizeTransition(
             sizeFactor: AlwaysStoppedAnimation(t),
-            axisAlignment: -1,
+            // axisAlignment: -1 у вертикального SizeTransition = левый верх.
+            alignment: Alignment.topLeft,
             child: child,
           ),
         );

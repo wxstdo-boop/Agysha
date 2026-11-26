@@ -1,6 +1,6 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Круглая «конусная» градиентная обводка вокруг иконки: кольцо с
 /// sweep-градиентом (переливается по кругу), мягко прилегает к иконке и
