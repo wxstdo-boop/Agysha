@@ -508,15 +508,23 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   /// Запросы к archive.org. Перебираем по очереди, пока не найдём трек.
+  /// Порядок перебора задан не случайно: сначала жанры, потом имена тех, чей
+  /// фонк/хардтек знают все. Это заметно точнее общего слова «phonk», где в
+  /// топе выдачи висят чужие сборники и самодельные нарезки.
   static const List<String> _phonkQueries = [
-    'phonk AND mediatype:audio AND format:(MP3)',
+    'hardtekk AND mediatype:audio AND format:(MP3)',
     'drift phonk AND mediatype:audio AND format:(MP3)',
+    'phonk AND mediatype:audio AND format:(MP3)',
+    'russian phonk AND mediatype:audio AND format:(MP3)',
+    'kordhell AND mediatype:audio AND format:(MP3)',
+    'dvrst AND mediatype:audio AND format:(MP3)',
+    'lxst cxntury AND mediatype:audio AND format:(MP3)',
+    'moondeity AND mediatype:audio AND format:(MP3)',
+    'pharmacist AND mediatype:audio AND format:(MP3)',
     'brazilian phonk AND mediatype:audio AND format:(MP3)',
     'memphis phonk AND mediatype:audio AND format:(MP3)',
     'phonk bass AND mediatype:audio AND format:(MP3)',
-    'hardtekk AND mediatype:audio AND format:(MP3)',
     'night drive phonk AND mediatype:audio AND format:(MP3)',
-    'phonk instrumental AND mediatype:audio AND format:(MP3)',
   ];
 
   /// Скачивает один небольшой mp3-трек с archive.org.
@@ -527,10 +535,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<({List<int> bytes, String identifier})?> _downloadPhonkFromArchive(
     Set<String> existingFingerprints,
   ) async {
-    // 26 секунд: поиск + метаданные + скачивание одного трека. На 14
+    // 32 секунды: поиск + метаданные + скачивание одного трека. На 14
     // секундах загрузка часто не успевала, и вместо музыки включался
     // синтезированный «запасной» трек.
-    final deadline = DateTime.now().add(const Duration(seconds: 26));
+    final deadline = DateTime.now().add(const Duration(seconds: 32));
     final queries = [..._phonkQueries]..shuffle();
     for (final q in queries) {
       if (DateTime.now().isAfter(deadline)) break;
@@ -538,12 +546,12 @@ class _ProfileScreenState extends State<ProfileScreen>
         'q': q,
         'fl[]': ['identifier', 'title'],
         'sort[]': 'downloads desc',
-        'rows': '50',
+        'rows': '80',
         'output': 'json',
       });
       final searchRes = await http
           .get(searchUri)
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(seconds: 8));
       if (searchRes.statusCode != 200) continue;
       final data = json.decode(searchRes.body) as Map<String, dynamic>;
       final docs = (data['response']?['docs'] as List<dynamic>?) ?? const [];
@@ -553,22 +561,17 @@ class _ProfileScreenState extends State<ProfileScreen>
         final title = d['title']?.toString() ?? '';
         return isPlayableTrackTitle(title, id);
       }).toList();
-      // Сначала те, где жанр прямо в названии или идентификаторе: они
-      // точнее попадают в фонк. Остальные — запасной вариант, но тоже
-      // настоящие треки с человеческими названиями.
+      // Только записи, где жанр или исполнитель прямо назван в заголовке
+      // или идентификаторе. Раньше при пустом отборе брался «любой настоящий
+      // трек» — и в подборку ехали случайные хаус-сеты и чужие альбомы.
       final onGenre = <dynamic>[];
-      final rest = <dynamic>[];
       for (final d in candidates) {
         final t = '${d['title']} ${d['identifier']}';
-        (looksLikePhonk(t) ? onGenre : rest).add(d);
+        if (looksLikePhonk(t)) onGenre.add(d);
       }
       onGenre.shuffle();
-      rest.shuffle();
-
-      // Если в выдаче есть записи, где фонк прямо назван, чужие треки не
-      // трогаем вовсе: раньше «запасной» список подмешивался к основному, и
-      // вместо фонка в подборку лезли случайные хаус-сеты и чужие альбомы.
-      final ordered = onGenre.isNotEmpty ? onGenre : rest;
+      if (onGenre.isEmpty) continue;
+      final ordered = onGenre;
 
       for (final doc in ordered.take(12)) {
         if (DateTime.now().isAfter(deadline)) break;
@@ -576,7 +579,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         final metaUri = Uri.parse('https://archive.org/metadata/$id/files');
         final metaRes = await http
             .get(metaUri)
-            .timeout(const Duration(seconds: 5));
+            .timeout(const Duration(seconds: 6));
         if (metaRes.statusCode != 200) continue;
         final metaData = json.decode(metaRes.body) as Map<String, dynamic>;
         final files =
@@ -616,7 +619,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         final dlUri = Uri.parse('https://archive.org/download/$id/$fileName');
         final dlRes = await http
             .get(dlUri)
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 18));
         if (dlRes.statusCode != 200 || dlRes.bodyBytes.length < 200000) {
           continue;
         }

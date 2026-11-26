@@ -512,10 +512,21 @@ class ArtifactEmblem extends StatelessWidget {
                   ),
                 ),
               ),
+              // Своя оправа у каждой серии: форма читается раньше цвета.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: ArtifactFramePainter(
+                      giftId: giftId,
+                      color: activeColor,
+                    ),
+                  ),
+                ),
+              ),
               // Фасетная кристаллическая подложка с многослойным градиентом
               Container(
-                width: size * 0.86,
-                height: size * 0.86,
+                width: size * 0.74,
+                height: size * 0.74,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
@@ -542,8 +553,8 @@ class ArtifactEmblem extends StatelessWidget {
               ),
               // Острый геометрический векторный артефакт
               SizedBox(
-                width: size * 0.65,
-                height: size * 0.65,
+                width: size * 0.58,
+                height: size * 0.58,
                 child: CustomPaint(
                   painter: SharpArtifactPainter(
                     giftId: giftId,
@@ -558,6 +569,184 @@ class ArtifactEmblem extends StatelessWidget {
       },
     );
   }
+}
+
+/// Оправа вокруг эмблемы артефакта. У каждой серии своя форма: шестигранный
+/// безель с часовыми насечками, лепестки сакуры, спицы лотоса, лавровый венец,
+/// орбита с узлами и гранёный клинок самурая. Без этого все шесть значков
+/// читались как один круг в разных цветах.
+class ArtifactFramePainter extends CustomPainter {
+  final String giftId;
+  final Color color;
+
+  const ArtifactFramePainter({required this.giftId, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = math.min(size.width, size.height) / 2;
+    final line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.0, r * 0.075)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = color.withValues(alpha: 0.88);
+    final soft = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(0.7, r * 0.040)
+      ..strokeCap = StrokeCap.round
+      ..color = color.withValues(alpha: 0.38);
+    final glint = Paint()..color = Colors.white.withValues(alpha: 0.9);
+
+    switch (giftId) {
+      case 'chrono_crystal':
+        final hex = Path();
+        for (var i = 0; i < 6; i++) {
+          final a = -math.pi / 2 + i * math.pi / 3;
+          final p = Offset(
+            cx + math.cos(a) * r * 0.97,
+            cy + math.sin(a) * r * 0.97,
+          );
+          i == 0 ? hex.moveTo(p.dx, p.dy) : hex.lineTo(p.dx, p.dy);
+        }
+        hex.close();
+        canvas.drawPath(hex, line);
+        // Двенадцать насечек как у безеля часов: серия про время.
+        for (var i = 0; i < 12; i++) {
+          final a = -math.pi / 2 + i * math.pi / 6;
+          final inner = i % 3 == 0 ? r * 0.74 : r * 0.80;
+          canvas.drawLine(
+            Offset(cx + math.cos(a) * inner, cy + math.sin(a) * inner),
+            Offset(cx + math.cos(a) * r * 0.88, cy + math.sin(a) * r * 0.88),
+            soft,
+          );
+        }
+        break;
+      case 'cyber_sakura':
+        // Пять лепестков: тонкие эллипсы, повёрнутые вокруг центра.
+        for (var i = 0; i < 5; i++) {
+          final a = -math.pi / 2 + i * 2 * math.pi / 5;
+          canvas.save();
+          canvas.translate(
+            cx + math.cos(a) * r * 0.74,
+            cy + math.sin(a) * r * 0.74,
+          );
+          canvas.rotate(a + math.pi / 2);
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: Offset.zero,
+              width: r * 0.36,
+              height: r * 0.62,
+            ),
+            line,
+          );
+          canvas.restore();
+        }
+        canvas.drawCircle(Offset(cx, cy), r * 0.97, soft);
+        break;
+      case 'neon_lotus':
+        for (var i = 0; i < 8; i++) {
+          final a = -math.pi / 2 + i * math.pi / 4;
+          canvas.drawLine(
+            Offset(cx + math.cos(a) * r * 0.80, cy + math.sin(a) * r * 0.80),
+            Offset(cx + math.cos(a) * r * 0.99, cy + math.sin(a) * r * 0.99),
+            line,
+          );
+        }
+        canvas.drawCircle(Offset(cx, cy), r * 0.80, soft);
+        break;
+      case 'golden_bell':
+        // Лавровый венец: две дуги расходятся от низа к вершине.
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.90),
+          math.pi * 0.62,
+          math.pi * 0.62,
+          false,
+          line,
+        );
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.90),
+          math.pi * 1.76,
+          math.pi * 0.62,
+          false,
+          line,
+        );
+        for (var i = 0; i < 3; i++) {
+          final x = cx + (i - 1) * r * 0.34;
+          final y = cy - r * 0.86 + (i == 1 ? -r * 0.06 : 0);
+          final gem = Path()
+            ..moveTo(x, y - r * 0.10)
+            ..lineTo(x + r * 0.09, y)
+            ..lineTo(x, y + r * 0.10)
+            ..lineTo(x - r * 0.09, y)
+            ..close();
+          canvas.drawPath(gem, line);
+        }
+        break;
+      case 'ada_neural_shard':
+        canvas.save();
+        canvas.translate(cx, cy);
+        canvas.rotate(-0.38);
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: r * 1.96,
+            height: r * 0.94,
+          ),
+          line,
+        );
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: r * 1.96,
+            height: r * 0.94,
+          ),
+          soft,
+        );
+        for (var i = 0; i < 3; i++) {
+          final a = i * 2 * math.pi / 3;
+          canvas.drawCircle(
+            Offset(math.cos(a) * r * 0.97, math.sin(a) * r * 0.47),
+            r * 0.085,
+            glint,
+          );
+        }
+        canvas.restore();
+        break;
+      case 'samurai_visor':
+        final oct = Path();
+        for (var i = 0; i < 8; i++) {
+          final a = -math.pi / 2 + math.pi / 8 + i * math.pi / 4;
+          final p = Offset(
+            cx + math.cos(a) * r * 0.97,
+            cy + math.sin(a) * r * 0.97,
+          );
+          i == 0 ? oct.moveTo(p.dx, p.dy) : oct.lineTo(p.dx, p.dy);
+        }
+        oct.close();
+        canvas.drawPath(oct, line);
+        // Два косых удара клинка по нижним граням.
+        canvas.drawLine(
+          Offset(cx - r * 0.62, cy + r * 0.66),
+          Offset(cx - r * 0.18, cy + r * 0.90),
+          soft,
+        );
+        canvas.drawLine(
+          Offset(cx + r * 0.18, cy + r * 0.90),
+          Offset(cx + r * 0.62, cy + r * 0.66),
+          soft,
+        );
+        break;
+      default:
+        canvas.drawCircle(Offset(cx, cy), r * 0.95, soft);
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant ArtifactFramePainter oldDelegate) =>
+      oldDelegate.giftId != giftId || oldDelegate.color != color;
 }
 
 /// Острые, высокодетализированные геометрические векторные значки NFT артефактов

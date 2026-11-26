@@ -416,6 +416,10 @@ extension _ProfileCards on _ProfileScreenState {
 
   void _showPrestigeTitlePicker() async {
     Haptics.select();
+    // Клавиатуру гасим ДО шторки. Иначе после выбора статуса шторка
+    // закрывается, фокус возвращается на поле имени — и клавиатура всплывает
+    // сама, хотя человек её не звал.
+    FocusManager.instance.primaryFocus?.unfocus();
     refreshUi(() => _isPrestigePickerOpen = true);
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
@@ -536,6 +540,8 @@ extension _ProfileCards on _ProfileScreenState {
     if (mounted) {
       refreshUi(() => _isPrestigePickerOpen = false);
     }
+    // Страховка на случай, если фокус всё же вернулся к полю имени.
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   Widget _giftsCard(ThemeData theme) {
@@ -618,6 +624,8 @@ extension _ProfileCards on _ProfileScreenState {
     return _Card(
       title: Translations.t('profileName', context, 'Короткое имя'),
       icon: Icons.badge_outlined,
+      // Поле ввода не наклоняем: под пальцем карточка ездила вверх-вниз.
+      tilt: false,
       child: Row(
         children: [
           Expanded(
@@ -874,69 +882,57 @@ extension _ProfileCards on _ProfileScreenState {
                     ),
                   ),
                 ),
+                // Кнопка поиска без подписи: только значок. Текст рядом с
+                // «Добавить» дублировал сам себя и занимал место, а значок
+                // читается с одного взгляда. Пока идёт поиск, тот же слот
+                // плавно меняет значок на кольцо загрузки — ширина кнопки
+                // не прыгает, потому что слот фиксированный.
                 PressScale(
                   pressedScale: 0.94,
-                  child: FilledButton.tonal(
-                    onPressed: _service.canAddTrack && !_isSearchingHardtekk
-                        ? _searchAndAddHardtekkInline
-                        : null,
-                    style: _roundButtonStyle(),
-                    child: AnimatedSize(
-                      duration: const Duration(milliseconds: 240),
-                      curve: Curves.easeInOutCubic,
+                  child: Tooltip(
+                    message: Translations.t('searchIdle', context, 'Поиск'),
+                    child: FilledButton.tonal(
+                      onPressed: _service.canAddTrack && !_isSearchingHardtekk
+                          ? _searchAndAddHardtekkInline
+                          : null,
+                      style: _roundButtonStyle().copyWith(
+                        padding: const WidgetStatePropertyAll(
+                          EdgeInsets.symmetric(horizontal: Spacing.sm + 2),
+                        ),
+                        minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
+                      ),
                       child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
+                        duration: const Duration(milliseconds: 220),
                         switchInCurve: Curves.easeOutCubic,
                         switchOutCurve: Curves.easeInCubic,
                         transitionBuilder: (child, anim) => FadeTransition(
                           opacity: anim,
                           child: ScaleTransition(
-                            scale: Tween<double>(
-                              begin: 0.94,
-                              end: 1.0,
-                            ).animate(anim),
+                            scale: Tween<double>(begin: 0.86, end: 1.0).animate(
+                              CurvedAnimation(
+                                parent: anim,
+                                curve: Curves.easeOutBack,
+                              ),
+                            ),
                             child: child,
                           ),
                         ),
                         child: _isSearchingHardtekk
-                            ? Row(
+                            ? SizedBox(
                                 key: const ValueKey('searching_mode'),
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        BrandColors.red,
-                                      ),
-                                    ),
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Theme.of(context).colorScheme.primary,
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    Translations.t(
-                                      'searching',
-                                      context,
-                                      'Ищем…',
-                                    ),
-                                  ),
-                                ],
+                                ),
                               )
-                            : Row(
-                                key: const ValueKey('search_idle'),
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.search_rounded, size: 16),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    Translations.t(
-                                      'searchIdle',
-                                      context,
-                                      'Поиск',
-                                    ),
-                                  ),
-                                ],
+                            : const Icon(
+                                Icons.search_rounded,
+                                key: ValueKey('search_idle'),
+                                size: 21,
                               ),
                       ),
                     ),

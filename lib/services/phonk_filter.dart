@@ -6,7 +6,9 @@
 /// можно было проверить тестами без сети.
 library;
 
-/// Слова, по которым запись считается фонком.
+/// Слова, по которым запись считается фонком или хардтеком: жанры, подвиды и
+/// имена культовых исполнителей. По ним же отсеивается случайная музыка из
+/// выдачи archive.org — «что-то со словом audio» в подборку не попадает.
 const List<String> phonkWords = [
   'phonk',
   'drift',
@@ -14,6 +16,16 @@ const List<String> phonkWords = [
   'brazil',
   'bass',
   'hard',
+  'hardtekk',
+  'hardtek',
+  'kordhell',
+  'dvrst',
+  'lxst',
+  'cxntury',
+  'moondeity',
+  'pharmacist',
+  'sxmpra',
+  'gosteff',
 ];
 
 /// Слова, по которым видно сборник, часовой микс, альбом или подкаст.
@@ -62,6 +74,22 @@ const List<String> junkWords = [
   'kbps',
   'various artists',
   'tracks',
+  'type beat',
+  'karaoke',
+  'acapella',
+  'reaction',
+  'review',
+  'tutorial',
+  'lesson',
+  'ringtone',
+  'sfx',
+  'teaser',
+  'trailer',
+  'promo',
+  'advert',
+  'demo',
+  'unfinished',
+  'test',
 ];
 
 /// «Скачано с» и рипперы: у таких записей вместо названия трека мусор.
@@ -107,8 +135,45 @@ bool isPlayableTrackTitle(String title, String id) {
   return words >= 2 && words <= 8;
 }
 
-/// Есть ли в тексте хоть одно фонк-слово.
+/// Слова, которых самих по себе мало: «hard» и «bass» живут и в хард-роке, и
+/// в гитарных миксах. Они засчитываются только парой или вместе с сильным
+/// словом из [phonkWords].
+const List<String> _weakPhonkWords = ['hard', 'bass', 'drift', 'brazil'];
+
+/// Жанры, которые к фонку не относятся, но легко цепляются за «hard»,
+/// «bass» и «memphis»: раньше из-за этого в подборку лезли чужие сеты.
+final RegExp _otherGenre = RegExp(
+  r'(^|[^\p{L}])(rock|metal|jazz|classical|piano|guitar|orchestra|'
+  r'hardstyle|hardcore|house|techno|trance|dubstep|reggae|ska|blues|'
+  r'country|reggaeton|salsa|rap battle)([^\p{L}]|$)',
+  unicode: true,
+);
+
+final Map<String, RegExp> _phonkRes = {
+  for (final w in phonkWords)
+    w: RegExp(
+      r'(^|[^\p{L}])' + RegExp.escape(w) + r'([^\p{L}]|$)',
+      unicode: true,
+    ),
+};
+
+/// Настоящий ли это фонк или хардтек по названию записи.
+///
+/// Слово ищется целиком: подстрочный поиск принимал «hardstyle» за «hard»,
+/// а «bassline house» — за фонк, и в подборку ехала случайная музыка.
 bool looksLikePhonk(String text) {
   final t = text.toLowerCase();
-  return phonkWords.any(t.contains);
+  final hits = <String>{
+    for (final e in _phonkRes.entries)
+      if (e.value.hasMatch(t)) e.key,
+  };
+  if (hits.isEmpty) return false;
+  final strong = hits.where((w) => !_weakPhonkWords.contains(w)).length;
+  if (strong == 0) {
+    // Только слабые слова: либо их два («hard bass»), либо это вообще
+    // другой жанр с похожим словом.
+    if (_otherGenre.hasMatch(t)) return false;
+    return hits.length >= 2;
+  }
+  return true;
 }

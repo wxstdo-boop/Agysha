@@ -52,4 +52,43 @@ void main() {
     expect(looksLikePhonk('NIGHT DRIFT PHONK'), isTrue);
     expect(looksLikePhonk('Deep House Cat Show'), isFalse);
   });
+
+  test('слово ищется целиком: «hardstyle» не проходит за «hard»', () {
+    expect(looksLikePhonk('Hardstyle Festival 2024'), isFalse);
+    expect(looksLikePhonk('Hard Rock Anthems'), isFalse);
+    expect(looksLikePhonk('Bass House Session'), isFalse);
+  });
+
+  test('два слабых слова — это хардбасс, а не случайный сет', () {
+    expect(looksLikePhonk('Hard Bass 2025'), isTrue);
+    expect(looksLikePhonk('hard'), isFalse);
+    expect(looksLikePhonk('bass'), isFalse);
+  });
+
+  test('фонк-исполнители и подвиды узнаются по имени', () {
+    for (final text in [
+      'Kordhell — Murder In My Mind',
+      'DVRST - Close Eyes',
+      'LXST CXNTURY — Resentment',
+      'hardtekk 2025',
+      'Memphis Rap 1994',
+    ]) {
+      expect(looksLikePhonk(text), isTrue, reason: 'должно проходить: $text');
+    }
+  });
+
+  test('тип-биты, караоке и рингтоны не считаются треком', () {
+    for (final title in [
+      'Phonk Type Beat 2025',
+      'Phonk Karaoke Version',
+      'Phonk Ringtone',
+      'Phonk Tutorial Lesson',
+    ]) {
+      expect(
+        isPlayableTrackTitle(title, title.toLowerCase()),
+        isFalse,
+        reason: 'должно отсеиваться: $title',
+      );
+    }
+  });
 }

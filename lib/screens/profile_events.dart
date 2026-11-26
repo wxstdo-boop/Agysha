@@ -35,6 +35,7 @@ class _Card extends StatelessWidget {
     this.trailing,
     required this.child,
     this.pressable = true,
+    this.tilt = true,
   });
 
   /// Отдача «вдавливанием» на зажатие. По умолчанию включена: все карточки
@@ -42,6 +43,11 @@ class _Card extends StatelessWidget {
   /// будет отдача уменьшения небольшая»). Карточки, у которых внутри свои
   /// жесты (список музыки), могут её выключить, чтобы не спорить за палец.
   final bool pressable;
+
+  /// 3D-наклон под пальцем. Карточкам с полем ввода он не нужен: при тапе
+  /// по полю плашка ощутимо «ездила» вверх-вниз под рукой, а наклон вокруг
+  /// центра читается как дрожь всей карточки.
+  final bool tilt;
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +102,7 @@ class _Card extends StatelessWidget {
     // Вдавливание + тот же наклон за пальцем, что у карточек-артефактов:
     // без наклона кнопки ивента выпадали из общего языка экрана.
     return PressScale(
+      enableTilt: tilt,
       pressedScale: 0.975,
       duration: const Duration(milliseconds: 220),
       releaseDuration: const Duration(milliseconds: 320),
