@@ -1408,6 +1408,11 @@ void showGiftDetailsSheet(
   VoidCallback? onFavoriteToggled,
 ) {
   Haptics.select();
+  // Листаем ВСЮ подборку, а не один артефакт: внутри окна соседние карточки
+  // крутятся «кубом». Порядок тот же, что в полосе профиля.
+  final all = ProfileService().gifts;
+  final at = all.indexWhere((g) => g.id == gift.id);
+  final gifts = all.isEmpty ? <ProfileGift>[gift] : all;
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -1418,36 +1423,80 @@ void showGiftDetailsSheet(
       reverseCurve: Curves.easeInCubic,
       reverseDuration: const Duration(milliseconds: 240),
     ),
-    builder: (ctx) =>
-        _GiftDetailsSheet(gift: gift, onFavoriteToggled: onFavoriteToggled),
+    builder: (ctx) => _GiftDetailsSheet(
+      gifts: gifts,
+      initialIndex: at < 0 ? 0 : at,
+      onFavoriteToggled: onFavoriteToggled,
+    ),
   ).then((_) => onFavoriteToggled?.call());
 }
 
-/// Модальный лист детального осмотра артефакта в стиле киберпанк
+/// Модальный лист детального осмотра артефакта в стиле киберпанк.
+///
+/// Внутри окна артефакты листаются влево/вправо «кубом»: страница
+/// поворачивается вокруг вертикальной оси и уходит в глубину. Коллекцию
+/// можно смотреть, не закрывая окно.
 class _GiftDetailsSheet extends StatefulWidget {
-  final ProfileGift gift;
-  final VoidCallback? onFavoriteToggled;
+  const _GiftDetailsSheet({
+    required this.gifts,
+    required this.initialIndex,
+    this.onFavoriteToggled,
+  });
 
-  const _GiftDetailsSheet({required this.gift, this.onFavoriteToggled});
+  final List<ProfileGift> gifts;
+  final int initialIndex;
+  final VoidCallback? onFavoriteToggled;
 
   @override
   State<_GiftDetailsSheet> createState() => _GiftDetailsSheetState();
 }
 
 class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
-  late bool _fav;
+  /// Высота страницы карусели: одинаковая у всех артефактов, чтобы окно не
+  /// прыгало при листании (описание длинное — прокручивается внутри).
+  static const double _pageHeight = 356;
+
+  late final PageController _pages = PageController(
+    initialPage: widget.initialIndex,
+  );
+  late int _index = widget.initialIndex;
+  late bool _fav = widget.gifts[widget.initialIndex].isFavorite;
+
+  ProfileGift get _gift => widget.gifts[_index];
+
+  bool get _multiple => widget.gifts.length > 1;
 
   @override
-  void initState() {
-    super.initState();
-    _fav = widget.gift.isFavorite;
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  void _onPageChanged(int i) {
+    if (i == _index) return;
+    Haptics.select();
+    setState(() {
+      _index = i;
+      _fav = widget.gifts[i].isFavorite;
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    final id = _gift.id;
+    final was = _fav;
+    await Haptics.select();
+    await ProfileService().toggleGiftFavorite(id);
+    if (!mounted) return;
+    final fresh = ProfileService().gifts.where((g) => g.id == id).firstOrNull;
+    setState(() => _fav = fresh?.isFavorite ?? !was);
+    widget.onFavoriteToggled?.call();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    final rarity = widget.gift.rarity;
+    final accent = _fav ? BrandColors.red : _gift.rarity.color;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 320),
@@ -1457,9 +1506,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
         color: dark ? const Color(0xFF12121C) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border.all(
-          color: _fav
-              ? BrandColors.red.withValues(alpha: 0.50)
-              : rarity.color.withValues(alpha: 0.35),
+          color: accent.withValues(alpha: _fav ? 0.50 : 0.35),
           width: 1.2,
         ),
       ),
@@ -1479,162 +1526,22 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            // Огромная иконка артефакта с неоновой аурой
-            TweenAnimationBuilder<Color?>(
-              duration: const Duration(milliseconds: 360),
-              curve: Curves.easeInOutCubic,
-              tween: ColorTween(end: _fav ? BrandColors.red : rarity.color),
-              builder: (context, animColor, _) {
-                return ArtifactEmblem(
-                  giftId: widget.gift.id,
-                  icon: widget.gift.icon,
-                  color: rarity.color,
-                  isFavorite: _fav,
-                  activeColorOverride: animColor,
-                  size: 92,
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            Text(
-              Translations.t(
-                'giftTitle_${widget.gift.id}',
-                context,
-                widget.gift.title,
+            const SizedBox(height: 14),
+            SizedBox(
+              height: _pageHeight,
+              child: PageView.builder(
+                controller: _pages,
+                itemCount: widget.gifts.length,
+                physics: _multiple
+                    ? const PageScrollPhysics()
+                    : const NeverScrollableScrollPhysics(),
+                onPageChanged: _onPageChanged,
+                itemBuilder: (context, i) => _cube(context, i),
               ),
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: (_fav ? BrandColors.red : rarity.color).withValues(
-                      alpha: 0.18,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: (_fav ? BrandColors.red : rarity.color).withValues(
-                        alpha: 0.5,
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    rarity.labelRu,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: _fav ? BrandColors.red : rarity.color,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOutCubic,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w700,
-                    color: _fav
-                        ? BrandColors.red
-                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                  child: Text(
-                    Translations.t(
-                      'giftArtifact',
-                      context,
-                      'Артефакт #{n}',
-                    ).replaceAll(
-                      '{n}',
-                      widget.gift.serialNumber.toString().padLeft(4, '0'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            const SizedBox(height: 8),
+            if (_multiple) _dots(theme, accent),
             const SizedBox(height: 16),
-            // Описание / лор
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOutCubic,
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.35,
-                ),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: (_fav ? BrandColors.red : rarity.color).withValues(
-                    alpha: 0.18,
-                  ),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    Translations.t(
-                      'giftDesc_${widget.gift.id}',
-                      context,
-                      widget.gift.description,
-                    ),
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.4,
-                      color: theme.colorScheme.onSurface.withValues(
-                        alpha: 0.88,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: Icon(
-                          Icons.bolt_rounded,
-                          key: ValueKey(_fav),
-                          size: 16,
-                          color: _fav
-                              ? BrandColors.red
-                              : theme.colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOutCubic,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _fav
-                              ? BrandColors.red
-                              : theme.colorScheme.primary,
-                        ),
-                        child: Text(
-                          Translations.t(
-                            'giftBuff_${widget.gift.id}',
-                            context,
-                            widget.gift.buffText,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Кнопка «Сделать главным талисманом» с ультра-плавной сменой цвета и размера
             Row(
               children: [
                 Expanded(
@@ -1642,19 +1549,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                     pressedScale: 0.94,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () async {
-                        await Haptics.select();
-                        await ProfileService().toggleGiftFavorite(
-                          widget.gift.id,
-                        );
-                        if (mounted) {
-                          final cur = ProfileService().gifts
-                              .where((g) => g.id == widget.gift.id)
-                              .firstOrNull;
-                          setState(() => _fav = cur?.isFavorite ?? !_fav);
-                        }
-                        widget.onFavoriteToggled?.call();
-                      },
+                      onTap: _toggleFavorite,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 320),
                         curve: Curves.easeInOutCubic,
@@ -1679,65 +1574,58 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                             ),
                           ],
                         ),
-                        child: Center(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 260),
-                                child: Icon(
-                                  _fav
-                                      ? Icons.star_rounded
-                                      : Icons.star_outline_rounded,
-                                  key: ValueKey(_fav),
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 260),
+                              child: Icon(
+                                _fav
+                                    ? Icons.star_rounded
+                                    : Icons.star_outline_rounded,
+                                key: ValueKey(_fav),
+                                color: Colors.white,
+                                size: 18,
                               ),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                width: 175,
-                                child: Center(
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 260),
-                                    switchInCurve: Curves.easeOutCubic,
-                                    switchOutCurve: Curves.easeInCubic,
-                                    transitionBuilder: (child, anim) =>
-                                        FadeTransition(
-                                          opacity: anim,
-                                          child: ScaleTransition(
-                                            scale: Tween<double>(
-                                              begin: 0.90,
-                                              end: 1.0,
-                                            ).animate(anim),
-                                            child: child,
-                                          ),
-                                        ),
-                                    child: Text(
-                                      _fav
-                                          ? Translations.t(
-                                              'giftFavOn',
-                                              context,
-                                              'В избранном (до 5)',
-                                            )
-                                          : Translations.t(
-                                              'giftFavOff',
-                                              context,
-                                              'В избранное (до 5)',
-                                            ),
-                                      key: ValueKey(_fav),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
+                            ),
+                            const SizedBox(width: 8),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 260),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, anim) =>
+                                  FadeTransition(
+                                    opacity: anim,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: 0.90,
+                                        end: 1.0,
+                                      ).animate(anim),
+                                      child: child,
                                     ),
                                   ),
+                              child: Text(
+                                _fav
+                                    ? Translations.t(
+                                        'giftFavOn',
+                                        context,
+                                        'В избранном (до 5)',
+                                      )
+                                    : Translations.t(
+                                        'giftFavOff',
+                                        context,
+                                        'В избранное (до 5)',
+                                      ),
+                                key: ValueKey(_fav),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1765,6 +1653,185 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Точки-индикатор: показывают, где мы в коллекции, и что листать есть
+  /// куда. Активная растягивается в черту цветом редкости.
+  Widget _dots(ThemeData theme, Color accent) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < widget.gifts.length; i++)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            width: i == _index ? 16 : 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: i == _index
+                  ? accent
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Страница карусели с «кубическим» поворотом. Угол считается по живому
+  /// смещению контроллера, поэтому страница поворачивается ровно за пальцем,
+  /// а не догоняет его анимацией.
+  Widget _cube(BuildContext context, int i) {
+    return AnimatedBuilder(
+      animation: _pages,
+      child: RepaintBoundary(child: _page(context, widget.gifts[i])),
+      builder: (context, built) {
+        final page = _pages.hasClients && _pages.position.haveDimensions
+            ? (_pages.page ?? _index.toDouble())
+            : _index.toDouble();
+        final t = (page - i).clamp(-1.0, 1.0);
+        final depth = 1 - t.abs() * 0.10;
+        final transform = Matrix4.identity()
+          ..setEntry(3, 2, 0.0014)
+          ..rotateY(t * (math.pi / 3.1))
+          ..scaleByDouble(depth, depth, 1, 1);
+        return Transform(
+          alignment: t < 0 ? Alignment.centerRight : Alignment.centerLeft,
+          transform: transform,
+          child: Opacity(
+            opacity: (1 - t.abs() * 0.55).clamp(0.0, 1.0),
+            child: built,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _page(BuildContext context, ProfileGift gift) {
+    final theme = Theme.of(context);
+    final rarity = gift.rarity;
+    final fav = gift.id == _gift.id ? _fav : gift.isFavorite;
+    final accent = fav ? BrandColors.red : rarity.color;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TweenAnimationBuilder<Color?>(
+          duration: const Duration(milliseconds: 360),
+          curve: Curves.easeInOutCubic,
+          tween: ColorTween(end: accent),
+          builder: (context, animColor, _) => ArtifactEmblem(
+            giftId: gift.id,
+            icon: gift.icon,
+            color: rarity.color,
+            isFavorite: fav,
+            activeColorOverride: animColor,
+            size: 92,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          Translations.t('giftTitle_${gift.id}', context, gift.title),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: accent.withValues(alpha: 0.5)),
+              ),
+              child: Text(
+                rarity.labelRu,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: accent,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              Translations.t(
+                'giftArtifact',
+                context,
+                'Артефакт #{n}',
+              ).replaceAll('{n}', gift.serialNumber.toString().padLeft(4, '0')),
+              style: TextStyle(
+                fontSize: 12,
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w700,
+                color: accent.withValues(alpha: 0.75),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.35,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: accent.withValues(alpha: 0.18)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    Translations.t(
+                      'giftDesc_${gift.id}',
+                      context,
+                      gift.description,
+                    ),
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.88,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.bolt_rounded, size: 16, color: accent),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          Translations.t(
+                            'giftBuff_${gift.id}',
+                            context,
+                            gift.buffText,
+                          ),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

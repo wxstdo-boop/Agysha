@@ -591,7 +591,7 @@ extension _ProfileCards on _ProfileScreenState {
           // листании крайняя карточка успевала появиться и пропасть.
           // Запас по краям шире одной карточки: при быстром листании
           // следующая карточка уже собрана и не успевает «прорадать».
-          scrollCacheExtent: const ScrollCacheExtent.pixels(900),
+          scrollCacheExtent: const ScrollCacheExtent.pixels(420),
           itemCount: gifts.length,
           itemBuilder: (context, i) => Padding(
             padding: const EdgeInsets.only(right: Spacing.sm),

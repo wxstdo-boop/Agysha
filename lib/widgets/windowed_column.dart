@@ -19,7 +19,7 @@ class WindowedColumn extends StatefulWidget {
     required this.itemCount,
     required this.itemHeight,
     required this.itemBuilder,
-    this.overscan = 400,
+    this.overscan = 96,
   });
 
   final int itemCount;
@@ -36,7 +36,7 @@ class WindowedColumn extends StatefulWidget {
 
 class _WindowedColumnState extends State<WindowedColumn> {
   /// Сколько строк строим, пока окно ещё не измерено (первый кадр).
-  static const int _firstFrameRows = 24;
+  static const int _firstFrameRows = 8;
 
   ScrollPosition? _position;
   bool _measured = false;

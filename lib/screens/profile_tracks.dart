@@ -73,136 +73,132 @@ class _TrackRowState extends State<_TrackRow>
           ),
         );
       },
-      child: Theme(
-        // Гасим чернильные всплески: под пальцем на строке не должно
-        // вспыхивать прямоугольника на всю ширину карточки.
-        data: theme.copyWith(
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          hoverColor: Colors.transparent,
-        ),
-        child: Row(
-          children: [
-            PressScale(
-              pressedScale: 0.88,
-              child: MusicPulseRing(
-                active: playing,
-                child: IconButton(
-                  onPressed: widget.onToggle,
-                  style: IconButton.styleFrom(
-                    shape: const CircleBorder(),
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: cs.primary,
-                    highlightColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                  ),
-                  icon: AnimatedSwitcher(
-                    duration: reduce
-                        ? Duration.zero
-                        : const Duration(milliseconds: 420),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    layoutBuilder: (current, previous) => Stack(
-                      alignment: Alignment.center,
-                      children: [...previous, ?current],
-                    ),
-                    transitionBuilder: (child, anim) => FadeTransition(
-                      opacity: anim,
-                      child: ScaleTransition(
-                        scale: Tween<double>(begin: 0.75, end: 1).animate(anim),
-                        child: child,
-                      ),
-                    ),
-                    child: Icon(
-                      playing ? Icons.pause : Icons.play_arrow_rounded,
-                      key: ValueKey(playing),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: Spacing.xs),
-            Expanded(
-              child: Text(
-                track.title.isEmpty
-                    ? Translations.t('profileMusicTrack', context, 'Трек')
-                    : track.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium,
-              ),
-            ),
-            // Переключатель порядка рядом с корзиной: значок сам меняется
-            // на повтор/очередь/перемешку и перетекает, а не подменяется
-            // кадром.
-            PressScale(
-              pressedScale: 0.86,
+      // Чернильные всплески гасим в стиле самих кнопок: обёртка `Theme`
+      // на каждую строку стоила лишнего слоя инхерита в сотнях строк.
+      child: Row(
+        children: [
+          PressScale(
+            pressedScale: 0.88,
+            child: MusicPulseRing(
+              active: playing,
               child: IconButton(
-                onPressed: widget.onCycleMode,
-                tooltip: switch (widget.mode) {
-                  QueueMode.repeat => Translations.t(
-                    'musicModeRepeat',
-                    context,
-                    'Повторять этот трек',
-                  ),
-                  QueueMode.order => Translations.t(
-                    'musicModeOrder',
-                    context,
-                    'Треки по порядку',
-                  ),
-                  QueueMode.shuffle => Translations.t(
-                    'musicModeShuffle',
-                    context,
-                    'Треки вперемешку',
-                  ),
-                },
+                onPressed: widget.onToggle,
                 style: IconButton.styleFrom(
                   shape: const CircleBorder(),
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: cs.primary,
+                  splashFactory: NoSplash.splashFactory,
                   highlightColor: Colors.transparent,
                   hoverColor: Colors.transparent,
                 ),
                 icon: AnimatedSwitcher(
                   duration: reduce
                       ? Duration.zero
-                      : const Duration(milliseconds: 280),
+                      : const Duration(milliseconds: 420),
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: Alignment.center,
+                    children: [...previous, ?current],
+                  ),
                   transitionBuilder: (child, anim) => FadeTransition(
                     opacity: anim,
-                    child: RotationTransition(
-                      turns: Tween<double>(begin: -0.25, end: 0).animate(anim),
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.75, end: 1).animate(anim),
                       child: child,
                     ),
                   ),
                   child: Icon(
-                    switch (widget.mode) {
-                      QueueMode.repeat => Icons.repeat_one_rounded,
-                      QueueMode.order => Icons.repeat_rounded,
-                      QueueMode.shuffle => Icons.shuffle_rounded,
-                    },
-                    key: ValueKey(widget.mode),
-                    size: 20,
-                    color: widget.mode == QueueMode.repeat
-                        ? cs.onSurfaceVariant
-                        : cs.primary,
+                    playing ? Icons.pause : Icons.play_arrow_rounded,
+                    key: ValueKey(playing),
                   ),
                 ),
               ),
             ),
-            PressScale(
-              pressedScale: 0.86,
-              child: IconButton(
-                onPressed: widget.onRemove,
-                style: IconButton.styleFrom(
-                  shape: const CircleBorder(),
-                  highlightColor: Colors.transparent,
-                  hoverColor: Colors.transparent,
+          ),
+          const SizedBox(width: Spacing.xs),
+          Expanded(
+            child: Text(
+              track.title.isEmpty
+                  ? Translations.t('profileMusicTrack', context, 'Трек')
+                  : track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          // Переключатель порядка рядом с корзиной: значок сам меняется
+          // на повтор/очередь/перемешку и перетекает, а не подменяется
+          // кадром.
+          PressScale(
+            pressedScale: 0.86,
+            child: IconButton(
+              onPressed: widget.onCycleMode,
+              tooltip: switch (widget.mode) {
+                QueueMode.repeat => Translations.t(
+                  'musicModeRepeat',
+                  context,
+                  'Повторять этот трек',
                 ),
-                icon: const Icon(Icons.delete_outline),
+                QueueMode.order => Translations.t(
+                  'musicModeOrder',
+                  context,
+                  'Треки по порядку',
+                ),
+                QueueMode.shuffle => Translations.t(
+                  'musicModeShuffle',
+                  context,
+                  'Треки вперемешку',
+                ),
+              },
+              style: IconButton.styleFrom(
+                shape: const CircleBorder(),
+                splashFactory: NoSplash.splashFactory,
+                highlightColor: Colors.transparent,
+                hoverColor: Colors.transparent,
+              ),
+              icon: AnimatedSwitcher(
+                duration: reduce
+                    ? Duration.zero
+                    : const Duration(milliseconds: 280),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: RotationTransition(
+                    turns: Tween<double>(begin: -0.25, end: 0).animate(anim),
+                    child: child,
+                  ),
+                ),
+                child: Icon(
+                  switch (widget.mode) {
+                    QueueMode.repeat => Icons.repeat_one_rounded,
+                    QueueMode.order => Icons.repeat_rounded,
+                    QueueMode.shuffle => Icons.shuffle_rounded,
+                  },
+                  key: ValueKey(widget.mode),
+                  size: 20,
+                  color: widget.mode == QueueMode.repeat
+                      ? cs.onSurfaceVariant
+                      : cs.primary,
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+          PressScale(
+            pressedScale: 0.86,
+            child: IconButton(
+              onPressed: widget.onRemove,
+              style: IconButton.styleFrom(
+                shape: const CircleBorder(),
+                splashFactory: NoSplash.splashFactory,
+                highlightColor: Colors.transparent,
+                hoverColor: Colors.transparent,
+              ),
+              icon: const Icon(Icons.delete_outline),
+            ),
+          ),
+        ],
       ),
     );
   }

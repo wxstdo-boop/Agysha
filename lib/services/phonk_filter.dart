@@ -177,3 +177,49 @@ bool looksLikePhonk(String text) {
   }
   return true;
 }
+
+/// Фонк-лейблы и каналы, которые часто стоят в поле автора записи.
+const List<String> phonkLabels = [
+  'phonk',
+  'hardtekk',
+  'hardtek',
+  'kordhell',
+  'dvrst',
+  'sxmpra',
+  'gosteff',
+  'pharmacist',
+  'moondeity',
+  'phonk library',
+  'phonk house',
+  'drift phonk',
+  // Русские метки: хардтек и фонк в наших каталогах подписаны кириллицей.
+  'фонк',
+  'хардтек',
+  'хард-тек',
+  'хардбасс',
+];
+
+final List<RegExp> _labelRes = [
+  for (final w in phonkLabels)
+    RegExp(r'(^|[^\p{L}])' + RegExp.escape(w) + r'([^\p{L}]|$)', unicode: true),
+];
+
+/// Полный отбор кандидата из фонк-выдачи archive.org.
+///
+/// Жанр ищется по названию, идентификатору и автору: поле автора часто и есть
+/// жанр («Phonk Library», «KORDHELL»). Если жанровых слов нет, но запись
+/// пришла из фонк-запроса, трек всё равно берём — у фонка с вокалом в
+/// названии остаются только слова песни, и раньше такие треки не находились
+/// вообще. Чужие жанры, миксы, сборники и караоке по-прежнему отсекаются.
+bool acceptsPhonkCandidate(String title, String id, {String creator = ''}) {
+  if (!isPlayableTrackTitle(title, id)) return false;
+  final text = '$title $id $creator'.toLowerCase();
+  if (_otherGenre.hasMatch(text)) return false;
+  if (looksLikePhonk(text)) return true;
+  for (final re in _labelRes) {
+    if (re.hasMatch(text)) return true;
+  }
+  // Больше никаких «похоже на песню»: кандидат без фонк-слова, без метки и
+  // без известного исполнителя — это случайная запись из общей выдачи.
+  return false;
+}

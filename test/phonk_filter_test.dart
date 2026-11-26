@@ -91,4 +91,35 @@ void main() {
       );
     }
   });
+
+  test('фонк со словами проходит по исполнителю и метке', () {
+    // В названии только вокал — жанровых слов нет, зато исполнитель фонка.
+    expect(
+      acceptsPhonkCandidate('Murder In My Mind', 'x1', creator: 'Kordhell'),
+      isTrue,
+    );
+    expect(
+      acceptsPhonkCandidate('Night Drive', 'x2', creator: 'DVRST'),
+      isTrue,
+    );
+    // Метка в идентификаторе записи (сборники и «vol. N» режет другой фильтр).
+    expect(acceptsPhonkCandidate('Night City', 'phonk_library_3'), isTrue);
+    // Русский хардтек по метке.
+    expect(
+      acceptsPhonkCandidate('Ночной город', 'x4', creator: 'хардтек'),
+      isTrue,
+    );
+  });
+
+  test('чужие жанры не проходят даже с фонк-исполнителем рядом', () {
+    expect(
+      acceptsPhonkCandidate('Jazz Piano Ballad', 'y1', creator: 'Kordhell'),
+      isFalse,
+    );
+    expect(
+      acceptsPhonkCandidate('Phonk Type Beat 2025', 'y2', creator: 'phonk'),
+      isFalse,
+    );
+    expect(acceptsPhonkCandidate('Обычная песня', 'y3'), isFalse);
+  });
 }

@@ -101,6 +101,12 @@ class _MusicPulseRingState extends State<MusicPulseRing>
 
   @override
   Widget build(BuildContext context) {
+    // Строк треков в окне десятки, и в каждой лежит кольцо. Когда трек не
+    // играет и волна давно погасла, пульс не рисуем вовсе: ни Stack, ни
+    // AnimatedBuilder, ни лишнего RepaintBoundary на строку.
+    if (!widget.active && !_vis.isAnimating && _vis.value <= 0.001) {
+      return widget.child;
+    }
     final cs = Theme.of(context).colorScheme;
     final reduce = MotionPrefs.shouldReduceMotion;
     // Монотонный тон: одна краска на все волны. Красный бренда, чуть

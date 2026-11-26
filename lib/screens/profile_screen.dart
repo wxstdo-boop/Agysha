@@ -271,7 +271,18 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.dispose();
   }
 
-  void _onMusicChanged() => _scheduleRebuild();
+  /// Подпись видимого состояния плеера: играет/пауза, какой трек, режим
+  /// очереди. Плеер сыплет уведомлениями и на служебные поводы (смена
+  /// источника, буферизация), а профиль после каждого пересобирал весь
+  /// экран — из-за этого он «подтормаживал» во время музыки.
+  int? _musicSig;
+
+  void _onMusicChanged() {
+    final sig = Object.hash(_music.playing, _music.path, _music.mode);
+    if (sig == _musicSig) return;
+    _musicSig = sig;
+    _scheduleRebuild();
+  }
 
   /// Перестройка не чаще одного раза за микротаск: сервисы уведомляют
   /// пачками (очки, подарки, треки), и раньше каждый сигнал запускал полный
@@ -297,10 +308,22 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  /// Отпечаток списка треков: очередь плеера пересобираем только когда он
+  /// правда изменился, а не на каждое уведомление профиля.
+  int? _tracksSig;
+
   void _onServiceChanged() {
     // Список треков мог измениться (добавили/удалили) — держим очередь
     // плеера и медиауведомление в том же составе.
-    _syncMusicQueue();
+    final tracks = _service.tracks;
+    final sig = Object.hash(
+      tracks.length,
+      tracks.isEmpty ? '' : tracks.last.id,
+    );
+    if (sig != _tracksSig) {
+      _tracksSig = sig;
+      _syncMusicQueue();
+    }
     _scheduleRebuild();
   }
 
@@ -510,16 +533,25 @@ class _ProfileScreenState extends State<ProfileScreen>
   /// Порядок перебора задан не случайно: сначала жанры, потом имена тех, чей
   /// фонк/хардтек знают все. Это заметно точнее общего слова «phonk», где в
   /// топе выдачи висят чужие сборники и самодельные нарезки.
+  /// Запросы к archive.org. Кириллические и «хардтековые» варианты стоят
+  /// здесь не для красоты: русский хардтек и фонк с вокалом лежат под своими
+  /// словами, и по одному латинскому «phonk» их не видно.
   static const List<String> _phonkQueries = [
-    'hardtekk AND mediatype:audio AND format:(MP3)',
-    'drift phonk AND mediatype:audio AND format:(MP3)',
     'phonk AND mediatype:audio AND format:(MP3)',
+    'hardtekk AND mediatype:audio AND format:(MP3)',
+    'hardtek AND mediatype:audio AND format:(MP3)',
+    'хардтек AND mediatype:audio AND format:(MP3)',
+    'фонк AND mediatype:audio AND format:(MP3)',
+    'drift phonk AND mediatype:audio AND format:(MP3)',
     'russian phonk AND mediatype:audio AND format:(MP3)',
+    'русский фонк AND mediatype:audio AND format:(MP3)',
     'kordhell AND mediatype:audio AND format:(MP3)',
     'dvrst AND mediatype:audio AND format:(MP3)',
     'lxst cxntury AND mediatype:audio AND format:(MP3)',
     'moondeity AND mediatype:audio AND format:(MP3)',
     'pharmacist AND mediatype:audio AND format:(MP3)',
+    'sxmpra AND mediatype:audio AND format:(MP3)',
+    'gosteff AND mediatype:audio AND format:(MP3)',
     'brazilian phonk AND mediatype:audio AND format:(MP3)',
     'memphis phonk AND mediatype:audio AND format:(MP3)',
     'phonk bass AND mediatype:audio AND format:(MP3)',
@@ -543,7 +575,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (DateTime.now().isAfter(deadline)) break;
       final searchUri = Uri.https('archive.org', '/advancedsearch.php', {
         'q': q,
-        'fl[]': ['identifier', 'title'],
+        'fl[]': ['identifier', 'title', 'creator'],
         'sort[]': 'downloads desc',
         'rows': '80',
         'output': 'json',
@@ -554,19 +586,20 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (searchRes.statusCode != 200) continue;
       final data = json.decode(searchRes.body) as Map<String, dynamic>;
       final docs = (data['response']?['docs'] as List<dynamic>?) ?? const [];
-      final candidates = docs.where((d) {
-        final id = d['identifier']?.toString() ?? '';
-        if (id.isEmpty) return false;
-        final title = d['title']?.toString() ?? '';
-        return isPlayableTrackTitle(title, id);
-      }).toList();
-      // Только записи, где жанр или исполнитель прямо назван в заголовке
-      // или идентификаторе. Раньше при пустом отборе брался «любой настоящий
-      // трек» — и в подборку ехали случайные хаус-сеты и чужие альбомы.
+      // Жанр ищем по названию, идентификатору и автору. Фонк с вокалом часто
+      // называется просто словами песни — такие треки раньше отсекались все
+      // до одного. Чужие жанры, миксы и сборники по-прежнему не проходят.
       final onGenre = <dynamic>[];
-      for (final d in candidates) {
-        final t = '${d['title']} ${d['identifier']}';
-        if (looksLikePhonk(t)) onGenre.add(d);
+      for (final d in docs) {
+        final id = d['identifier']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        final title = d['title']?.toString() ?? '';
+        final creator = (d['creator'] is List)
+            ? (d['creator'] as List).join(' ')
+            : (d['creator']?.toString() ?? '');
+        if (acceptsPhonkCandidate(title, id, creator: creator)) {
+          onGenre.add(d);
+        }
       }
       onGenre.shuffle();
       if (onGenre.isEmpty) continue;
@@ -1844,44 +1877,52 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
           ],
         ),
-        body: AnimatedBuilder(
-          animation: _service,
-          // Ленивый список, а НЕ список готовых детей: раньше все девять
-          // карточек (вместе с сотнями строк треков и полусотней строк
-          // рейтинга) собирались ещё до первого кадра. Теперь строятся только
-          // видимые, и открытие профиля не зависит от размера коллекции.
-          builder: (context, _) {
-            final cards = <Widget Function(ThemeData)>[
-              _headerCard,
-              _nameCard,
-              _onlineCard,
-              _musicCard,
-              if (_yandexMusicEnabled) _yandexMusicCard,
-              _leaderboardCard,
-              // Очки — сразу после рейтинга: «за что» читается рядом с «кто
-              // сколько», а карточки музыки и рейтинга остаются на своих местах.
-              _scoreCard,
-              _giftsCard,
-              _eventsCard,
-            ];
-            return ListView.builder(
-              controller: _scrollCtrl,
-              padding: const EdgeInsets.fromLTRB(
-                Spacing.md,
-                Spacing.sm,
-                Spacing.md,
-                Spacing.xxl,
-              ),
-              itemCount: cards.length * 2 - 1,
-              itemBuilder: (context, i) {
-                if (i.isOdd) return const SizedBox(height: Spacing.md);
-                final card = cards[i ~/ 2];
-                return RepaintBoundary(child: card(theme));
-              },
-            );
-          },
-        ),
+        // Ленивый список, а НЕ список готовых детей: раньше все девять
+        // карточек (вместе с сотнями строк треков и полусотней строк
+        // рейтинга) собирались ещё до первого кадра. Теперь строятся только
+        // видимые, и открытие профиля не зависит от размера коллекции.
+        //
+        // Слушателей у экрана было два: `AnimatedBuilder` на сервис профиля и
+        // `setState` из тех же уведомлений. Каждое изменение (очки, трек,
+        // подарок) собирало весь видимый экран ДВАЖДЫ. Теперь одна точка —
+        // `setState` с микротаск-склейкой ниже.
+        body: _profileList(theme),
       ),
+    );
+  }
+
+  Widget _profileList(ThemeData theme) {
+    final cards = <Widget Function(ThemeData)>[
+      _headerCard,
+      _nameCard,
+      _onlineCard,
+      _musicCard,
+      if (_yandexMusicEnabled) _yandexMusicCard,
+      _leaderboardCard,
+      // Очки — сразу после рейтинга: «за что» читается рядом с «кто
+      // сколько», а карточки музыки и рейтинга остаются на своих местах.
+      _scoreCard,
+      _giftsCard,
+      _eventsCard,
+    ];
+    return ListView.builder(
+      controller: _scrollCtrl,
+      // Запас за краем экрана — ровно столько, чтобы карточка выше
+      // успевала собраться: профиль не держит в памяти пару экранов
+      // дорогих виджетов (по умолчанию 250 px).
+      scrollCacheExtent: const ScrollCacheExtent.pixels(250),
+      padding: const EdgeInsets.fromLTRB(
+        Spacing.md,
+        Spacing.sm,
+        Spacing.md,
+        Spacing.xxl,
+      ),
+      itemCount: cards.length * 2 - 1,
+      itemBuilder: (context, i) {
+        if (i.isOdd) return const SizedBox(height: Spacing.md);
+        final card = cards[i ~/ 2];
+        return RepaintBoundary(child: card(theme));
+      },
     );
   }
 }
