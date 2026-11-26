@@ -175,8 +175,6 @@ Widget _friendsKeyboard({
   required ValueChanged<String> onChar,
   required VoidCallback onBackspace,
   required VoidCallback onSpace,
-  required VoidCallback onSubmit,
-  String? actionLabel,
 }) {
   return AnimatedSize(
     duration: const Duration(milliseconds: 300),
@@ -210,8 +208,6 @@ Widget _friendsKeyboard({
                 onChar: onChar,
                 onBackspace: onBackspace,
                 onSpace: onSpace,
-                onAction: onSubmit,
-                actionLabel: actionLabel,
                 onCollapse: onClose,
               ),
             )
@@ -633,8 +629,6 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                   onChar: _kbChar,
                   onBackspace: _kbDelete,
                   onSpace: _kbSpace,
-                  onSubmit: _submit,
-                  actionLabel: Translations.t('add', context, 'Добавить'),
                 ),
               ],
             ),
@@ -1118,11 +1112,6 @@ class _FriendScoreSheetState extends State<_FriendScoreSheet> {
                   onChar: _kbChar,
                   onBackspace: () => _kbBackspace(_ctrl),
                   onSpace: () {},
-                  onSubmit: () {
-                    final score = int.tryParse(_ctrl.text.trim()) ?? 0;
-                    widget.onSave(widget.friend.copyWith(score: score));
-                  },
-                  actionLabel: Translations.t('save', context, 'Сохранить'),
                 ),
               ],
             ),

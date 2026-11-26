@@ -164,7 +164,7 @@ void main() {
     void expectGloss(String path) {
       final src = File(path).readAsStringSync();
       final saves = RegExp(
-        r'Translations\.saveOf\(context\)|Translations\.t\(.save., context',
+        r"Translations\.saveOf\(context\)|Translations\.t\(\s*'save'",
       ).allMatches(src).length;
       expect(saves, greaterThan(0), reason: '$path: нет кнопки сохранения');
       expect(

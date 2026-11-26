@@ -250,30 +250,21 @@ class _InlineKeyboardState extends State<InlineKeyboard>
             _CollapseHandle(theme: theme, onCollapse: widget.onCollapse!),
           _row(theme, _digits, widget.keyHeight),
           const SizedBox(height: 6),
-          // Смена раскладки — не подмена кадром: старый ряд мягко уходит,
-          // новый въезжает снизу с растворением. Числовой ряд и нижняя
-          // строка остаются на месте, поэтому панель не «прыгает».
+          // Смена раскладки — чистый кросс-фейд БЕЗ сдвига. Раньше новые
+          // буквы въезжали снизу, а старые уезжали: полкадра на экране жили
+          // два ряда со смещением, и набор читался как «буквы дёргаются и
+          // смещаются». Теперь буквы меняются на месте: положение каждой
+          // клавиши одинаково в обеих раскладках, двигаться нечему.
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
+            duration: const Duration(milliseconds: 160),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             layoutBuilder: (current, previous) => Stack(
               alignment: Alignment.center,
               children: [...previous, if (current != null) current],
             ),
-            transitionBuilder: (child, animation) {
-              final t = Curves.easeOutCubic.transform(animation.value);
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.10),
-                    end: Offset.zero,
-                  ).animate(AlwaysStoppedAnimation(t)),
-                  child: child,
-                ),
-              );
-            },
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
             child: Column(
               key: ValueKey(_layout),
               mainAxisSize: MainAxisSize.min,
@@ -701,14 +692,14 @@ class _KeyState extends State<_Key> {
         // вдавливание (владелец: «отдачу плавнее и медленнее надо, а то
         // быстро»). Вход мягче, возврат ещё длиннее — палец успевает
         // почувствовать ход, а следующая клавиша нажимается поверх.
-        pressedScale: 0.86,
-        duration: const Duration(milliseconds: 190),
-        releaseDuration: const Duration(milliseconds: 340),
-        // 3D-отдача: клавиша наклоняется к пальцу (тише общего угла —
-        // на 40-пиксельной шляпке крупный угол читался как перекос), а
-        // поверх заливки идёт «мокрый» блик — его видно и на сплошной
-        // красной клавише-действии.
-        maxTiltAngle: 0.13,
+        pressedScale: 0.90,
+        duration: const Duration(milliseconds: 150),
+        releaseDuration: const Duration(milliseconds: 260),
+        // Наклон клавиши ВЫКЛЮЧЕН: при быстром наборе каждая шляпка
+        // поворачивалась под пальцем, и буквы на панели «дёргались и
+        // смещались». Нажатие теперь читается вдавливанием и «мокрым»
+        // бликом — их видно и на сплошной красной клавише-действии.
+        enableTilt: false,
         pressOverlay: pressGloss(
           BorderRadius.circular(Radii.md),
           strength: 0.24,

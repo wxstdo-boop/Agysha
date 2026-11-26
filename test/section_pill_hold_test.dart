@@ -160,4 +160,43 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
   });
+
+  testWidgets('нажатие не сжимает подпись раздела и не тянет её влево', (
+    tester,
+  ) async {
+    await pumpPill(tester);
+    final label = find
+        .descendant(
+          of: find.byType(SectionPill),
+          matching: find.text('Привычки'),
+        )
+        .first;
+    final rest = tester.getRect(label);
+
+    // Держим палец на подписи все кадры, пока идёт отдача нажатия.
+    final gesture = await tester.startGesture(tester.getCenter(label));
+    var widest = 0.0;
+    var narrowest = double.infinity;
+    var minLeft = double.infinity;
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      final r = tester.getRect(label);
+      widest = r.width > widest ? r.width : widest;
+      narrowest = r.width < narrowest ? r.width : narrowest;
+      minLeft = r.left < minLeft ? r.left : minLeft;
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      widest - narrowest,
+      lessThan(0.5),
+      reason: 'подпись не должна скукоживаться под пальцем',
+    );
+    expect(
+      (minLeft - rest.left).abs(),
+      lessThan(0.5),
+      reason: 'подпись не должна съезжать влево при нажатии',
+    );
+  });
 }
