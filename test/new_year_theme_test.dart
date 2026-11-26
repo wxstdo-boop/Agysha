@@ -4,11 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:agysha/services/prefs.dart';
 import 'package:agysha/services/settings_service.dart';
-import 'package:agysha/theme/itshnik_theme.dart';
 import 'package:agysha/theme/new_year_keys.dart';
 import 'package:agysha/theme/new_year_theme.dart';
 import 'package:agysha/widgets/exclusive_theme_tiles.dart';
-import 'package:agysha/widgets/itshnik_overlay.dart';
 import 'package:agysha/widgets/new_year_overlay.dart';
 
 /// Четвёртая эксклюзивная тема «Новый год»: срок до 31.01.2027 включительно,
@@ -117,47 +115,6 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(CustomPaint), findsWidgets);
-    });
-  });
-
-  group('тумблеры новогодних эффектов IT-шника', () {
-    Future<void> pumpBackdrop(
-      WidgetTester tester, {
-      required bool snow,
-      required bool garland,
-    }) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ItshnikBackdrop(
-            variant: ItshnikVariant.newYear,
-            newYearSnow: snow,
-            newYearGarland: garland,
-            child: const SizedBox.expand(),
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-
-    testWidgets('выключение и повторное включение не ломают слой', (tester) async {
-      await pumpBackdrop(tester, snow: true, garland: true);
-      await pumpBackdrop(tester, snow: false, garland: false);
-      await tester.pump(const Duration(milliseconds: 600));
-      await pumpBackdrop(tester, snow: true, garland: true);
-      await tester.pump(const Duration(milliseconds: 600));
-      await pumpBackdrop(tester, snow: false, garland: true);
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('быстрое переключение туда-обратно завершается', (tester) async {
-      await pumpBackdrop(tester, snow: true, garland: true);
-      for (var i = 0; i < 6; i++) {
-        await pumpBackdrop(tester, snow: i.isEven, garland: i.isEven);
-        await tester.pump(const Duration(milliseconds: 40));
-      }
-      await tester.pump(const Duration(seconds: 1));
-      expect(tester.takeException(), isNull);
     });
   });
 }

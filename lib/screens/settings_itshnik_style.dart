@@ -45,44 +45,6 @@ extension _SettingsItshnikStyle on _SettingsScreenState {
                 ),
             ],
           ),
-          if (appState.itshnikVariant == ItshnikVariant.newYear) ...[
-            const SizedBox(height: 16),
-            Text(
-              Translations.t(
-                'itshnikNewYearEffects',
-                context,
-                'НОВОГОДНИЕ ЭФФЕКТЫ',
-              ),
-              style: labelStyle,
-            ),
-            const SizedBox(height: 4),
-            _ItshnikToggleRow(
-              label: Translations.t(
-                'itshnikNewYearSnow',
-                context,
-                'Снег, снежинки и искры',
-              ),
-              value: appState.itshnikNewYearSnow,
-              color: skin.accent,
-              onChanged: (value) {
-                Haptics.select();
-                appState.setItshnikNewYearSnow(value);
-              },
-            ),
-            _ItshnikToggleRow(
-              label: Translations.t(
-                'itshnikNewYearGarland',
-                context,
-                'Гирлянды, игрушки и огоньки',
-              ),
-              value: appState.itshnikNewYearGarland,
-              color: skin.accentAlt,
-              onChanged: (value) {
-                Haptics.select();
-                appState.setItshnikNewYearGarland(value);
-              },
-            ),
-          ],
           const SizedBox(height: 16),
           Text('ШРИФТ', style: labelStyle),
           const SizedBox(height: 8),
@@ -193,11 +155,6 @@ extension _SettingsItshnikStyle on _SettingsScreenState {
           'itshnikVariantFrost',
           context,
           'Мороз',
-        ),
-        ItshnikVariant.newYear => Translations.t(
-          'itshnikVariantNewYear',
-          context,
-          'Новый год',
         ),
       };
 
@@ -377,46 +334,6 @@ class _ItshnikActionButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Строка-тумблер внутри терминального блока «IT-шника».
-class _ItshnikToggleRow extends StatelessWidget {
-  const _ItshnikToggleRow({
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.onChanged,
-  });
-
-  final String label;
-  final bool value;
-  final Color color;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'ItsPixel',
-              fontSize: 13,
-              height: 1.2,
-              color: color,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Switch.adaptive(
-          value: value,
-          activeThumbColor: color,
-          onChanged: onChanged,
-        ),
-      ],
     );
   }
 }

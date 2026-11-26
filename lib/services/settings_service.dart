@@ -222,12 +222,7 @@ class SettingsService {
   static const _keyItshnikFont = 'itshnik_font';
   static const _keyItshnikWallpaper = 'itshnik_wallpaper';
   static const _keyItshnikWallpaperVideo = 'itshnik_wallpaper_is_video';
-  // Совпадают с ItshnikBackdrop.newYear*PrefsKey — дублируем литералы,
-  // чтобы сервис не тянул виджеты.
-  static const _keyItshnikNewYearSnow = 'itshnik_new_year_snow';
-  static const _keyItshnikNewYearGarland = 'itshnik_new_year_garland';
-
-  /// Вариант «IT-шника»: 'phosphor' | 'magenta' | 'frost' | 'new_year'.
+  /// Вариант «IT-шника»: 'phosphor' | 'magenta' | 'frost'.
   static Future<String> loadItshnikVariant() async {
     final map = await _loadSettings();
     final value =
@@ -236,8 +231,11 @@ class SettingsService {
     switch (value) {
       case 'magenta':
       case 'frost':
-      case 'new_year':
         return value!;
+      // Новогодний вид из «IT-шника» убран: у кого он был сохранён,
+      // получают ближайший зимний — «Мороз», без праздничных слоёв.
+      case 'new_year':
+        return 'frost';
       default:
         return 'phosphor';
     }
@@ -248,19 +246,6 @@ class SettingsService {
     map[_keyItshnikVariant] = key;
     await _saveSettings(map);
   }
-
-  /// Тумблеры новогодних слоёв «IT-шника» (Вид → Новый год).
-  /// Читаются синхронно: фон рисуется на первом же кадре.
-  static bool readItshnikNewYearSnow() => _readBoolSafe(_keyItshnikNewYearSnow);
-
-  static bool readItshnikNewYearGarland() =>
-      _readBoolSafe(_keyItshnikNewYearGarland);
-
-  static Future<void> saveItshnikNewYearSnow(bool value) =>
-      globalPrefs.setBool(_keyItshnikNewYearSnow, value);
-
-  static Future<void> saveItshnikNewYearGarland(bool value) =>
-      globalPrefs.setBool(_keyItshnikNewYearGarland, value);
 
   /// Шрифт «IT-шника»: 'pixel' | 'digits' | 'dash'.
   static Future<String> loadItshnikFont() async {

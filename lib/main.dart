@@ -1853,8 +1853,6 @@ class AgyshaAppState extends State<AgyshaApp>
   /// Одноразовый таймер на срок новогодней темы: приложение может быть
   /// открыто дольше, чем идёт 31 января, и тема обязана погаснуть сама.
   Timer? _newYearDeadlineTimer;
-  bool _itshnikNewYearSnow = true;
-  bool _itshnikNewYearGarland = true;
   Key _appKey = UniqueKey();
   bool _locked = false;
 
@@ -2048,24 +2046,6 @@ class AgyshaAppState extends State<AgyshaApp>
   String? get itshnikWallpaper => _itshnikWallpaper;
 
   bool get itshnikWallpaperIsVideo => _itshnikWallpaperIsVideo;
-
-  /// Новогодние слои «IT-шника» (Вид → Новый год): снег и гирлянды
-  /// выключаются по отдельности, чтобы не жечь батарею.
-  bool get itshnikNewYearSnow => _itshnikNewYearSnow;
-
-  bool get itshnikNewYearGarland => _itshnikNewYearGarland;
-
-  void setItshnikNewYearSnow(bool value) {
-    if (value == _itshnikNewYearSnow) return;
-    setState(() => _itshnikNewYearSnow = value);
-    SettingsService.saveItshnikNewYearSnow(value);
-  }
-
-  void setItshnikNewYearGarland(bool value) {
-    if (value == _itshnikNewYearGarland) return;
-    setState(() => _itshnikNewYearGarland = value);
-    SettingsService.saveItshnikNewYearGarland(value);
-  }
 
   void setItshnikVariant(ItshnikVariant variant) {
     if (variant == _itshnikVariant) return;
@@ -2346,9 +2326,7 @@ class AgyshaAppState extends State<AgyshaApp>
     _residentWallpaper = widget.initialResidentWallpaper;
     _cyberWallpaper = widget.initialCyberWallpaper;
     _newYearUnlocked = widget.initialNewYearUnlocked;
-    _itshnikNewYearSnow = SettingsService.readItshnikNewYearSnow();
     _armNewYearDeadline();
-    _itshnikNewYearGarland = SettingsService.readItshnikNewYearGarland();
     _locked = widget.initialLocked;
     aiLockScreenVisible.value = _locked;
     WidgetsBinding.instance.addObserver(this);
@@ -3122,8 +3100,6 @@ class AgyshaAppState extends State<AgyshaApp>
                             variant: _itshnikVariant,
                             wallpaper: _itshnikWallpaper,
                             wallpaperIsVideo: _itshnikWallpaperIsVideo,
-                            newYearSnow: _itshnikNewYearSnow,
-                            newYearGarland: _itshnikNewYearGarland,
                             child: const SizedBox.expand(),
                           ),
                         // Фон «Резидента» — корпоративный терминал: гексагоны,

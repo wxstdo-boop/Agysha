@@ -131,10 +131,7 @@ enum ItshnikVariant {
   magenta('magenta'),
 
   /// Ледяной бирюзово-голубой CRT.
-  frost('frost'),
-
-  /// Новый год: ёлочная зелень, золото и снег поверх неона.
-  newYear('new_year');
+  frost('frost');
 
   const ItshnikVariant(this.key);
 
@@ -216,24 +213,10 @@ class ItshnikSkin {
     snow: Color(0xFFEAFBFF),
   );
 
-  static const ItshnikSkin newYear = ItshnikSkin(
-    accent: Color(0xFF63F5A5),
-    accentSoft: Color(0xFFCFFFE4),
-    accentDim: Color(0xFFA5C9B4),
-    accentAlt: Color(0xFFFF5A5A),
-    accentAltSoft: Color(0xFFFFD4D4),
-    glow: Color(0xFFFFD24B),
-    ink: Color(0xFF04100C),
-    inkTop: Color(0xFF0E2318),
-    grid: Color(0xFF2E5540),
-    snow: Color(0xFFFFFFFF),
-  );
-
   static ItshnikSkin of(ItshnikVariant variant) => switch (variant) {
     ItshnikVariant.phosphor => phosphor,
     ItshnikVariant.magenta => magenta,
     ItshnikVariant.frost => frost,
-    ItshnikVariant.newYear => newYear,
   };
 }
 

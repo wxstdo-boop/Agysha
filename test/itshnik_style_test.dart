@@ -76,16 +76,18 @@ void main() {
     expect(await SettingsService.loadItshnikWallpaper(), isNull);
   });
 
-  test('у каждого вида свой акцент, у нового года есть снег', () {
+  test('у каждого вида свой акцент', () {
     final accents = {
       for (final v in ItshnikVariant.values) ItshnikSkin.of(v).accent,
     };
     expect(accents, hasLength(ItshnikVariant.values.length));
-    expect(ItshnikSkin.of(ItshnikVariant.newYear).snow, isNotNull);
-    expect(
-      ItshnikSkin.of(ItshnikVariant.newYear).accent,
-      isNot(ItshnikSkin.of(ItshnikVariant.phosphor).accent),
-    );
+  });
+
+  test('новогоднего вида у «IT-шника» больше нет', () {
+    expect(ItshnikVariant.values.map((v) => v.key), isNot(contains('new_year')));
+    // Сохранённый «new_year» у старой версии мягко переезжает в «Мороз».
+    expect(ItshnikVariant.fromKey('new_year'), ItshnikVariant.phosphor);
+    expect(ItshnikVariant.fromKey('frost'), ItshnikVariant.frost);
   });
 
   test('шрифт темы переключается и не трогает базовую тему', () {
