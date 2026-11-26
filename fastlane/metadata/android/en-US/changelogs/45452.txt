@@ -1,0 +1,2 @@
+- ✨ Новогодние эффекты, надёжные уведомления и инструкция Яндекс Музыки
+- ✨ Checkpoint: before update notifications hardening
