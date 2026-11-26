@@ -40,6 +40,8 @@ class MainActivity : AudioServiceActivity() {
     private val RENDER_CHANNEL = "com.wetcorp.agysha/renderer"
     private val RENDER_PREFS = "agysha_render"
     private val RENDER_KEY = "mode"
+    private val LIFECYCLE_PREFS = "agysha_lifecycle"
+    private val TASK_CLOSED_KEY = "task_closed"
     private var activeRenderer = "skia"
     private var methodChannel: MethodChannel? = null
     private var launchChannel: MethodChannel? = null
@@ -48,6 +50,9 @@ class MainActivity : AudioServiceActivity() {
     // до первого запроса из Dart: на холодном старте движок ещё не готов
     // её принять, и без этого флага чат не открывался вообще.
     private var pendingOpenAdaChat = false
+
+    /** Задачу убрали из недавних — Dart должен подняться заново (см. onDestroy). */
+    private var taskClosedAfterDestroy = false
 
     private fun captureOpenAdaChat(intent: Intent?) {
         if (intent == null) return
@@ -105,6 +110,12 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Флаг переживает смерть процесса: если задачу снесли, а процесс
+        // потом убили, следующий холодный старт всё равно начнётся с чистого
+        // листа — метку надо только погасить, чтобы она не «дёрнула»
+        // приложение ещё раз на первом resume.
+        taskClosedAfterDestroy = getSharedPreferences(LIFECYCLE_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(TASK_CLOSED_KEY, false)
         // Edge-to-edge: контент рисуется ПОД системным статус-баром, чтобы
         // глобальное скругление углов (ClipRRect в Dart) доходило и до
         // верхних углов экрана. На MIUI/HyperOS сам по себе не включает
@@ -244,6 +255,16 @@ class MainActivity : AudioServiceActivity() {
                     val pending = pendingOpenAdaChat
                     pendingOpenAdaChat = false
                     result.success(pending)
+                }
+                // Задачу убрали из недавних (см. onDestroy): движок остался
+                // живым, и в Dart пора собрать приложение заново, чтобы оно
+                // открылось как обычный запуск, а не как «замороженный фон».
+                "consumeTaskClosed" -> {
+                    val closed = taskClosedAfterDestroy
+                    taskClosedAfterDestroy = false
+                    getSharedPreferences(LIFECYCLE_PREFS, Context.MODE_PRIVATE)
+                        .edit().putBoolean(TASK_CLOSED_KEY, false).apply()
+                    result.success(closed)
                 }
                 else -> result.notImplemented()
             }
@@ -1406,6 +1427,49 @@ class MainActivity : AudioServiceActivity() {
             )
         }
         startActivity(intent)
+    }
+
+    /**
+     * Задачу убрали из недавних или приложение закрыли кнопкой «назад».
+     *
+     * Активность уничтожается (`isFinishing`), но движок `audio_service`
+     * остаётся в кэше — вместе со всем состоянием Dart. Метка говорит
+     * следующему resume: собери приложение заново, как при обычном запуске.
+     * Смена конфигурации (поворот, тема) сюда не попадает: это не закрытие.
+     */
+    override fun onDestroy() {
+        if (isFinishing && !isChangingConfigurations) {
+            taskClosedAfterDestroy = true
+            getSharedPreferences(LIFECYCLE_PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(TASK_CLOSED_KEY, true).apply()
+        }
+        super.onDestroy()
+    }
+
+    /**
+     * Движок после «убрать из недавних» — тот же самый.
+     *
+     * `AudioServiceActivity` берёт движок из кэша `AudioServicePlugin`
+     * (ради музыки в фоне), а `launchMode=singleTask` переиспользует задачу.
+     * Задачу снесли — активность уничтожилась, но Flutter-движок и всё
+     * состояние Dart остались жить. При следующем открытии активность
+     * цепляется к ТОМУ ЖЕ движку, и его lifecycle-канал может остаться на
+     * `paused`/`hidden`: в Dart тогда не приходит `resumed`, планировщик
+     * кадров стоит (`framesEnabled == false`), и приложение выглядит «как
+     * будто оно в фоне» — застывший кадр без анимаций и реакции.
+     *
+     * Поэтому при каждом выходе активности на передний план явно повторяем
+     * `appIsResumed()`. Событие идемпотентно (повторный `resumed` безопасен,
+     * перепланировка уведомлений в Dart троттлится), а будильники и служба
+     * звонка живут в своих сервисах и этой правкой не затрагиваются.
+     */
+    override fun onPostResume() {
+        super.onPostResume()
+        try {
+            flutterEngine?.lifecycleChannel?.appIsResumed()
+        } catch (e: Exception) {
+            Log.e("MainActivity", "appIsResumed failed: $e")
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

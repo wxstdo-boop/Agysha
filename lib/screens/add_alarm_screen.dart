@@ -132,7 +132,9 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
   Future<void> _fadeOutStop(AudioPlayer? p, int seq) async {
     if (p == null) return;
     try {
-      for (var i = 10; i > 0; i--) {
+      // Последний шаг — НОЛЬ: stop() на остаточной громкости режет волну
+      // на полупериоде и даёт слышимый щелчок/шум в конце.
+      for (var i = 10; i >= 0; i--) {
         // Появилось новое прослушивание — рампу сворачиваем, не трогаем звук.
         if (seq != _playSeq) return;
         await p.setVolume(i / 10);

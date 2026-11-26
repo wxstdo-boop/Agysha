@@ -60,6 +60,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import '../widgets/agysha_confirm_dialog.dart';
 import '../widgets/exclusive_theme_tiles.dart';
+import '../theme/matrix_theme.dart';
 import '../theme/resident_theme.dart';
 import '../theme/new_year_theme.dart';
 import '../services/style_options.dart';
