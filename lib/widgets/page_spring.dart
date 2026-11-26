@@ -129,7 +129,12 @@ class PageSpring {
     final perPage = pos.viewportDimension * controller.viewportFraction;
     if (perPage <= 0) return;
     final delta = (_pos - current) * perPage;
-    if (delta.abs() < 0.01) return;
+    // 0.4 px, а не 0.01: в хвосте доводки пружина ползёт субпикселями, и
+    // каждый такой jumpTo перекладывал и перерисовывал весь экран раздела
+    // ради смещения меньше пикселя. На глаз разницы нет, а финиш переезда
+    // перестал стоить полный кадр каждый тик — это и читалось как «подлаг
+    // в конце».
+    if (delta.abs() < 0.4) return;
     pos.jumpTo(pos.pixels + delta);
   }
 

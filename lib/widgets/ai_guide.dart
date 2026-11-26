@@ -2489,18 +2489,20 @@ class _AiChatBodyState extends State<_AiChatBody>
             // Поле имеет постоянный размер при движении IME. Отдельный
             // слой позволяет сдвигать его вместе с листом без полной
             // перерисовки поля на каждом кадре клавиатуры.
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-              // Listener, а не только TextField.onTap: после сворачивания
-              // панели первое касание поля иногда не доходило до onTap
-              // (жест забирал родитель/анимация), и клавиатура открывалась
-              // лишь со второго тапа. Сырой pointer-down срабатывает всегда
-              // и идемпотентен.
-              child: Listener(
-                behavior: HitTestBehavior.translucent,
-                onPointerDown: (_) {
-                  if (!_keyboardOpen) _expandKeyboard();
-                },
+            // Listener, а не только TextField.onTap: после сворачивания
+            // панели первое касание поля иногда не доходило до onTap
+            // (жест забирал родитель/анимация), и клавиатура открывалась
+            // лишь со второго тапа. Сырой pointer-down срабатывает всегда и
+            // идемпотентен, а обёрнут он вокруг ВСЕЙ полосы ввода с её
+            // отступами — иначе касание рядом с полем (по паддингу) уходило
+            // в пустоту и тоже требовало второго тапа.
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) {
+                if (!_keyboardOpen) _expandKeyboard();
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
                 child: Row(
                   children: [
                     Expanded(

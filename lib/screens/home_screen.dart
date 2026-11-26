@@ -472,7 +472,10 @@ class _HomeScreenState extends State<HomeScreen>
     final a = sectionPillSnapByPage[from] ?? sectionOffsetByPage[from] ?? 0.0;
     final b = sectionPillSnapByPage[to] ?? sectionOffsetByPage[to] ?? a;
     final value = a + (b - a) * t;
-    if ((sectionScrollOffset.value - value).abs() > 0.08) {
+    // 0.6 px: в хвосте доводки офсет дёргался на десятые доли пикселя и
+    // пересобирал заголовки всех разделов каждый кадр. Такая мелкая правка
+    // глазу не видна, а финальные кадры переезда были самыми тяжёлыми.
+    if ((sectionScrollOffset.value - value).abs() > 0.6) {
       sectionScrollOffset.value = value;
       // ВАЖНО: не дергаем sectionPillVisible.value во время дробного листания карусели,
       // чтобы таблетка не пряталась и не дергалась на стыке разделов.
@@ -489,9 +492,16 @@ class _HomeScreenState extends State<HomeScreen>
     final settled = page.round();
     _lastSettledPage = settled;
     if (_currentIndex.value != settled) _currentIndex.value = settled;
-    sectionScrollOffset.value =
-        sectionPillSnapByPage[settled] ?? sectionOffsetByPage[settled] ?? 0;
-    sectionPillVisible.value = sectionScrollOffset.value <= 8;
+    // Запись офсета таблетки — на СЛЕДУЮЩИЙ кадр. Раньше она приходила тем
+    // же кадром, что и остановка пружины: он и так самый дорогой (последний
+    // кадр переезда, старт подсветки раздела), а тут ещё пересобирались
+    // заголовки всех разделов. Кадром позже этого никто не видит.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      sectionScrollOffset.value =
+          sectionPillSnapByPage[settled] ?? sectionOffsetByPage[settled] ?? 0;
+      sectionPillVisible.value = sectionScrollOffset.value <= 8;
+    });
     _saveTabSoon(settled);
   }
 

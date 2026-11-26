@@ -1031,7 +1031,11 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(16),
+                                      // Почти прямоугольник: владелец просил,
+                                      // чтобы карточка звука читалась
+                                      // «прямоугольничком», а не пилюлей-
+                                      // капсулой. Радиус только смягчает углы.
+                                      borderRadius: BorderRadius.circular(9),
                                       // Плоская монотонная заливка: без
                                       // градиента и без свечения, никакого
                                       // «отсвета» за таблеткой.

@@ -224,12 +224,7 @@ class _InlineKeyboardState extends State<InlineKeyboard>
       // читается целым — владелец просил именно уменьшить панель по бокам.
       // Боковые поля панели поджаты: клавиши должны быть шире, чтобы по ним
       // попадать пальцем (владелец: «кнопки на клавиатуре расширь»).
-      padding: EdgeInsets.fromLTRB(
-        2,
-        widget.onCollapse == null ? 8 : 0,
-        2,
-        10,
-      ),
+      padding: EdgeInsets.fromLTRB(2, widget.onCollapse == null ? 8 : 0, 2, 10),
       decoration: BoxDecoration(
         // Панель — нейтральное стекло: сквозь неё просвечивает лист, и
         // клавиатура читается его частью, а не чужой красной вставкой.
@@ -560,9 +555,14 @@ class InlineKeyboardHandle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
+    // Сырой pointer-down вместо onTap: свёрнутая панель живёт внутри
+    // AnimatedSwitcher/SizeTransition, и после опускания клавиатуры первое
+    // касание иногда уходило в арену жестов уезжающего старого ребёнка —
+    // панель открывалась лишь со второго тапа. Listener срабатывает до
+    // арены и всегда, а повторный вызов раскрытия идемпотентен.
+    return Listener(
       behavior: HitTestBehavior.opaque,
-      onTap: () {
+      onPointerDown: (_) {
         Haptics.light();
         onExpand();
       },
