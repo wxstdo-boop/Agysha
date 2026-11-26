@@ -1897,13 +1897,19 @@ class _AiChatBodyState extends State<_AiChatBody>
     try {
       final rewards = await AiGuideService.collectRewards(_lang);
       if (!mounted || rewards.isEmpty) return;
-      setState(() {
-        for (final r in rewards) {
-          _pushMessage(AiMessage(isUser: false, text: r, ts: _nextTs()));
+      // По одному пузырю с паузой: пачка наград одним setState появлялась
+      // рывком и читалась как «экран мигнул».
+      for (var i = 0; i < rewards.length; i++) {
+        if (!mounted) return;
+        setState(() {
+          _pushMessage(AiMessage(isUser: false, text: rewards[i], ts: _nextTs()));
+        });
+        _scrollToBottom();
+        if (i < rewards.length - 1) {
+          await Future<void>.delayed(const Duration(milliseconds: 340));
         }
-      });
+      }
       _saveHistory();
-      _scrollToBottom();
     } catch (_) {
       // Награды — не критично: сбой не должен ронять чат.
     }

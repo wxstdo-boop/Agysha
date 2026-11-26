@@ -161,12 +161,7 @@ class AlarmForegroundService : Service() {
     private fun resetAudio() {
         handler.removeCallbacksAndMessages(null)
         vibrating = false
-        try {
-            player?.stop()
-        } catch (_: Exception) {}
-        try {
-            player?.release()
-        } catch (_: Exception) {}
+        fadeOutAndStop(player)
         player = null
         try {
             ringtone?.stop()
@@ -389,6 +384,47 @@ class AlarmForegroundService : Service() {
     }
 
     /**
+     * Плавно гасит плеер и только потом его останавливает.
+     *
+     * `MediaPlayer.stop()` на полной громкости обрывает волну посреди
+     * периода — на Realme это слышно как щелчок/шум в конце звонка
+     * («заедание» на выключении). Поэтому громкость уходит в ноль за
+     * ~120 мс маленькими шагами и лишь затем плеер останавливается и
+     * освобождается. Шаги идут на отдельном Handler: `resetAudio()` в
+     * начале следующего звонка чистит основной `handler`, и затухание
+     * прошлого плеера не должно обрываться/теряться из-за этого.
+     * Ссылка на поле не используется — плеер уже мог быть заменён.
+     */
+    private fun fadeOutAndStop(mp: MediaPlayer?) {
+        if (mp == null) return
+        val fadeHandler = Handler(Looper.getMainLooper())
+        val steps = 6
+        var left = steps
+        val step = object : Runnable {
+            override fun run() {
+                if (left > 0) {
+                    val vol = left.toFloat() / steps
+                    try {
+                        mp.setVolume(vol, vol)
+                    } catch (_: Exception) {
+                        left = 0
+                    }
+                    left--
+                    fadeHandler.postDelayed(this, 20L)
+                    return
+                }
+                try {
+                    mp.stop()
+                } catch (_: Exception) {}
+                try {
+                    mp.release()
+                } catch (_: Exception) {}
+            }
+        }
+        step.run()
+    }
+
+    /**
      * Плавное нарастание звука (crescendo): стартует с едва слышимого уровня
      * (0.05) и мягко по квадратичной кривой выходит на 100% за 25 секунд.
      * Защищает от утреннего испуга при звонке.
@@ -469,10 +505,7 @@ class AlarmForegroundService : Service() {
     private fun stopEverything() {
         handler.removeCallbacksAndMessages(null)
         vibrating = false
-        try {
-            player?.stop()
-            player?.release()
-        } catch (_: Exception) {}
+        fadeOutAndStop(player)
         player = null
         try {
             ringtone?.stop()

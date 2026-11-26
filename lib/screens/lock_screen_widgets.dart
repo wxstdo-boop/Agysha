@@ -1366,6 +1366,28 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               }
               final scale = 1 - 0.155 * press * (1 - lift);
               matrix.scaleByDouble(scale, scale, 1.0, 1.0);
+              // «Тянущееся стекло»: клавиша вытягивается В СТОРОНУ пальца,
+              // поперёк — чуть поджимается. Направление любое: матрица
+              // поворачивается на угол пальца, растягивает по этой оси и
+              // поворачивается назад, поэтому диагональ тянется диагональю,
+              // а не суммой двух осевых растяжений (та давала «подушку»).
+              // Амплитуда мала: растяжение читается как живая отдача, а не
+              // как деформация клавиши. Всё на уже сглаженных press/tilt/aim,
+              // поэтому ход остаётся ровным при любом потоке касаний.
+              final aimLen = aim.distance;
+              final stretchK =
+                  press * (1 - lift) * tilt * aimLen.clamp(0.0, 1.0);
+              if (stretchK > 0.001) {
+                final angle = math.atan2(aim.dy, aim.dx);
+                matrix.rotateZ(angle);
+                matrix.scaleByDouble(
+                  1 + 0.115 * stretchK,
+                  1 - 0.035 * stretchK,
+                  1.0,
+                  1.0,
+                );
+                matrix.rotateZ(-angle);
+              }
               return Transform(
                 transform: matrix,
                 alignment: Alignment.center,

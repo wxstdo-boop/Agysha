@@ -17,12 +17,14 @@ import 'widgets/mutilated_overlay.dart';
 import 'widgets/metel_overlay.dart';
 import 'widgets/itshnik_overlay.dart';
 import 'widgets/itshnik_tap_effects.dart';
+import 'widgets/matrix_overlay.dart';
 import 'widgets/resident_overlay.dart';
 import 'widgets/resident_tap_effects.dart';
 import 'widgets/cyber_overlay.dart';
 import 'widgets/cyber_tap_effects.dart';
 import 'theme/cyber_theme.dart';
 import 'theme/itshnik_theme.dart';
+import 'theme/matrix_theme.dart';
 import 'theme/resident_theme.dart';
 import 'theme/new_year_keys.dart';
 import 'theme/new_year_theme.dart';
@@ -76,6 +78,7 @@ import 'overlay/launch_intent.dart'
     show
         listenOpenAdaChat,
         consumePendingOpenAdaChat,
+        consumeTaskClosed,
         shouldOpenAdaChatOnLaunch;
 import 'widgets/ada_avatars.dart';
 import 'widgets/ai_guide.dart';
@@ -1233,6 +1236,11 @@ Future<void> startAppForTesting() => _startApp(Stopwatch()..start());
 bool startupReachedApp() => _startupReachedApp;
 bool _startupReachedApp = false;
 
+/// Сторож старта уже поднял приложение с настройками по умолчанию.
+/// Поздняя инициализация в этом случае НЕ вызывает `runApp` повторно —
+/// иначе дерево пересоздалось бы у человека под пальцами.
+bool _startupWatchdogFired = false;
+
 void main() async {
   // Засекаем старт: если инициализация затянется, счёт пойдёт в сплэш
   // (см. [AgyshaApp.splashElapsedMs]) и двойного ожидания не будет.
@@ -1393,6 +1401,35 @@ void _openAdaFromBubble() {
   }());
 }
 
+/// Страховка от «вечного белого экрана» на старте.
+///
+/// Если инициализация зависла на любом шаге (platform-канал не ответил,
+/// Keystore занят, диск занят), на экране остаётся фон первого кадра —
+/// в светлой теме это почти белое полотно. Человек видит «приложение
+/// открылось и умерло». Через [_kStartupWatchdog] секунд поднимаем
+/// приложение принудительно с настройками по умолчанию: дальше сервисы
+/// сами дочитают prefs и обновят тему. PIN при этом спрашиваем, если он
+/// вообще задан, — занижать блокировку нельзя.
+Timer? _startupWatchdogTimer;
+const Duration _kStartupWatchdog = Duration(seconds: 9);
+
+void _armStartupWatchdog() {
+  _startupWatchdogTimer?.cancel();
+  _startupWatchdogTimer = Timer(_kStartupWatchdog, () {
+    if (_startupReachedApp) return;
+    _startupReachedApp = true;
+    _startupWatchdogFired = true;
+    var hasPin = false;
+    try {
+      hasPin = PinService.hasPinSync();
+    } catch (_) {
+      hasPin = true; // Не смогли прочитать — считаем, что PIN есть.
+    }
+    debugPrint('startup: сторож сработал, поднимаемся с умолчаниями');
+    runApp(AgyshaApp(initialLocked: hasPin));
+  });
+}
+
 /// Запуск приложения. Вынесено из [main], чтобы экран диагностики сбоя
 /// старта мог повторить попытку: `onRetry` вызывает эту же функцию, и
 /// успешный запуск просто заменяет диагностический корень рабочим.
@@ -1408,6 +1445,7 @@ Future<void> _startApp([Stopwatch? bootClock]) async {
     await _runStartup(bootClock);
   } else {
     runApp(const _BootBackdrop());
+    _armStartupWatchdog();
     // Даём движку нарисовать первый кадр, чтобы окно Android гарантированно
     // сменилось фоном до дисковых и platform-вызовов. Ожидание ОГРАНИЧЕНО:
     // если приложение открылось, но кадры пока не идут (окно перекрыто
@@ -1523,7 +1561,12 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
   // Вызов ДО runApp может быть сброшен первым кадром Flutter, поэтому
   // повторяем его в postFrameCallback сразу после первого кадра.
   if (!kIsWeb) {
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    // Без ограничения этот вызов мог не ответить (занятый канал движка) и
+    // держал ВСЮ инициализацию: на экране оставался фон первого кадра —
+    // «вечный белый экран». Режим всё равно переставится ниже, после runApp.
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.edgeToEdge,
+    ).timeout(const Duration(milliseconds: 400), onTimeout: () {});
   }
   // Запуск — два независимых берега вместо одной цепочки.
   //
@@ -1606,7 +1649,14 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
     onTimeout: () => null,
   );
 
+  if (_startupWatchdogFired) {
+    // Сторож уже поднял приложение (см. [_armStartupWatchdog]). Повторный
+    // runApp пересоздал бы дерево на глазах у человека — молча выходим,
+    // сервисы дочитают настройки сами.
+    return;
+  }
   _startupReachedApp = true;
+  _startupWatchdogTimer?.cancel();
   runApp(
     AgyshaApp(
       initialLocked: ready.hasPin,
@@ -1982,6 +2032,9 @@ class AgyshaAppState extends State<AgyshaApp>
         // «Метель» — подарок 12-го дня: холодный белый снег, поэтому только
         // светлая.
         return ThemeMode.light;
+      case MatrixPalette.key:
+        // «Матрица» — зелёный терминал, всегда тёмная.
+        return ThemeMode.dark;
       case ItshnikPalette.key:
       case ResidentPalette.key:
       case CyberPalette.key:
@@ -2515,78 +2568,98 @@ class AgyshaAppState extends State<AgyshaApp>
       // Приложение снова на переднем плане.
       // Системный UI (файл-пикер и т.п.) закрылся — флаг сбрасываем.
       systemUiActive = false;
-      // Приложение могло не запускаться неделями, а срок новогодней темы
-      // истёк именно в фоне: сверяем системную дату при каждом возврате.
-      _checkNewYearExpiry();
-      // Возврат из фона с включённым PIN: показываем блокировку ДО того,
-      // как человек увидит содержимое. Будильник сюда не попадает
-      // (_wakeScreenShowing), системные экраны — тоже (флаг выше).
-      if (_relockPending) {
-        _relockPending = false;
-        // Грейс-период: если вернулись раньше [kRelockGrace], PIN не
-        // спрашиваем — просто продолжаем с того же места. Флаг всё равно
-        // снимаем, иначе следующий уход посчитает время от старой метки.
-        final away = _backgroundedAt;
-        _backgroundedAt = null;
-        final awayMs = away == null
-            ? kRelockGrace.inMilliseconds
-            : DateTime.now().difference(away).inMilliseconds;
-        if (awayMs >= kRelockGrace.inMilliseconds) _goLock();
-      }
-      HabitService().normalizeIfDayChanged();
-      // Вернулись в приложение, а «в окне» уже выключено — закрываем
-      // системное окно Ады, если оно пережило уход в фон. Иначе оно висит
-      // поверх и глотает касания (таблетка разделов).
-      if (!aiFloating.value && !kIsWeb) unawaited(closeAdaOverlay());
-      // В фоне тики таймеров замораживаются — при возврате пересчитываем
-      // остаток по стенным часам, чтобы счётчик не отставал.
-      TimerService().refreshFromClock();
-      // Право полноэкранного показа система снимает сама (обновление,
-      // перезагрузка, Realme). При каждом возврате сверяемся с ОС: если
-      // человек только что выдал право, плашка «система отключила показ»
-      // должна исчезнуть сразу, а не после перезапуска приложения.
-      unawaited(
-        notificationService.refreshFullScreenGrant().then((granted) {
-          if (granted) {
-            dismissBeautifulSnackBar(groupKey: 'fullscreen_grant');
-          }
-        }),
-      );
-      // Тяжёлая перепланировка — НЕ на первый видимый кадр: сначала даём
-      // кадру отрисоваться (addPostFrameCallback), и только если с прошлого
-      // раза прошло больше [kResumeRescheduleGrace]. Иначе десятки
-      // platform-вызовов приходились ровно на кадр возврата и экран мигал.
-      final now = DateTime.now();
-      final last = _lastResumeReschedule;
-      if (last == null || now.difference(last) >= kResumeRescheduleGrace) {
-        _lastResumeReschedule = now;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          unawaited(rescheduleAllNotifications());
-        });
-      }
-      // Ада-трекинг: догоняем пропущенный отчёт (приложение лежало в фоне)
-      // и перезаводим таймер на ближайшие 08:00/21:00.
-      unawaited(_adaTrackTick());
-      ActionLog.record('приложение', 'возврат из фона');
-      // Пока приложение лежало в фоне, мог выйти новый релиз: проверка
-      // сама держит суточный интервал, а плашка — одну на версию.
-      if (kSelfUpdateEnabled) {
-        unawaited(_checkUpdates(announce: !_locked));
-      }
-      unawaited(_scheduleAdaTrackingNotifs());
-      // Автоэкспорт «догоняет» пропущенный час, пока приложение было
-      // закрыто или в фоне — Dart-таймер там не срабатывает.
-      maybeCatchUpAutoExport();
-      // Если системный оверлей Ады закрыли — возвращаем значок ИИ
-      // плавно через AnimatedSwitcher.
-      if (!kIsWeb && aiFloating.value) {
-        isAdaOverlayActive().then((active) {
-          if (!active && aiFloating.value) {
-            aiFloating.value = false;
-            globalPrefs.setBool('ai_floating', false);
-          }
-        });
-      }
+      // Возврат асинхронный: сперва выясняем, не пережил ли движок смахивание
+      // из недавних. Если да — собираем приложение заново (см.
+      // [consumeTaskClosed]), иначе это обычный возврат из фона.
+      unawaited(_onResumed());
+    }
+  }
+
+  /// Возврат на передний план из фона.
+  Future<void> _onResumed() async {
+    if (!kIsWeb && await consumeTaskClosed()) {
+      if (!mounted) return;
+      // Задачу снесли, но движок `audio_service` остался жив: показывать
+      // тот же старый экран нельзя — человек ждёт обычный запуск. PIN, если
+      // он задан, спросит refreshApp; будильники перепланируются там же,
+      // а служба звонка и AlarmManager этой веткой не затрагиваются.
+      _relockPending = false;
+      _backgroundedAt = null;
+      aiLockScreenVisible.value = false;
+      await refreshApp();
+      return;
+    }
+    // Приложение могло не запускаться неделями, а срок новогодней темы
+    // истёк именно в фоне: сверяем системную дату при каждом возврате.
+    _checkNewYearExpiry();
+    // Возврат из фона с включённым PIN: показываем блокировку ДО того,
+    // как человек увидит содержимое. Будильник сюда не попадает
+    // (_wakeScreenShowing), системные экраны — тоже (флаг выше).
+    if (_relockPending) {
+      _relockPending = false;
+      // Грейс-период: если вернулись раньше [kRelockGrace], PIN не
+      // спрашиваем — просто продолжаем с того же места. Флаг всё равно
+      // снимаем, иначе следующий уход посчитает время от старой метки.
+      final away = _backgroundedAt;
+      _backgroundedAt = null;
+      final awayMs = away == null
+          ? kRelockGrace.inMilliseconds
+          : DateTime.now().difference(away).inMilliseconds;
+      if (awayMs >= kRelockGrace.inMilliseconds) _goLock();
+    }
+    HabitService().normalizeIfDayChanged();
+    // Вернулись в приложение, а «в окне» уже выключено — закрываем
+    // системное окно Ады, если оно пережило уход в фон. Иначе оно висит
+    // поверх и глотает касания (таблетка разделов).
+    if (!aiFloating.value && !kIsWeb) unawaited(closeAdaOverlay());
+    // В фоне тики таймеров замораживаются — при возврате пересчитываем
+    // остаток по стенным часам, чтобы счётчик не отставал.
+    TimerService().refreshFromClock();
+    // Право полноэкранного показа система снимает сама (обновление,
+    // перезагрузка, Realme). При каждом возврате сверяемся с ОС: если
+    // человек только что выдал право, плашка «система отключила показ»
+    // должна исчезнуть сразу, а не после перезапуска приложения.
+    unawaited(
+      notificationService.refreshFullScreenGrant().then((granted) {
+        if (granted) {
+          dismissBeautifulSnackBar(groupKey: 'fullscreen_grant');
+        }
+      }),
+    );
+    // Тяжёлая перепланировка — НЕ на первый видимый кадр: сначала даём
+    // кадру отрисоваться (addPostFrameCallback), и только если с прошлого
+    // раза прошло больше [kResumeRescheduleGrace]. Иначе десятки
+    // platform-вызовов приходились ровно на кадр возврата и экран мигал.
+    final now = DateTime.now();
+    final last = _lastResumeReschedule;
+    if (last == null || now.difference(last) >= kResumeRescheduleGrace) {
+      _lastResumeReschedule = now;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(rescheduleAllNotifications());
+      });
+    }
+    // Ада-трекинг: догоняем пропущенный отчёт (приложение лежало в фоне)
+    // и перезаводим таймер на ближайшие 08:00/21:00.
+    unawaited(_adaTrackTick());
+    ActionLog.record('приложение', 'возврат из фона');
+    // Пока приложение лежало в фоне, мог выйти новый релиз: проверка
+    // сама держит суточный интервал, а плашка — одну на версию.
+    if (kSelfUpdateEnabled) {
+      unawaited(_checkUpdates(announce: !_locked));
+    }
+    unawaited(_scheduleAdaTrackingNotifs());
+    // Автоэкспорт «догоняет» пропущенный час, пока приложение было
+    // закрыто или в фоне — Dart-таймер там не срабатывает.
+    maybeCatchUpAutoExport();
+    // Если системный оверлей Ады закрыли — возвращаем значок ИИ
+    // плавно через AnimatedSwitcher.
+    if (!kIsWeb && aiFloating.value) {
+      isAdaOverlayActive().then((active) {
+        if (!active && aiFloating.value) {
+          aiFloating.value = false;
+          globalPrefs.setBool('ai_floating', false);
+        }
+      });
     }
   }
 
@@ -2650,9 +2723,14 @@ class AgyshaAppState extends State<AgyshaApp>
         final isGrokStyle = isGrok || isDarkGrok;
         final resolved = _resolveLocale();
 
-        final lightScheme = (useDynamic && _lightDynamic != null)
+        final ColorScheme lightScheme = (useDynamic && _lightDynamic != null)
             ? _lightDynamic!
             : (() {
+                // «Матрица» тёмная всегда; светлая пара нужна только для
+                // согласованности MaterialApp и не показывается.
+                if (_themeKey == MatrixPalette.key) {
+                  return MatrixPalette.lightScheme;
+                }
                 if (isPeach) {
                   return const ColorScheme.light(
                     primary: Color(0xFFD46045),
@@ -2822,7 +2900,7 @@ class AgyshaAppState extends State<AgyshaApp>
                 );
               })();
 
-        final darkScheme = (useDynamic && _darkDynamic != null)
+        final ColorScheme darkScheme = (useDynamic && _darkDynamic != null)
             ? _darkDynamic!
             : (() {
                 // «IT-шник» — палитра живёт в ItshnikPalette, чтобы фон и
@@ -2842,6 +2920,9 @@ class AgyshaAppState extends State<AgyshaApp>
                 // гирлянды живут в NewYearPalette.
                 if (_themeKey == NewYearThemeKeys.theme) {
                   return NewYearPalette.scheme;
+                }
+                if (_themeKey == MatrixPalette.key) {
+                  return MatrixPalette.scheme;
                 }
                 if (_themeKey == 'oled') {
                   return const ColorScheme.dark(
@@ -3189,6 +3270,11 @@ class AgyshaAppState extends State<AgyshaApp>
                               : _themeKey == 'metel'
                               ? const MetelAurora(
                                   key: ValueKey('metel_aurora'),
+                                  child: SizedBox.expand(),
+                                )
+                              : _themeKey == MatrixPalette.key
+                              ? const MatrixRain(
+                                  key: ValueKey('matrix_rain'),
                                   child: SizedBox.expand(),
                                 )
                               : const SizedBox.shrink(

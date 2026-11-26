@@ -38,6 +38,9 @@ extension _SettingsThemeCarousel on _SettingsScreenState {
         Translations.t('themeSystemLight', context),
         Icons.palette_outlined,
       ),
+      // «Матрица» — зелёный терминал с дождём цифр. Не переводится:
+      // название темы — имя собственное, как MUTILATED и Grok.
+      const _ThemeEntry(MatrixPalette.key, 'Матрица', Icons.grid_on_outlined),
       _ThemeEntry('rose', Translations.roseOf(context), Icons.favorite_outline),
       _ThemeEntry(
         'peach',

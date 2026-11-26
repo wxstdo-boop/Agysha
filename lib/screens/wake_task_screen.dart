@@ -207,8 +207,10 @@ class _WakeTaskScreenState extends State<WakeTaskScreen>
     _flipGuard?.cancel();
     _flipGuard = null;
     // Плавное затухание вместо резкого stop — без «щелчка» на конце.
+    // Последний шаг обязательно НОЛЬ: stop() на громкости 10% обрывает
+    // волну на полупериоде, и на Realme это слышно как щелчок/шум.
     try {
-      for (var i = 10; i > 0; i--) {
+      for (var i = 10; i >= 0; i--) {
         await _player.setVolume(i / 10);
         await Future.delayed(const Duration(milliseconds: 20));
       }
