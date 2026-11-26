@@ -16,6 +16,7 @@ extension _SettingsItshnikButton on _SettingsScreenState {
     AgyshaAppState appState,
   ) {
     return ExclusiveThemesRow(
+      showNewYear: appState.newYearThemeAvailable,
       activeKey: SettingsService.exclusiveThemeKeys.contains(appState.themeKey)
           ? appState.themeKey
           : null,

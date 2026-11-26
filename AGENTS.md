@@ -1357,3 +1357,28 @@ Play Protect, file an appeal», support.google.com/googleplay/answer/2812853).
   сделать `git push --force`, затем вернуть её
   (`POST ... name=main&push_access_level=40&merge_access_level=40&allow_force_push=false`).
   Теги и ветки заливать обычным `git push gitlab --all` + `git push gitlab --tags`.
+
+## Четвёртая тема «Новый год», варианты и обои стилей
+
+- **Срок темы.** `lib/theme/new_year_keys.dart` держит последнюю дату
+  (`31.01.2027` включительно). Доступность решает `SettingsService.
+  isNewYearThemeAvailable(now:, unlocked:)`: в сезоне — всем, после срока —
+  только при ручном возврате из «Уголка разработчика»
+  (`newyear_theme_unlocked`, тумблер «Вернуть новогоднюю тему»). Тумблер
+  живёт в `settings_dev_tools.dart`, его доступ наследуется от режима
+  тестера: обычный пользователь раздел не видит.
+- **Отключение не стирает настройки.** Выключение флага лишь убирает плитку:
+  ключи обоев, варианта и эффектов остаются в prefs, поэтому повторное
+  включение возвращает всё как было.
+- **Тумблеры эффектов IT-шника анимированы.** `ItshnikBackdrop` держит два
+  `AnimationController` (снег/гирлянды), а painter гасит группу через
+  `saveLayer` только во время перехода. Быстрое переключение перенаправляет
+  анимацию из текущей точки — наложений и «залипших» полупрозрачных слоёв нет.
+  Покрыто `test/new_year_theme_test.dart`.
+- **Варианты стилей.** У «Резидента» и «Cyber psychos» по три варианта
+  (`standard`, `v1`, `v2`) в `settings_style_variants.dart`; `schemeFor`,
+  шрифты и радиусы переключаются в `resident_theme.dart` / `cyber_theme.dart`,
+  стандарт остаётся прежним.
+- **Обои.** Свои статические и видеообои у каждого стиля
+  (`style_wallpaper.dart`, `StyleWallpaperLayer`): файл копируется в
+  приватную папку стиля, видео идёт через `video_player` с паузой в фоне.

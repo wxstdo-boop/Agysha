@@ -5,6 +5,8 @@ import '../utils/design_tokens.dart';
 import 'cyber_theme.dart';
 import 'itshnik_theme.dart';
 import 'resident_theme.dart';
+import 'new_year_keys.dart';
+import 'new_year_theme.dart';
 
 /// Единый построитель темы приложения.
 ///
@@ -68,14 +70,19 @@ ThemeData buildAgyshaTheme(
   String? fontFamily,
   String? themeKey,
   ItshnikFont itshnikFont = ItshnikFont.pixel,
+  String residentVariant = 'standard',
+  String cyberVariant = 'standard',
 }) {
   final isItshnik = themeKey == ItshnikPalette.key;
   final isResident = themeKey == ResidentPalette.key;
   final isCyber = themeKey == CyberPalette.key;
+  final isNewYear = themeKey == NewYearThemeKeys.theme;
   final appFontFamily = isItshnik
       ? itshnikFont.text
       : isCyber
       ? 'CyberText'
+      : isNewYear
+      ? NewYearPalette.bodyFamily
       : (fontFamily == 'caveat' ? 'Caveat' : null);
   final base = ThemeData(
     useMaterial3: true,
@@ -286,11 +293,14 @@ ThemeData buildAgyshaTheme(
   // что делает её собой: пиксельные шрифты, жёсткие углы, свечение и
   // блочный плеск нажатия.
   if (isItshnik) return applyItshnikTheme(base, font: itshnikFont);
+  // «Новый год» — своя праздничная тема: зимняя палитра, серифные заголовки
+  // и гирлянды живут в ней, а не поверх обычного оформления.
+  if (isNewYear) return applyNewYearTheme(base);
   // «Cyber psychos» — неоновая ночь Найт-Сити: кислотный жёлтый, циан и
   // маджента, прямые углы, широкий дисплейный шрифт и глитч-плеск.
-  if (isCyber) return applyCyberTheme(base);
+  if (isCyber) return applyCyberTheme(base, variant: cyberVariant);
   // «Резидент» донашивает тот же каркас: меняются углы, рамки, типографика
   // HUD и плеск нажатия, палитра приходит из ResidentPalette.scheme.
-  if (isResident) return applyResidentTheme(base);
+  if (isResident) return applyResidentTheme(base, variant: residentVariant);
   return base;
 }

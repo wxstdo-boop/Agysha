@@ -30,11 +30,26 @@ class CyberPalette {
   static const Color inkTop = Color(0xFF140A24);
   static const Color grid = Color(0xFF2A1B45);
 
-  /// Акцент варианта: 'acid' | 'cyan' | 'magenta'.
+  /// Акцент варианта: стандарт — кислота, №1 — холодный циан,
+  /// №2 — раскалённая маджента. Принимаем имена и вариантов, и цветов:
+  /// панель настроек хранит 'standard' | 'v1' | 'v2'.
   static Color accentFor(String variant) => switch (variant) {
-    'cyan' => cyan,
-    'magenta' => magenta,
+    'v1' || 'cyan' => cyan,
+    'v2' || 'magenta' => magenta,
     _ => acid,
+  };
+
+  /// Свои шрифты вариантов: №1 — Unbounded, №2 — Play и его текстовый
+  /// спутник. Стандарт остаётся на Russo One + Jura.
+  static String displayFor(String variant) => switch (variant) {
+    'v1' || 'cyan' => 'CyberV1Display',
+    'v2' || 'magenta' => 'CyberV2Display',
+    _ => 'CyberDisplay',
+  };
+
+  static String textFor(String variant) => switch (variant) {
+    'v2' || 'magenta' => 'CyberV2Text',
+    _ => 'CyberText',
   };
 
   /// Схема варианта: акцент перекрашивает primary, свечение и рамки,
@@ -42,7 +57,22 @@ class CyberPalette {
   static ColorScheme schemeFor(String variant) {
     final accent = accentFor(variant);
     if (accent == acid) return scheme;
+    // Атмосфера, а не только акцент: холодная ночь у №1, тёплый смог у №2.
+    final cool = accent == cyan;
     return scheme.copyWith(
+      surface: cool ? const Color(0xFF050A12) : const Color(0xFF120610),
+      surfaceContainerLowest:
+          cool ? const Color(0xFF02060C) : const Color(0xFF0B040A),
+      surfaceContainerLow:
+          cool ? const Color(0xFF091320) : const Color(0xFF1A0A17),
+      surfaceContainer:
+          cool ? const Color(0xFF0D1A2A) : const Color(0xFF22101F),
+      surfaceContainerHigh:
+          cool ? const Color(0xFF13243A) : const Color(0xFF2C1628),
+      surfaceContainerHighest:
+          cool ? const Color(0xFF1B3049) : const Color(0xFF3A1D33),
+      onSurfaceVariant: cool ? const Color(0xFF8FB8CC) : const Color(0xFFC98FA8),
+      outline: cool ? const Color(0xFF1F3D5B) : const Color(0xFF4A2036),
       primary: accent,
       onPrimary: Color.lerp(accent, Colors.black, 0.86)!,
       primaryContainer: Color.lerp(accent, ink, 0.78)!,
@@ -139,6 +169,8 @@ class CyberCutBorder extends OutlinedBorder {
 /// рамки, свечение на кнопках, широкий дисплей CyberDisplay в заголовках.
 ThemeData applyCyberTheme(ThemeData base, {String variant = 'acid'}) {
   final scheme = CyberPalette.schemeFor(variant);
+  final displayFamily = CyberPalette.displayFor(variant);
+  final textFamily = CyberPalette.textFor(variant);
   final accent = scheme.primary;
   final onAccent = scheme.onPrimary;
 
@@ -150,7 +182,7 @@ ThemeData applyCyberTheme(ThemeData base, {String variant = 'acid'}) {
     double? height,
   }) {
     return (from ?? const TextStyle()).copyWith(
-      fontFamily: 'CyberDisplay',
+      fontFamily: displayFamily,
       fontSize: size,
       fontWeight: weight,
       letterSpacing: spacing,
@@ -166,7 +198,7 @@ ThemeData applyCyberTheme(ThemeData base, {String variant = 'acid'}) {
     double? height,
   }) {
     return (from ?? const TextStyle()).copyWith(
-      fontFamily: 'CyberText',
+      fontFamily: textFamily,
       fontSize: size,
       fontWeight: weight,
       letterSpacing: spacing,

@@ -85,8 +85,15 @@ class ItshnikBackdrop extends StatefulWidget {
 }
 
 class _ItshnikBackdropState extends State<ItshnikBackdrop>
-    with SingleTickerProviderStateMixin, MotionAwareRepeat {
+    with TickerProviderStateMixin, MotionAwareRepeat {
   late final AnimationController _ctrl;
+
+  /// Плавное появление/исчезновение групп новогодних эффектов. Значение —
+  /// множитель прозрачности слоя, поэтому включение и выключение читается
+  /// как анимация, а не как рывок; повторные тапы просто перенаправляют
+  /// анимацию из текущей точки, и наложений не бывает.
+  late final AnimationController _snowFade;
+  late final AnimationController _garlandFade;
   final ValueNotifier<double> _phase = ValueNotifier<double>(0);
   final _ItshnikCache _cache = _ItshnikCache();
 
@@ -129,6 +136,16 @@ class _ItshnikBackdropState extends State<ItshnikBackdrop>
         duration: const Duration(seconds: 18),
       )..addListener(_syncPhase),
     );
+    _snowFade = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+      value: widget.newYearSnow ? 1 : 0,
+    );
+    _garlandFade = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 460),
+      value: widget.newYearGarland ? 1 : 0,
+    );
   }
 
   void _syncPhase() {
@@ -139,8 +156,35 @@ class _ItshnikBackdropState extends State<ItshnikBackdrop>
   }
 
   @override
+  void didUpdateWidget(covariant ItshnikBackdrop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.newYearSnow != widget.newYearSnow) {
+      _fadeTo(_snowFade, widget.newYearSnow);
+    }
+    if (oldWidget.newYearGarland != widget.newYearGarland) {
+      _fadeTo(_garlandFade, widget.newYearGarland);
+    }
+  }
+
+  /// Доводит тумблер до цели из любого места: быстрый тап туда-обратно не
+  /// оставляет слой полупрозрачным и не запускает вторую анимацию.
+  void _fadeTo(AnimationController controller, bool on) {
+    if (MotionPrefs.shouldReduceMotion) {
+      controller.value = on ? 1 : 0;
+      return;
+    }
+    controller.animateTo(
+      on ? 1 : 0,
+      duration: controller.duration,
+      curve: on ? Curves.easeOutCubic : Curves.easeInCubic,
+    );
+  }
+
+  @override
   void dispose() {
     _ctrl.dispose();
+    _snowFade.dispose();
+    _garlandFade.dispose();
     _phase.dispose();
     _cache.dispose();
     super.dispose();
@@ -169,6 +213,8 @@ class _ItshnikBackdropState extends State<ItshnikBackdrop>
                 hasWallpaper: widget.wallpaper != null,
                 newYearSnow: widget.newYearSnow,
                 newYearGarland: widget.newYearGarland,
+                snowFade: _snowFade,
+                garlandFade: _garlandFade,
               ),
             ),
           ),
@@ -643,7 +689,42 @@ class _ItshnikPainter extends CustomPainter {
     this.hasWallpaper = false,
     this.newYearSnow = true,
     this.newYearGarland = true,
-  }) : super(repaint: phase);
+    this.snowFade,
+    this.garlandFade,
+  }) : super(
+         repaint: snowFade == null && garlandFade == null
+             ? phase
+             : Listenable.merge(<Listenable?>[phase, snowFade, garlandFade]),
+       );
+
+  /// Прозрачность групп эффектов: 0 — погашено, 1 — полностью включено.
+  final Animation<double>? snowFade;
+  final Animation<double>? garlandFade;
+
+  double get _snowAlpha => newYearSnow ? (snowFade?.value ?? 1) : 0;
+  double get _garlandAlpha => newYearGarland ? (garlandFade?.value ?? 1) : 0;
+
+  /// Рисует группу через слой с заданной прозрачностью. Пока слой полностью
+  /// виден (обычное состояние), saveLayer не нужен — лишних буферов нет.
+  void _paintFaded(
+    Canvas canvas,
+    Size size,
+    double alpha,
+    void Function() body,
+  ) {
+    if (alpha <= 0.002) return;
+    final opaque = alpha > 0.998;
+    if (!opaque) {
+      canvas.saveLayer(
+        Offset.zero & size,
+        Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: alpha),
+      );
+      body();
+      canvas.restore();
+      return;
+    }
+    body();
+  }
 
   ItshnikSkin get skin => ItshnikSkin.of(variant);
 
@@ -668,20 +749,26 @@ class _ItshnikPainter extends CustomPainter {
     // «Снег и снежинки» — своя группа: сосульки/кромка/искры живут вместе
     // с ним, чтобы тумблер гасил весь зимний слой разом.
     final snowOn = !_newYear || newYearSnow;
-    if (_winter && snowOn) _paintSnow(canvas, size, t);
+    if (_winter && snowOn && _snowAlpha > 0.002) {
+      _paintFaded(canvas, size, _snowAlpha, () => _paintSnow(canvas, size, t));
+    }
     _paintCodeRain(canvas, size, t);
     _paintBits(canvas, size, t);
     _paintHearts(canvas, size, t);
     if (_newYear && snowOn) {
-      _paintSnowflakes(canvas, size, t);
-      _paintSparks(canvas, size, t);
-      _paintSnowCap(canvas, size);
+      _paintFaded(canvas, size, _snowAlpha, () {
+        _paintSnowflakes(canvas, size, t);
+        _paintSparks(canvas, size, t);
+        _paintSnowCap(canvas, size);
+      });
     }
     // «Гирлянды и игрушки» — вторая группа.
     if (_newYear && newYearGarland) {
-      _paintOrnaments(canvas, size, t);
-      _paintGarland(canvas, size, t);
-      _paintLampFrame(canvas, size, t);
+      _paintFaded(canvas, size, _garlandAlpha, () {
+        _paintOrnaments(canvas, size, t);
+        _paintGarland(canvas, size, t);
+        _paintLampFrame(canvas, size, t);
+      });
     }
     _paintScanlines(canvas, size, t);
     _paintGlitch(canvas, size, t);
@@ -1129,6 +1216,8 @@ class _ItshnikPainter extends CustomPainter {
       oldDelegate.phase != phase ||
       oldDelegate.variant != variant ||
       oldDelegate.hasWallpaper != hasWallpaper ||
+      oldDelegate.snowFade != snowFade ||
+      oldDelegate.garlandFade != garlandFade ||
       oldDelegate.newYearSnow != newYearSnow ||
       oldDelegate.newYearGarland != newYearGarland;
 }

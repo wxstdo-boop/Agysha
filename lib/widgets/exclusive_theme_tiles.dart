@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../services/haptics.dart';
 import '../theme/cyber_theme.dart';
 import '../theme/itshnik_theme.dart';
+import '../theme/new_year_theme.dart';
 import '../theme/resident_theme.dart';
 import '../utils/design_tokens.dart';
 import '../utils/motion_prefs.dart';
@@ -27,6 +28,7 @@ class ExclusiveThemesRow extends StatelessWidget {
     required this.activeKey,
     required this.onSelect,
     this.height = 104,
+    this.showNewYear = false,
   });
 
   /// Ключ включённой эксклюзивной темы либо null.
@@ -37,64 +39,121 @@ class ExclusiveThemesRow extends StatelessWidget {
 
   final double height;
 
+  /// Показывать ли четвёртую плитку «Новый год».
+  ///
+  /// Её решает не виджет, а `AgyshaAppState.newYearThemeAvailable`: до
+  /// 31.01.2027 плитка есть всегда, после — только если человек вернул тему
+  /// тумблером в «Уголке разработчика». Когда плитки нет, строка остаётся
+  /// прежней: три плитки в один ряд, ничего не сдвигается.
+  final bool showNewYear;
+
   @override
   Widget build(BuildContext context) {
+    final itshnik = _tileItshnik();
+    final resident = _tileResident();
+    final cyber = _tileCyber();
+    if (!showNewYear) {
+      return SizedBox(
+        height: height,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: itshnik),
+            const SizedBox(width: 10),
+            Expanded(child: resident),
+            const SizedBox(width: 10),
+            Expanded(child: cyber),
+          ],
+        ),
+      );
+    }
+    // Четыре плитки в один ряд на телефоне сжались бы до иконок, поэтому
+    // две строки по две: размер плитки и читаемость прежние.
     return SizedBox(
-      height: height,
-      child: Row(
+      height: height * 2 + 10,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: _ExclusiveThemeTile(
-              key: const ValueKey('exclusive_tile_itshnik'),
-              title: 'IT-ШНИК',
-              subtitle: 'MiSide · терминал',
-              active: activeKey == ItshnikPalette.key,
-              accent: ItshnikPalette.phosphor,
-              accentAlt: ItshnikPalette.pink,
-              gradient: const [Color(0xFF07120F), Color(0xFF0B1F1B)],
-              glyph: const _ItGlyph(),
-              texture: _TileTexture.scanlines,
-              onTap: () => onSelect(ItshnikPalette.key),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: itshnik),
+                const SizedBox(width: 10),
+                Expanded(child: resident),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(height: 10),
           Expanded(
-            child: _ExclusiveThemeTile(
-              key: const ValueKey('exclusive_tile_resident'),
-              title: 'РЕЗИДЕНТ',
-              subtitle: 'Resident Evil · Ада',
-              active: activeKey == ResidentPalette.key,
-              accent: ResidentPalette.blood,
-              accentAlt: ResidentPalette.brass,
-              gradient: const [Color(0xFF140A0C), Color(0xFF1C1012)],
-              glyph: const _AdaGlyph(),
-              texture: _TileTexture.hex,
-              onTap: () => onSelect(ResidentPalette.key),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _ExclusiveThemeTile(
-              key: const ValueKey('exclusive_tile_cyber'),
-              title: 'CYBER PSYCHOS',
-              subtitle: 'Night City · неон',
-              active: activeKey == CyberPalette.key,
-              accent: CyberPalette.acid,
-              accentAlt: CyberPalette.cyan,
-              gradient: const [Color(0xFF0A0614), Color(0xFF1A0C2E)],
-              glyph: const _CyberGlyph(),
-              texture: _TileTexture.grid,
-              onTap: () => onSelect(CyberPalette.key),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: cyber),
+                const SizedBox(width: 10),
+                Expanded(child: _tileNewYear()),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _tileItshnik() => _ExclusiveThemeTile(
+    key: const ValueKey('exclusive_tile_itshnik'),
+    title: 'IT-ШНИК',
+    subtitle: 'MiSide · терминал',
+    active: activeKey == ItshnikPalette.key,
+    accent: ItshnikPalette.phosphor,
+    accentAlt: ItshnikPalette.pink,
+    gradient: const [Color(0xFF07120F), Color(0xFF0B1F1B)],
+    glyph: const _ItGlyph(),
+    texture: _TileTexture.scanlines,
+    onTap: () => onSelect(ItshnikPalette.key),
+  );
+
+  Widget _tileResident() => _ExclusiveThemeTile(
+    key: const ValueKey('exclusive_tile_resident'),
+    title: 'РЕЗИДЕНТ',
+    subtitle: 'Resident Evil · Ада',
+    active: activeKey == ResidentPalette.key,
+    accent: ResidentPalette.blood,
+    accentAlt: ResidentPalette.brass,
+    gradient: const [Color(0xFF140A0C), Color(0xFF1C1012)],
+    glyph: const _AdaGlyph(),
+    texture: _TileTexture.hex,
+    onTap: () => onSelect(ResidentPalette.key),
+  );
+
+  Widget _tileCyber() => _ExclusiveThemeTile(
+    key: const ValueKey('exclusive_tile_cyber'),
+    title: 'CYBER PSYCHOS',
+    subtitle: 'Night City · неон',
+    active: activeKey == CyberPalette.key,
+    accent: CyberPalette.acid,
+    accentAlt: CyberPalette.cyan,
+    gradient: const [Color(0xFF0A0614), Color(0xFF1A0C2E)],
+    glyph: const _CyberGlyph(),
+    texture: _TileTexture.grid,
+    onTap: () => onSelect(CyberPalette.key),
+  );
+
+  Widget _tileNewYear() => _ExclusiveThemeTile(
+    key: const ValueKey('exclusive_tile_newyear'),
+    title: 'НОВЫЙ ГОД',
+    subtitle: 'снег · гирлянды',
+    active: activeKey == NewYearPalette.key,
+    accent: NewYearPalette.gold,
+    accentAlt: NewYearPalette.ice,
+    gradient: const [Color(0xFF08121C), Color(0xFF0E2A22)],
+    glyph: const _NewYearGlyph(),
+    texture: _TileTexture.snow,
+    onTap: () => onSelect(NewYearPalette.key),
+  );
 }
 
-enum _TileTexture { scanlines, hex, grid }
+enum _TileTexture { scanlines, hex, grid, snow }
 
 class _ExclusiveThemeTile extends StatefulWidget {
   const _ExclusiveThemeTile({
@@ -173,6 +232,7 @@ class _ExclusiveThemeTileState extends State<_ExclusiveThemeTile>
     _TileTexture.scanlines => 'ItsPixel',
     _TileTexture.grid => 'CyberDisplay',
     _TileTexture.hex => null,
+    _TileTexture.snow => NewYearPalette.displayFamily,
   };
 
   @override
@@ -542,6 +602,95 @@ class _CyberGlyphPainter extends CustomPainter {
 }
 
 /// Фактура плитки: сканлайны терминала либо гексагональная сетка.
+/// Мини-ёлка с золотой звездой для плитки «Новый год».
+class _NewYearGlyph extends StatelessWidget {
+  const _NewYearGlyph();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF06111A),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: NewYearPalette.gold.withValues(alpha: 0.4)),
+      ),
+      child: const Center(
+        child: CustomPaint(
+          size: Size(24, 26),
+          painter: _NewYearGlyphPainter(),
+        ),
+      ),
+    );
+  }
+}
+
+class _NewYearGlyphPainter extends CustomPainter {
+  const _NewYearGlyphPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.shortestSide / 24.0;
+    canvas.translate((size.width - 24 * s) / 2, (size.height - 26 * s) / 2);
+    canvas.scale(s);
+
+    // Ствол.
+    canvas.drawRect(
+      const Rect.fromLTWH(11, 20, 2, 5),
+      Paint()..color = const Color(0xFF4A3418),
+    );
+    // Три яруса ели: от широкого низа к узкой верхушке.
+    final pine = Paint()..color = const Color(0xFF1E6B4A);
+    final layers = <List<double>>[
+      [12, 3.5, 5.5, 10],
+      [12, 8.5, 7.5, 16],
+      [12, 14, 9.5, 21],
+    ];
+    for (final l in layers) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(l[0], l[1])
+          ..lineTo(l[0] - l[2], l[3])
+          ..lineTo(l[0] + l[2], l[3])
+          ..close(),
+        pine,
+      );
+    }
+    // Звезда.
+    final star = Path();
+    for (var i = 0; i < 10; i++) {
+      final r = i.isEven ? 3.4 : 1.5;
+      final a = -math.pi / 2 + i * math.pi / 5;
+      final x = 12 + r * math.cos(a);
+      final y = 2.6 + r * math.sin(a);
+      if (i == 0) {
+        star.moveTo(x, y);
+      } else {
+        star.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(star..close(), Paint()..color = NewYearPalette.gold);
+    // Гирлянда: три огонька по ярусам.
+    canvas.drawCircle(
+      const Offset(8.2, 12.6),
+      1.1,
+      Paint()..color = NewYearPalette.berry,
+    );
+    canvas.drawCircle(
+      const Offset(15.4, 16.4),
+      1.1,
+      Paint()..color = NewYearPalette.ice,
+    );
+    canvas.drawCircle(
+      const Offset(10.6, 18.6),
+      1.1,
+      Paint()..color = NewYearPalette.gold,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _NewYearGlyphPainter oldDelegate) => false;
+}
+
 class _TileTexturePainter extends CustomPainter {
   const _TileTexturePainter({required this.texture, required this.accent});
 
@@ -555,6 +704,40 @@ class _TileTexturePainter extends CustomPainter {
       for (double y = 0; y < size.height; y += 6) {
         canvas.drawRect(Rect.fromLTWH(0, y, size.width, 1), paint);
       }
+      return;
+    }
+    if (texture == _TileTexture.snow) {
+      // Снежная крошка и лёгкий сугроб у нижней кромки: плитка «дышит»
+      // зимой, но остаётся тёмной, чтобы текст читался.
+      final dot = Paint()..color = accent.withValues(alpha: 0.16);
+      const rows = 7;
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < 6; c++) {
+          final x = (c + (r.isOdd ? 0.5 : 0)) * (size.width / 6);
+          final y = r * (size.height / rows) + 3;
+          canvas.drawCircle(Offset(x, y), 0.9, dot);
+        }
+      }
+      canvas.drawPath(
+        Path()
+          ..moveTo(0, size.height)
+          ..lineTo(0, size.height - 10)
+          ..quadraticBezierTo(
+            size.width * 0.35,
+            size.height - 18,
+            size.width * 0.62,
+            size.height - 8,
+          )
+          ..quadraticBezierTo(
+            size.width * 0.85,
+            size.height - 2,
+            size.width,
+            size.height - 12,
+          )
+          ..lineTo(size.width, size.height)
+          ..close(),
+        Paint()..color = accent.withValues(alpha: 0.10),
+      );
       return;
     }
     if (texture == _TileTexture.grid) {

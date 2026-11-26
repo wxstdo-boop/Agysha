@@ -7,6 +7,8 @@ import 'debug_service.dart';
 import 'prefs.dart';
 import 'json_file.dart';
 import 'new_year_event_service.dart';
+import 'style_options.dart';
+import '../theme/new_year_keys.dart';
 
 class SettingsService {
   static const _keyTheme = 'setting_theme';
@@ -112,6 +114,13 @@ class SettingsService {
       // Без ветки после перезапуска она откатывалась бы на системную.
       case 'cyber':
         return 'cyber';
+      // «Новый год» — четвёртая эксклюзивная тема, но у неё есть срок:
+      // до 31 января 2027 включительно. После срока тема недоступна, и
+      // приложение возвращается туда, откуда человек в неё пришёл; «Уголок
+      // разработчика» может снова открыть её вручную.
+      case NewYearThemeKeys.theme:
+        if (isNewYearThemeAvailable()) return NewYearThemeKeys.theme;
+        return _fallbackAfterNewYear(map);
       default:
         // Без явного выбора — СИСТЕМНАЯ тема (обои/Material You), а не Grok:
         // у Grok primary почти чёрный, и таблетка/переключатели выглядели
@@ -129,7 +138,47 @@ class SettingsService {
     'itshnik',
     'resident',
     'cyber',
+    NewYearThemeKeys.theme,
   };
+
+  // ── Новогодняя тема: срок и повторная активация ────────────────────
+  static const _keyNewYearUnlocked = 'newyear_theme_unlocked';
+
+  /// «Вернуть новогоднюю тему» из «Уголка разработчика».
+  ///
+  /// Читается синхронно: тема нужна уже на первом кадре, а не после
+  /// асинхронной загрузки настроек.
+  static bool readNewYearThemeUnlocked() =>
+      _readBoolSafe(_keyNewYearUnlocked);
+
+  static Future<void> saveNewYearThemeUnlocked(bool value) async {
+    final map = await _loadSettings();
+    map[_keyNewYearUnlocked] = value;
+    await _saveSettings(map);
+    await globalPrefs.setBool(_keyNewYearUnlocked, value);
+  }
+
+  /// Доступна ли тема сейчас: либо ещё не истёк срок, либо человек сам
+  /// вернул её через «Уголок разработчика». После срока сама она не
+  /// возвращается — только этой галочкой.
+  static bool isNewYearThemeAvailable({DateTime? now, bool? unlocked}) {
+    final manual = unlocked ?? readNewYearThemeUnlocked();
+    if (manual) return true;
+    return NewYearThemeKeys.inSeason(now ?? DateTime.now());
+  }
+
+  /// Куда вернуться, когда срок темы истёк: в тему, из которой человек
+  /// включал «Новый год». Другая эксклюзивная тема (IT-шник, «Резидент»,
+  /// «Cyber psychos») — законный выбор, её возвращаем; саму «Новый год» и
+  /// мусор — нет.
+  static String _fallbackAfterNewYear(Map<String, dynamic> map) {
+    final key = _themeBeforeKey(NewYearThemeKeys.theme);
+    final value = map[key] as String? ?? globalPrefs.getString(key);
+    if (value == null || value.isEmpty || value == NewYearThemeKeys.theme) {
+      return 'dark';
+    }
+    return value;
+  }
 
   /// Тема, которая стояла до включения эксклюзивной темы: выключили её —
   /// человек возвращается туда, откуда пришёл, а не в случайную «тёмную».
@@ -261,6 +310,63 @@ class SettingsService {
       map[_keyItshnikWallpaper] = path;
       map[_keyItshnikWallpaperVideo] = isVideo;
     }
+    await _saveSettings(map);
+  }
+
+  // ── Варианты оформления и обои эксклюзивных стилей ─────────────────
+  //
+  // У каждого стиля свой ключ настроек: «Резидент» и «Cyber psychos» не
+  // делят ни вариант, ни обои, ни подгонку — иначе включение видео в одном
+  // стиле подменяло бы фон другого.
+  static String _variantKey(String styleKey) => 'style_variant_$styleKey';
+  static String _wallpaperKey(String styleKey) => 'style_wallpaper_$styleKey';
+
+  /// Вариант оформления стиля: 'standard' | 'v1' | 'v2'. Неизвестное
+  /// значение — стандарт: тема не должна ломаться из-за старых настроек.
+  static Future<String> loadStyleVariant(String styleKey) async {
+    final key = _variantKey(styleKey);
+    final map = await _loadSettings();
+    final value = map[key] as String? ?? globalPrefs.getString(key);
+    switch (value) {
+      case 'v1':
+      case 'v2':
+        return value!;
+      default:
+        return 'standard';
+    }
+  }
+
+  static Future<void> saveStyleVariant(String styleKey, String variant) async {
+    final key = _variantKey(styleKey);
+    final value = variant == 'v1' || variant == 'v2' ? variant : 'standard';
+    final map = await _loadSettings();
+    map[key] = value;
+    await _saveSettings(map);
+  }
+
+  static Future<StyleWallpaperChoice?> loadStyleWallpaper(
+    String styleKey,
+  ) async {
+    final key = _wallpaperKey(styleKey);
+    final map = await _loadSettings();
+    final raw = map[key] as String? ?? globalPrefs.getString(key);
+    return StyleWallpaperChoice.fromJsonString(raw);
+  }
+
+  /// `null` очищает обои стиля: фон снова рисуется процедурно.
+  static Future<void> saveStyleWallpaper(
+    String styleKey,
+    StyleWallpaperChoice? choice,
+  ) async {
+    final key = _wallpaperKey(styleKey);
+    final map = await _loadSettings();
+    if (choice == null) {
+      map.remove(key);
+      await _saveSettings(map);
+      await globalPrefs.remove(key);
+      return;
+    }
+    map[key] = jsonEncode(choice.toJson());
     await _saveSettings(map);
   }
 

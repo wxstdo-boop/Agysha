@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:material_ui/material_ui.dart';
 
+import '../services/style_options.dart';
 import '../theme/cyber_theme.dart';
+import 'style_wallpaper.dart';
 import '../utils/motion_prefs.dart';
 
 /// Фон эксклюзивной темы «Cyber psychos»: ночь Найт-Сити.
@@ -21,7 +23,15 @@ import '../utils/motion_prefs.dart';
 /// (сетка, дождь, мерцание). Неподвижный слой перерисовывается только при
 /// смене размера или варианта — кадров на него не тратится.
 class CyberBackdrop extends StatefulWidget {
-  const CyberBackdrop({super.key, this.variant = 'acid', required this.child});
+  const CyberBackdrop({
+    super.key,
+    this.variant = 'acid',
+    this.wallpaper,
+    required this.child,
+  });
+
+  /// Обои стиля (фото или видео). Рисуются под ночным городом.
+  final StyleWallpaperChoice? wallpaper;
 
   /// Акцент варианта: 'acid' | 'cyan' | 'magenta'.
   final String variant;
@@ -79,6 +89,11 @@ class _CyberBackdropState extends State<CyberBackdrop>
       alignment: Alignment.topLeft,
       children: [
         const ColoredBox(color: CyberPalette.ink),
+        if (widget.wallpaper != null)
+          StyleWallpaperLayer(
+            choice: widget.wallpaper!,
+            dim: 0.4,
+          ),
         RepaintBoundary(
           child: CustomPaint(
             isComplex: true,

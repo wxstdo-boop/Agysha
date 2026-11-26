@@ -61,6 +61,9 @@ import 'package:path_provider/path_provider.dart';
 import '../widgets/agysha_confirm_dialog.dart';
 import '../widgets/exclusive_theme_tiles.dart';
 import '../theme/resident_theme.dart';
+import '../theme/new_year_theme.dart';
+import '../services/style_options.dart';
+import '../widgets/style_wallpaper.dart';
 
 part 'settings_components.dart';
 part 'settings_permissions.dart';
@@ -69,6 +72,7 @@ part 'settings_transfer.dart';
 part 'settings_theme_carousel.dart';
 part 'settings_itshnik_button.dart';
 part 'settings_itshnik_style.dart';
+part 'settings_style_variants.dart';
 part 'settings_dev_tools.dart';
 part 'settings_links.dart';
 part 'settings_section_top.dart';

@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:material_ui/material_ui.dart';
 
+import '../services/style_options.dart';
 import '../theme/resident_theme.dart';
+import 'style_wallpaper.dart';
 import '../utils/motion_prefs.dart';
 
 /// Фон эксклюзивной темы «Резидент»: корпоративный терминал в духе
@@ -23,7 +25,19 @@ import '../utils/motion_prefs.dart';
 /// Всё в одном контроллере и одном painter: тик через [MotionPrefs.ambient],
 /// фаза округляется до шага, дерево не пересоздаётся.
 class ResidentBackdrop extends StatefulWidget {
-  const ResidentBackdrop({super.key, required this.child});
+  const ResidentBackdrop({
+    super.key,
+    this.variant = 'standard',
+    this.wallpaper,
+    required this.child,
+  });
+
+  /// Вариант вида: 'standard' | 'v1' | 'v2'. Меняет атмосферу фона —
+  /// стальной архив и кровавую лабораторию.
+  final String variant;
+
+  /// Обои стиля (фото или видео). Рисуются под процедурным слоем.
+  final StyleWallpaperChoice? wallpaper;
 
   final Widget child;
 
@@ -128,6 +142,18 @@ class _ResidentBackdropState extends State<ResidentBackdrop>
       fit: StackFit.expand,
       children: [
         const ColoredBox(color: ResidentPalette.ink),
+        if (widget.wallpaper != null)
+          StyleWallpaperLayer(
+            choice: widget.wallpaper!,
+            dim: 0.35,
+          ),
+        // Варианты вида: архив (v1) — пыльный янтарь, лаборатория (v2) —
+        // холодная кость. Слабый тон поверх обоев, индивидуальность
+        // сохраняется, картинка остаётся видимой.
+        if (widget.variant == 'v1')
+          const ColoredBox(color: Color(0x2AE8BC5A))
+        else if (widget.variant == 'v2')
+          const ColoredBox(color: Color(0x1F8A9096)),
         RepaintBoundary(
           child: CustomPaint(
             painter: _ResidentPainter(

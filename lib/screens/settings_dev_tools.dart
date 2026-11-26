@@ -196,6 +196,12 @@ extension _SettingsDevTools on _SettingsScreenState {
           final perfectionismFlag = ValueNotifier<bool>(_perfectionism);
           final taskNotesFlag = ValueNotifier<bool>(_taskNotes);
           final berserkFlag = ValueNotifier<bool>(_berserk);
+          // «Вернуть новогоднюю тему»: после 31.01.2027 плитка живёт только
+          // по этому флагу. Читаем сразу из настроек — он нужен первому
+          // кадру, без ожидания асинхронной загрузки.
+          final newYearFlag = ValueNotifier<bool>(
+            SettingsService.readNewYearThemeUnlocked(),
+          );
           final cs = Theme.of(routeContext).colorScheme;
 
           void syncOuterScreen() {
@@ -218,6 +224,20 @@ extension _SettingsDevTools on _SettingsScreenState {
             } catch (e) {
               perfectionismFlag.value = !value; // откат при отказе сервиса
               syncOuterScreen();
+              if (routeContext.mounted) {
+                showBeautifulSnackBar(routeContext, message: e.toString());
+              }
+            }
+          }
+
+          /// Новогодняя тема: только ручное возвращение, сама после срока
+          /// она не появляется. Выключение не стирает её настройки.
+          Future<void> saveNewYear(bool value) async {
+            newYearFlag.value = value;
+            try {
+              AgyshaApp.of(routeContext).setNewYearThemeUnlocked(value);
+            } catch (e) {
+              newYearFlag.value = !value;
               if (routeContext.mounted) {
                 showBeautifulSnackBar(routeContext, message: e.toString());
               }
@@ -311,6 +331,48 @@ extension _SettingsDevTools on _SettingsScreenState {
                   ),
                 ),
                 onTap: () => savePerfectionism(!perfectionismFlag.value),
+              ),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                leading: const Icon(
+                  Icons.ac_unit_rounded,
+                  color: NewYearPalette.gold,
+                ),
+                title: Text(
+                  Translations.t(
+                    'devNewYearRestore',
+                    routeContext,
+                    'Вернуть новогоднюю тему',
+                  ),
+                ),
+                subtitle: Text(
+                  Translations.t(
+                    'devNewYearRestoreHint',
+                    routeContext,
+                    'Снова показывает плитку «Новый год» в выборе стилей. '
+                        'Настройки темы при выключении сохраняются.',
+                  ),
+                ),
+                trailing: ValueListenableBuilder<bool>(
+                  valueListenable: newYearFlag,
+                  builder: (context, value, _) => RepaintBoundary(
+                    child: VolumetricSwitch(
+                      value: value,
+                      onChanged: saveNewYear,
+                      activeColor: NewYearPalette.gold,
+                      semanticLabel: Translations.t(
+                        'devNewYearRestore',
+                        routeContext,
+                        'Вернуть новогоднюю тему',
+                      ),
+                      scale: 1.28,
+                    ),
+                  ),
+                ),
+                onTap: () => saveNewYear(!newYearFlag.value),
               ),
               ListTile(
                 shape: RoundedRectangleBorder(

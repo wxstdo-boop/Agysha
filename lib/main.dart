@@ -24,6 +24,11 @@ import 'widgets/cyber_tap_effects.dart';
 import 'theme/cyber_theme.dart';
 import 'theme/itshnik_theme.dart';
 import 'theme/resident_theme.dart';
+import 'theme/new_year_keys.dart';
+import 'theme/new_year_theme.dart';
+import 'widgets/new_year_overlay.dart';
+import 'widgets/new_year_tap_effects.dart';
+import 'services/style_options.dart';
 import 'l10n/locale_provider.dart';
 import 'l10n/translations.dart';
 import 'services/pin_service.dart';
@@ -889,6 +894,11 @@ class _StartupState {
     this.itshnikFont = 'pixel',
     this.itshnikWallpaper,
     this.itshnikWallpaperIsVideo = false,
+    this.residentVariant = 'standard',
+    this.cyberVariant = 'standard',
+    this.residentWallpaper,
+    this.cyberWallpaper,
+    this.newYearUnlocked = false,
   });
 
   final bool hasPin;
@@ -901,6 +911,16 @@ class _StartupState {
   final String itshnikFont;
   final String? itshnikWallpaper;
   final bool itshnikWallpaperIsVideo;
+
+  /// Варианты оформления и обои «Резидента» и «Cyber psychos» — по ключу
+  /// стиля, чтобы один не перетирал настройки другого.
+  final String residentVariant;
+  final String cyberVariant;
+  final StyleWallpaperChoice? residentWallpaper;
+  final StyleWallpaperChoice? cyberWallpaper;
+
+  /// «Вернуть новогоднюю тему» из «Уголка разработчика».
+  final bool newYearUnlocked;
 
   /// Запуск тапом по уведомлению будильника — сам обработчик навешивается
   /// ПОСЛЕ runApp (там уже есть дерево виджетов), сюда кладём только факт.
@@ -1020,6 +1040,19 @@ Future<_StartupState> _loadStartupState() async {
   final itshnikVariant = SettingsService.loadItshnikVariant();
   final itshnikFont = SettingsService.loadItshnikFont();
   final itshnikWallpaper = SettingsService.loadItshnikWallpaper();
+  // «Новый год» разрешён до срока или пока человек сам не вернул его:
+  // флаг читаем синхронно, он нужен уже на первом кадре.
+  final newYearUnlocked = SettingsService.readNewYearThemeUnlocked();
+  final residentVariant = SettingsService.loadStyleVariant(
+    ResidentPalette.key,
+  );
+  final cyberVariant = SettingsService.loadStyleVariant(CyberPalette.key);
+  final residentWallpaper = SettingsService.loadStyleWallpaper(
+    ResidentPalette.key,
+  );
+  final cyberWallpaper = SettingsService.loadStyleWallpaper(
+    CyberPalette.key,
+  );
   // Прогреваем живые флаги режимов до первого Home-кадра:
   // кнопка BERSERK и карточки не ждут открытия настроек.
   // Вибрация, звуки и «Оптимизация» тоже читаются ДО первого кадра:
@@ -1051,6 +1084,10 @@ Future<_StartupState> _loadStartupState() async {
       itshnikVariant,
       itshnikFont,
       itshnikWallpaper,
+      residentVariant,
+      cyberVariant,
+      residentWallpaper,
+      cyberWallpaper,
       modes,
     ]),
     const Duration(seconds: 3),
@@ -1075,6 +1112,11 @@ Future<_StartupState> _loadStartupState() async {
     itshnikFont: await itshnikFont,
     itshnikWallpaper: (await itshnikWallpaper)?.path,
     itshnikWallpaperIsVideo: (await itshnikWallpaper)?.isVideo ?? false,
+    residentVariant: await residentVariant,
+    cyberVariant: await cyberVariant,
+    residentWallpaper: await residentWallpaper,
+    cyberWallpaper: await cyberWallpaper,
+    newYearUnlocked: newYearUnlocked,
   );
 }
 
@@ -1167,6 +1209,11 @@ Future<void> _restoreStartupBackup(Map<String, dynamic> backup) async {
       initialItshnikFont: startup.itshnikFont,
       initialItshnikWallpaper: startup.itshnikWallpaper,
       initialItshnikWallpaperIsVideo: startup.itshnikWallpaperIsVideo,
+      initialResidentVariant: startup.residentVariant,
+      initialCyberVariant: startup.cyberVariant,
+      initialResidentWallpaper: startup.residentWallpaper,
+      initialCyberWallpaper: startup.cyberWallpaper,
+      initialNewYearUnlocked: startup.newYearUnlocked,
       alarmBootPayload: _alarmBootPayload,
     ),
   );
@@ -1559,6 +1606,11 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
       initialItshnikFont: ready.itshnikFont,
       initialItshnikWallpaper: ready.itshnikWallpaper,
       initialItshnikWallpaperIsVideo: ready.itshnikWallpaperIsVideo,
+      initialResidentVariant: ready.residentVariant,
+      initialCyberVariant: ready.cyberVariant,
+      initialResidentWallpaper: ready.residentWallpaper,
+      initialCyberWallpaper: ready.cyberWallpaper,
+      initialNewYearUnlocked: ready.newYearUnlocked,
       alarmBootPayload: _alarmBootPayload,
     ),
   );
@@ -1743,6 +1795,16 @@ class AgyshaApp extends StatefulWidget {
   final String? initialItshnikWallpaper;
   final bool initialItshnikWallpaperIsVideo;
 
+  /// Варианты оформления и свои обои «Резидента» и «Cyber psychos»:
+  /// у каждого стиля свои, в том числе своя подгонка обоев.
+  final String initialResidentVariant;
+  final String initialCyberVariant;
+  final StyleWallpaperChoice? initialResidentWallpaper;
+  final StyleWallpaperChoice? initialCyberWallpaper;
+
+  /// «Вернуть новогоднюю тему» уже включено в «Уголке разработчика».
+  final bool initialNewYearUnlocked;
+
   /// Не-null, если приложение открыто срабатыванием будильника (холодный
   /// старт по full-screen intent или по тапу на уведомление).
   final String? alarmBootPayload;
@@ -1757,6 +1819,11 @@ class AgyshaApp extends StatefulWidget {
     this.initialItshnikFont = 'pixel',
     this.initialItshnikWallpaper,
     this.initialItshnikWallpaperIsVideo = false,
+    this.initialResidentVariant = 'standard',
+    this.initialCyberVariant = 'standard',
+    this.initialResidentWallpaper,
+    this.initialCyberWallpaper,
+    this.initialNewYearUnlocked = false,
     this.alarmBootPayload,
   });
 
@@ -1777,6 +1844,15 @@ class AgyshaAppState extends State<AgyshaApp>
   late ItshnikFont _itshnikFont;
   String? _itshnikWallpaper;
   bool _itshnikWallpaperIsVideo = false;
+  late String _residentVariant;
+  late String _cyberVariant;
+  StyleWallpaperChoice? _residentWallpaper;
+  StyleWallpaperChoice? _cyberWallpaper;
+  bool _newYearUnlocked = false;
+
+  /// Одноразовый таймер на срок новогодней темы: приложение может быть
+  /// открыто дольше, чем идёт 31 января, и тема обязана погаснуть сама.
+  Timer? _newYearDeadlineTimer;
   bool _itshnikNewYearSnow = true;
   bool _itshnikNewYearGarland = true;
   Key _appKey = UniqueKey();
@@ -1954,6 +2030,9 @@ class AgyshaAppState extends State<AgyshaApp>
     // Без этого guard'а лишний setState перезапускал AnimatedTheme, и при
     // смене cyberpunk → системная значок успевал мигнуть старой палитрой.
     if (key == _themeKey) return;
+    // «Новый год» после срока включается только через «Уголок разработчика»:
+    // кнопка не должна вернуть недоступную тему.
+    if (key == NewYearThemeKeys.theme && !newYearThemeAvailable) return;
     setState(() => _themeKey = key);
     SettingsService.saveThemeMode(key);
     // Тема перетекает сама — MaterialApp анимирует ThemeData (AnimatedTheme),
@@ -2010,6 +2089,85 @@ class AgyshaAppState extends State<AgyshaApp>
       _itshnikWallpaperIsVideo = path != null && isVideo;
     });
     SettingsService.saveItshnikWallpaper(path, isVideo: isVideo);
+  }
+
+  // ── «Резидент» и «Cyber psychos»: вариант, обои, видеообои ────────
+  String get residentVariant => _residentVariant;
+  String get cyberVariant => _cyberVariant;
+  StyleWallpaperChoice? get residentWallpaper => _residentWallpaper;
+  StyleWallpaperChoice? get cyberWallpaper => _cyberWallpaper;
+
+  /// Вариант и обои стиля по его ключу — чтобы панель настроек и фон
+  /// работали одним кодом для обоих стилей.
+  String styleVariant(String styleKey) => styleKey == ResidentPalette.key
+      ? _residentVariant
+      : styleKey == CyberPalette.key
+      ? _cyberVariant
+      : 'standard';
+
+  StyleWallpaperChoice? styleWallpaper(String styleKey) =>
+      styleKey == ResidentPalette.key
+      ? _residentWallpaper
+      : styleKey == CyberPalette.key
+      ? _cyberWallpaper
+      : null;
+
+  void setStyleVariant(String styleKey, String variant) {
+    final value = variant == 'v1' || variant == 'v2' ? variant : 'standard';
+    if (styleKey == ResidentPalette.key) {
+      if (value == _residentVariant) return;
+      setState(() => _residentVariant = value);
+    } else if (styleKey == CyberPalette.key) {
+      if (value == _cyberVariant) return;
+      setState(() => _cyberVariant = value);
+    } else {
+      return;
+    }
+    SettingsService.saveStyleVariant(styleKey, value);
+  }
+
+  /// `null` — вернуть процедурный фон стиля.
+  void setStyleWallpaper(String styleKey, StyleWallpaperChoice? choice) {
+    if (styleKey == ResidentPalette.key) {
+      if (choice == _residentWallpaper) return;
+      setState(() => _residentWallpaper = choice);
+    } else if (styleKey == CyberPalette.key) {
+      if (choice == _cyberWallpaper) return;
+      setState(() => _cyberWallpaper = choice);
+    } else {
+      return;
+    }
+    SettingsService.saveStyleWallpaper(styleKey, choice);
+  }
+
+  // ── Новогодняя тема ───────────────────────────────────────────────
+  bool get newYearThemeUnlocked => _newYearUnlocked;
+
+  /// Плитка «Новый год» видна, если срок не истёк или человек вернул тему
+  /// сам из «Уголка разработчика».
+  bool get newYearThemeAvailable =>
+      SettingsService.isNewYearThemeAvailable(unlocked: _newYearUnlocked);
+
+  void setNewYearThemeUnlocked(bool value) {
+    if (value == _newYearUnlocked) return;
+    setState(() => _newYearUnlocked = value);
+    SettingsService.saveNewYearThemeUnlocked(value);
+    // Выключили доступ, а тема стоит — сразу возвращаемся в прежнюю.
+    if (!value && !newYearThemeAvailable && _themeKey == NewYearThemeKeys.theme) {
+      _revertFromNewYearTheme();
+    }
+  }
+
+  /// Истёк срок и тема больше не доступна: уходим в прежнюю тему и
+  /// запоминаем это, чтобы она не вернулась сама после срока.
+  Future<void> _revertFromNewYearTheme() async {
+    final previous = await SettingsService.loadThemeBeforeExclusive(
+      NewYearThemeKeys.theme,
+    );
+    if (!mounted) return;
+    if (!newYearThemeAvailable && _themeKey == NewYearThemeKeys.theme) {
+      setThemeMode(previous);
+    }
   }
 
   void setLanguageCode(String code) {
@@ -2183,7 +2341,13 @@ class AgyshaAppState extends State<AgyshaApp>
     _itshnikFont = ItshnikFont.fromKey(widget.initialItshnikFont);
     _itshnikWallpaper = widget.initialItshnikWallpaper;
     _itshnikWallpaperIsVideo = widget.initialItshnikWallpaperIsVideo;
+    _residentVariant = widget.initialResidentVariant;
+    _cyberVariant = widget.initialCyberVariant;
+    _residentWallpaper = widget.initialResidentWallpaper;
+    _cyberWallpaper = widget.initialCyberWallpaper;
+    _newYearUnlocked = widget.initialNewYearUnlocked;
     _itshnikNewYearSnow = SettingsService.readItshnikNewYearSnow();
+    _armNewYearDeadline();
     _itshnikNewYearGarland = SettingsService.readItshnikNewYearGarland();
     _locked = widget.initialLocked;
     aiLockScreenVisible.value = _locked;
@@ -2297,8 +2461,27 @@ class AgyshaAppState extends State<AgyshaApp>
     _overlayCheckTimer = null;
   }
 
+  /// Заводит таймер ровно на конец срока темы. Сработает только если оба
+  /// момента (включение и срок) пришлись на один запуск приложения; все
+  /// остальные случаи закрывает проверка при возврате из фона и при старте.
+  void _armNewYearDeadline() {
+    _newYearDeadlineTimer?.cancel();
+    final left = NewYearThemeKeys.deadline.difference(DateTime.now());
+    if (left.isNegative) return;
+    _newYearDeadlineTimer = Timer(left, _checkNewYearExpiry);
+  }
+
+  /// Срок вышел — гасим тему и возвращаемся туда, откуда в неё пришли.
+  /// Настройки остальных стилей и самой новогодней темы не трогаем.
+  void _checkNewYearExpiry() {
+    if (_themeKey != NewYearThemeKeys.theme) return;
+    if (newYearThemeAvailable) return;
+    unawaited(_revertFromNewYearTheme());
+  }
+
   @override
   void dispose() {
+    _newYearDeadlineTimer?.cancel();
     _bootWatchdog?.cancel();
     _stopOverlayCheck();
     _adaTrackTimer?.cancel();
@@ -2343,6 +2526,9 @@ class AgyshaAppState extends State<AgyshaApp>
       // Приложение снова на переднем плане.
       // Системный UI (файл-пикер и т.п.) закрылся — флаг сбрасываем.
       systemUiActive = false;
+      // Приложение могло не запускаться неделями, а срок новогодней темы
+      // истёк именно в фоне: сверяем системную дату при каждом возврате.
+      _checkNewYearExpiry();
       // Возврат из фона с включённым PIN: показываем блокировку ДО того,
       // как человек увидит содержимое. Будильник сюда не попадает
       // (_wakeScreenShowing), системные экраны — тоже (флаг выше).
@@ -2428,7 +2614,8 @@ class AgyshaAppState extends State<AgyshaApp>
     // со старым шрифтом — Caveat не переключался).
     final cacheKey =
         '${scheme.hashCode}|$isGrokStyle|$_fontFamily|$_themeKey'
-        '|${_itshnikFont.key}|${_itshnikVariant.key}';
+        '|${_itshnikFont.key}|${_itshnikVariant.key}'
+        '|$_residentVariant|$_cyberVariant';
     final cached = isDark ? _darkThemeCache : _lightThemeCache;
     final cachedKey = isDark ? _darkThemeCacheKey : _lightThemeCacheKey;
     if (cached != null && cachedKey == cacheKey) return cached;
@@ -2440,6 +2627,8 @@ class AgyshaAppState extends State<AgyshaApp>
       fontFamily: _fontFamily,
       themeKey: _themeKey,
       itshnikFont: _itshnikFont,
+      residentVariant: _residentVariant,
+      cyberVariant: _cyberVariant,
     );
     if (isDark) {
       _darkThemeCache = built;
@@ -2653,12 +2842,17 @@ class AgyshaAppState extends State<AgyshaApp>
                   return ItshnikPalette.schemeFor(_itshnikVariant);
                 }
                 if (_themeKey == ResidentPalette.key) {
-                  return ResidentPalette.scheme;
+                  return ResidentPalette.schemeFor(_residentVariant);
                 }
                 // «Cyber psychos» — палитра темы: фон, неон и эффекты берут
                 // ровно те же цвета, что и оформление экранов.
                 if (_themeKey == CyberPalette.key) {
-                  return CyberPalette.scheme;
+                  return CyberPalette.schemeFor(_cyberVariant);
+                }
+                // «Новый год» — зимняя ночь с золотом и хвоей, палитра и
+                // гирлянды живут в NewYearPalette.
+                if (_themeKey == NewYearThemeKeys.theme) {
+                  return NewYearPalette.scheme;
                 }
                 if (_themeKey == 'oled') {
                   return const ColorScheme.dark(
@@ -2934,17 +3128,28 @@ class AgyshaAppState extends State<AgyshaApp>
                           ),
                         // Фон «Резидента» — корпоративный терминал: гексагоны,
                         // ленты алого шёлка и скан-линия под прозрачными
-                        // экранами темы.
+                        // экранами темы. Вариант и обои — свои у стиля.
                         if (_themeKey == ResidentPalette.key)
-                          const ResidentBackdrop(
-                            key: ValueKey('resident_backdrop'),
-                            child: SizedBox.expand(),
+                          ResidentBackdrop(
+                            key: const ValueKey('resident_backdrop'),
+                            variant: _residentVariant,
+                            wallpaper: _residentWallpaper,
+                            child: const SizedBox.expand(),
                           ),
                         // Фон «Cyber psychos»: ночной город, неоновая сетка,
                         // дождь и скан-линии под прозрачными экранами темы.
                         if (_themeKey == CyberPalette.key)
-                          const CyberBackdrop(
-                            key: ValueKey('cyber_backdrop'),
+                          CyberBackdrop(
+                            key: const ValueKey('cyber_backdrop'),
+                            variant: _cyberVariant,
+                            wallpaper: _cyberWallpaper,
+                            child: const SizedBox.expand(),
+                          ),
+                        // Фон «Нового года»: зимняя ночь, снегопад, гирлянды
+                        // и снежинки. Отдельная тема, а не слой поверх чужой.
+                        if (_themeKey == NewYearThemeKeys.theme)
+                          const NewYearBackdrop(
+                            key: ValueKey('newyear_backdrop'),
                             child: SizedBox.expand(),
                           ),
                         // Контент (Navigator) — всегда ОДИН слой, без анимации:
@@ -2972,6 +3177,12 @@ class AgyshaAppState extends State<AgyshaApp>
                         if (_themeKey == CyberPalette.key)
                           const CyberTapEffects(
                             key: ValueKey('cyber_tap_effects'),
+                          ),
+                        // Вспышка снежинок и золотая искра в точке нажатия
+                        // новогодней темы.
+                        if (_themeKey == NewYearThemeKeys.theme)
+                          const NewYearTapEffects(
+                            key: ValueKey('newyear_tap_effects'),
                           ),
                         // Пятна крови темы MUTILATED — ОТДЕЛЬНЫЙ слой поверх
                         // Navigator (включая drag-прокси при перетаскивании).

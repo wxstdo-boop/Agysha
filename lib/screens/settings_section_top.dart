@@ -42,6 +42,13 @@ extension _SettingsSectionTop on _SettingsScreenState {
               const SizedBox(height: 14),
               _buildItshnikStylePanel(context, appState),
             ],
+            // «Резидент» и «Cyber psychos» — свои варианты вида и свои обои,
+            // отдельно для каждого стиля.
+            if (appState.themeKey == ResidentPalette.key ||
+                appState.themeKey == CyberPalette.key) ...[
+              const SizedBox(height: 14),
+              _buildStyleVariantPanel(context, appState, appState.themeKey),
+            ],
           ],
         ),
       ),

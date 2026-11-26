@@ -126,6 +126,42 @@ flutter:
     - family: CyberText
       fonts:
         - asset: assets/fonts/CyberText.ttf
+    # «Новый год» — четвёртая эксклюзивная тема: декоративный кириллический
+    # дисплей (Ruslan Display) и рукописный Neucha. SIL OFL 1.1, кириллица есть.
+    - family: NewYearDisplay
+      fonts:
+        - asset: assets/fonts/NewYearDisplay.ttf
+    - family: NewYearText
+      fonts:
+        - asset: assets/fonts/NewYearText.ttf
+    # Вариант №1 «Резидента» — полевой устав: строгий PT Serif и сжатый
+    # PT Sans Narrow. SIL OFL 1.1, кириллица есть.
+    - family: ResidentV1Serif
+      fonts:
+        - asset: assets/fonts/ResidentV1SerifBody.ttf
+          weight: 400
+        - asset: assets/fonts/ResidentV1Serif.ttf
+          weight: 700
+    - family: ResidentV1Sans
+      fonts:
+        - asset: assets/fonts/ResidentV1Sans.ttf
+    # Вариант №2 «Резидента» — парадный зал: Yeseva One и Rubik.
+    - family: ResidentV2Display
+      fonts:
+        - asset: assets/fonts/ResidentV2Display.ttf
+    - family: ResidentV2Text
+      fonts:
+        - asset: assets/fonts/ResidentV2Text.ttf
+    # Вариант №1 «Cyber psychos» — Unbounded. №2 — Play. SIL OFL 1.1.
+    - family: CyberV1Display
+      fonts:
+        - asset: assets/fonts/CyberV1Display.ttf
+    - family: CyberV2Display
+      fonts:
+        - asset: assets/fonts/CyberV2Display.ttf
+    - family: CyberV2Text
+      fonts:
+        - asset: assets/fonts/CyberV2Text.ttf
     # Третий шрифт «IT-шника» (Roboto с широким тире): нужен, когда текст
     # темы не пиксельный, а «штриховой».
     - family: ItsDash

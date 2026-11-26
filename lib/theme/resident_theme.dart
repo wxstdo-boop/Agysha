@@ -89,6 +89,62 @@ class ResidentPalette {
     shadow: blood,
     scrim: Color(0xFF000000),
   );
+
+  /// Шрифты вариантов: №1 — полевой устав (PT Serif + PT Sans Narrow),
+  /// №2 — парадный зал (Yeseva One + Rubik).
+  static const String v1SerifFamily = 'ResidentV1Serif';
+  static const String v1SansFamily = 'ResidentV1Sans';
+  static const String v2DisplayFamily = 'ResidentV2Display';
+  static const String v2TextFamily = 'ResidentV2Text';
+
+  /// Схема варианта оформления: стандарт отдаёт ровно прежнюю палитру,
+  /// №1 уводит тему в пыльный архив (тёплая бумага, латунь, меньше алого),
+  /// №2 — в парадный зал с бордовым бархатом и золотом.
+  static ColorScheme schemeFor(String variant) => switch (variant) {
+    'v1' => scheme.copyWith(
+      primary: brass,
+      onPrimary: Color(0xFF241800),
+      primaryContainer: Color(0xFF3D2C08),
+      onPrimaryContainer: Color(0xFFFFE9B8),
+      secondary: blood,
+      onSecondary: Color(0xFF2B0003),
+      secondaryContainer: Color(0xFF4A0B10),
+      onSecondaryContainer: Color(0xFFFFD5D7),
+      surface: Color(0xFF14100B),
+      surfaceContainerLowest: Color(0xFF0C0906),
+      surfaceContainerLow: Color(0xFF1C1610),
+      surfaceContainer: Color(0xFF231C14),
+      surfaceContainerHigh: Color(0xFF2B2318),
+      surfaceContainerHighest: Color(0xFF352B1D),
+      onSurface: parchment,
+      onSurfaceVariant: Color(0xFFB8A480),
+      outline: Color(0xFF4A3A22),
+      outlineVariant: Color(0xFF2E2317),
+      shadow: brass,
+    ),
+    'v2' => scheme.copyWith(
+      primary: Color(0xFFC8A03C),
+      onPrimary: Color(0xFF241A00),
+      primaryContainer: Color(0xFF3A2A05),
+      onPrimaryContainer: Color(0xFFFFE7A8),
+      secondary: Color(0xFFB02A55),
+      onSecondary: Color(0xFF2B0010),
+      secondaryContainer: Color(0xFF45051F),
+      onSecondaryContainer: Color(0xFFFFD4E2),
+      surface: Color(0xFF120810),
+      surfaceContainerLowest: Color(0xFF080407),
+      surfaceContainerLow: Color(0xFF1A0D16),
+      surfaceContainer: Color(0xFF22111C),
+      surfaceContainerHigh: Color(0xFF2C1724),
+      surfaceContainerHighest: Color(0xFF39202E),
+      onSurface: Color(0xFFF6E9EF),
+      onSurfaceVariant: Color(0xFFC08FA4),
+      outline: Color(0xFF46222F),
+      outlineVariant: Color(0xFF2A141E),
+      shadow: Color(0xFFB02A55),
+    ),
+    _ => scheme,
+  };
 }
 
 /// Оформление поверх базовой темы: корпоративное досье Umbrella — глубокий
@@ -97,9 +153,24 @@ class ResidentPalette {
 ///
 /// Шрифты из pubspec: [ResidentPalette.serifFamily] для заголовков, цифр и
 /// штампов, [ResidentPalette.sansFamily] для основного текста.
-ThemeData applyResidentTheme(ThemeData base) {
+ThemeData applyResidentTheme(ThemeData base, {String variant = 'standard'}) {
   final scheme = base.colorScheme;
-  final radius = BorderRadius.circular(4);
+  final radius = BorderRadius.circular(variant == 'v2' ? 12 : (variant == 'v1' ? 2 : 4));
+
+  // У каждого варианта своя пара шрифтов: стандарт — Cormorant/Oswald,
+  // №1 — PT Serif/PT Sans Narrow, №2 — Yeseva One/Rubik.
+  final serifFamily = switch (variant) {
+    'v1' => ResidentPalette.v1SerifFamily,
+    'v2' => ResidentPalette.v2DisplayFamily,
+    _ => ResidentPalette.serifFamily,
+  };
+  final sansFamily = switch (variant) {
+    'v1' => ResidentPalette.v1SansFamily,
+    'v2' => ResidentPalette.v2TextFamily,
+    _ => ResidentPalette.sansFamily,
+  };
+  // Разрядка задаёт характер: устав печатает плотно и строго, зал дышит.
+  final spacingScale = variant == 'v1' ? 1.25 : (variant == 'v2' ? 1.15 : 1.0);
 
   TextStyle sans(
     TextStyle? from, {
@@ -111,10 +182,10 @@ ThemeData applyResidentTheme(ThemeData base) {
     List<FontFeature>? features,
   }) {
     return (from ?? const TextStyle()).copyWith(
-      fontFamily: ResidentPalette.sansFamily,
+      fontFamily: sansFamily,
       fontSize: size,
       fontWeight: weight,
-      letterSpacing: spacing,
+      letterSpacing: spacing * spacingScale,
       height: height,
       color: color,
       fontFeatures: features,
@@ -131,10 +202,10 @@ ThemeData applyResidentTheme(ThemeData base) {
     List<FontFeature>? features,
   }) {
     return (from ?? const TextStyle()).copyWith(
-      fontFamily: ResidentPalette.serifFamily,
+      fontFamily: serifFamily,
       fontSize: size,
       fontWeight: weight,
-      letterSpacing: spacing,
+      letterSpacing: spacing * spacingScale,
       height: height,
       color: color,
       fontFeatures: features,
