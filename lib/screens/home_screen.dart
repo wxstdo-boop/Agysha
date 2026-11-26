@@ -1095,7 +1095,12 @@ class _PageTickerGate extends StatelessWidget {
       valueListenable: page,
       child: child,
       builder: (context, value, child) {
-        final visible = (value - index).abs() < 0.98;
+        // 1.6, а не 0.98: при 0.98 раздел оживал за сотую долю страницы до
+        // остановки, и его вечные анимации (пульсы, свечения, перекаты цифр)
+        // стартовали ПЕРВЫМ кадром ровно на финише доводки — это и читалось
+        // как «подлаг в конце». Теперь раздел тикает уже на подъезде, к
+        // остановке он прогретый, а дальние страницы по-прежнему спят.
+        final visible = (value - index).abs() < 1.6;
         return TickerMode(enabled: visible, child: child!);
       },
     );

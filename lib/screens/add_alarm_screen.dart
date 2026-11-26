@@ -588,6 +588,15 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                   pressedScale: 0.94,
                   duration: const Duration(milliseconds: 140),
                   releaseDuration: const Duration(milliseconds: 220),
+                  // Ровно та же отдача фона, что у строки «Вибрация»: слой
+                  // ПОВЕРХ карточки, сквозь который видно её собственную
+                  // поверхность. Без него нажатие читалось только сжатием, а
+                  // владелец ждал «такой же фон, как у вибрации» — и чтобы
+                  // фон под ним не глотался (0.07, не плотная заливка).
+                  pressOverlay: pressTintOverlay(
+                    BorderRadius.circular(20),
+                    strength: 0.07,
+                  ),
                   child: Card(
                     clipBehavior: Clip.antiAlias,
                     shape: RoundedRectangleBorder(
@@ -922,9 +931,11 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                             // Карточки звуков были заметно уже карточки
                             // настроек и выглядели «скукоженными»: при 0.6
                             // в ячейку помещалось меньше половины полосы.
-                            // 0.72 возвращает им прежнюю ровную ширину, а
-                            // крайние соседи по-прежнему выглядывают.
-                            viewportFraction: 0.72,
+                            // 0.72 всё ещё читалось как сжатая карточка,
+                            // поэтому 0.86: таблетка почти во всю ширину
+                            // карточки звуков, а соседи выглядывают ровной
+                            // узкой кромкой.
+                            viewportFraction: 0.86,
                             onChanged: (s) => setState(() => _soundName = s),
                             itemBuilder: (context, s, selected) {
                               final isCustom = s == 'Custom';
@@ -985,7 +996,7 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                                     // старте и без рывка на финише.
                                     curve: Curves.easeInOutCubic,
                                     margin: const EdgeInsets.symmetric(
-                                      horizontal: 4,
+                                      horizontal: 3,
                                       vertical: 4,
                                     ),
                                     padding: const EdgeInsets.symmetric(

@@ -850,6 +850,12 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                   // Основное содержимое
                   Expanded(
                     child: GestureDetector(
+                      // Opaque, а не deferToChild: содержимое карточки —
+                      // колонка с отступами и пустыми зазорами, и тап по
+                      // ним раньше не доходил до детектора. Владелец читал
+                      // это как «будильник не открывается с первого раза»:
+                      // попасть надо было точно в текст.
+                      behavior: HitTestBehavior.opaque,
                       onTap: () => _editAlarm(alarm),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),

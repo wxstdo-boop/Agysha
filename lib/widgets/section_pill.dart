@@ -257,6 +257,18 @@ class _SectionPillState extends State<SectionPill>
   /// Идёт ли тяга пальцем по таблетке.
   bool _dragging = false;
 
+  /// Кегль подписей, уже подобранный под ширину ячейки, и ключ состава
+  /// подписей, под который он подобран.
+  ///
+  /// Зачем кеш: `LayoutBuilder` на первом кадре после перезахода отдаёт
+  /// ширину, которой ещё нет (0 или узкую), `_fittedFontSize` возвращает
+  /// крупные 14 px — подписи встают «в полный рост», а следующим кадром
+  /// ужимаются до реального кегля. Рядом с выравниванием по центру ячейки
+  /// это читалось как «разделы съехали влево и скукожились». Кеш не даёт
+  /// кеглю ПОСЛЕ первого подбора вырасти обратно.
+  double? _fittedSize;
+  String? _fittedKey;
+
   /// Signed-тяга пальца за край рельса (-0.72..0.72). Под пальцем —
   /// чистая функция кадра, БЕЗ лага: общий ValueNotifier +
   /// TweenAnimationBuilder догонял цель с лагом 180–230 мс и перестартовывал
@@ -606,7 +618,7 @@ class _SectionPillState extends State<SectionPill>
               // и подписи обрезались многоточием каждая по-своему —
               // выглядело как «тексты не выровнены». Теперь подписи
               // ужимаются целиком и стоят ровно.
-              final fontSize = _fittedFontSize(labels, count, box.maxWidth);
+              final fontSize = _stableFittedSize(labels, count, box.maxWidth);
               return Row(
                 children: List.generate(count, (i) {
                   final label = i < labels.length ? labels[i] : '';
@@ -711,6 +723,27 @@ class _SectionPillState extends State<SectionPill>
         ),
       ],
     );
+  }
+
+  /// Кегль подписей с памятью: см. [_fittedSize]. Ключ — состав подписей,
+  /// чтобы появление «Проверок» или смена языка сбрасывали подбор.
+  double _stableFittedSize(List<String> labels, int count, double width) {
+    final key = '${labels.join('|')}#$count';
+    if (key != _fittedKey) {
+      _fittedKey = key;
+      _fittedSize = null;
+    }
+    // Ширины ещё нет (первый кадр после перезахода, нулевой layout):
+    // отдаём последний подобранный кегль, а не крупные 14 px — иначе
+    // подписи успевают «расправиться» и тут же сжаться.
+    if (width <= 0 || count <= 0) return _fittedSize ?? 11.0;
+    final next = _fittedFontSize(labels, count, width);
+    final prev = _fittedSize;
+    // Кегль может уменьшиться (подпись влезла хуже), но НЕ вырастет обратно:
+    // рост — это и есть «в полный рост, а потом скукожилось».
+    if (prev != null && next > prev) return prev;
+    _fittedSize = next;
+    return next;
   }
 
   /// Самый крупный кегль (шаг 0.5 от 14 вниз до 9.5), при котором САМАЯ

@@ -388,8 +388,11 @@ class _PickerCellState<T> extends State<_PickerCell<T>> {
               ? (widget.controller.page ?? 0.0)
               : 0.0;
           final delta = (widget.index - pos).abs().clamp(0.0, 1.0);
-          final scale = 1.0 - 0.12 * delta;
-          final opacity = 1.0 - 0.35 * delta;
+          // Соседи поджимаются и гаснут МЯГЧЕ (было 0.12/0.35): при прежних
+          // значениях кромка соседней карточки читалась отдельной
+          // «скукоженной» плашкой, а не продолжением полосы.
+          final scale = 1.0 - 0.08 * delta;
+          final opacity = 1.0 - 0.26 * delta;
           return Opacity(
             opacity: opacity,
             child: Transform.scale(scale: scale, child: child),

@@ -224,7 +224,12 @@ class _InlineKeyboardState extends State<InlineKeyboard>
       // читается целым — владелец просил именно уменьшить панель по бокам.
       // Боковые поля панели поджаты: клавиши должны быть шире, чтобы по ним
       // попадать пальцем (владелец: «кнопки на клавиатуре расширь»).
-      padding: EdgeInsets.fromLTRB(3, widget.onCollapse == null ? 8 : 0, 3, 10),
+      padding: EdgeInsets.fromLTRB(
+        2,
+        widget.onCollapse == null ? 8 : 0,
+        2,
+        10,
+      ),
       decoration: BoxDecoration(
         // Панель — нейтральное стекло: сквозь неё просвечивает лист, и
         // клавиатура читается его частью, а не чужой красной вставкой.
@@ -255,20 +260,29 @@ class _InlineKeyboardState extends State<InlineKeyboard>
           // два ряда со смещением, и набор читался как «буквы дёргаются и
           // смещаются». Теперь буквы меняются на месте: положение каждой
           // клавиши одинаково в обеих раскладках, двигаться нечему.
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 160),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            layoutBuilder: (current, previous) => Stack(
-              alignment: Alignment.center,
-              children: [...previous, if (current != null) current],
-            ),
-            transitionBuilder: (child, animation) =>
-                FadeTransition(opacity: animation, child: child),
-            child: Column(
-              key: ValueKey(_layout),
-              mainAxisSize: MainAxisSize.min,
-              children: _layoutRows(theme),
+          // Высота полки раскладок ЗАФИКСИРОВАНА. Ряды у букв и у символов
+          // чуть разной высоты, и панель при переключении подрастала и
+          // поджималась — вместе с ней подъезжало и всё окно листа
+          // (владелец: «на знаках клавиатуру окно смещает»). Фиксированная
+          // высота убирает сам источник смещения: переключение теперь
+          // кросс-фейд на месте, панель не меняет размер ни на пиксель.
+          SizedBox(
+            height: 3 * (widget.keyHeight + 2) + 16,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 160),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              layoutBuilder: (current, previous) => Stack(
+                alignment: Alignment.center,
+                children: [...previous, if (current != null) current],
+              ),
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
+              child: Column(
+                key: ValueKey(_layout),
+                mainAxisSize: MainAxisSize.min,
+                children: _layoutRows(theme),
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -683,9 +697,10 @@ class _KeyState extends State<_Key> {
             cs.surfaceContainerHighest.withValues(alpha: 0.30),
           );
     return Padding(
-      // Полпикселя по бокам вместо пикселя: зазор между клавишами остаётся
-      // читаемым, но каждая шляпка получает ещё ~1 px ширины.
-      padding: const EdgeInsets.symmetric(horizontal: 0.5, vertical: 1),
+      // Четверть пикселя по бокам: зазор между шляпками остаётся (их
+      // разделяет ещё и рамка), но каждая клавиша получает максимум ширины,
+      // какой даёт ряд из 11 штук. Шире — только за счёт числа клавиш в ряду.
+      padding: const EdgeInsets.symmetric(horizontal: 0.25, vertical: 1),
       child: PressScale(
         // Отдача клавиши — заметно медленнее и мягче прежних 90/180 мс:
         // на быстром наборе клавиша «щёлкала» кадром и не читалась как
@@ -697,13 +712,13 @@ class _KeyState extends State<_Key> {
         releaseDuration: const Duration(milliseconds: 260),
         // Наклон клавиши ВЫКЛЮЧЕН: при быстром наборе каждая шляпка
         // поворачивалась под пальцем, и буквы на панели «дёргались и
-        // смещались». Нажатие теперь читается вдавливанием и «мокрым»
-        // бликом — их видно и на сплошной красной клавише-действии.
+        // смещались». Нажатие читается чистым вдавливанием.
         enableTilt: false,
-        pressOverlay: pressGloss(
-          BorderRadius.circular(Radii.md),
-          strength: 0.24,
-        ),
+        // «Мокрого» блика у клавиш больше нет. Он рисовал сверху шляпки
+        // светлую полосу на 45% высоты — на 33-пиксельной клавише она
+        // накрывала саму букву (владелец: «полоской покрывает символ»).
+        // Отдача осталась вдавливанием, а сама шляпка стала шире.
+        pressOverlay: null,
         // Отдачу рисует сам PressScale: `Material`+`InkWell` на каждую клавишу
         // — лишние слои и чернильные всплески. Держим только один «блик»
         // нажатия через `Listener` внутри PressScale, а тап отдаёт GestureDetector.
@@ -812,10 +827,11 @@ class _CaseGlyph extends StatelessWidget {
       pressedScale: 0.86,
       duration: const Duration(milliseconds: 190),
       releaseDuration: const Duration(milliseconds: 340),
-      // Та же 3D-отдача и блик, что у служебных клавиш: буквы не должны
-      // «отдавать» иначе, чем «стереть» и «пробел».
+      // Та же отдача, что у служебных клавиш: буквы не должны «отдавать»
+      // иначе, чем «стереть» и «пробел». Блик убран по той же причине, что
+      // и у служебных клавиш — светлая полоса ложилась поверх буквы.
       maxTiltAngle: 0.13,
-      pressOverlay: pressGloss(BorderRadius.circular(Radii.md), strength: 0.24),
+      pressOverlay: null,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {

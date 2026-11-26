@@ -112,6 +112,52 @@ buckets = {"new": [], "polish": [], "fix": []}
 order = []
 seen = set()
 
+def parts_of(text):
+    """Один заголовок коммита часто перечисляет несколько правок через «;».
+
+    В релизе это читалось как пункт-простыня, а чаще — после обрезки по
+    140 символам — половина работы просто пропадала, и на целую сборку в
+    «Что нового» стояла ОДНА строка. Такие перечисления делим на отдельные
+    пункты. Одиночную «;» внутри обычной фразы не трогаем: делим только
+    когда частей две и больше и каждая из них — самостоятельная фраза.
+    """
+    if ";" not in text:
+        return [text]
+    pieces = [p.strip() for p in text.split(";")]
+    substantial = [p for p in pieces if len(p) >= 12]
+    if len(substantial) < 2:
+        return [text]
+    return [p for p in pieces if p]
+
+def add_item(raw_text):
+    text = raw_text.strip()
+    if not text:
+        return
+    # Тело коммита бывает и служебным («Подробности ниже:»), и слишком
+    # длинным для заметки: такие строки в релиз не отдаём.
+    if len(text) < 6 or text.endswith(":"):
+        return
+    if len(text) > 140:
+        cut = text[:140]
+        text = cut.rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
+    elif text.endswith((",", ";")):
+        # Перенесённый пункт тела приходит без второй половины: висящая
+        # запятая выдаёт обрубок, лучше честное многоточие.
+        text = text[:-1].rstrip() + "…"
+    text = text[0].upper() + text[1:]
+    low = text.lower()
+    emoji = "✨"
+    for keys, icon in EMOJI_RULES:
+        if any(k in low for k in keys):
+            emoji = icon
+            break
+    bullet = "- " + emoji + " " + text
+    if bullet in seen:
+        return
+    seen.add(bullet)
+    order.append((emoji, text))
+    buckets[section_of(low)].append((emoji, humanize(text)))
+
 for raw in sys.stdin:
     line = raw.rstrip("\n")
     # Перенос строки длинного пункта из changelog — не заголовок коммита,
@@ -135,30 +181,8 @@ for raw in sys.stdin:
                   "", text).strip()
     if not text:
         continue
-    # Тело коммита бывает и служебным («Подробности ниже:»), и слишком
-    # длинным для заметки: такие строки в релиз не отдаём.
-    if len(text) < 6 or text.endswith(":"):
-        continue
-    if len(text) > 140:
-        cut = text[:140]
-        text = cut.rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
-    elif text.endswith((",", ";")):
-        # Перенесённый пункт тела приходит без второй половины: висящая
-        # запятая выдаёт обрубок, лучше честное многоточие.
-        text = text[:-1].rstrip() + "…"
-    text = text[0].upper() + text[1:]
-    low = text.lower()
-    emoji = "✨"
-    for keys, icon in EMOJI_RULES:
-        if any(k in low for k in keys):
-            emoji = icon
-            break
-    bullet = "- " + emoji + " " + text
-    if bullet in seen:
-        continue
-    seen.add(bullet)
-    order.append((emoji, text))
-    buckets[section_of(low)].append((emoji, humanize(text)))
+    for piece in parts_of(text):
+        add_item(piece)
 
 if not SECTIONS:
     # Порядок — как в истории: fastlane-заметки читают сверху вниз, и
