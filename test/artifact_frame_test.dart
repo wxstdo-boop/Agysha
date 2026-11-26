@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:agysha/widgets/gift_card_3d.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Серии артефактов из каталога `lib/models/profile_gift.dart`.
