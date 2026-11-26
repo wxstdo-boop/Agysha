@@ -1498,186 +1498,184 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
     final dark = theme.brightness == Brightness.dark;
     final accent = _fav ? BrandColors.red : _gift.rarity.color;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeInOutCubic,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      decoration: BoxDecoration(
-        color: dark ? const Color(0xFF12121C) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(
-          color: accent.withValues(alpha: _fav ? 0.50 : 0.35),
-          width: 1.2,
+    // Рамка листа перекрашивается ЖИВЫМ смещением карусели: пока карточки
+    // кубом идут за пальцем, акцент перетекает между цветами редкости без
+    // скачка на смене страницы.
+    return AnimatedBuilder(
+      animation: _pages,
+      builder: (context, _) => AnimatedContainer(
+        duration: Duration.zero,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xFF12121C) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(
+            color: _liveAccent(accent).withValues(alpha: _fav ? 0.50 : 0.35),
+            width: 1.2,
+          ),
         ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Верхняя полоска драга
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(2),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Верхняя полоска драга
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              height: _pageHeight,
-              child: PageView.builder(
-                controller: _pages,
-                itemCount: widget.gifts.length,
-                physics: _multiple
-                    ? const PageScrollPhysics()
-                    : const NeverScrollableScrollPhysics(),
-                onPageChanged: _onPageChanged,
-                itemBuilder: (context, i) => _cube(context, i),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: _pageHeight,
+                child: PageView.builder(
+                  controller: _pages,
+                  itemCount: widget.gifts.length,
+                  physics: _multiple
+                      ? const PageScrollPhysics()
+                      : const NeverScrollableScrollPhysics(),
+                  onPageChanged: _onPageChanged,
+                  itemBuilder: (context, i) => _cube(context, i),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            if (_multiple) _dots(theme, accent),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: PressScale(
-                    pressedScale: 0.94,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _toggleFavorite,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeInOutCubic,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _fav
-                              ? BrandColors.red
-                              : theme.colorScheme.primary,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color:
-                                  (_fav
-                                          ? BrandColors.red
-                                          : theme.colorScheme.primary)
-                                      .withValues(alpha: 0.40),
-                              blurRadius: _fav ? 14 : 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 260),
-                              child: Icon(
-                                _fav
-                                    ? Icons.star_rounded
-                                    : Icons.star_outline_rounded,
-                                key: ValueKey(_fav),
-                                color: Colors.white,
-                                size: 18,
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: PressScale(
+                      pressedScale: 0.94,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _toggleFavorite,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeInOutCubic,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _fav
+                                ? BrandColors.red
+                                : theme.colorScheme.primary,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    (_fav
+                                            ? BrandColors.red
+                                            : theme.colorScheme.primary)
+                                        .withValues(alpha: 0.40),
+                                blurRadius: _fav ? 14 : 8,
+                                offset: const Offset(0, 4),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 260),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              transitionBuilder: (child, anim) =>
-                                  FadeTransition(
-                                    opacity: anim,
-                                    child: ScaleTransition(
-                                      scale: Tween<double>(
-                                        begin: 0.90,
-                                        end: 1.0,
-                                      ).animate(anim),
-                                      child: child,
-                                    ),
-                                  ),
-                              child: Text(
-                                _fav
-                                    ? Translations.t(
-                                        'giftFavOn',
-                                        context,
-                                        'В избранном (до 5)',
-                                      )
-                                    : Translations.t(
-                                        'giftFavOff',
-                                        context,
-                                        'В избранное (до 5)',
-                                      ),
-                                key: ValueKey(_fav),
-                                style: const TextStyle(
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 260),
+                                child: Icon(
+                                  _fav
+                                      ? Icons.star_rounded
+                                      : Icons.star_outline_rounded,
+                                  key: ValueKey(_fav),
                                   color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
+                                  size: 18,
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 260),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                transitionBuilder: (child, anim) =>
+                                    FadeTransition(
+                                      opacity: anim,
+                                      child: ScaleTransition(
+                                        scale: Tween<double>(
+                                          begin: 0.90,
+                                          end: 1.0,
+                                        ).animate(anim),
+                                        child: child,
+                                      ),
+                                    ),
+                                child: Text(
+                                  _fav
+                                      ? Translations.t(
+                                          'giftFavOn',
+                                          context,
+                                          'В избранном (до 5)',
+                                        )
+                                      : Translations.t(
+                                          'giftFavOff',
+                                          context,
+                                          'В избранное (до 5)',
+                                        ),
+                                  key: ValueKey(_fav),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                PressScale(
-                  pressedScale: 0.92,
-                  child: IconButton.filledTonal(
-                    style: IconButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                  const SizedBox(width: 10),
+                  PressScale(
+                    pressedScale: 0.92,
+                    child: IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.all(14),
                       ),
-                      padding: const EdgeInsets.all(14),
+                      onPressed: () {
+                        Haptics.light();
+                        Navigator.of(context).pop();
+                      },
+                      icon: const Icon(Icons.close_rounded),
                     ),
-                    onPressed: () {
-                      Haptics.light();
-                      Navigator.of(context).pop();
-                    },
-                    icon: const Icon(Icons.close_rounded),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// Точки-индикатор: показывают, где мы в коллекции, и что листать есть
-  /// куда. Активная растягивается в черту цветом редкости.
-  Widget _dots(ThemeData theme, Color accent) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (var i = 0; i < widget.gifts.length; i++)
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            width: i == _index ? 16 : 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: i == _index
-                  ? accent
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.22),
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-      ],
-    );
+  /// Акцент «на сейчас»: цвет текущей карточки, перетекающий в соседнюю
+  /// ровно настолько, насколько карусель ушла от середины.
+  Color _liveAccent(Color fallback) {
+    if (!_multiple || !_pages.hasClients) return fallback;
+    final raw = _pages.page;
+    if (raw == null) return fallback;
+    final lower = raw.floor().clamp(0, widget.gifts.length - 1);
+    final upper = (lower + 1).clamp(0, widget.gifts.length - 1);
+    final t = (raw - lower).clamp(0.0, 1.0);
+    final a = _accentOf(lower);
+    final b = _accentOf(upper);
+    return Color.lerp(a, b, t) ?? fallback;
+  }
+
+  Color _accentOf(int i) {
+    final gift = widget.gifts[i];
+    return gift.id == _gift.id && _fav ? BrandColors.red : gift.rarity.color;
   }
 
   /// Страница карусели с «кубическим» поворотом. Угол считается по живому

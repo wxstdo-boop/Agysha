@@ -176,47 +176,13 @@ Widget _friendsKeyboard({
   required VoidCallback onBackspace,
   required VoidCallback onSpace,
 }) {
-  return AnimatedSize(
-    duration: const Duration(milliseconds: 300),
-    curve: Curves.easeInOutCubic,
-    alignment: Alignment.topCenter,
-    child: AnimatedSwitcher(
-      duration: const Duration(milliseconds: 260),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      layoutBuilder: (current, previous) => Stack(
-        alignment: Alignment.topCenter,
-        children: [...previous, ?current],
-      ),
-      transitionBuilder: (child, animation) {
-        final t = Curves.easeOutCubic.transform(animation.value);
-        return FadeTransition(
-          opacity: animation,
-          child: SizeTransition(
-            sizeFactor: AlwaysStoppedAnimation(t),
-            // axisAlignment: -1 у вертикального SizeTransition = левый верх.
-            alignment: Alignment.topLeft,
-            child: child,
-          ),
-        );
-      },
-      child: open
-          ? Padding(
-              key: const ValueKey('friends_kb_open'),
-              padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
-              child: InlineKeyboard(
-                keyHeight: 46,
-                onChar: onChar,
-                onBackspace: onBackspace,
-                onSpace: onSpace,
-                onCollapse: onClose,
-              ),
-            )
-          : InlineKeyboardHandle(
-              key: const ValueKey('friends_kb_handle'),
-              onExpand: onOpen,
-            ),
-    ),
+  return InlineKeyboardShelf(
+    open: open,
+    onExpand: onOpen,
+    onCollapse: onClose,
+    onChar: onChar,
+    onBackspace: onBackspace,
+    onSpace: onSpace,
   );
 }
 
@@ -260,10 +226,29 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
     super.initState();
     // Очки при открытии — «весёлое» число из имени-заглушки, а не сухой ноль.
     _scoreCtrl.text = _funScore('');
+    // Панель раскрывается и от ФОКУСА, а не только от `onTap` поля: тап по
+    // полю на телефоне иногда успевал только поставить каретку, и клавиатура
+    // «не открывалась вовсе, лишь слегка подпрыгивала».
+    _nameFocus.addListener(_syncKeyboardToFocus);
+    _scoreFocus.addListener(_syncKeyboardToFocus);
+  }
+
+  /// Фокус на любом поле = своя клавиатура развёрнута, и пишет она в это поле.
+  void _syncKeyboardToFocus() {
+    if (!mounted) return;
+    final toScore = _scoreFocus.hasFocus;
+    if (!toScore && !_nameFocus.hasFocus) return;
+    if (_kbOpen && _kbScore == toScore) return;
+    setState(() {
+      _kbOpen = true;
+      _kbScore = toScore;
+    });
   }
 
   @override
   void dispose() {
+    _nameFocus.removeListener(_syncKeyboardToFocus);
+    _scoreFocus.removeListener(_syncKeyboardToFocus);
     _nameFocus.dispose();
     _scoreFocus.dispose();
     _ctrl.dispose();
@@ -934,7 +919,21 @@ class _FriendScoreSheetState extends State<_FriendScoreSheet> {
   bool _kbOpen = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Тап по полю на телефоне иногда успевал только поставить каретку, и
+    // панель «не открывалась вовсе». Фокус — надёжнее тапа: раскрываем от него.
+    _focus.addListener(_syncKeyboardToFocus);
+  }
+
+  void _syncKeyboardToFocus() {
+    if (!mounted || !_focus.hasFocus || _kbOpen) return;
+    setState(() => _kbOpen = true);
+  }
+
+  @override
   void dispose() {
+    _focus.removeListener(_syncKeyboardToFocus);
     _focus.dispose();
     _ctrl.dispose();
     super.dispose();

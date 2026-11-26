@@ -2240,8 +2240,14 @@ class _AiChatBodyState extends State<_AiChatBody>
                                   begin: 1.0,
                                   end: _typingFade ? 0.0 : 1.0,
                                 ),
-                                duration: const Duration(milliseconds: 320),
-                                curve: Curves.easeInOutCubic,
+                                // Ровно та же длительность и кривая, что у
+                                // входа ответа (360 мс, easeOutCubic): слот
+                                // «Сочиняю…» сворачивается ВМЕСТЕ с тем, как
+                                // встаёт пузырь ответа, — одно движение вместо
+                                // двух одновременных (читалось как «сообщение
+                                // появляется дёргано»).
+                                duration: const Duration(milliseconds: 360),
+                                curve: Curves.easeOutCubic,
                                 builder: (context, fade, child) => ClipRect(
                                   child: Align(
                                     alignment: Alignment.bottomCenter,
@@ -2650,52 +2656,18 @@ class _AiChatBodyState extends State<_AiChatBody>
           ),
         ),
         // Своя клавиатура: свёрнутая — узкая полоска, развёрнутая — панель
-        // с ручкой. Высота меняется плавно, лента не прыгает кадром.
-        AnimatedSize(
-          // Сворачивание/разворачивание — одно медленное движение: 300 мс
-          // easeInOut, а не 220 мс «в лоб». Поле ввода над панелью едет
-          // вместе с ней, поэтому не «телепортируется» вниз кадром.
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOutCubic,
-          alignment: Alignment.topCenter,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 260),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            layoutBuilder: (current, previous) => Stack(
-              alignment: Alignment.topCenter,
-              children: [...previous, ?current],
-            ),
-            transitionBuilder: (child, animation) {
-              final t = Curves.easeOutCubic.transform(animation.value);
-              return FadeTransition(
-                opacity: animation,
-                child: SizeTransition(
-                  sizeFactor: AlwaysStoppedAnimation(t),
-                  alignment: Alignment.topLeft,
-                  child: child,
-                ),
-              );
-            },
-            child: _keyboardOpen
-                ? Padding(
-                    key: const ValueKey('kb_open'),
-                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
-                    child: InlineKeyboard(
-                      keyHeight: 46,
-                      onChar: _insertChar,
-                      onBackspace: _backspace,
-                      onSpace: _space,
-                      onAction: _send,
-                      actionLabel: null,
-                      onCollapse: _collapseKeyboard,
-                    ),
-                  )
-                : InlineKeyboardHandle(
-                    key: const ValueKey('kb_handle'),
-                    onExpand: _expandKeyboard,
-                  ),
-          ),
+        // с ручкой. Раскрытие ведёт общая полка `InlineKeyboardShelf`:
+        // высоту анимирует один `AnimatedSize`, содержимое меняется
+        // кросс-фейдом. После сворачивания панель снова раскрывается
+        // до полного размера — раньше «не поднималась».
+        InlineKeyboardShelf(
+          open: _keyboardOpen,
+          onExpand: _expandKeyboard,
+          onCollapse: _collapseKeyboard,
+          onChar: _insertChar,
+          onBackspace: _backspace,
+          onSpace: _space,
+          keyHeight: 46,
         ),
       ],
     );

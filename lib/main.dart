@@ -1967,13 +1967,53 @@ class AgyshaAppState extends State<AgyshaApp>
 
   /// Системная палитра от `dynamic_color` приходит в типе SDK-овского
   /// Material, а приложение живёт на `material_ui` — присвоить её напрямую
-  /// нельзя (разные `ColorScheme`). Переносим через seed-цвет: системным
-  /// остаётся основной цвет и его яркость, остальные роли считаются заново.
+  /// нельзя (разные классы `ColorScheme`). Собираем свою схему из палитры
+  /// обоев, перенося ВСЕ роли: primary, tertiary, все тона поверхностей,
+  /// outline. Раньше переносился только основной цвет, и «Системная» почти
+  /// не отличалась от обычной сид-темы.
   static ColorScheme? _adaptDynamicScheme(dynamic scheme) {
     if (scheme == null) return null;
-    return ColorScheme.fromSeed(
-      seedColor: scheme.primary as Color,
-      brightness: scheme.brightness as Brightness,
+    final Color primary = scheme.primary as Color;
+    final Brightness brightness = scheme.brightness as Brightness;
+    final base = ColorScheme.fromSeed(
+      seedColor: primary,
+      brightness: brightness,
+    );
+    return base.copyWith(
+      primary: primary,
+      onPrimary: scheme.onPrimary as Color,
+      primaryContainer: scheme.primaryContainer as Color,
+      onPrimaryContainer: scheme.onPrimaryContainer as Color,
+      secondary: scheme.secondary as Color,
+      onSecondary: scheme.onSecondary as Color,
+      secondaryContainer: scheme.secondaryContainer as Color,
+      onSecondaryContainer: scheme.onSecondaryContainer as Color,
+      tertiary: scheme.tertiary as Color,
+      onTertiary: scheme.onTertiary as Color,
+      tertiaryContainer: scheme.tertiaryContainer as Color,
+      onTertiaryContainer: scheme.onTertiaryContainer as Color,
+      error: scheme.error as Color,
+      onError: scheme.onError as Color,
+      errorContainer: scheme.errorContainer as Color,
+      onErrorContainer: scheme.onErrorContainer as Color,
+      surface: scheme.surface as Color,
+      onSurface: scheme.onSurface as Color,
+      surfaceDim: scheme.surfaceDim as Color,
+      surfaceBright: scheme.surfaceBright as Color,
+      surfaceContainerLowest: scheme.surfaceContainerLowest as Color,
+      surfaceContainerLow: scheme.surfaceContainerLow as Color,
+      surfaceContainer: scheme.surfaceContainer as Color,
+      surfaceContainerHigh: scheme.surfaceContainerHigh as Color,
+      surfaceContainerHighest: scheme.surfaceContainerHighest as Color,
+      onSurfaceVariant: scheme.onSurfaceVariant as Color,
+      outline: scheme.outline as Color,
+      outlineVariant: scheme.outlineVariant as Color,
+      shadow: scheme.shadow as Color,
+      scrim: scheme.scrim as Color,
+      inverseSurface: scheme.inverseSurface as Color,
+      onInverseSurface: scheme.onInverseSurface as Color,
+      inversePrimary: scheme.inversePrimary as Color,
+      surfaceTint: scheme.surfaceTint as Color,
     );
   }
 

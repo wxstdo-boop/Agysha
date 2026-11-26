@@ -264,15 +264,27 @@ class _InlineKeyboardState extends State<InlineKeyboard>
           SizedBox(
             height: 3 * (widget.keyHeight + 2) + 16,
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 160),
+              duration: const Duration(milliseconds: 210),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
               layoutBuilder: (current, previous) => Stack(
                 alignment: Alignment.center,
                 children: [...previous, ?current],
               ),
-              transitionBuilder: (child, animation) =>
-                  FadeTransition(opacity: animation, child: child),
+              // Кросс-фейд с еле заметным «дыханием» масштаба: буквы
+              // проявляются на месте, но не выглядят плоской подменой кадра.
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.985, end: 1).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
+                  child: child,
+                ),
+              ),
               child: Column(
                 key: ValueKey(_layout),
                 mainAxisSize: MainAxisSize.min,
@@ -540,6 +552,76 @@ class _CollapseHandleState extends State<_CollapseHandle> {
   }
 }
 
+/// Полка клавиатуры: свёрнутая — узкая ручка, развёрнутая — панель клавиш.
+///
+/// Раскрытие — один `AnimatedSize` и кросс-фейд. Раньше здесь стояли ещё
+/// `AnimatedSwitcher` + `SizeTransition` поверх того же `AnimatedSize`:
+/// два разных механизма анимировали ОДНУ высоту, и в листе «Добавить друга»
+/// панель подрастала на пару пикселей и складывалась обратно — клавиши так
+/// и не показывались. Теперь высоту ведёт только `AnimatedSize`, а смена
+/// содержимого — чистый фейд: раскрытие всегда доходит до полной панели.
+class InlineKeyboardShelf extends StatelessWidget {
+  /// Развёрнута ли панель.
+  final bool open;
+
+  /// Свернуть панель (ручка внутри самой панели).
+  final VoidCallback onCollapse;
+
+  /// Развернуть панель тапом по ручке.
+  final VoidCallback onExpand;
+
+  final ValueChanged<String> onChar;
+  final VoidCallback onBackspace;
+  final VoidCallback onSpace;
+
+  final double keyHeight;
+
+  const InlineKeyboardShelf({
+    super.key,
+    required this.open,
+    required this.onCollapse,
+    required this.onExpand,
+    required this.onChar,
+    required this.onBackspace,
+    required this.onSpace,
+    this.keyHeight = 46,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        layoutBuilder: (current, previous) => Stack(
+          alignment: Alignment.topCenter,
+          children: [...previous, ?current],
+        ),
+        child: open
+            ? Padding(
+                key: const ValueKey('inline_kb_open'),
+                padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
+                child: InlineKeyboard(
+                  keyHeight: keyHeight,
+                  onChar: onChar,
+                  onBackspace: onBackspace,
+                  onSpace: onSpace,
+                  onCollapse: onCollapse,
+                ),
+              )
+            : InlineKeyboardHandle(
+                key: const ValueKey('inline_kb_handle'),
+                onExpand: onExpand,
+              ),
+      ),
+    );
+  }
+}
+
 /// Узкая полоска на месте свёрнутой клавиатуры: тап возвращает панель.
 /// Живёт по тому же адресу, где была клавиатура, поэтому лист не прыгает.
 class InlineKeyboardHandle extends StatelessWidget {
@@ -783,12 +865,26 @@ class _KeyState extends State<_Key> {
                             : cs.onSurfaceVariant,
                       ),
                     )
-                  : Text(
-                      widget.label!,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontSize: widget.small ? 17 : null,
-                        fontWeight: Weights.semibold,
-                        color: widget.emphasized ? Colors.white : cs.onSurface,
+                  // Подпись меняется кросс-фейдом: у переключателя раскладки
+                  // надпись «АБВ → ABC → #+=», у пробела и действия она может
+                  // смениться вместе с раскладкой. Раньше текст подменялся
+                  // кадром — на панели это читалось щелчком.
+                  : AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 170),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) =>
+                          FadeTransition(opacity: animation, child: child),
+                      child: Text(
+                        widget.label!,
+                        key: ValueKey<String>(widget.label!),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: widget.small ? 17 : null,
+                          fontWeight: Weights.semibold,
+                          color: widget.emphasized
+                              ? Colors.white
+                              : cs.onSurface,
+                        ),
                       ),
                     ),
             ),
