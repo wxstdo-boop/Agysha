@@ -27,9 +27,19 @@ void main() {
       reason: 'обработчик обязан знать, какой кнопкой открыли приложение',
     );
     expect(
-      main.contains("actionId == 'update' && info != null"),
+      main.contains("if (actionId == 'update') {"),
       isTrue,
       reason: 'действие «Обновить» должно уходить в загрузку APK',
+    );
+    expect(
+      main.contains('await _openSettingsForUpdate();'),
+      isTrue,
+      reason: 'сначала Настройки: там виден прогресс установки',
+    );
+    expect(
+      main.contains('silentDailyCheck(force: true)'),
+      isTrue,
+      reason: 'суточный интервал не должен блокировать скачивание по кнопке',
     );
     expect(
       main.contains('UpdateNotice.instance.installFromNotification(info)'),

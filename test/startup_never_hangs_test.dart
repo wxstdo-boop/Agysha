@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart' show SizedBox;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:agysha/main.dart';
@@ -47,13 +48,17 @@ void main() {
       // тестовой среде оно законно падает. Проверяем только то, что важно:
       // старт ДОШЁЛ до `runApp` и не упёрся в зависшую инициализацию.
     });
+    // Снимаем дерево: `AgyshaAppState.dispose` отменяет отложенные стартовые
+    // задачи (`_inIdle`), иначе их таймеры переживут конец теста.
+    await tester.pumpWidget(const SizedBox.shrink());
     // Ошибки построения интерфейса в тестовом окружении — не предмет теста.
     tester.takeException();
 
     expect(
       startupReachedApp(),
       isTrue,
-      reason: 'зависший канал настроек не дал старту дойти до приложения за '
+      reason:
+          'зависший канал настроек не дал старту дойти до приложения за '
           '12 с: бюджет старта не работает, экран снова останется пустым',
     );
   }, timeout: const Timeout(Duration(seconds: 60)));

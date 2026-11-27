@@ -1143,14 +1143,8 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
   /// секунды — клавиша «догоняла» палец уже после отпускания, и набор
   /// читался дёрганым. Пик теперь на ~150 мс, остывание под пальцем и
   /// высыхание — тоже короче, но с той же кривой без щелчков на стыке.
-  static const _kIn = Duration(milliseconds: 640);
-  static const _kOut = Duration(milliseconds: 520);
-
-  /// Доля хода, за которую пятно наливается до максимума.
-  static const _kPeak = 0.30;
-
-  /// До чего пятно остывает, если палец всё ещё прижат.
-  static const _kFloor = 0.45;
+  static const _kIn = Duration(milliseconds: 420);
+  static const _kOut = Duration(milliseconds: 300);
 
   /// Появление и исчезание пятна — ДВА прямых контроллера.
   ///
@@ -1175,8 +1169,8 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
     vsync: this,
     value: 0,
     // Медленнее и мягче: наклон догоняет палец, а не щёлкает за ним.
-    duration: const Duration(milliseconds: 340),
-    reverseDuration: const Duration(milliseconds: 620),
+    duration: const Duration(milliseconds: 220),
+    reverseDuration: const Duration(milliseconds: 460),
   );
 
   /// Момент прошлого отпускания. Быстрый набор ПИН-кода — это десяток
@@ -1215,22 +1209,19 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
       ty /= mag;
     }
     _tiltTarget = Offset(tx, ty);
-    _tilt.value = Offset.lerp(_tilt.value, _tiltTarget, 0.28) ?? _tiltTarget;
+    // Один сглаживающий шаг на событие касания. Раньше значение догоняло
+    // цель ещё и в билдере (lerp 0.22 каждый кадр), то есть два фильтра
+    // подряд: клавиша отставала от пальца и на медленном ведении «плыла»
+    // ступеньками. События приходят 60–120 раз в секунду, одного шага 0.34
+    // хватает, чтобы ход был ровным и без рывков.
+    _tilt.value = Offset.lerp(_tilt.value, _tiltTarget, 0.34) ?? _tiltTarget;
   }
 
-  /// Уровень пигмента по прогрессу удержания: налилось до 1 за первые 30%
-  /// хода, дальше ПОД ПАЛЬЦЕМ плавно остывает до 0.45.
-  ///
-  /// Подъём — именно `easeInOutSine`, а не `easeOutSine`: у ease-out самая
-  /// крутая производная стоит на нуле, и первый же кадр давал ~13% яркости
-  /// сразу — пятно «вспыхивало» в момент касания. С гладижащей по краям
-  /// кривой первые кадры почти неподвижны, а на стыке с веткой остывания
-  /// производная тоже нулевая с обеих сторон, поэтому щелчка нет нигде.
-  static double _level(double v) {
-    if (v <= _kPeak) return Curves.easeInOutSine.transform(v / _kPeak);
-    final k = Curves.easeInOutSine.transform((v - _kPeak) / (1 - _kPeak));
-    return 1.0 - (1.0 - _kFloor) * k;
-  }
+  /// Уровень пигмента: пятно только НАЛИВАЕТСЯ, пока палец прижат.
+  /// Раньше после трети хода оно начинало остывать обратно — под пальцем
+  /// шёл «насос» вверх-вниз, и клавиша читалась дёрганой. Теперь движение
+  /// однонаправленное, а убрать пятно может только отпускание.
+  static double _level(double v) => Curves.easeOutSine.transform(v);
 
   @override
   void dispose() {
@@ -1275,18 +1266,10 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
       if (_out.value < 1) _out.forward();
       return;
     }
-    // Если палец ушёл раньше пика, короткий тап всё равно дорастает до максимума
-    // (остальное время — уже спад). Долгое зажатие замораживается на своём
-    // остывшем уровне и оттуда плавно дотухает.
-    if (_in.value < _kPeak) {
-      final left = _kPeak - _in.value;
-      _in.animateTo(
-        _kPeak,
-        duration: Duration(milliseconds: (_kIn.inMilliseconds * left).round()),
-      );
-    } else {
-      _in.stop();
-    }
+    // Отпускание сразу начинает высыхание: никакого «дотягивания до пика»
+    // после пальца, из-за которого форма ещё раз подпрыгивала вверх уже
+    // без нажатия.
+    _in.stop();
     _out.forward(from: 0);
   }
 
@@ -1343,8 +1326,8 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               // easeOutCubic давал рывок в первом кадре, и темп нажатия
               // читался дёрганым. Рампы растянуты до ~200 мс и сглажены
               // по краям, поэтому ход пальца не «щёлкает».
-              final press = Curves.easeInOutCubic.transform(
-                (_in.value / 0.26).clamp(0.0, 1.0),
+              final press = Curves.easeOutCubic.transform(
+                (_in.value / 0.30).clamp(0.0, 1.0),
               );
               final lift = Curves.easeInOutCubic.transform(
                 (_out.value / 0.38).clamp(0.0, 1.0),
@@ -1353,8 +1336,7 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               // Показываемый наклон подтягивается к цели по кадрам: между
               // pointer-событиями он едет сам, поэтому клавиша не прыгает
               // на редких событиях и не щёлкает на частых.
-              final aim =
-                  Offset.lerp(_tilt.value, _tiltTarget, 0.22) ?? _tiltTarget;
+              final aim = _tilt.value;
               final matrix = Matrix4.identity();
               if (tilt > 0.001) {
                 matrix.setEntry(3, 2, 0.0020);
@@ -1382,9 +1364,13 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               // Мелкий перелёт в конце рампы (easeOutBack ~+8%) — это и
               // есть «желейность»: клавиша чуть проскакивает следом за
               // пальцем и оседает назад, вместо жёсткого стопа на плитке.
+              // Протяжка идёт почти половину хода нажатия, а не первые
+              // 140 мс: клавиша «течёт» за пальцем и оседает, а не
+              // выстреливает упругой плиткой. Это и просили — желе
+              // медленнее и плавнее.
               final stretchT =
-                  Curves.easeOutBack.transform(
-                    (_in.value / 0.22).clamp(0.0, 1.0),
+                  Curves.easeOutCubic.transform(
+                    (_in.value / 0.46).clamp(0.0, 1.0),
                   ) *
                   (1 - lift);
               final aimLen = math.max(aim.distance, 0.30);
@@ -1398,8 +1384,8 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
                 // продольного: так клавиша «течёт» в сторону пальца, но
                 // не превращается в сплюснутую каплю.
                 matrix.scaleByDouble(
-                  1 + 0.235 * stretchK,
-                  1 - 0.090 * stretchK,
+                  1 + 0.275 * stretchK,
+                  1 - 0.105 * stretchK,
                   1.0,
                   1.0,
                 );

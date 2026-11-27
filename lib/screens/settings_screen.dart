@@ -39,6 +39,7 @@ import '../services/ai_guide_service.dart';
 import '../l10n/translations.dart';
 import '../l10n/locale_provider.dart';
 import '../utils/context_menu.dart';
+import '../widgets/noise_mask_tile.dart';
 import '../widgets/volumetric_switch.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/confetti_burst.dart';

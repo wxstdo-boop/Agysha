@@ -18,9 +18,11 @@ void main() {
     // Раунд «желейного» ПИНа усилил амплитуду (было 0.21/0.44).
     expect(src.contains('rotateX(-aim.dy * 0.24 * tilt)'), isTrue);
     expect(src.contains('rotateY(aim.dx * 0.50 * tilt)'), isTrue);
-    // Показываемый наклон подтягивается к цели по кадрам: при редких
-    // pointer-событиях клавиша не дёргается, а плавно догоняет палец.
-    expect(src.contains('Offset.lerp(_tilt.value, _tiltTarget, 0.22)'), isTrue);
+    // Наклон сглаживается ОДНИМ фильтром на событие касания: двойное
+    // сглаживание (ещё и в билдере) заставляло клавишу отставать и ползти
+    // ступеньками — владелец видел дёрганье.
+    expect(src.contains('Offset.lerp(_tilt.value, _tiltTarget, 0.34)'), isTrue);
+    expect(src.contains('final aim = _tilt.value;'), isTrue);
   });
 
   test('обводка замка не красится в подарочный северный цвет', () {
