@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import '../services/haptics.dart';
+
 import 'package:material_ui/material_ui.dart';
+
 import '../widgets/section_pill.dart';
 import '../models/alarm.dart';
 import '../models/app_timer.dart';
@@ -760,18 +762,11 @@ class _AlarmsScreenState extends State<AlarmsScreen>
             enabled: !_reordering,
             pressedScale: 0.975,
             enableTilt: true,
-            // Подсветка нажатия идёт ПОВЕРХ карточки: у Card своя
-            // непрозрачная заливка, и подложка pressTint под ней не видна.
-            // Альфа считается от того же прогресса нажатия, что и
-            // вдавливание, поэтому выделение разгорается и гаснет по кривой
-            // отдачи — без вспышки в первом кадре и без мигания.
-            // Общая подложка отдачи (как у времени/вибрации в окне
-            // будильника): мягкий smoothstep-разгон, поэтому фон набухает
-            // из-под пальца, а не вспыхивает первым кадром.
-            pressOverlay: pressTintOverlay(
-              BorderRadius.circular(20),
-              strength: 0.06,
-            ),
+            // Альфа берётся от того же прогресса нажатия, что и вдавливание,
+            // через PressTintBehind внутри Card: тон набегает под пальцем,
+            // но текст и значки остаются чистыми (слой pressOverlay лежал
+            // поверх содержимого и накрывал их красноватой плёнкой).
+            // Мягкий smoothstep-разгон — фон набухает, а не вспыхивает.
             duration: const Duration(milliseconds: 240),
             releaseDuration: const Duration(milliseconds: 340),
             // Тап ловим на ВСЕЙ карточке, а не только на правой колонке с
@@ -793,203 +788,235 @@ class _AlarmsScreenState extends State<AlarmsScreen>
                 // без него карточки лежат вплотную, и при отпускании драга
                 // список выглядит «склеенным», а места под палец нет.
                 margin: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    // Drag handle слева: перетаскивание по ЗАЖАТИЮ, как в
-                    // привычках. Мгновенный старт цеплял карточку при
-                    // случайном касании ручки — «чуть что и дёргает».
-                    ReorderableDelayedDragStartListener(
-                      index: i,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4),
-                        child: Icon(
-                          Icons.drag_indicator,
-                          size: 22,
-                          color: Colors.grey,
+                // Подложка отдачи — ПОД содержимым: тон набегает под пальцем,
+                // а значки, текст и полоски остаются чистыми (раньше слой лежал
+                // поверх карточки и «накрывал» значки полупрозрачной плёнкой).
+                child: PressTintBehind(
+                  radius: BorderRadius.circular(20),
+                  strength: 0.10,
+                  child: Row(
+                    children: [
+                      // Drag handle слева: перетаскивание по ЗАЖАТИЮ, как в
+                      // привычках. Мгновенный старт цеплял карточку при
+                      // случайном касании ручки — «чуть что и дёргает».
+                      ReorderableDelayedDragStartListener(
+                        index: i,
+                        child: PressScale(
+                          pressedScale: 0.84,
+                          enableTilt: true,
+                          maxTiltAngle: 0.32,
+                          duration: const Duration(milliseconds: 160),
+                          releaseDuration: const Duration(milliseconds: 240),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              Icons.drag_indicator,
+                              size: 22,
+                              color: Colors.grey,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    // Switch в левой колонке, как чекбокс в привычках
-                    SizedBox(
-                      width: 60,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          VolumetricSwitch(
-                            activeColor: Theme.of(context).colorScheme.primary,
-                            semanticLabel:
-                                '${Translations.t('alarms', context)} ${alarm.timeLabel}',
-                            value: alarm.enabled,
-                            onChanged: (v) async {
-                              final ctx = context;
-                              final noExactText = Translations.t(
-                                'alarmNoExact',
-                                ctx,
-                              );
-                              await _service.toggle(alarm.id);
-                              if (!ctx.mounted) return;
-                              final updated = _service.alarms.firstWhere(
-                                (a) => a.id == alarm.id,
-                              );
-                              if (updated.enabled) {
-                                notificationService.requestPermissionsSoft();
-                                final ok = await notificationService
-                                    .scheduleAlarm(updated);
-                                if (!ok && ctx.mounted) {
-                                  showBeautifulSnackBar(
-                                    ctx,
-                                    message: noExactText,
-                                    icon: Icons.warning_amber_outlined,
-                                    iconColor: Colors.orange,
-                                    actionLabel: Translations.t(
-                                      'openSettings',
+                      // Switch в левой колонке, как чекбокс в привычках
+                      SizedBox(
+                        width: 60,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            VolumetricSwitch(
+                              activeColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              semanticLabel:
+                                  '${Translations.t('alarms', context)} ${alarm.timeLabel}',
+                              value: alarm.enabled,
+                              onChanged: (v) async {
+                                final ctx = context;
+                                final noExactText = Translations.t(
+                                  'alarmNoExact',
+                                  ctx,
+                                );
+                                await _service.toggle(alarm.id);
+                                if (!ctx.mounted) return;
+                                final updated = _service.alarms.firstWhere(
+                                  (a) => a.id == alarm.id,
+                                );
+                                if (updated.enabled) {
+                                  notificationService.requestPermissionsSoft();
+                                  final ok = await notificationService
+                                      .scheduleAlarm(updated);
+                                  if (!ok && ctx.mounted) {
+                                    showBeautifulSnackBar(
                                       ctx,
-                                      'Открыть настройки',
-                                    ),
-                                    onAction: () => notificationService
-                                        .requestPermissions(),
+                                      message: noExactText,
+                                      icon: Icons.warning_amber_outlined,
+                                      iconColor: Colors.orange,
+                                      actionLabel: Translations.t(
+                                        'openSettings',
+                                        ctx,
+                                        'Открыть настройки',
+                                      ),
+                                      onAction: () => notificationService
+                                          .requestPermissions(),
+                                    );
+                                  }
+                                } else {
+                                  await notificationService.cancelAlarm(
+                                    updated.id,
                                   );
                                 }
-                              } else {
-                                await notificationService.cancelAlarm(
-                                  updated.id,
-                                );
-                              }
-                            },
-                          ),
-                        ],
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    // Основное содержимое
-                    Expanded(
-                      child: GestureDetector(
-                        // Opaque, а не deferToChild: содержимое карточки —
-                        // колонка с отступами и пустыми зазорами, и тап по
-                        // ним раньше не доходил до детектора. Владелец читал
-                        // это как «будильник не открывается с первого раза»:
-                        // попасть надо было точно в текст.
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _editAlarm(alarm),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Время и название будильника в центре;
-                              // значок тестового будильника есть у КАЖДОЙ
-                              // карточки и запускает именно этот будильник.
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _AlarmTimeHighlight(
-                                      label: alarm.timeLabel,
-                                      enabled: alarm.enabled,
-                                      theme: theme,
-                                    ),
-                                  ),
-                                  // Значок теста есть у каждой карточки и во время драга НЕ гаснет:
-                                  // раньше он растворялся при переносе, и владелец
-                                  // читал это как «значки теста пропадают».
-                                  SizedBox(
-                                    width: 32,
-                                    height: 32,
-                                    child: SmoothTooltip(
-                                      message: Translations.t(
-                                        'testAlarm',
-                                        context,
-                                        'Тест будильника',
+                      // Основное содержимое
+                      Expanded(
+                        child: GestureDetector(
+                          // Opaque, а не deferToChild: содержимое карточки —
+                          // колонка с отступами и пустыми зазорами, и тап по
+                          // ним раньше не доходил до детектора. Владелец читал
+                          // это как «будильник не открывается с первого раза»:
+                          // попасть надо было точно в текст.
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _editAlarm(alarm),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Время и название будильника в центре;
+                                // значок тестового будильника есть у КАЖДОЙ
+                                // карточки и запускает именно этот будильник.
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _AlarmTimeHighlight(
+                                        label: alarm.timeLabel,
+                                        enabled: alarm.enabled,
+                                        theme: theme,
                                       ),
-                                      preferredAbove: true,
-                                      child: PressScale(
-                                        pressedScale: 0.88,
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            // Как «напоминания» в
-                                            // привычках: спокойная
-                                            // тональная подложка и
-                                            // тонкая кромка. На тёмной
-                                            // теме плотная заливка 0.20 и
-                                            // яркая кромка 0.55 делали
-                                            // значок «грязным» — теперь
-                                            // подложка тональная, а
-                                            // кромка мягкая.
-                                            color: theme
-                                                .colorScheme
-                                                .primaryContainer
-                                                .withValues(
-                                                  alpha:
-                                                      theme.brightness ==
-                                                          Brightness.dark
-                                                      ? 0.26
-                                                      : 0.18,
-                                                ),
-                                            border: Border.all(
-                                              color: theme.colorScheme.primary
+                                    ),
+                                    // Значок теста есть у каждой карточки и во время драга НЕ гаснет:
+                                    // раньше он растворялся при переносе, и владелец
+                                    // читал это как «значки теста пропадают».
+                                    SizedBox(
+                                      width: 32,
+                                      height: 32,
+                                      child: SmoothTooltip(
+                                        message: Translations.t(
+                                          'testAlarm',
+                                          context,
+                                          'Тест будильника',
+                                        ),
+                                        preferredAbove: true,
+                                        child: PressScale(
+                                          pressedScale: 0.88,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              // Как «напоминания» в
+                                              // привычках: спокойная
+                                              // тональная подложка и
+                                              // тонкая кромка. На тёмной
+                                              // теме плотная заливка 0.20 и
+                                              // яркая кромка 0.55 делали
+                                              // значок «грязным» — теперь
+                                              // подложка тональная, а
+                                              // кромка мягкая.
+                                              color: theme
+                                                  .colorScheme
+                                                  .primaryContainer
                                                   .withValues(
                                                     alpha:
                                                         theme.brightness ==
                                                             Brightness.dark
-                                                        ? 0.38
-                                                        : 0.28,
+                                                        ? 0.26
+                                                        : 0.18,
                                                   ),
-                                              width: 1,
+                                              border: Border.all(
+                                                color: theme.colorScheme.primary
+                                                    .withValues(
+                                                      alpha:
+                                                          theme.brightness ==
+                                                              Brightness.dark
+                                                          ? 0.38
+                                                          : 0.28,
+                                                    ),
+                                                width: 1,
+                                              ),
                                             ),
-                                          ),
-                                          child: IconButton(
-                                            onPressed: () => _testAlarm(alarm),
-                                            icon: Icon(
-                                              Icons
-                                                  .notifications_active_outlined,
-                                              size: 17,
-                                              color: theme.colorScheme.primary
-                                                  .withValues(alpha: 0.95),
-                                            ),
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(
-                                              minWidth: 32,
-                                              minHeight: 32,
-                                            ),
-                                            style: IconButton.styleFrom(
-                                              tapTargetSize:
-                                                  MaterialTapTargetSize
-                                                      .shrinkWrap,
+                                            child: PressScale(
+                                              pressedScale: 0.84,
+                                              enableTilt: true,
+                                              maxTiltAngle: 0.30,
+                                              duration: const Duration(
+                                                milliseconds: 160,
+                                              ),
+                                              releaseDuration: const Duration(
+                                                milliseconds: 240,
+                                              ),
+                                              child: IconButton(
+                                                onPressed: () =>
+                                                    _testAlarm(alarm),
+                                                icon: Icon(
+                                                  Icons
+                                                      .notifications_active_outlined,
+                                                  size: 17,
+                                                  color: theme
+                                                      .colorScheme
+                                                      .primary
+                                                      .withValues(alpha: 0.95),
+                                                ),
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      minWidth: 32,
+                                                      minHeight: 32,
+                                                    ),
+                                                style: IconButton.styleFrom(
+                                                  tapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              // Метка будильника (если есть)
-                              if (alarm.label.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    sanitizeTextForWrap(alarm.label),
-                                    // Полный текст без троеточия: метка
-                                    // будильника всегда видна целиком.
-                                    maxLines: null,
-                                    // Метка того же масштаба, что заголовки
-                                    // задач и привычек: 20.5 в узкой колонке
-                                    // роняло по слову на строку.
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      fontSize: 19.5,
-                                      height: 1.35,
-                                      color: theme.colorScheme.onSurface,
+                                  ],
+                                ),
+                                // Метка будильника (если есть)
+                                if (alarm.label.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Text(
+                                      sanitizeTextForWrap(alarm.label),
+                                      // Полный текст без троеточия: метка
+                                      // будильника всегда видна целиком.
+                                      maxLines: null,
+                                      // Метка того же масштаба, что заголовки
+                                      // задач и привычек: 20.5 в узкой колонке
+                                      // роняло по слову на строку.
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            fontSize: 19.5,
+                                            height: 1.35,
+                                            color: theme.colorScheme.onSurface,
+                                          ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

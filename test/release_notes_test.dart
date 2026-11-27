@@ -134,11 +134,11 @@ void main() {
     // Заметки теперь «человеческие»: эмодзи-маркер по теме, глагол в
     // начале и никаких feat/fix-префиксов.
     expect(lines, [
-      '- ✨ Зайчик обновления ожил: живой подскок и читаемый глиф',
+      '- 🫧 Зайчик обновления ожил: живой подскок и читаемый глиф',
       '- ✨ Экспорт привычек в CSV',
       '- ✨ Не терять данные при апдейте',
       '- 🍽️ Питание: строка БЖУ без переполнения',
-      '- ✨ Полировка 12-го круга: канты и свечение',
+      '- 🫧 Полировка 12-го круга: канты и свечение',
     ]);
   }, skip: skipWithoutBash);
 
@@ -186,9 +186,9 @@ void main() {
 
     // Одиночная «;» внутри обычной фразы остаётся частью пункта: делим
     // только законченные перечисления, иначе пункт рвётся на огрызки.
-    final single = filter('- Кузница: токен виден при старте; поправили\n')
-        .trim()
-        .split('\n');
+    final single = filter(
+      '- Кузница: токен виден при старте; поправили\n',
+    ).trim().split('\n');
     expect(single, hasLength(1));
   }, skip: skipWithoutBash);
 
@@ -218,16 +218,42 @@ void main() {
     expect(out, isNot(contains('строки,')));
   }, skip: skipWithoutBash);
 
+  test('имена файлов, классов и версии вычищаются из заметки', () {
+    // Живой случай из v1.6.396: в «Что нового» рядом с человеческой
+    // формулировкой приезжали `alarms_screen`, `SettingsService` и обрубок
+    // «V1.» от версии в заголовке коммита.
+    const input = '''
+- Полировка: alarms_screen и SettingsService больше не дёргают фон
+- fix: v1.6.386+45462 не ставился поверх
+- Тест: add_alarm_screen
+''';
+    final out = filterArgs(input, '--sections');
+    expect(out, isNot(contains('_screen')));
+    expect(out, isNot(contains('Service')));
+    expect(out, isNot(contains('.dart')));
+    expect(out, isNot(contains('V1.')));
+    // Человеческая часть пункта остаётся.
+    expect(out, contains('дёргают фон'));
+    expect(out, contains('Не ставился поверх'));
+    // От строки, где после чистки осталось меньше трёх слов, следа нет.
+    expect(out.split('\n').where((l) => l.startsWith('- ')).length, 2);
+  });
+
   test('быстрое тело коммита не заваливает релиз десятком пунктов', () {
     final buffer = StringBuffer('- Кузница: полировка пузырей\n');
     for (var i = 1; i <= 14; i++) {
       buffer.writeln('- Пункт тела номер $i про плавность');
     }
-    final bullets = filterArgs(buffer.toString(), '--sections')
-        .split('\n')
-        .where((line) => line.startsWith('- '))
-        .length;
-    expect(bullets, lessThanOrEqualTo(9));
+    // Потолок теперь на раздел, а не на всю заметку: шесть пунктов в
+    // каждом блоке, чтобы «Плавнее» не съедало «Починили».
+    final text = filterArgs(buffer.toString(), '--sections');
+    for (final block in text.split('**').where((b) => b.contains('\n'))) {
+      final bullets = block
+          .split('\n')
+          .where((line) => line.startsWith('- '))
+          .length;
+      expect(bullets, lessThanOrEqualTo(6), reason: 'перебор в блоке: $block');
+    }
   }, skip: skipWithoutBash);
 
   test('fastlane-заметки без заголовков и в порядке истории', () {
@@ -288,6 +314,33 @@ void main() {
       }
     }
     expect(dirty, isEmpty, reason: 'служебные пункты в changelog: $dirty');
+  }, skip: skipWithoutBash);
+
+  test('заметка берёт из тела только первый абзац', () {
+    final script = File('tool/notes_from_log.py');
+    expect(script.existsSync(), isTrue);
+
+    final raw =
+        'Полировка профиля\u001fПервая строка тела.\n'
+        'Вторая строка того же абзаца.\n\n'
+        'Разбор по пунктам, который в заметку не идёт.\n\u001e';
+    // stdin через runSync не передать — пишем во временный файл и читаем из него.
+    final tmp = File(
+      '${Directory.systemTemp.path}/notes_from_log_${DateTime.now().microsecondsSinceEpoch}.txt',
+    );
+    tmp.writeAsStringSync(raw);
+    final piped = Process.runSync(
+      'bash',
+      ['-c', 'python3 ${script.path} < ${tmp.path}'],
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    );
+    tmp.deleteSync();
+    expect(piped.exitCode, 0);
+    final out = piped.stdout as String;
+    expect(out, contains('Первая строка тела.'));
+    expect(out, contains('Вторая строка того же абзаца.'));
+    expect(out, isNot(contains('Разбор по пунктам')));
   }, skip: skipWithoutBash);
 }
 
