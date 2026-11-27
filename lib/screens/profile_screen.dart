@@ -1874,6 +1874,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         Spacing.xxl,
       ),
       itemCount: cards.length * 2 - 1,
+      // Свой слой у каждой карточки уже стоит ниже, и он же кэширует
+      // растр: вторые границы от самого списка только удваивали число
+      // слоёв (лишняя память и переключения при прокрутке).
+      addRepaintBoundaries: false,
       itemBuilder: (context, i) {
         if (i.isOdd) return const SizedBox(height: Spacing.md);
         final card = cards[i ~/ 2];

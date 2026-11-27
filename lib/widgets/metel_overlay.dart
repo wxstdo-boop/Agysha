@@ -123,7 +123,10 @@ class _MetelAuroraState extends State<MetelAurora>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        widget.child,
+        // Экран поверх «живого» фона — в собственном слое: иначе каждая
+        // перерисовка дождя/снега/видеообоев заново растеризует и весь UI,
+        // и прокрутка профиля на слабом GPU превращается в слайд-шоу.
+        RepaintBoundary(child: widget.child),
         // Статичные слои «ночи»: лунный свет и снежное поле. Живут ПОД
         // оверлеем сияния, рисуются один раз при сборке (не каждый кадр):
         // `BoxDecoration` со статичными градиентами — ноль работы в кадре.

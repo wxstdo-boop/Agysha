@@ -460,7 +460,11 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     // вдавливания: раньше при отпускании до первого кадра анимации
     // (`_ctrl.value` ещё 0) наклон оставался висеть на карточке навсегда.
     _tiltFade.reverse();
-    if (_ctrl.value <= 0) return;
+    // Раньше здесь стоял выход по `_ctrl.value <= 0`: быстрый тап (нажатие и
+    // отпускание в одном кадре) отпускание не заставало анимацию — она
+    // стартовала уже ПОСЛЕ него и доезжала до конца, оставляя клавишу
+    // вдавленной и залитой. Отпускание теперь всегда разворачивает канал.
+    if (!_ctrl.isAnimating && _ctrl.value <= 0) return;
     _ctrl.duration = widget.releaseDuration ?? widget.duration;
     _ctrl.reverse();
   }
@@ -474,7 +478,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     if (!mounted) return;
     _releaseTilt = _tilt;
     _tiltFade.reverse();
-    if (_ctrl.value <= 0) return;
+    if (!_ctrl.isAnimating && _ctrl.value <= 0) return;
     _ctrl.duration = widget.releaseDuration ?? widget.duration;
     _ctrl.reverse();
   }

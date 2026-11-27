@@ -166,7 +166,10 @@ class _ResidentBackdropState extends State<ResidentBackdrop>
             ),
           ),
         ),
-        widget.child,
+        // Экран поверх «живого» фона — в собственном слое: иначе каждая
+        // перерисовка дождя/снега/видеообоев заново растеризует и весь UI,
+        // и прокрутка профиля на слабом GPU превращается в слайд-шоу.
+        RepaintBoundary(child: widget.child),
       ],
     );
   }

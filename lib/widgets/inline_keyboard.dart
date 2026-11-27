@@ -860,6 +860,12 @@ class _KeyState extends State<_Key> {
         // накрывала саму букву (владелец: «полоской покрывает символ»).
         // Отдача осталась вдавливанием, а сама шляпка стала шире.
         pressOverlay: null,
+        // Каждый тап клавиши обязан отозваться: общий «страж повтора»
+        // (150 мс) на быстром наборе глотал каждое второе нажатие, и шляпка
+        // казалась «залипшей». Заодно страховка: если отпускание потерялось,
+        // отдача снимается сама.
+        repeatGuard: Duration.zero,
+        maxPressDuration: const Duration(milliseconds: 400),
         // Отдачу рисует сам PressScale: `Material`+`InkWell` на каждую клавишу
         // — лишние слои и чернильные всплески. Держим только один «блик»
         // нажатия через `Listener` внутри PressScale, а тап отдаёт GestureDetector.
@@ -989,6 +995,12 @@ class _CaseGlyph extends StatelessWidget {
         releaseDuration: const Duration(milliseconds: 260),
         enableTilt: false,
         pressOverlay: null,
+        // Каждый тап клавиши обязан отозваться: общий «страж повтора»
+        // (150 мс) на быстром наборе глотал каждое второе нажатие, и шляпка
+        // казалась «залипшей». Заодно страховка: если отпускание потерялось,
+        // отдача снимается сама.
+        repeatGuard: Duration.zero,
+        maxPressDuration: const Duration(milliseconds: 400),
         child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {

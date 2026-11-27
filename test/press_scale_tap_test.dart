@@ -12,6 +12,7 @@ import 'package:agysha/widgets/press_scale.dart';
 /// распознавателями жестов, и pointer-up приходил уже новому, «пустому»
 /// распознавателю: кнопка не нажималась с первого раза. Быстрые тапы
 /// короче кадра случайно проходили.
+
 void main() {
   /// Видимая ширина содержимого: Transform не меняет layout, но
   /// localToGlobal учитывает масштаб, поэтому отдача видна в размере на экране.
@@ -91,10 +92,13 @@ void main() {
           pressedScale: 0.5,
           duration: const Duration(milliseconds: 400),
           releaseDuration: const Duration(milliseconds: 400),
-          child: const SizedBox(
+          // Голый SizedBox не участвует в hit-test, и палец до
+          // `PressScale` вообще не доходил: тест сравнивал шум округления.
+          // Краска делает цель настоящей целью.
+          child: const ColoredBox(
             key: ValueKey('press_target'),
-            width: 200,
-            height: 60,
+            color: Color(0xFF202020),
+            child: SizedBox(width: 200, height: 60),
           ),
         ),
       ),
@@ -103,6 +107,9 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byType(PressScale)),
     );
+    // Двумя кадрами: первый только заводит тикер контроллера, второй уже
+    // двигает значение — с одним кадром тест мерил покой и проходил всегда.
+    await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(milliseconds: 200));
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 30));
@@ -119,8 +126,51 @@ void main() {
 
     expect(
       afterSecond,
-      lessThan(releasing),
-      reason: 'второй тап не должен разворачивать отдачу обратно',
+      greaterThanOrEqualTo(releasing - 0.5),
+      reason: 'второй тап внутри защитного окна не должен продавливать глубже',
+    );
+  });
+
+  /// Регресс из живого приложения: на быстром наборе шляпка клавиши
+  /// залипала вдавленной и подсвеченной, будто фон не отпустился.
+  ///
+  /// Причина — отпускание в том же кадре, что и нажатие: канал отдачи ещё
+  /// стоял на нуле, защитный выход в `_release` срабатывал, и анимация,
+  /// стартовавшая уже ПОСЛЕ него, доезжала до полного вдавливания.
+  testWidgets('отпускание в том же кадре не оставляет отдачу вдавленной', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        PressScale(
+          pressedScale: 0.5,
+          duration: const Duration(milliseconds: 150),
+          releaseDuration: const Duration(milliseconds: 260),
+          // Голый SizedBox не участвует в hit-test, и палец до
+          // `PressScale` вообще не доходил: тест сравнивал шум округления.
+          // Краска делает цель настоящей целью.
+          child: const ColoredBox(
+            key: ValueKey('press_target'),
+            color: Color(0xFF202020),
+            child: SizedBox(width: 200, height: 60),
+          ),
+        ),
+      ),
+    );
+
+    for (var i = 0; i < 5; i++) {
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(PressScale)),
+      );
+      await gesture.up(); // без кадра между нажатием и отпусканием
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+
+    expect(
+      widthOf(tester),
+      moreOrLessEquals(200, epsilon: 0.5),
+      reason: 'после быстрых тапов отдача обязана вернуться в покой',
     );
   });
 }

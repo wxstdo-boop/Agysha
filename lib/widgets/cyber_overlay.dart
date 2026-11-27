@@ -107,7 +107,10 @@ class _CyberBackdropState extends State<CyberBackdrop>
             painter: _LivePainter(scene: _scene, accent: accent, phase: _phase),
           ),
         ),
-        widget.child,
+        // Экран поверх «живого» фона — в собственном слое: иначе каждая
+        // перерисовка дождя/снега/видеообоев заново растеризует и весь UI,
+        // и прокрутка профиля на слабом GPU превращается в слайд-шоу.
+        RepaintBoundary(child: widget.child),
       ],
     );
   }

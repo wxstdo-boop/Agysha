@@ -1501,7 +1501,11 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
       animation: _pages,
       builder: (context, _) => AnimatedContainer(
         duration: Duration.zero,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        // Отступы окна — ровно прежние: убрав точки-индикаторы, я заодно
+        // подрезал вертикаль, и лист «съёжился» относительно привычного
+        // размера. Возвращаем 20 по вертикали, а вместо строки точек держим
+        // её же высоту пустой — карточка стоит там, где стояла.
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         decoration: BoxDecoration(
           color: dark ? const Color(0xFF12121C) : Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1539,7 +1543,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
                   itemBuilder: (context, i) => _cube(context, i),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
