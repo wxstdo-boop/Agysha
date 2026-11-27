@@ -1418,6 +1418,12 @@ void showGiftDetailsSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    // Окно обрезает своё содержимое по скруглённому контуру: даже если
+    // внутри что-то окажется шире листа, оно не вылезет на фон под окном.
+    clipBehavior: Clip.antiAlias,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
     sheetAnimationStyle: appSheetStyle(),
     builder: (ctx) => _GiftDetailsSheet(
       gifts: gifts,
@@ -1454,7 +1460,6 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
   /// артефактами перетекает вместе с пальцем, поэтому куб не дёргается.
   static const double _emblem = 92;
   static const double _gaps = 12 + 6 + 16;
-  static const double _rarityRow = 24;
   static const double _panelPad = 14;
   static const double _panelInner = 8;
   static const double _buffIcon = 16;
@@ -1495,6 +1500,32 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
     return h;
   }
 
+  /// Высота строки «редкость + номер». Раньше здесь стояла константа 24, и
+  /// при крупном системном шрифте настоящая строка была выше — страница
+  /// переполнялась, а плашка вылезала за лист.
+  static double _rarityRowHeight(BuildContext context, double width) {
+    final pill =
+        _textHeight(
+          context,
+          'x',
+          width,
+          fontSize: 11,
+          weight: FontWeight.bold,
+          maxLines: 1,
+        ) +
+        3 * 2 +
+        2;
+    final serial = _textHeight(
+      context,
+      'x',
+      width,
+      fontSize: 12,
+      weight: FontWeight.w700,
+      maxLines: 1,
+    );
+    return pill > serial ? pill : serial;
+  }
+
   /// Высота одной страницы-артефакта при ширине листа [width].
   double _pageHeightFor(BuildContext context, ProfileGift gift, double width) {
     final title = _textHeight(
@@ -1525,7 +1556,12 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
         desc +
         _panelInner +
         (buff > _buffIcon ? buff : _buffIcon);
-    return _emblem + _gaps + title + _rarityRow + panel + 2;
+    return _emblem +
+        _gaps +
+        title +
+        _rarityRowHeight(context, width) +
+        panel +
+        2;
   }
 
   late final PageController _pages = PageController(
@@ -1846,7 +1882,12 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 6),
+        // Плашка редкости и номер не должны вылезать за окно: при крупном
+        // системном шрифте строка шире листа и её край оказывался поверх
+        // затемнённого фона снаружи. Поэтому строка по содержимому, а номер
+        // ужимается многоточием вместо переполнения.
         Row(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
@@ -1858,6 +1899,7 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
               ),
               child: Text(
                 rarity.labelRu,
+                maxLines: 1,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
@@ -1866,17 +1908,24 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              Translations.t(
-                'giftArtifact',
-                context,
-                'Артефакт #{n}',
-              ).replaceAll('{n}', gift.serialNumber.toString().padLeft(4, '0')),
-              style: TextStyle(
-                fontSize: 12,
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w700,
-                color: accent.withValues(alpha: 0.75),
+            Flexible(
+              child: Text(
+                Translations.t(
+                  'giftArtifact',
+                  context,
+                  'Артефакт #{n}',
+                ).replaceAll(
+                  '{n}',
+                  gift.serialNumber.toString().padLeft(4, '0'),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w700,
+                  color: accent.withValues(alpha: 0.75),
+                ),
               ),
             ),
           ],
