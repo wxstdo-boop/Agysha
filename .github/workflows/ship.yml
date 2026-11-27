@@ -204,30 +204,8 @@ jobs:
           # два пробела — проза из тела коммита. Скрипт склеивает их в абзац
           # под пунктом, поэтому пункт не остаётся огрызком из заголовка.
           NOTES="$(git log --no-merges --pretty=format:'%s%x1f%b%x1e' "$RANGE" \
-            | python3 -c '
-import sys
-
-raw = sys.stdin.read()
-for record in raw.split("\x1e"):
-    record = record.strip("\n")
-    if not record.strip():
-        continue
-    subject, _, body = record.partition("\x1f")
-    subject = subject.strip()
-    if not subject:
-        continue
-    print("- " + subject)
-    prose = []
-    for line in body.splitlines():
-        line = line.strip()
-        # Заголовки, готовые списки и код в теле — не проза для заметки.
-        if not line or line.startswith(("#", "|", "```", "---")):
-            continue
-        prose.append(line)
-    text = " ".join(prose).strip()
-    if text:
-        print("  " + text)
-' | bash tool/release_notes.sh --sections || true)"
+            | python3 tool/notes_from_log.py \
+            | bash tool/release_notes.sh --sections || true)"
           if [ -z "${NOTES//[[:space:]]/}" ]; then
             NOTES="- ✨ Обновление и мелкие улучшения"
           fi

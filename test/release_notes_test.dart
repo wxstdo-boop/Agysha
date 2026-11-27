@@ -315,6 +315,33 @@ void main() {
     }
     expect(dirty, isEmpty, reason: 'служебные пункты в changelog: $dirty');
   }, skip: skipWithoutBash);
+
+  test('заметка берёт из тела только первый абзац', () {
+    final script = File('tool/notes_from_log.py');
+    expect(script.existsSync(), isTrue);
+
+    final raw =
+        'Полировка профиля\u001fПервая строка тела.\n'
+        'Вторая строка того же абзаца.\n\n'
+        'Разбор по пунктам, который в заметку не идёт.\n\u001e';
+    // stdin через runSync не передать — пишем во временный файл и читаем из него.
+    final tmp = File(
+      '${Directory.systemTemp.path}/notes_from_log_${DateTime.now().microsecondsSinceEpoch}.txt',
+    );
+    tmp.writeAsStringSync(raw);
+    final piped = Process.runSync(
+      'bash',
+      ['-c', 'python3 ${script.path} < ${tmp.path}'],
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    );
+    tmp.deleteSync();
+    expect(piped.exitCode, 0);
+    final out = piped.stdout as String;
+    expect(out, contains('Первая строка тела.'));
+    expect(out, contains('Вторая строка того же абзаца.'));
+    expect(out, isNot(contains('Разбор по пунктам')));
+  }, skip: skipWithoutBash);
 }
 
 /// Проверяет, что `bash` реально запускается.

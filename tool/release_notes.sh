@@ -93,6 +93,10 @@ CODEISH = [
     (r"\b[A-Z][A-Za-z0-9]*(?:Service|Screen|Widget|Sheet|Store|Controller|Provider|"
      r"Notifier|Painter|Card|Test|Model|Helper|Utils)\b", " "),
     (r"\b[a-z]+[A-Z][A-Za-z0-9]*\b", " "),
+    # Многосложные имена классов: PressTintBehind, GiftCard3D.
+    (r"\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+\b", " "),
+    # Голые имена виджетов из тела коммита: «тон рисуется внутри Card».
+    (r"\b(?:Card|Scaffold|Stack|Row|Column|InkWell|Container|GestureDetector|ListView|Sliver|Future|Stream)\b", " "),
     (r"(?:^|\s)(?:[\w.-]+/){2,}[\w.-]+", " "),
     (r"\b[a-z0-9]+(?:\.[a-z0-9]+){2,}\b", " "),
 ]
@@ -101,7 +105,8 @@ CODEISH = [
 # «… теперь работает в». Хвост из них снимаем.
 DANGLING = ("в", "во", "на", "из", "с", "со", "к", "ко", "по", "для", "от",
             "до", "за", "под", "над", "при", "и", "а", "но", "или", "что",
-            "как", "это", "—", "-", "–")
+            "как", "это", "через", "внутри", "без", "про", "между", "около",
+            "после", "перед", "также", "—", "-", "–")
 
 
 def scrub_code(text):
@@ -183,6 +188,12 @@ DETAIL_LIMIT = 300
 
 def clip_detail(text):
     text = re.sub(r"\s{2,}", " ", text).strip()
+    # После чистки имён фраза часто обрывается предлогом («… внутри»,
+    # «… через.»). Снимаем такие хвосты, иначе заметка читается как обрубок.
+    words = text.split()
+    while len(words) > 1 and words[-1].strip(".,;:—-–").lower() in DANGLING:
+        words.pop()
+    text = " ".join(words)
     # Склеенное тело коммита приходит с висящим двоеточием или тире —
     # в заметке это читается как обрубок.
     text = text.strip(" -–—:;,")
@@ -265,7 +276,10 @@ for raw in sys.stdin:
     # а не печатаем отдельной строкой и не выбрасываем.
     if SECTIONS and line[:1] in (" ", "\t") and line.strip():
         if last_item is not None:
-            last_item["detail"] = (last_item["detail"] + " " + line.strip()).strip()
+            piece = scrub_code(line.strip())
+            # Тело коммита — тоже текст для человека: без имён классов.
+            if len(piece.split()) >= 3:
+                last_item["detail"] = (last_item["detail"] + " " + piece).strip()
         continue
     # Перенос строки длинного пункта из changelog — не заголовок коммита,
     # отдаём как есть, иначе хвост пункта теряется. В режиме разделов тело
