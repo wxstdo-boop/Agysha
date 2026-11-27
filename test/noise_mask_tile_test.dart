@@ -47,15 +47,17 @@ void main() {
     expect(find.textContaining('дождь играет'), findsOneWidget);
   });
 
-  test('в Уголке разработчика плитка стоит рядом с движком', () {
+  test('в Уголке разработчика плитка есть и стоит последней', () {
     final source = File(
       'lib/screens/settings_dev_tools.dart',
     ).readAsStringSync();
-    expect(source, contains('const NoiseMaskTile(),'));
+    final tile = source.indexOf('const NoiseMaskTile(),');
+    expect(tile, isNonNegative, reason: 'без плитки в уголке её и не видно');
+    // Плитка — последний пункт списка управления: ниже только закрытие
+    // уголка, поэтому тумблер не теряется между старыми настройками.
     expect(
-      source.indexOf('const NoiseMaskTile(),'),
-      lessThan(source.indexOf('const _RenderEngineTile(),')),
-      reason: 'тумблер дождя — перед переключателем движка, как и просили',
+      source.substring(tile),
+      startsWith('const NoiseMaskTile(),\n            ],'),
     );
   });
 }

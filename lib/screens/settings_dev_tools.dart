@@ -615,4 +615,3 @@ extension _SettingsDevTools on _SettingsScreenState {
     };
   }
 }
-
