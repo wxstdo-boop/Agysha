@@ -71,27 +71,24 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
   }
 
-  /// Полоса над подписью: контейнер с градиентом, у которого края прозрачные,
-  /// а середина заметно краснее, чем зелёный и синий каналы.
-  Container? accentStripe(WidgetTester tester) {
+  /// Красноватые полосы подписи: ровный тон, без градиента.
+  List<Container> accentBars(WidgetTester tester) {
     final rect = tester.getRect(find.byType(CreditsFooter));
+    final bars = <Container>[];
     for (final w in tester.widgetList<Container>(find.byType(Container))) {
       final deco = w.decoration;
-      if (deco is! BoxDecoration) continue;
-      final gradient = deco.gradient;
-      if (gradient is! LinearGradient || gradient.colors.length < 3) continue;
-      final mid = gradient.colors[gradient.colors.length ~/ 2];
-      if (mid.r <= mid.g || mid.r <= mid.b) continue;
+      if (deco is! BoxDecoration || deco.gradient != null) continue;
+      final color = deco.color;
+      if (color == null || color.r <= color.g || color.r <= color.b) continue;
       final element = find.byWidget(w).evaluate();
       if (element.isEmpty) continue;
       final box = element.first.renderObject as RenderBox?;
       if (box == null || !box.hasSize) continue;
       final topLeft = box.localToGlobal(Offset.zero);
       if (topLeft.dy < rect.top - 1 || topLeft.dy > rect.bottom) continue;
-      if (gradient.colors.first.a > 0.02) continue;
-      return w;
+      bars.add(w);
     }
-    return null;
+    return bars;
   }
 
   testWidgets('подпись тестеров стоит внизу настроек, под карточками', (
@@ -113,22 +110,35 @@ void main() {
     expect(footer.contains(names.center), isTrue);
   });
 
-  testWidgets('подпись полупрозрачная и лежит на красноватой полосе', (
+  testWidgets('подпись мелкая, полупрозрачная, полоса одна и короткая', (
     tester,
   ) async {
     await openSettings(tester);
     await scrollToFooter(tester);
 
     final namesText = tester.widget<Text>(find.text(CreditsFooter.names));
-    final alpha = namesText.style!.color!.a;
-    expect(alpha, greaterThan(0.3));
-    expect(alpha, lessThan(0.7), reason: 'текст не должен быть плотным');
+    expect(namesText.style!.fontSize, lessThanOrEqualTo(11.5));
+    final namesAlpha = namesText.style!.color!.a;
+    expect(namesAlpha, greaterThan(0.3));
+    expect(namesAlpha, lessThan(0.55), reason: 'текст не должен быть плотным');
 
     final labelText = tester.widget<Text>(find.text('ТЕСТЕРЫ'));
-    expect(labelText.style!.color!.a, lessThan(0.7));
+    expect(labelText.style!.fontSize, lessThanOrEqualTo(8));
+    expect(labelText.style!.color!.a, lessThan(0.4));
 
-    final stripe = accentStripe(tester);
-    expect(stripe, isNotNull, reason: 'красноватая полоса над подписью');
+    // Ровно одна полоса — сверху. Под именами подчёркивания больше нет.
+    final bars = accentBars(tester);
+    expect(bars, hasLength(1), reason: 'лишняя полоса под подписью');
+    final bar = tester.getRect(find.byWidget(bars.single));
+    final footer = tester.getRect(find.byType(CreditsFooter));
+    expect(bar.top, lessThan(tester.getRect(find.text('ТЕСТЕРЫ')).top));
+    expect(bar.width, lessThan(footer.width / 2), reason: 'полоса короткая');
+    final deco = bars.single.decoration as BoxDecoration;
+    expect(deco.color!.a, lessThan(0.26), reason: 'полоса слишком плотная');
+    expect(
+      tester.getRect(find.text(CreditsFooter.names)).bottom,
+      lessThan(footer.bottom),
+    );
   });
 
   testWidgets('на узком экране 320 подпись не переполняет строку', (
