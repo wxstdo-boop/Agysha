@@ -87,10 +87,11 @@ const Map<String, String> _ru = {
       'Не удалось прочитать или сохранить локальные данные. Исходные файлы не изменены.',
   'updateHashMissing': 'У релиза нет корректного SHA-256. Установка отменена.',
   'updateInstalled': 'Обновлено до v{v}',
-  'updateAvailable': 'Доступно обновление',
+  'updateAvailable': 'Доступна свежая версия',
   'updateNoticeAction': 'Обновить',
   'updateDownloading': 'Скачиваю обновление…',
-  'updateAvailableBody': 'Установить v{v}?',
+  'updateAvailableBody': 'Указанная версия: v{v}',
+  'updateAvailableHint': 'Изменения можно посмотреть в списке изменений.',
   'install': 'Установить',
   'updateInstallBlocked':
       'Система заблокировала обновление. Разрешите установку из этого источника и попробуйте снова.',
@@ -1095,11 +1096,12 @@ const Map<String, String> _ru = {
   'notifAdaChannelDesc': 'Утренний отчёт и вечерний разбор',
   'notifUpdateChannel': 'Обновления Agysha',
   'notifUpdateChannelDesc': 'Сообщение о вышедшей новой версии',
-  'notifUpdateTitle': 'Доступно обновление Agysha',
+  'notifUpdateTitle': 'Доступна свежая версия',
   'updateNotificationsTitle': 'Уведомления об обновлениях',
   'updateNotificationsDesc':
       'Шторка и плашка, когда выходит новый релиз. Сама проверка версии продолжает работать.',
-  'notifUpdateBody': 'Версия {v} уже вышла. Нажмите, чтобы обновить.',
+  'notifUpdateBody':
+      'Указанная версия: {v}. Изменения можно посмотреть в списке изменений.',
   'notifHabitChannel': 'Напоминания привычек',
   'notifHabitChannelDesc': 'Напоминание «Вспомнить всё» о привычках',
   'screenAwareBody':

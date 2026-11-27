@@ -261,8 +261,11 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
     if (!animate) return bubble;
-    // У обоих отправителей одна спокойная анимация: проявление и мягкий
-    // выезд снизу, без scale и без пересчёта высоты.
+    // У обоих отправителей одна спокойная анимация: пузырь проявляется,
+    // мягко выезжает снизу и одновременно РАСКРЫВАЕТ ВЫСОТУ. Без последнего
+    // лента сдвигалась на высоту новой реплики одним кадром — старые
+    // сообщения «прыгали» вверх, и появление (сообщение Ады, награда,
+    // строка стрика) читалось резким, сколько бы ни длился fade.
     return TweenAnimationBuilder<double>(
       // Анимируется один раз при первом появлении пузыря; у старых
       // сообщений анимация отключена (animate: false) — скролл большого
@@ -270,24 +273,26 @@ class _MessageBubble extends StatelessWidget {
       tween: Tween(begin: 0, end: 1),
       // Одинаково спокойное появление у обоих: раньше «моё» сообщение
       // вспыхивало быстрее ответа и читалось резче.
-      duration: const Duration(milliseconds: 360),
+      duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic,
       builder: (context, t, child) {
         final e = Curves.easeOutCubic.transform(t);
-        // Никакой анимации ВЫСОТЫ: покадровый heightFactor заставлял ленту
-        // пересобираться и «дёргался» на слабых телефонах. Пузырь сразу
-        // занимает своё место и только проявляется, мягко выезжая снизу.
-        //
-        // RepaintBoundary ВНУТРИ проявления — под Impeller ключевая деталь:
-        // текст с разметкой и тени пузыря растеризуются ОДИН раз, а кадры
-        // анимации только смешивают готовую текстуру с прозрачностью.
-        // Без границы Impeller перерисовывал каждый пузырь на каждом кадре
-        // входа — отсюда и «тормозные анимки в чате».
-        return Opacity(
-          opacity: e,
-          child: Transform.translate(
-            offset: Offset(0, 7.0 * (1.0 - e)),
-            child: RepaintBoundary(child: child),
+        // ClipRect + Align(heightFactor) — раскрытие без пересчёта самого
+        // пузыря: содержимое уже отрисовано, меняется только окно показа.
+        // Лента пересобирается лишь на время входа ОДНОГО нового пузыря
+        // (в истории animate: false), а RepaintBoundary не даёт Impeller
+        // перерисовывать текст и тени на каждом кадре.
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            heightFactor: e,
+            child: Opacity(
+              opacity: e,
+              child: Transform.translate(
+                offset: Offset(0, 7.0 * (1.0 - e)),
+                child: RepaintBoundary(child: child),
+              ),
+            ),
           ),
         );
       },

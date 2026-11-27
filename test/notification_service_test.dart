@@ -155,10 +155,14 @@ void main() {
     // Тот же payload, что разбирает main.dart: тап по баннеру и по действию
     // «Обновить» ведут в один обработчик.
     expect(args['payload'], 'update:9.9.9+99999');
-    expect(args['title'], 'Осеннее обновление');
+    expect(args['title'], 'Доступна свежая версия');
     final body = args['body']! as String;
     expect(body, contains('9.9.9+99999'));
-    expect(body, contains('Починен будильник'));
+    expect(body, contains('Указанная версия'));
+    expect(body, contains('Изменения можно посмотреть в списке изменений.'));
+    // Пункты релиза и ссылки в шторку не выкладываются: их читают в
+    // приложении, в «Что нового».
+    expect(body, isNot(contains('Починен будильник')));
     expect(body, isNot(contains('###')));
     expect(body, isNot(contains('https://')));
     final specifics = (args['platformSpecifics']! as Map)

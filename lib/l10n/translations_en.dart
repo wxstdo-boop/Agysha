@@ -85,10 +85,11 @@ const Map<String, String> _en = {
   'updateHashMissing':
       'The release has no valid SHA-256 digest. Installation was cancelled.',
   'updateInstalled': 'Updated to v{v}',
-  'updateAvailable': 'Update available',
+  'updateAvailable': 'Fresh version available',
   'updateNoticeAction': 'Update',
   'updateDownloading': 'Downloading update…',
-  'updateAvailableBody': 'Install v{v}?',
+  'updateAvailableBody': 'Available version: v{v}',
+  'updateAvailableHint': 'You can see the changes in the changelog.',
   'install': 'Install',
   'updateInstallBlocked':
       'The system blocked the update. Allow installs for this app and try again.',
@@ -1090,11 +1091,12 @@ const Map<String, String> _en = {
   'notifAdaChannelDesc': 'Morning report and evening review',
   'notifUpdateChannel': 'Agysha updates',
   'notifUpdateChannelDesc': 'Notice about a released new version',
-  'notifUpdateTitle': 'Agysha update available',
+  'notifUpdateTitle': 'Fresh version available',
   'updateNotificationsTitle': 'Update notifications',
   'updateNotificationsDesc':
       'A shade banner and an in-app notice when a release comes out. Version checks keep running either way.',
-  'notifUpdateBody': 'Version {v} is out. Tap to update.',
+  'notifUpdateBody':
+      'Available version: {v}. You can see the changes in the changelog.',
   'notifHabitChannel': 'Habit reminders',
   'notifHabitChannelDesc': '“Remember everything” habit reminder',
   'screenAwareBody':

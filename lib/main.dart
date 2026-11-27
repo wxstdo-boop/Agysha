@@ -530,19 +530,25 @@ final MethodChannel _alarmPayloadChannel = const MethodChannel(
   'com.wetcorp.agysha/alarm_payload',
 );
 
-Future<void> _handleNotificationTap(String? payload) async {
+Future<void> _handleNotificationTap(String? payload, [String? actionId]) async {
   if (payload == null) return;
   if (payload.startsWith('update:')) {
-    // Баннер «вышла новая версия» в шторке: плашку с кнопкой установки
-    // показываем принудительно — о версии уже могли сообщить раньше.
-    if (pendingUpdate.value != null) {
-      await UpdateNotice.instance.announce(pendingUpdate.value, force: true);
-    } else {
+    // Тап по самому баннеру открывает приложение и плашку с установкой;
+    // кнопка «Обновить» в шторке скачивает APK сразу, не уводя человека
+    // в экран «Что нового». О версии могли сообщить раньше, поэтому
+    // проверяем её принудительно.
+    var info = pendingUpdate.value;
+    if (info == null) {
       // Приложение убили с момента релиза: сначала узнаём версию,
       // потом всё равно показываем плашку — иначе тап по баннеру
       // упирался в «о версии уже сообщали» и не делал ничего.
       await UpdateService.instance.silentDailyCheck();
-      await UpdateNotice.instance.announce(pendingUpdate.value, force: true);
+      info = pendingUpdate.value;
+    }
+    if (actionId == 'update' && info != null) {
+      await UpdateNotice.instance.installFromNotification(info);
+    } else {
+      await UpdateNotice.instance.announce(info, force: true);
     }
     return;
   }
@@ -894,6 +900,7 @@ class _StartupState {
     required this.fontFamily,
     required this.launchedByNotification,
     required this.notificationPayload,
+    this.notificationActionId,
     this.itshnikVariant = 'phosphor',
     this.itshnikFont = 'pixel',
     this.itshnikWallpaper,
@@ -930,6 +937,10 @@ class _StartupState {
   /// ПОСЛЕ runApp (там уже есть дерево виджетов), сюда кладём только факт.
   final bool launchedByNotification;
   final String? notificationPayload;
+
+  /// Кнопка баннера обновления, которой запустили приложение
+  /// (`update` — «Обновить»). null — обычный тап.
+  final String? notificationActionId;
 
   /// Значения, с которыми стартуем, если чтение настроек не успело за бюджет.
   /// Пустой `lang` означает «как решит система»: `LocaleProvider` уже умеет
@@ -1111,6 +1122,7 @@ Future<_StartupState> _loadStartupState() async {
     fontFamily: await fontFamily,
     launchedByNotification: details?.didNotificationLaunchApp == true,
     notificationPayload: details?.notificationResponse?.payload,
+    notificationActionId: details?.notificationResponse?.actionId,
     itshnikVariant: await itshnikVariant,
     itshnikFont: await itshnikFont,
     itshnikWallpaper: (await itshnikWallpaper)?.path,
@@ -1757,7 +1769,7 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
   if (ready.launchedByNotification) {
     _pendingAlarmPayload = ready.notificationPayload;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handleNotificationTap(_pendingAlarmPayload);
+      _handleNotificationTap(_pendingAlarmPayload, ready.notificationActionId);
       _pendingAlarmPayload = null;
       alarmHandled = true;
     });

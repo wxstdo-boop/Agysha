@@ -112,12 +112,20 @@ class _UpdatePillState extends State<UpdatePill>
         // складывались, и на входе/выходе окно «вспыхивало» (та самая
         // жалоба на мигание). Теперь слой ровно один и он же плавно гаснет.
         barrierColor: Colors.black.withValues(alpha: 0.42),
-        // Длиннее прежнего: окно читается как мягкое всплытие, без рывка.
-        transitionDuration: const Duration(milliseconds: 360),
-        pageBuilder: (ctx, _, _) => _UpdateConfirmDialog(
-          version: update.versionName,
-          onConfirm: () => Navigator.pop(ctx, true),
-          onCancel: () => Navigator.pop(ctx, false),
+        // 240 мс в обе стороны: окно всплывает мягко, а на закрытии не
+        // висит лишние 120 мс, пока пользователь уже нажал (долгий уход
+        // читался как «лагает»). Отдельного reverse-времени у
+        // showGeneralDialog нет, поэтому общий ход укорочен.
+        transitionDuration: const Duration(milliseconds: 240),
+        // RepaintBoundary: на уходе маршрут только гасит и масштабирует
+        // готовый слой окна, тени и скругления не перерисовываются кадр за
+        // кадром — на слабом телефоне это и давало рывок при закрытии.
+        pageBuilder: (ctx, _, _) => RepaintBoundary(
+          child: _UpdateConfirmDialog(
+            version: update.versionName,
+            onConfirm: () => Navigator.pop(ctx, true),
+            onCancel: () => Navigator.pop(ctx, false),
+          ),
         ),
         transitionBuilder: (ctx, anim, _, child) {
           final curved = CurvedAnimation(
@@ -126,7 +134,9 @@ class _UpdatePillState extends State<UpdatePill>
             // место, без рывка в конце. Выход — короткий easeIn: окно уходит
             // собранно, не задерживая пользователя.
             curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
+            // Выход: сразу трогается и мягко гаснет. Прежний easeInCubic
+            // первые ~100 мс почти не двигал окно — читалось как залипание.
+            reverseCurve: Curves.easeOutQuad,
           );
           // Только окно: фон затемняет барьер маршрута, поэтому второго
           // затемняющего слоя нет — окно не «вспыхивает» на переходе.
@@ -146,6 +156,11 @@ class _UpdatePillState extends State<UpdatePill>
         return;
       }
 
+      // Даём окну доиграть выход: раньше сеть и запись APK стартовали в
+      // том же кадре, что и pop, и анимация ухода дёргалась. Пауза чуть
+      // больше transitionDuration (240 мс), чтобы уход не срезался.
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (!mounted) return;
       // Качаем и ставим ОДНИМ вызовом сервиса: работа живёт вне экрана.
       // Ушёл из настроек/свернул приложение — загрузка не обрывается, а
       // установка запускается сама, как только APK готов.
@@ -464,7 +479,7 @@ class _UpdateConfirmDialogState extends State<_UpdateConfirmDialog>
                             Translations.t(
                               'updateAvailable',
                               context,
-                              'Доступно обновление',
+                              'Доступна свежая версия',
                             ),
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: Weights.bold,
@@ -478,10 +493,22 @@ class _UpdateConfirmDialogState extends State<_UpdateConfirmDialog>
                       Translations.t(
                         'updateAvailableBody',
                         context,
-                        'Установить v{v}?',
+                        'Указанная версия: v{v}',
                       ).replaceAll('{v}', widget.version),
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: Spacing.xs),
+                    Text(
+                      Translations.t(
+                        'updateAvailableHint',
+                        context,
+                        'Изменения можно посмотреть в списке изменений.',
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.75),
                         fontStyle: FontStyle.italic,
                         height: 1.35,
                       ),
