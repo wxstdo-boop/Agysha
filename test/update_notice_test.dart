@@ -71,7 +71,7 @@ void main() {
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
-    expect(find.textContaining('Доступно обновление'), findsOneWidget);
+    expect(find.textContaining('Доступна свежая версия'), findsOneWidget);
     expect(find.textContaining('1.6.354'), findsOneWidget);
     expect(find.text('Обновить'), findsOneWidget);
 
@@ -105,6 +105,6 @@ void main() {
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
-    expect(find.textContaining('Доступно обновление'), findsNothing);
+    expect(find.textContaining('Доступна свежая версия'), findsNothing);
   });
 }

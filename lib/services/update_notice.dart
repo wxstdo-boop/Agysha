@@ -131,7 +131,7 @@ class UpdateNotice {
       showBeautifulSnackBar(
         target,
         message:
-            '${Translations.t('updateAvailable', target, 'Доступно обновление')}'
+            '${Translations.t('updateAvailable', target, 'Доступна свежая версия')}'
             ' · v${info.versionName}',
         icon: Icons.system_update_rounded,
         groupKey: 'update',
@@ -146,13 +146,27 @@ class UpdateNotice {
     }
   }
 
+  /// Кнопка «Обновить» в шторке: скачивание стартует сразу, без плашки.
+  ///
+  /// Раньше действие баннера лишь открывало приложение с тем же payload, что
+  /// и тап, — человек нажимал «Обновить», а попадал в список изменений и
+  /// должен был искать установку руками. Теперь это тот же путь, что и
+  /// кнопка на плашке, но без лишнего шага.
+  Future<void> installFromNotification(UpdateInfo info) async {
+    if (!kSelfUpdateEnabled) return;
+    pendingUpdate.value = info;
+    await _install(info);
+  }
+
   /// Скачивает и ставит обновление по тапу на плашке.
   ///
   /// Загрузка и установка живут в [UpdateService] и переживают смену
   /// экрана: плашка лишь запускает их и показывает итог.
   Future<void> _install(UpdateInfo info) async {
     dismissBeautifulSnackBar(groupKey: 'update');
-    final context = navigatorKey.currentContext;
+    // Запуск из шторки: первый кадр приложения может ещё не дать контекста,
+    // а без него не показать ни прогресс, ни ошибку. Ждём его ограниченно.
+    final context = navigatorKey.currentContext ?? await _waitForContext();
     if (context == null || !context.mounted) return;
     if (!UpdateService.hasValidSha256(info.sha256)) {
       _toast(

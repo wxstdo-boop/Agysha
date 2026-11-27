@@ -144,7 +144,9 @@ class NotificationService extends ChangeNotifier {
   bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-  void Function(String? payload)? onNotificationTap;
+  /// Тап по уведомлению. [actionId] непустой только у кнопок баннера
+  /// обновления: `update` — «Обновить», `dismiss` — «Позже».
+  void Function(String? payload, String? actionId)? onNotificationTap;
 
   // Используем существующий метод-канал из MainActivity.kt,
   // где зарегистрирован обработчик getTimeZone.
@@ -168,12 +170,12 @@ class NotificationService extends ChangeNotifier {
     await _plugin.initialize(
       settings: initSettings,
       onDidReceiveNotificationResponse: (response) {
-        // Действия баннера обновления: «Обновить» — тот же путь, что и тап по
-        // самому баннеру; «Позже» лишь убирает строку из шторки и не должно
-        // открывать экран обновления. У обычных уведомлений actionId == null.
+        // Действия баннера обновления: «Обновить» скачивает APK сразу,
+        // «Позже» лишь убирает строку из шторки. У обычных уведомлений
+        // actionId == null — это обычный тап.
         final actionId = response.actionId;
-        if (actionId != null && actionId != _updateActionId) return;
-        onNotificationTap?.call(response.payload);
+        if (actionId == _laterActionId) return;
+        onNotificationTap?.call(response.payload, actionId);
       },
     );
     await _createChannels();
@@ -694,13 +696,19 @@ class NotificationService extends ChangeNotifier {
   /// id действия «Обновить» на баннере версии.
   static const String _updateActionId = 'update';
 
+  /// id действия «Позже»: закрывает баннер и ничего не открывает.
+  static const String _laterActionId = 'dismiss';
+
   /// Баннер в шторке о новой версии.
   ///
-  /// Тап по баннеру и по действию «Обновить» открывает приложение с тем же
-  /// payload `update:<версия>` (его разбирает main.dart), где [UpdateNotice]
-  /// показывает плашку с кнопкой установки. Описание релиза [notes] (markdown
-  /// из GitHub) и human-название выпуска [releaseName] необязательны: без них
-  /// баннер выглядит как раньше — версия и призыв обновиться.
+  /// Тап по баннеру открывает приложение с payload `update:<версия>`, а
+  /// действие «Обновить» сразу запускает скачивание APK (action id
+  /// [_updateActionId] разбирает main.dart) — из шторки не нужно ещё раз
+  /// искать кнопку в приложении.
+  ///
+  /// [notes] и [releaseName] больше не выкладываются в тело баннера: список
+  /// изменений живёт в приложении («Что нового»), а шторка говорит коротко —
+  /// какая версия доступна и где смотреть изменения.
   ///
   /// Возвращает `true`, только если баннер действительно поставлен: по этому
   /// признаку вызывающий решает, помечать ли выпуск как «уже сообщённый».
@@ -731,19 +739,19 @@ class NotificationService extends ChangeNotifier {
       // заранее: show() сам вернёт ошибку, если баннер не поставить.
     }
     final lang = globalPrefs.getString('setting_locale') ?? 'ru';
+    // Тело баннера — только версия и подсказка, где изменения. Пункты
+    // релиза в шторку не выкладываем: они читаются в «Что нового».
     final text = buildUpdateNotificationText(
       version: version,
-      notes: notes,
-      releaseName: releaseName,
       defaultTitle: Translations.tFor(
         lang,
         'notifUpdateTitle',
-        'Доступно обновление Agysha',
+        'Доступна свежая версия',
       ),
       bodyTemplate: Translations.tFor(
         lang,
         'notifUpdateBody',
-        'Версия {v} уже вышла. Нажмите, чтобы обновить.',
+        'Указанная версия: {v}. Изменения можно посмотреть в списке изменений.',
       ),
     );
     final details = NotificationDetails(

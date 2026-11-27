@@ -91,10 +91,12 @@ const Map<String, String> _fr = {
   'updateHashMissing':
       'La version ne fournit pas de SHA-256 valide. Installation annulée.',
   'updateInstalled': 'Mis à jour vers v{v}',
-  'updateAvailable': 'Mise à jour disponible',
+  'updateAvailable': 'Nouvelle version disponible',
   'updateNoticeAction': 'Mettre à jour',
   'updateDownloading': 'Téléchargement de la mise à jour…',
-  'updateAvailableBody': 'Installer la v{v} ?',
+  'updateAvailableBody': 'Version indiquée : v{v}',
+  'updateAvailableHint':
+      'Les changements sont visibles dans le journal des modifications.',
   'install': 'Installer',
   'updateInstallBlocked':
       'Le système a bloqué la mise à jour. Autorisez l’installation depuis cette source et réessayez.',
@@ -1141,11 +1143,12 @@ const Map<String, String> _fr = {
   'notifAdaChannelDesc': 'Rapport du matin et bilan du soir',
   'notifUpdateChannel': 'Mises à jour Agysha',
   'notifUpdateChannelDesc': 'Annonce d’une nouvelle version',
-  'notifUpdateTitle': 'Mise à jour Agysha disponible',
+  'notifUpdateTitle': 'Nouvelle version disponible',
   'updateNotificationsTitle': 'Notifications de mise à jour',
   'updateNotificationsDesc':
       'Bannière et avis dans l’app lors d’une nouvelle version. La vérification des versions reste active.',
-  'notifUpdateBody': 'La version {v} est sortie. Touchez pour mettre à jour.',
+  'notifUpdateBody':
+      'Version indiquée : {v}. Les changements sont visibles dans le journal des modifications.',
   'notifHabitChannel': 'Rappels d’habitudes',
   'notifHabitChannelDesc': 'Rappel d’habitude « Se souvenir de tout »',
   'screenAwareBody':
