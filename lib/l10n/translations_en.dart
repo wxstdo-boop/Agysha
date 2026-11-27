@@ -5,6 +5,7 @@ const Map<String, String> _en = {
   'alarms': 'Alarms',
   'habits': 'Habits',
   'tasks': 'Tasks',
+  'creditsTesters': 'testers',
   'rc': 'RC',
   'rcTab': 'Checks',
   'realityChecks': 'Reality Checks',
