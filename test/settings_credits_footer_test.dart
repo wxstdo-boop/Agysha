@@ -132,6 +132,8 @@ void main() {
     final bar = tester.getRect(find.byWidget(bars.single));
     final footer = tester.getRect(find.byType(CreditsFooter));
     expect(bar.top, lessThan(tester.getRect(find.text('ТЕСТЕРЫ')).top));
+    // Полоса почти вплотную к последней карточке, а не через полэкрана.
+    expect(bar.top - footer.top, lessThanOrEqualTo(12));
     expect(bar.width, lessThan(footer.width / 2), reason: 'полоса короткая');
     final deco = bars.single.decoration as BoxDecoration;
     expect(deco.color!.a, lessThan(0.26), reason: 'полоса слишком плотная');

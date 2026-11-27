@@ -8,7 +8,7 @@ import '../l10n/translations.dart';
 class CreditsFooter extends StatelessWidget {
   const CreditsFooter({super.key});
 
-  static const String names = 'Kokos · Laraf';
+  static const String names = 'Kokos · Laraf · Lemon';
 
   @override
   Widget build(BuildContext context) {
@@ -38,8 +38,8 @@ class CreditsFooter extends StatelessWidget {
       label: '$label: $names',
       child: Padding(
         padding: const EdgeInsets.only(
-          top: 24,
-          bottom: 28,
+          top: 10,
+          bottom: 22,
           left: 18,
           right: 18,
         ),
