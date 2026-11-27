@@ -322,8 +322,17 @@ Future<void> showAiGuideChat(BuildContext context) {
     // PopScope ниже) — случайные жесты больше не выкидывают из чата.
     isDismissible: false,
     enableDrag: false,
+    // Затемнение под чатом почти незаметное. Раньше здесь стоял дефолтный
+    // чёрный полумрак: лист закрывался, а если закрытие пришлось на жест,
+    // экран под ним ещё догонял затухание — читалось как «остался задний
+    // фон». Сам лист почти непрозрачный, ему затемнение не нужно.
+    barrierColor: Colors.black12,
     // Плавный выезд и мягкое закрытие с естественным затуханием (easeOutCubic / easeInCubic)
-    sheetAnimationStyle: appSheetStyle(),
+    sheetAnimationStyle: appSheetStyle().copyWith(
+      // Уход короче общего: лист уже сложился вниз своей складкой, и
+      // длинный reverse только держал на экране полупрозрачный хвост.
+      reverseDuration: const Duration(milliseconds: 150),
+    ),
     // Отделяем тяжёлую ленту чата в отдельный composited layer: во время
     // выезда bottom sheet Android двигает готовый слой, а не перерисовывает
     // весь экран и все карточки под ним на каждом кадре.
@@ -409,6 +418,10 @@ class _AiChatSheetState extends State<_AiChatSheet>
     final velocity = details.velocity.pixelsPerSecond.dy;
     setState(() => _folding = false);
     if (velocity > 620 || _fold > sheetHeight * 0.26) {
+      // Закрытие уже началось: тап по крестику в этот момент не должен
+      // перезапускать складку (она сбросила бы ожидающий pop, и лист
+      // оставался висеть пустым — «задний фон» после закрытия).
+      _closing = true;
       // Доводим до конца «в стол» и только потом снимаем лист: без
       // двойного движения (своего и reverse-анимации роута) не видно.
       _animateFold(
@@ -426,8 +439,14 @@ class _AiChatSheetState extends State<_AiChatSheet>
     }
   }
 
+  /// Роут снимаем РОВНО раз. Двойной pop уносил не только лист, но и
+  /// экран под ним: снаружи это выглядело как «закрыл чат — остался пустой
+  /// тёмный фон».
+  bool _popped = false;
+
   void _popNow() {
-    if (!mounted) return;
+    if (!mounted || _popped) return;
+    _popped = true;
     Navigator.of(context).pop();
   }
 

@@ -120,6 +120,12 @@ class _PerfPanelScreenState extends State<PerfPanelScreen> {
             ],
             const SizedBox(height: 18),
             _Line(
+              'Бюджет кадра',
+              '${JankProbe.budgetMs.toStringAsFixed(1)} мс · '
+                  'нагрузка ${(JankProbe.pressure * 100).round()} %',
+              cs: cs,
+            ),
+            _Line(
               'Режим',
               PerfPrefs.active
                   ? 'Оптимизация включена: декор заморожен, наклона нет'

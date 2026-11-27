@@ -15,8 +15,9 @@ void main() {
     final src = read('lib/screens/lock_screen_widgets.dart');
     expect(src.contains('maxTiltAngle: 0.18'), isTrue);
     expect(src.contains('enableTilt: true'), isTrue);
-    expect(src.contains('rotateX(-aim.dy * 0.21 * tilt)'), isTrue);
-    expect(src.contains('rotateY(aim.dx * 0.44 * tilt)'), isTrue);
+    // Раунд «желейного» ПИНа усилил амплитуду (было 0.21/0.44).
+    expect(src.contains('rotateX(-aim.dy * 0.24 * tilt)'), isTrue);
+    expect(src.contains('rotateY(aim.dx * 0.50 * tilt)'), isTrue);
     // Показываемый наклон подтягивается к цели по кадрам: при редких
     // pointer-событиях клавиша не дёргается, а плавно догоняет палец.
     expect(src.contains('Offset.lerp(_tilt.value, _tiltTarget, 0.22)'), isTrue);

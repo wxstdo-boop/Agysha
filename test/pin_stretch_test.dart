@@ -24,9 +24,19 @@ void main() {
     );
     expect(
       block,
-      contains('_in.value / 0.20'),
+      contains('_in.value / 0.22'),
       reason: 'растяжение должно успевать за быстрой рампой нажатия',
     );
+    expect(
+      block,
+      contains('Curves.easeOutBack'),
+      reason: 'без мелкого перелёта клавиша останавливается как плитка',
+    );
+  });
+
+  test('наклон клавиши заметен и мягок', () {
+    expect(src.contains('matrix.rotateX(-aim.dy * 0.24 * tilt)'), isTrue);
+    expect(src.contains('matrix.rotateY(aim.dx * 0.50 * tilt)'), isTrue);
   });
 
   test('в центре клавиши остаётся лёгкая отдача', () {
@@ -41,9 +51,14 @@ void main() {
       reason: 'при почти нулевом смещении угол считается нестабильно',
     );
     expect(
-      src.contains('1 + 0.165 * stretchK'),
+      src.contains('1 + 0.235 * stretchK'),
       isTrue,
       reason: 'амплитуда «мыльного» растяжения',
+    );
+    expect(
+      src.contains('1 - 0.090 * stretchK'),
+      isTrue,
+      reason: 'поперечное сжатие — чтобы клавиша «текла», а не сплющивалась',
     );
   });
 }
