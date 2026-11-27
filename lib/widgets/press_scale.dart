@@ -627,7 +627,10 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
           ),
         );
       },
-      child: RepaintBoundary(child: widget.child),
+      child: PressScaleScope(
+        progress: _ctrl,
+        child: RepaintBoundary(child: widget.child),
+      ),
     );
 
     return Listener(
@@ -720,4 +723,93 @@ Widget Function(BuildContext context, double progress) pressGloss(
       ),
     );
   };
+}
+
+/// Прогресс нажатия текущего [PressScale] для вложенных слоёв.
+///
+/// Нужен там, где отдача фона должна жить ПОД содержимым карточки, а не над
+/// ним: у [Card] своя непрозрачная заливка, поэтому `pressTint` её не
+/// пробивает, а слой поверх содержимого подкрашивал значки и текст.
+/// Через этот скоуп вложенный [PressTintBehind] узнаёт тот же самый прогресс
+/// и рисует подложку между заливкой карточки и её содержимым.
+class PressScaleScope extends InheritedWidget {
+  final Animation<double> progress;
+
+  const PressScaleScope({
+    super.key,
+    required this.progress,
+    required super.child,
+  });
+
+  static Animation<double>? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<PressScaleScope>()?.progress;
+
+  @override
+  bool updateShouldNotify(PressScaleScope oldWidget) =>
+      oldWidget.progress != progress;
+}
+
+/// Подложка отдачи ПОД содержимым карточки.
+///
+/// Кладётся первым слоем [Stack] внутри карточки: тон набегает под пальцем,
+/// но значки, текст и полоски остаются чистыми — подложка их не перекрывает.
+/// Вне [PressScale] (скоупа нет) виджет прозрачен и ничего не рисует.
+class PressTintBehind extends StatelessWidget {
+  final BorderRadius radius;
+  final double strength;
+  final Color? color;
+  final Widget child;
+
+  /// Дополнительная площадь подложки (её собственный отступ), чтобы скругление
+  /// совпадало с контуром карточки, а не с её внутренним содержимым.
+  final EdgeInsetsGeometry? padding;
+
+  const PressTintBehind({
+    super.key,
+    required this.radius,
+    required this.child,
+    this.strength = 0.10,
+    this.color,
+    this.padding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = PressScaleScope.maybeOf(context);
+    final tint = color ?? Theme.of(context).colorScheme.primary;
+    final layer = progress == null
+        ? const SizedBox.shrink()
+        : AnimatedBuilder(
+            animation: progress,
+            builder: (context, _) {
+              final smooth = _smoothstep(progress.value);
+              return ColoredBox(
+                color: tint.withValues(
+                  alpha: (strength * smooth).clamp(0.0, 1.0),
+                ),
+              );
+            },
+          );
+    Widget body = Stack(
+      children: [
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: radius,
+            child: IgnorePointer(child: layer),
+          ),
+        ),
+        child,
+      ],
+    );
+    if (padding != null) {
+      body = Padding(padding: padding!, child: body);
+    }
+    return body;
+  }
+
+  static double _smoothstep(double t) {
+    final c = t.clamp(0.0, 1.0);
+    final s = c * c * (3.0 - 2.0 * c);
+    return s * s;
+  }
 }

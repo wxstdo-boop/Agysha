@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'dart:async';
+
 import '../services/haptics.dart';
 import '../services/sounds.dart';
 import '../models/task.dart';
@@ -1105,12 +1106,6 @@ class _TasksScreenState extends State<TasksScreen>
         // у будильников: без него 3D-отдача была видна «через раздел» —
         // на будильниках есть, а здесь карточка читалась плоской.
         enableTilt: true,
-        pressOverlay: pressTintOverlay(
-          BorderRadius.circular(20),
-          // Полупрозрачнее и мягче: 0.06 на плотной заливке карточки
-          // читалось как «фон залился», а не как отклик под пальцем.
-          strength: 0.045,
-        ),
         duration: const Duration(milliseconds: 240),
         releaseDuration: const Duration(milliseconds: 340),
         child: _TaskHoldNote(
@@ -1126,213 +1121,250 @@ class _TasksScreenState extends State<TasksScreen>
             // привычками и будильниками. Стандартный margin 4 по бокам
             // сдвигал карточки на 20 вместо 16 (сетка страницы).
             margin: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                // Drag handle слева — перетаскивание только по ЗАЖАТИЮ:
-                // ReorderableDelayedDragStartListener ждёт удержания, поэтому
-                // начатый на ручке скролл/свайп больше не «дёргает» карточку
-                // вместо прокрутки списка.
-                SizedBox(
-                  width: 46,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Галка СВЕРХУ драг-хэндла (одна колонка 46px).
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // (scale 0.9) — «чуть выделяется», без мигания и
-                          // вспышек. Иконка меняется сразу (фон заливается
-                          // плавно AnimatedContainer'ом).
-                          Material(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(16),
-                            child: InkWell(
-                              key: ValueKey('task_toggle_${task.id}'),
-                              onTap: () => _toggleTask(task),
-                              splashColor: theme.colorScheme.primary.withValues(
-                                alpha: 0.14,
+            // Подложка отдачи — ПОД содержимым: тон набегает под пальцем,
+            // а значки, текст и полоски остаются чистыми (раньше слой лежал
+            // поверх карточки и «накрывал» значки полупрозрачной плёнкой).
+            child: PressTintBehind(
+              radius: BorderRadius.circular(20),
+              strength: 0.10,
+              child: Row(
+                children: [
+                  // Drag handle слева — перетаскивание только по ЗАЖАТИЮ:
+                  // ReorderableDelayedDragStartListener ждёт удержания, поэтому
+                  // начатый на ручке скролл/свайп больше не «дёргает» карточку
+                  // вместо прокрутки списка.
+                  SizedBox(
+                    width: 46,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Галка СВЕРХУ драг-хэндла (одна колонка 46px).
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Значок отзывается как физическая кнопка:
+                            // вдавливается и слегка наклоняется к пальцу.
+                            // Вспышка InkWell убрана — полупрозрачный круг
+                            // ложился ПОВЕРХ иконки и «накрывал» её. Тон
+                            // отдачи теперь лежит ПОД значком (pressTint).
+                            PressScale(
+                              pressedScale: 0.86,
+                              enableTilt: true,
+                              maxTiltAngle: 0.30,
+                              pressTint: theme.colorScheme.primary,
+                              pressTintStrength: 0.16,
+                              pressTintRadius: BorderRadius.circular(16),
+                              duration: const Duration(milliseconds: 180),
+                              releaseDuration: const Duration(
+                                milliseconds: 260,
                               ),
-                              highlightColor: theme.colorScheme.primary
-                                  .withValues(alpha: 0.06),
-                              borderRadius: BorderRadius.circular(16),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 260),
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: task.done
-                                      ? theme.colorScheme.primary
-                                      : Colors.transparent,
-                                  border: Border.all(
-                                    color: task.done
-                                        ? theme.colorScheme.primary
-                                        : theme.colorScheme.outline,
-                                    width: 2,
+                              child: Material(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                                child: InkWell(
+                                  key: ValueKey('task_toggle_${task.id}'),
+                                  onTap: () => _toggleTask(task),
+                                  splashColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 260),
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: task.done
+                                          ? theme.colorScheme.primary
+                                          : Colors.transparent,
+                                      border: Border.all(
+                                        color: task.done
+                                            ? theme.colorScheme.primary
+                                            : theme.colorScheme.outline,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    // Плавная смена значка: иконка задачи → галка с
+                                    // лёгким «попом» (fade + scale), как в привычках.
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 280,
+                                      ),
+                                      switchInCurve: Curves.easeOutBack,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      transitionBuilder: (child, animation) =>
+                                          ScaleTransition(
+                                            scale: animation,
+                                            child: FadeTransition(
+                                              opacity: animation,
+                                              child: child,
+                                            ),
+                                          ),
+                                      child: task.done
+                                          ? const Icon(
+                                              Icons.check,
+                                              key: ValueKey('task_done_check'),
+                                              size: 23,
+                                              color: Colors.white,
+                                            )
+                                          : Icon(
+                                              task.icon,
+                                              key: const ValueKey('task_icon'),
+                                              size: 23,
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                    ),
                                   ),
                                 ),
-                                // Плавная смена значка: иконка задачи → галка с
-                                // лёгким «попом» (fade + scale), как в привычках.
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 280),
-                                  switchInCurve: Curves.easeOutBack,
-                                  switchOutCurve: Curves.easeInCubic,
-                                  transitionBuilder: (child, animation) =>
-                                      ScaleTransition(
-                                        scale: animation,
-                                        child: FadeTransition(
-                                          opacity: animation,
-                                          child: child,
-                                        ),
-                                      ),
-                                  child: task.done
-                                      ? const Icon(
-                                          Icons.check,
-                                          key: ValueKey('task_done_check'),
-                                          size: 23,
-                                          color: Colors.white,
-                                        )
-                                      : Icon(
-                                          task.icon,
-                                          key: const ValueKey('task_icon'),
-                                          size: 23,
-                                          color: theme
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                        ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      // Драг-хэндл — снизу, стартует по зажатию.
-                      ReorderableDelayedDragStartListener(
-                        index: index,
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4),
-                          child: Icon(
-                            Icons.drag_indicator,
-                            size: 24,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Основное содержимое
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Строка заголовка: текст задачи + компактная кнопка редактирования
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              // Плавное зачёркивание: линия «рисуется» по тексту
-                              // при отметке и «стирается» при снятии (см.
-                              // AnimatedStrikeText) — вместо мгновенного
-                              // TextDecoration.lineThrough.
-                              child: AnimatedStrikeText(
-                                text: task.title,
-                                style: StrikeStyle.textStyle(
-                                  theme,
-                                  fontSize: 22.5,
-                                  height: 1.25,
-                                ),
-                                // Тот же масштаб шрифта, что рендерит текст:
-                                // иначе линии зачёркивания при системном
-                                // масштабе ≠ 1.0 не совпадают со строками.
-                                textScaler: MediaQuery.textScalerOf(context),
-                                struck: task.done,
-                                // Текст в отмеченном состоянии — заметно
-                                // полупрозрачный (а не просто другой оттенок):
-                                // прозрачность едет вместе с линией.
-                                struckColor: StrikeStyle.textColor(theme),
-                                strikeColor: StrikeStyle.lineColor(theme),
-                                // Полный текст без троеточия: заголовок
-                                // задачи всегда виден целиком, а не обрезан.
-                                maxLines: null,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => _editTask(task),
-                              icon: Icon(
-                                Icons.edit_outlined,
-                                size: 20,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 32,
-                                minHeight: 32,
-                              ),
-                              style: IconButton.styleFrom(
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
                             ),
                           ],
                         ),
-                        // Приоритет + срок (если задан) — одной строкой.
-                        if (task.priority >= 0 || task.dueAt != null) ...[
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              if (task.priority >= 0)
-                                _priorityPill(task.priority, theme, context),
-                              // Срок появляется/исчезает плавно и мягко
-                              // раздвигает приоритет (SizeTransition по
-                              // горизонтали), а не вставляется рывком.
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 240),
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (child, anim) =>
-                                    FadeTransition(
-                                      opacity: anim,
-                                      child: SizeTransition(
-                                        sizeFactor: anim,
-                                        axis: Axis.horizontal,
-                                        child: child,
-                                      ),
-                                    ),
-                                child: task.dueAt == null
-                                    ? const SizedBox.shrink(
-                                        key: ValueKey('no_due'),
-                                      )
-                                    : KeyedSubtree(
-                                        key: ValueKey(
-                                          task.dueAt!.toIso8601String(),
-                                        ),
-                                        child: _duePill(task, theme, context),
-                                      ),
+                        const SizedBox(height: 6),
+                        // Драг-хэндл — снизу, стартует по зажатию.
+                        ReorderableDelayedDragStartListener(
+                          index: index,
+                          child: PressScale(
+                            pressedScale: 0.84,
+                            enableTilt: true,
+                            maxTiltAngle: 0.32,
+                            duration: const Duration(milliseconds: 160),
+                            releaseDuration: const Duration(milliseconds: 240),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4),
+                              child: Icon(
+                                Icons.drag_indicator,
+                                size: 24,
+                                color: Colors.grey,
                               ),
-                            ],
+                            ),
                           ),
-                        ],
-                        // Заметка «Вспомнил, что использую…» — красивая
-                        // плашка внизу карточки.
-                        if (task.note.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          _noteChip(task.note, theme, context),
-                        ],
+                        ),
                       ],
                     ),
                   ),
-                ),
-              ],
+                  // Основное содержимое
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Строка заголовка: текст задачи + компактная кнопка редактирования
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                // Плавное зачёркивание: линия «рисуется» по тексту
+                                // при отметке и «стирается» при снятии (см.
+                                // AnimatedStrikeText) — вместо мгновенного
+                                // TextDecoration.lineThrough.
+                                child: AnimatedStrikeText(
+                                  text: task.title,
+                                  style: StrikeStyle.textStyle(
+                                    theme,
+                                    fontSize: 22.5,
+                                    height: 1.25,
+                                  ),
+                                  // Тот же масштаб шрифта, что рендерит текст:
+                                  // иначе линии зачёркивания при системном
+                                  // масштабе ≠ 1.0 не совпадают со строками.
+                                  textScaler: MediaQuery.textScalerOf(context),
+                                  struck: task.done,
+                                  // Текст в отмеченном состоянии — заметно
+                                  // полупрозрачный (а не просто другой оттенок):
+                                  // прозрачность едет вместе с линией.
+                                  struckColor: StrikeStyle.textColor(theme),
+                                  strikeColor: StrikeStyle.lineColor(theme),
+                                  // Полный текст без троеточия: заголовок
+                                  // задачи всегда виден целиком, а не обрезан.
+                                  maxLines: null,
+                                ),
+                              ),
+                              PressScale(
+                                pressedScale: 0.85,
+                                enableTilt: true,
+                                maxTiltAngle: 0.30,
+                                duration: const Duration(milliseconds: 160),
+                                releaseDuration: const Duration(
+                                  milliseconds: 240,
+                                ),
+                                child: IconButton(
+                                  onPressed: () => _editTask(task),
+                                  icon: Icon(
+                                    Icons.edit_outlined,
+                                    size: 20,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 32,
+                                    minHeight: 32,
+                                  ),
+                                  style: IconButton.styleFrom(
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          // Приоритет + срок (если задан) — одной строкой.
+                          if (task.priority >= 0 || task.dueAt != null) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (task.priority >= 0)
+                                  _priorityPill(task.priority, theme, context),
+                                // Срок появляется/исчезает плавно и мягко
+                                // раздвигает приоритет (SizeTransition по
+                                // горизонтали), а не вставляется рывком.
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 240),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: (child, anim) =>
+                                      FadeTransition(
+                                        opacity: anim,
+                                        child: SizeTransition(
+                                          sizeFactor: anim,
+                                          axis: Axis.horizontal,
+                                          child: child,
+                                        ),
+                                      ),
+                                  child: task.dueAt == null
+                                      ? const SizedBox.shrink(
+                                          key: ValueKey('no_due'),
+                                        )
+                                      : KeyedSubtree(
+                                          key: ValueKey(
+                                            task.dueAt!.toIso8601String(),
+                                          ),
+                                          child: _duePill(task, theme, context),
+                                        ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          // Заметка «Вспомнил, что использую…» — красивая
+                          // плашка внизу карточки.
+                          if (task.note.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            _noteChip(task.note, theme, context),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -54,6 +54,7 @@ EMOJI_RULES = [
 
 # Что считаем исправлением, а что — шлифовкой. Остальное попадает в «Новое».
 FIX_WORDS = ("баг", "фикс", "исправ", "чиним", "почин", "не работа", "пада",
+             "не ставил", "не открыв", "не запус", "не появл", "не груз",
              "лома", "пропада", "зависа", "дёрга", "дерга", "тормоз", "лаг")
 POLISH_WORDS = ("плавн", "анимац", "отдач", "полиров", "быстрее", "ускор",
                 "мягч", "наклон", "тилт", "3d", "перелив", "свечен", "красив",
@@ -79,11 +80,68 @@ SHORTENINGS = [
     (r"\bт\.е\b\.?", "то есть"),
 ]
 
+# Код в заметке читается как чужая кухня: «alarms_screen», «SettingsService»,
+# «lib/services/update_service.dart». Пользователю такие слова ничего не
+# говорят, поэтому имена файлов, классов и ключей вырезаем, а фразу чиним —
+# если после чистки от неё ничего не осталось, пункт не печатаем вовсе.
+CODEISH = [
+    (r"`[^`]*`", " "),
+    (r"\b[vV]?\d+\.\d+(?:\.\d+)?(?:\+\d+)?\b", " "),
+    (r"(?<![\w.+])\.(?!\d)", " "),
+    (r"\b[\w-]*\.[A-Za-z]{2,6}\b", " "),
+    (r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b", " "),
+    (r"\b[A-Z][A-Za-z0-9]*(?:Service|Screen|Widget|Sheet|Store|Controller|Provider|"
+     r"Notifier|Painter|Card|Test|Model|Helper|Utils)\b", " "),
+    (r"\b[a-z]+[A-Z][A-Za-z0-9]*\b", " "),
+    (r"(?:^|\s)(?:[\w.-]+/){2,}[\w.-]+", " "),
+    (r"\b[a-z0-9]+(?:\.[a-z0-9]+){2,}\b", " "),
+]
+
+# Слова, на которых фраза после чистки обрывается: «В  добавлена …» или
+# «… теперь работает в». Хвост из них снимаем.
+DANGLING = ("в", "во", "на", "из", "с", "со", "к", "ко", "по", "для", "от",
+            "до", "за", "под", "над", "при", "и", "а", "но", "или", "что",
+            "как", "это", "—", "-", "–")
+
+
+def scrub_code(text):
+    for pat, rep in CODEISH:
+        text = re.sub(pat, rep, text)
+    text = re.sub(r"\s*\(\s*\)", " ", text)
+    text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+    text = re.sub(r"([,;:])(?=[^\s\d])", r"\1 ", text)
+    text = re.sub(r"\s{2,}", " ", text).strip(" .,;:—-")
+    # «Полировка: …», «Тест: …» — шапка коммита; снимаем её до чистки
+    # хвостов, иначе связка «и» остаётся в начале пункта.
+    text = re.sub(r"^(полировка|плавность|правки|прочее|тест|фикс)\s*[:—-]\s*",
+                  "", text, flags=re.I)
+    for _ in range(4):
+        head, _, tail = text.rpartition(" ")
+        if tail.lower() in DANGLING:
+            text = head.strip(" .,;:—-")
+        else:
+            break
+    # Обрубок после чистки («И больше не дёргают фон») начинается со связки —
+    # снимаем её с начала так же, как с конца.
+    for _ in range(4):
+        head, _, rest = text.partition(" ")
+        if head.lower() in DANGLING:
+            text = rest.strip(" .,;:—-")
+        else:
+            break
+    return text
+
+
 def humanize(text):
+    text = scrub_code(text)
     for pat, rep in JARGON + SHORTENINGS:
         text = re.sub(pat, rep, text, flags=re.I)
     # «Тема: деталь» из заголовка коммита читается как предложение только с
     # тире — двоеточие оставляло ощущение списка из changelog.
+    # «Полировка — …», «Плавность — …»: в коммитах это шапка раздела, в
+    # заметке — просто лишнее слово перед сутью.
+    text = re.sub(r"^(полировка|плавность|правки|прочее)\s*[:—-]\s*", "",
+                  text, flags=re.I)
     m = re.match(r"^([^:]{3,60}):\s+(.+)$", text)
     if m:
         head, tail = m.group(1), m.group(2)
@@ -112,14 +170,43 @@ buckets = {"new": [], "polish": [], "fix": []}
 order = []
 seen = set()
 
+# Пункт, к которому цепляются подробности из тела коммита. Без него заметка
+# релиза из одного коммита оставалась ОДНОЙ строкой на весь выпуск:
+# заголовок в полфразы, а всё человеческое («что было не так») лежало в теле
+# и до читателя не доезжало.
+last_item = None
+
+# Сколько знаков подробностей оставляем. Две-три фразы — это уже абзац,
+# который читают; простыня из тела коммита превращает заметку в отчёт.
+DETAIL_LIMIT = 300
+
+
+def clip_detail(text):
+    text = re.sub(r"\s{2,}", " ", text).strip()
+    # Склеенное тело коммита приходит с висящим двоеточием или тире —
+    # в заметке это читается как обрубок.
+    text = text.strip(" -–—:;,")
+    if not text:
+        return ""
+    if len(text) > DETAIL_LIMIT:
+        cut = text[:DETAIL_LIMIT]
+        dot = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
+        if dot > DETAIL_LIMIT * 0.55:
+            text = cut[: dot + 1]
+        else:
+            text = cut.rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
+    text = text[0].upper() + text[1:]
+    if not text.endswith((".", "!", "?", "…")):
+        text += "."
+    return text
+
 def parts_of(text):
     """Один заголовок коммита часто перечисляет несколько правок через «;».
 
-    В релизе это читалось как пункт-простыня, а чаще — после обрезки по
-    140 символам — половина работы просто пропадала, и на целую сборку в
-    «Что нового» стояла ОДНА строка. Такие перечисления делим на отдельные
-    пункты. Одиночную «;» внутри обычной фразы не трогаем: делим только
-    когда частей две и больше и каждая из них — самостоятельная фраза.
+    В релизе это читалось как пункт-простыня, а после обрезки — половина
+    работы пропадала. Такие перечисления делим на отдельные пункты.
+    Одиночную «;» внутри обычной фразы не трогаем: делим только когда
+    частей две и больше и каждая из них — самостоятельная фраза.
     """
     if ";" not in text:
         return [text]
@@ -129,6 +216,7 @@ def parts_of(text):
         return [text]
     return [p for p in pieces if p]
 
+
 def add_item(raw_text):
     text = raw_text.strip()
     if not text:
@@ -137,8 +225,9 @@ def add_item(raw_text):
     # длинным для заметки: такие строки в релиз не отдаём.
     if len(text) < 6 or text.endswith(":"):
         return
-    if len(text) > 140:
-        cut = text[:140]
+    cap = 200 if SECTIONS else 140
+    if len(text) > cap:
+        cut = text[:cap]
         text = cut.rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
     elif text.endswith((",", ";")):
         # Перенесённый пункт тела приходит без второй половины: висящая
@@ -146,7 +235,10 @@ def add_item(raw_text):
         text = text[:-1].rstrip() + "…"
     text = text[0].upper() + text[1:]
     low = text.lower()
-    emoji = "✨"
+    section = section_of(low)
+    # Значок сначала по теме, а если темы не узнали — по разделу, чтобы пункт
+    # внутри «Плавнее» не начинался со звёздочки из «Нового».
+    emoji = {"new": "✨", "polish": "🫧", "fix": "🛠️"}[section]
     for keys, icon in EMOJI_RULES:
         if any(k in low for k in keys):
             emoji = icon
@@ -156,10 +248,25 @@ def add_item(raw_text):
         return
     seen.add(bullet)
     order.append((emoji, text))
-    buckets[section_of(low)].append((emoji, humanize(text)))
+    human = humanize(text)
+    # После вырезания имён от пункта иногда остаётся два слова («Тест»,
+    # «Экран:»): такое в заметке читается хуже, чем отсутствие строки.
+    if len(human.split()) < 3:
+        return
+    item = {"emoji": emoji, "text": human, "detail": ""}
+    buckets[section].append(item)
+    global last_item
+    last_item = item
 
 for raw in sys.stdin:
     line = raw.rstrip("\n")
+    # Строка с отступом — подробности предыдущего пункта: то, что автор
+    # коммита написал в теле («было так, стало так»). Приклеиваем к пункту,
+    # а не печатаем отдельной строкой и не выбрасываем.
+    if SECTIONS and line[:1] in (" ", "\t") and line.strip():
+        if last_item is not None:
+            last_item["detail"] = (last_item["detail"] + " " + line.strip()).strip()
+        continue
     # Перенос строки длинного пункта из changelog — не заголовок коммита,
     # отдаём как есть, иначе хвост пункта теряется. В режиме разделов тело
     # коммита приходит сырым: его прозу и заголовки не печатаем, берём только
@@ -181,6 +288,8 @@ for raw in sys.stdin:
                   "", text).strip()
     if not text:
         continue
+    # Перечисление через «;» даёт отдельные пункты: иначе одна строка на
+    # всю сборку и половина работы теряется при обрезке.
     for piece in parts_of(text):
         add_item(piece)
 
@@ -191,21 +300,36 @@ if not SECTIONS:
         print("- " + emoji + " " + text)
     raise SystemExit(0)
 
-# Тело коммитов добавляет пункты сверх заголовков: длинный список из десяти
-# строк в релизе не читают. Оставляем первые девять по истории.
-LIMIT = 9
-left = LIMIT
+# Длинный список из десяти строк в релизе не читают. Держим по шесть пунктов
+# на раздел: этого хватает, чтобы показать работу, и не превращает заметку в
+# простыню.
+LIMIT_PER_SECTION = 6
 for key in ("new", "polish", "fix"):
-    buckets[key] = buckets[key][:left]
-    left -= len(buckets[key])
+    buckets[key] = buckets[key][:LIMIT_PER_SECTION]
 
 total = sum(len(v) for v in buckets.values())
 if total == 0:
     raise SystemExit(0)
 
+# Вступление подбираем по составу выпуска: заметка про три починки не должна
+# начинаться словами «в этой версии появилось новое» — читатель сразу видит,
+# что текст писали не глядя в список изменений.
+kinds = {k for k in ("new", "polish", "fix") if buckets[k]}
+if kinds == {"new"}:
+    lead = ("В этой сборке — новое: ниже по делу, что появилось и как этим "
+            "пользоваться.")
+elif kinds == {"fix"}:
+    lead = ("Сборка целиком про починку: ниже — что мешало в прошлой версии "
+            "и как теперь.")
+elif kinds == {"polish"}:
+    lead = ("Здесь ничего нового — только шлифовка: движение ровнее, отклик "
+            "мягче, мелочи аккуратнее.")
+else:
+    lead = ("Здесь и новое, и починка старого, и шлифовка: ниже коротко, "
+            "что именно поменялось.")
+
 print("Свежая сборка Agysha — ставится поверх, вход и настройки на месте.")
-print("Эта версия в основном про то, что видно и чувствуется в руке: "
-      "движение стало ровнее, а мелочи — аккуратнее.")
+print(lead)
 print("")
 
 TITLES = {
@@ -217,11 +341,17 @@ for key in ("new", "polish", "fix"):
     items = buckets[key]
     if not items:
         continue
-    title, lead = TITLES[key]
+    title, section_lead = TITLES[key]
     print("**" + title + "**")
-    print(lead)
-    for emoji, text in items:
-        print("- " + emoji + " " + text)
+    print(section_lead)
+    for item in items:
+        print("- " + item["emoji"] + " " + item["text"])
+        detail = clip_detail(item["detail"])
+        # Пункт без подробностей остаётся одной строкой — так бывает, когда
+        # у коммита нет тела. Честно короткая заметка лучше раздутой водой
+        # ради объёма.
+        if detail:
+            print("  " + detail)
     print("")
 
 print("Обновляйся поверх — данные и настройки остаются. "

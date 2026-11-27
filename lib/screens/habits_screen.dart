@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:math';
+
 import '../services/haptics.dart';
 import '../services/sounds.dart';
+
 import 'package:material_ui/material_ui.dart';
+
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
 
 import '../models/habit.dart';
@@ -1239,12 +1242,6 @@ class _HabitsScreenState extends State<HabitsScreen>
         // у будильников: без него 3D-отдача была видна «через раздел» —
         // на будильниках есть, а здесь карточка читалась плоской.
         enableTilt: true,
-        pressOverlay: pressTintOverlay(
-          BorderRadius.circular(20),
-          // Полупрозрачнее и мягче: 0.06 на плотной заливке карточки
-          // читалось как «фон залился», а не как отклик под пальцем.
-          strength: 0.045,
-        ),
         duration: const Duration(milliseconds: 240),
         releaseDuration: const Duration(milliseconds: 340),
         child: Card(
@@ -1257,448 +1254,483 @@ class _HabitsScreenState extends State<HabitsScreen>
           // Горизонтальный отступ перенесён в padding списка — карточка
           // вплотную к item'у, обводка при драге её не перекрывает.
           margin: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: [
-              // Bigger hit-target (padding 6+8, icon 26) matches what works
-              // in tasks/alarms screen — same Dismissible wrapper,
-              // immediate drag works there, so we keep that here.
-              // Фиксированная ширина слота: при смене пин↔драг-хэндл текст
-              // не сдвигается, а сам значок меняется кросс-фейдом + scale.
-              SizedBox(
-                width: 46,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Галка СВЕРХУ драг-хэндла (одна колонка 46px): текст
-                    // получает всю оставшуюся ширину и умещается целиком.
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.zero,
-                          // (scale 0.9) — «чуть выделяется», без мигания.
-                          // Защита от двойного срабатывания — в _tapHabitOnce.
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => _tapHabitOnce(habit),
-                            // Чистая тематическая обводка большого значка
-                            // (без IconRing — он сдвигал layout). Кольцо на
-                            // самом кружке, без внешнего зазора.
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 260),
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: habit.doneToday
-                                    ? theme.colorScheme.primary
-                                    : Colors.transparent,
-                                // Красивая обводка: выбранная — primary (яркая),
-                                // не выбранная — тематический outline (мягкий).
-                                border: Border.all(
+          // Подложка отдачи — ПОД содержимым: тон набегает под пальцем,
+          // а значки, текст и полоски остаются чистыми (раньше слой лежал
+          // поверх карточки и «накрывал» значки полупрозрачной плёнкой).
+          child: PressTintBehind(
+            radius: BorderRadius.circular(20),
+            strength: 0.10,
+            child: Row(
+              children: [
+                // Bigger hit-target (padding 6+8, icon 26) matches what works
+                // in tasks/alarms screen — same Dismissible wrapper,
+                // immediate drag works there, so we keep that here.
+                // Фиксированная ширина слота: при смене пин↔драг-хэндл текст
+                // не сдвигается, а сам значок меняется кросс-фейдом + scale.
+                SizedBox(
+                  width: 46,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Галка СВЕРХУ драг-хэндла (одна колонка 46px): текст
+                      // получает всю оставшуюся ширину и умещается целиком.
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.zero,
+                            // (scale 0.9) — «чуть выделяется», без мигания.
+                            // Защита от двойного срабатывания — в _tapHabitOnce.
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _tapHabitOnce(habit),
+                              // Чистая тематическая обводка большого значка
+                              // (без IconRing — он сдвигал layout). Кольцо на
+                              // самом кружке, без внешнего зазора.
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 260),
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
                                   color: habit.doneToday
                                       ? theme.colorScheme.primary
-                                      : theme.colorScheme.outline,
-                                  width: 2,
+                                      : Colors.transparent,
+                                  // Красивая обводка: выбранная — primary (яркая),
+                                  // не выбранная — тематический outline (мягкий).
+                                  border: Border.all(
+                                    color: habit.doneToday
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.outline,
+                                    width: 2,
+                                  ),
                                 ),
-                              ),
-                              // Плавная смена значка: привычка → галка с лёгким
-                              // «попом» (fade + scale), а не резкий щелчок.
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 280),
-                                switchInCurve: Curves.easeOutBack,
-                                switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (child, animation) =>
-                                    ScaleTransition(
-                                      scale: animation,
-                                      child: FadeTransition(
-                                        opacity: animation,
-                                        child: child,
+                                // Плавная смена значка: привычка → галка с лёгким
+                                // «попом» (fade + scale), а не резкий щелчок.
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 280),
+                                  switchInCurve: Curves.easeOutBack,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: (child, animation) =>
+                                      ScaleTransition(
+                                        scale: animation,
+                                        child: FadeTransition(
+                                          opacity: animation,
+                                          child: child,
+                                        ),
                                       ),
-                                    ),
-                                child: habit.doneToday
-                                    ? const Icon(
-                                        Icons.check,
-                                        key: ValueKey('habit_done_check'),
-                                        size: 23,
-                                        color: Colors.white,
-                                      )
-                                    : Icon(
-                                        habit.icon,
-                                        key: const ValueKey('habit_icon'),
-                                        size: 23,
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
-                                      ),
+                                  child: habit.doneToday
+                                      ? const Icon(
+                                          Icons.check,
+                                          key: ValueKey('habit_done_check'),
+                                          size: 23,
+                                          color: Colors.white,
+                                        )
+                                      : Icon(
+                                          habit.icon,
+                                          key: const ValueKey('habit_icon'),
+                                          size: 23,
+                                          color: theme
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // Драг-хэндл / пин — снизу.
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 280),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: ScaleTransition(scale: animation, child: child),
+                        ],
                       ),
-                      child: habit.pinned
-                          ? const Padding(
-                              key: ValueKey('pin'),
-                              padding: EdgeInsets.symmetric(horizontal: 4),
-                              child: Icon(
-                                Icons.push_pin,
-                                size: 24,
-                                color: Colors.grey,
-                              ),
-                            )
-                          : _HabitDragHandle(
-                              index: dragIndex,
-                              child: const Padding(
+                      const SizedBox(height: 6),
+                      // Драг-хэндл / пин — снизу.
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 280),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: animation,
+                            child: child,
+                          ),
+                        ),
+                        child: habit.pinned
+                            ? const Padding(
+                                key: ValueKey('pin'),
                                 padding: EdgeInsets.symmetric(horizontal: 4),
                                 child: Icon(
-                                  Icons.drag_indicator,
+                                  Icons.push_pin,
                                   size: 24,
                                   color: Colors.grey,
                                 ),
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  // onTap: triple tap = reset streak (_handleHabitTap).
-                  // onLongPress: hold 6s = pin/unpin habit.
-                  // Drag-handle uses ReorderableDelayedDragStartListener
-                  // (long-press first) so Dismissible horizontal
-                  // swipe-to-delete on the Card stays unambiguous.
-                  onTap: () => _handleHabitTap(habit),
-                  onLongPress: () => _togglePin(habit),
-                  child: Padding(
-                    // Тот же ритм отступов, что в задачах (4,12,12,8):
-                    // карточка привычек не «скукожена» относительно задач.
-                    padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Title row: name takes remaining width; compact actions on the right.
-                        // Кнопки действий фиксированной ширины — не давят на
-                        // текст, имя привычки занимает всё оставшееся место.
-                        // ВАЖНО: выравнивание ПО ВЕРХУ (start), а не по центру:
-                        // центр вдоль двухстрочного названия уводил значки
-                        // (увед/раскрытие/карандаш) к середине строки и
-                        // оставлял пустые «карманы» справа на каждом ряду —
-                        // текст выглядел скукоженным. Сверху текст и значки
-                        // сажаются на одну линию, и текст дотягивается до
-                        // правого края.
-                        // Раньше здесь стоял IntrinsicHeight (чтобы колокольчик
-                        // встал по центру блока действий). На КАЖДУЮ карточку он
-                        // давал лишний intrinsic-проход по всему поддереву — при
-                        // скролле это и читалось как «экран адски стопорится».
-                        // Колокольчик и так центрируется сам (Row с center), а
-                        // кнопки справа идут колонкой фиксированной высоты, так
-                        // что intrinsic-проходы больше не нужны.
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              // Плавное зачёркивание: линия «рисуется» по
-                              // тексту при отметке и «стирается» при снятии
-                              // (см. AnimatedStrikeText).
-                              child: AnimatedStrikeText(
-                                text: habit.name,
-                                style: StrikeStyle.textStyle(
-                                  theme,
-                                  fontSize: 22.5,
-                                  height: 1.3,
-                                ),
-                                // Тот же масштаб шрифта, что рендерит текст:
-                                // иначе линии зачёркивания при системном
-                                // масштабе ≠ 1.0 не совпадают со строками.
-                                textScaler: MediaQuery.textScalerOf(context),
-                                struck: habit.doneToday,
-                                // Текст в отмеченном состоянии — заметно
-                                // полупрозрачный (а не просто другой оттенок):
-                                // прозрачность едет вместе с линией.
-                                struckColor: StrikeStyle.textColor(theme),
-                                strikeColor: StrikeStyle.lineColor(theme),
-                                // Полный текст без троеточия: имя привычки
-                                // всегда видно целиком (как в задачах), а не
-                                // «скукожено» до двух строк. Действия справа
-                                // (колокольчик/раскрытие/карандаш) стоят в своей
-                                // зоне, а текст расширяется на всю оставшуюся
-                                // ширину через Expanded — и не налезает на них.
-                                maxLines: null,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            // Значок закрепления справа убран: пин и так виден
-                            // слева (drag-handle превращается в пин у
-                            // закреплённой привычки) — дублировать не нужно.
-                            //
-                            // Действия идут ВЕРТИКАЛЬНО (раскрытие СВЕРХУ,
-                            // карандаш ПОД ним). Значок напоминания НЕ внутри
-                            // этой пары, а РЯДОМ, слева: колокольчик — слева
-                            // по центру высоты пары, стрелка — справа сверху,
-                            // карандаш — справа снизу. Втроём это «треугольник».
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Текст напоминания в списке НЕ показываем —
-                                // только колокольчик. Кружок в тон соседних
-                                // кнопок (карандаш/раскрытие): та же
-                                // полупрозрачная подложка primaryContainer.
-                                if (habit.reminderTime != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: Container(
-                                      key: const ValueKey('remind_all_chip'),
-                                      width: 26,
-                                      height: 26,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: theme
-                                            .colorScheme
-                                            .primaryContainer
-                                            .withValues(alpha: 0.18),
-                                      ),
-                                      child: Icon(
-                                        Icons.notifications_active_outlined,
-                                        size: 17,
-                                        color: theme.colorScheme.primary,
-                                      ),
+                              )
+                            : _HabitDragHandle(
+                                index: dragIndex,
+                                child: PressScale(
+                                  pressedScale: 0.84,
+                                  enableTilt: true,
+                                  maxTiltAngle: 0.32,
+                                  duration: const Duration(milliseconds: 160),
+                                  releaseDuration: const Duration(
+                                    milliseconds: 240,
+                                  ),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    child: Icon(
+                                      Icons.drag_indicator,
+                                      size: 24,
+                                      color: Colors.grey,
                                     ),
                                   ),
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    // Кнопка раскрытия есть только если
-                                    // реально есть что показывать: заметки
-                                    // — всегда; статус — только у полезной
-                                    // привычки (у вредной статус не
-                                    // отображается, поэтому и кнопки нет).
-                                    if (habit.notes.isNotEmpty ||
-                                        (habit.type == 'good' &&
-                                            habit.status.isNotEmpty))
-                                      _compactIconButton(
-                                        cornerRipple: true,
-                                        icon: Icons.keyboard_arrow_down,
-                                        rotation:
-                                            (_expandedNotes[habit.id] ?? false)
-                                            ? 3.14159 // пи — стрелка вверх
-                                            : 0,
-                                        color:
-                                            (_expandedNotes[habit.id] ?? false)
-                                            ? theme.colorScheme.primary
-                                            : theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                        onPressed: () => setState(
-                                          () => _expandedNotes[habit.id] =
-                                              !(_expandedNotes[habit.id] ??
-                                                  false),
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    // onTap: triple tap = reset streak (_handleHabitTap).
+                    // onLongPress: hold 6s = pin/unpin habit.
+                    // Drag-handle uses ReorderableDelayedDragStartListener
+                    // (long-press first) so Dismissible horizontal
+                    // swipe-to-delete on the Card stays unambiguous.
+                    onTap: () => _handleHabitTap(habit),
+                    onLongPress: () => _togglePin(habit),
+                    child: Padding(
+                      // Тот же ритм отступов, что в задачах (4,12,12,8):
+                      // карточка привычек не «скукожена» относительно задач.
+                      padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title row: name takes remaining width; compact actions on the right.
+                          // Кнопки действий фиксированной ширины — не давят на
+                          // текст, имя привычки занимает всё оставшееся место.
+                          // ВАЖНО: выравнивание ПО ВЕРХУ (start), а не по центру:
+                          // центр вдоль двухстрочного названия уводил значки
+                          // (увед/раскрытие/карандаш) к середине строки и
+                          // оставлял пустые «карманы» справа на каждом ряду —
+                          // текст выглядел скукоженным. Сверху текст и значки
+                          // сажаются на одну линию, и текст дотягивается до
+                          // правого края.
+                          // Раньше здесь стоял IntrinsicHeight (чтобы колокольчик
+                          // встал по центру блока действий). На КАЖДУЮ карточку он
+                          // давал лишний intrinsic-проход по всему поддереву — при
+                          // скролле это и читалось как «экран адски стопорится».
+                          // Колокольчик и так центрируется сам (Row с center), а
+                          // кнопки справа идут колонкой фиксированной высоты, так
+                          // что intrinsic-проходы больше не нужны.
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                // Плавное зачёркивание: линия «рисуется» по
+                                // тексту при отметке и «стирается» при снятии
+                                // (см. AnimatedStrikeText).
+                                child: AnimatedStrikeText(
+                                  text: habit.name,
+                                  style: StrikeStyle.textStyle(
+                                    theme,
+                                    fontSize: 22.5,
+                                    height: 1.3,
+                                  ),
+                                  // Тот же масштаб шрифта, что рендерит текст:
+                                  // иначе линии зачёркивания при системном
+                                  // масштабе ≠ 1.0 не совпадают со строками.
+                                  textScaler: MediaQuery.textScalerOf(context),
+                                  struck: habit.doneToday,
+                                  // Текст в отмеченном состоянии — заметно
+                                  // полупрозрачный (а не просто другой оттенок):
+                                  // прозрачность едет вместе с линией.
+                                  struckColor: StrikeStyle.textColor(theme),
+                                  strikeColor: StrikeStyle.lineColor(theme),
+                                  // Полный текст без троеточия: имя привычки
+                                  // всегда видно целиком (как в задачах), а не
+                                  // «скукожено» до двух строк. Действия справа
+                                  // (колокольчик/раскрытие/карандаш) стоят в своей
+                                  // зоне, а текст расширяется на всю оставшуюся
+                                  // ширину через Expanded — и не налезает на них.
+                                  maxLines: null,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              // Значок закрепления справа убран: пин и так виден
+                              // слева (drag-handle превращается в пин у
+                              // закреплённой привычки) — дублировать не нужно.
+                              //
+                              // Действия идут ВЕРТИКАЛЬНО (раскрытие СВЕРХУ,
+                              // карандаш ПОД ним). Значок напоминания НЕ внутри
+                              // этой пары, а РЯДОМ, слева: колокольчик — слева
+                              // по центру высоты пары, стрелка — справа сверху,
+                              // карандаш — справа снизу. Втроём это «треугольник».
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Текст напоминания в списке НЕ показываем —
+                                  // только колокольчик. Кружок в тон соседних
+                                  // кнопок (карандаш/раскрытие): та же
+                                  // полупрозрачная подложка primaryContainer.
+                                  if (habit.reminderTime != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: Container(
+                                        key: const ValueKey('remind_all_chip'),
+                                        width: 26,
+                                        height: 26,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: theme
+                                              .colorScheme
+                                              .primaryContainer
+                                              .withValues(alpha: 0.18),
+                                        ),
+                                        child: Icon(
+                                          Icons.notifications_active_outlined,
+                                          size: 17,
+                                          color: theme.colorScheme.primary,
                                         ),
                                       ),
-                                    const SizedBox(height: 2),
-                                    _compactIconButton(
-                                      icon: Icons.edit_outlined,
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                      onPressed: () => _editHabit(habit),
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        // Полезная → 7 точек стрика. Вредная → бейдж
-                        // «Сегодня очищено» только при отметке; в остальных
-                        // случаях — пусто. Стрик у вредной привычки НЕ
-                        // показываем: человек НЕ «зарабатывает очки», борясь
-                        // с пагубной привычкой, бейдж фиксирует сам факт
-                        // победы над ней сегодня. Переключается AnimatedSwitcher
-                        // для плавности.
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 280),
-                          switchInCurve: Curves.easeOut,
-                          switchOutCurve: Curves.easeIn,
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(
-                                opacity: animation,
-                                child: SizeTransition(
-                                  sizeFactor: animation,
-                                  alignment: Alignment.topCenter,
-                                  child: child,
-                                ),
-                              ),
-                          child: habit.type == 'good'
-                              ? (_service.displayStreak(habit) > 0
-                                    ? Padding(
-                                        key: const ValueKey('streak_dots'),
-                                        padding: const EdgeInsets.only(
-                                          top: 6,
-                                          bottom: 2,
-                                        ),
-                                        child: Row(
-                                          children: List.generate(7, (index) {
-                                            // lastDoneDate == null → история пуста
-                                            // (никогда не отмечалась или был сброс).
-                                            // Осиротевший streak>0 без даты — артефакт
-                                            // старой версии/импорта: точки не должны
-                                            // «нарисоваться» из мёртвого счётчика.
-                                            //
-                                            // ВАЖНО: точки = streak БЕЗ вычитания.
-                                            // Стрик-счётчик уже включает последний
-                                            // завершённый день (он растёт в момент
-                                            // отметки, а не в полночь). Раньше здесь
-                                            // было `doneToday ? streak : streak - 1`,
-                                            // и каждое утро до отметки левый кружок
-                                            // «съедался» — при стрике 7 показывалось
-                                            // 6, при стрике 1 не показывалось ничего,
-                                            // хотя стрик не отменялся. Счётчик и точки
-                                            // теперь всегда совпадают.
-                                            // Серия читается через сервис: если
-                                            // после последней отметки пропущен день,
-                                            // точки гаснут сразу, не дожидаясь
-                                            // таймера смены суток.
-                                            final effectiveStreak = _service
-                                                .displayStreak(habit);
-                                            final isDone =
-                                                effectiveStreak > (6 - index);
-                                            return AnimatedContainer(
-                                              duration: const Duration(
-                                                milliseconds: 320,
-                                              ),
-                                              curve: Curves.easeOut,
-                                              margin: const EdgeInsets.only(
-                                                right: 6,
-                                              ),
-                                              width: 10,
-                                              height: 10,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: isDone
-                                                    ? theme.colorScheme.primary
-                                                    : theme
-                                                          .colorScheme
-                                                          .surfaceContainerHighest,
-                                              ),
-                                            );
-                                          }),
-                                        ),
-                                      )
-                                    : const SizedBox.shrink(
-                                        key: ValueKey('streak_empty'),
-                                      ))
-                              : habit.doneToday
-                              ? _erasedBadge(context, theme)
-                              : const SizedBox.shrink(
-                                  key: ValueKey('streak_empty'),
-                                ),
-                        ),
-                        // Раскрытие/закрытие заметки: высота и прозрачность
-                        // едут ВМЕСТЕ по одной кривой (Align.heightFactor +
-                        // Opacity), поэтому при закрытии панель не «исчезает
-                        // мгновенно», а так же плавно сжимается и растворяется,
-                        // как раскрывалась.
-                        // 760 мс (было 480): вход и выход — одна мягкая волна
-                        // (easeInOutCubic), без рывка в конце.
-                        // Раскрытие/закрытие заметки: глубокая, роскошная плавная анимация
-                        // (AnimatedCrossFade) за 760 мс по Curves.easeInOutCubic:
-                        // при закрытии карточка плавно растворяется и сжимается,
-                        // в полной гармонии с плавным 760 мс поворотом стрелочки.
-                        if (habit.notes.isNotEmpty ||
-                            (habit.type == 'good' && habit.status.isNotEmpty))
-                          AnimatedCrossFade(
-                            duration: const Duration(milliseconds: 760),
-                            firstCurve: Curves.easeInOutCubic,
-                            secondCurve: Curves.easeInOutCubic,
-                            sizeCurve: Curves.easeInOutCubic,
-                            crossFadeState: (_expandedNotes[habit.id] ?? false)
-                                ? CrossFadeState.showFirst
-                                : CrossFadeState.showSecond,
-                            firstChild: Padding(
-                              padding: const EdgeInsets.only(top: 6, bottom: 4),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color:
-                                      theme.colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (habit.type == 'good' &&
-                                        habit.status.isNotEmpty) ...[
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Icon(
-                                            Icons.lightbulb,
-                                            size: 16,
-                                            color: theme.colorScheme.primary,
+                                  Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      // Кнопка раскрытия есть только если
+                                      // реально есть что показывать: заметки
+                                      // — всегда; статус — только у полезной
+                                      // привычки (у вредной статус не
+                                      // отображается, поэтому и кнопки нет).
+                                      if (habit.notes.isNotEmpty ||
+                                          (habit.type == 'good' &&
+                                              habit.status.isNotEmpty))
+                                        _compactIconButton(
+                                          cornerRipple: true,
+                                          icon: Icons.keyboard_arrow_down,
+                                          rotation:
+                                              (_expandedNotes[habit.id] ??
+                                                  false)
+                                              ? 3.14159 // пи — стрелка вверх
+                                              : 0,
+                                          color:
+                                              (_expandedNotes[habit.id] ??
+                                                  false)
+                                              ? theme.colorScheme.primary
+                                              : theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                          onPressed: () => setState(
+                                            () => _expandedNotes[habit.id] =
+                                                !(_expandedNotes[habit.id] ??
+                                                    false),
                                           ),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              habit.status,
-                                              style: theme.textTheme.bodyMedium
-                                                  ?.copyWith(
-                                                    color: theme
-                                                        .colorScheme
-                                                        .onSurface,
-                                                    height: 1.5,
-                                                  ),
-                                              softWrap: true,
-                                            ),
-                                          ),
-                                        ],
+                                        ),
+                                      const SizedBox(height: 2),
+                                      _compactIconButton(
+                                        icon: Icons.edit_outlined,
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                        onPressed: () => _editHabit(habit),
                                       ),
-                                      if (habit.notes.isNotEmpty)
-                                        const SizedBox(height: 8),
                                     ],
-                                    if (habit.notes.isNotEmpty)
-                                      Text(
-                                        habit.notes,
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                              color:
-                                                  theme.colorScheme.onSurface,
-                                              height: 1.5,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          // Полезная → 7 точек стрика. Вредная → бейдж
+                          // «Сегодня очищено» только при отметке; в остальных
+                          // случаях — пусто. Стрик у вредной привычки НЕ
+                          // показываем: человек НЕ «зарабатывает очки», борясь
+                          // с пагубной привычкой, бейдж фиксирует сам факт
+                          // победы над ней сегодня. Переключается AnimatedSwitcher
+                          // для плавности.
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 280),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: SizeTransition(
+                                    sizeFactor: animation,
+                                    alignment: Alignment.topCenter,
+                                    child: child,
+                                  ),
+                                ),
+                            child: habit.type == 'good'
+                                ? (_service.displayStreak(habit) > 0
+                                      ? Padding(
+                                          key: const ValueKey('streak_dots'),
+                                          padding: const EdgeInsets.only(
+                                            top: 6,
+                                            bottom: 2,
+                                          ),
+                                          child: Row(
+                                            children: List.generate(7, (index) {
+                                              // lastDoneDate == null → история пуста
+                                              // (никогда не отмечалась или был сброс).
+                                              // Осиротевший streak>0 без даты — артефакт
+                                              // старой версии/импорта: точки не должны
+                                              // «нарисоваться» из мёртвого счётчика.
+                                              //
+                                              // ВАЖНО: точки = streak БЕЗ вычитания.
+                                              // Стрик-счётчик уже включает последний
+                                              // завершённый день (он растёт в момент
+                                              // отметки, а не в полночь). Раньше здесь
+                                              // было `doneToday ? streak : streak - 1`,
+                                              // и каждое утро до отметки левый кружок
+                                              // «съедался» — при стрике 7 показывалось
+                                              // 6, при стрике 1 не показывалось ничего,
+                                              // хотя стрик не отменялся. Счётчик и точки
+                                              // теперь всегда совпадают.
+                                              // Серия читается через сервис: если
+                                              // после последней отметки пропущен день,
+                                              // точки гаснут сразу, не дожидаясь
+                                              // таймера смены суток.
+                                              final effectiveStreak = _service
+                                                  .displayStreak(habit);
+                                              final isDone =
+                                                  effectiveStreak > (6 - index);
+                                              return AnimatedContainer(
+                                                duration: const Duration(
+                                                  milliseconds: 320,
+                                                ),
+                                                curve: Curves.easeOut,
+                                                margin: const EdgeInsets.only(
+                                                  right: 6,
+                                                ),
+                                                width: 10,
+                                                height: 10,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: isDone
+                                                      ? theme
+                                                            .colorScheme
+                                                            .primary
+                                                      : theme
+                                                            .colorScheme
+                                                            .surfaceContainerHighest,
+                                                ),
+                                              );
+                                            }),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(
+                                          key: ValueKey('streak_empty'),
+                                        ))
+                                : habit.doneToday
+                                ? _erasedBadge(context, theme)
+                                : const SizedBox.shrink(
+                                    key: ValueKey('streak_empty'),
+                                  ),
+                          ),
+                          // Раскрытие/закрытие заметки: высота и прозрачность
+                          // едут ВМЕСТЕ по одной кривой (Align.heightFactor +
+                          // Opacity), поэтому при закрытии панель не «исчезает
+                          // мгновенно», а так же плавно сжимается и растворяется,
+                          // как раскрывалась.
+                          // 760 мс (было 480): вход и выход — одна мягкая волна
+                          // (easeInOutCubic), без рывка в конце.
+                          // Раскрытие/закрытие заметки: глубокая, роскошная плавная анимация
+                          // (AnimatedCrossFade) за 760 мс по Curves.easeInOutCubic:
+                          // при закрытии карточка плавно растворяется и сжимается,
+                          // в полной гармонии с плавным 760 мс поворотом стрелочки.
+                          if (habit.notes.isNotEmpty ||
+                              (habit.type == 'good' && habit.status.isNotEmpty))
+                            AnimatedCrossFade(
+                              duration: const Duration(milliseconds: 760),
+                              firstCurve: Curves.easeInOutCubic,
+                              secondCurve: Curves.easeInOutCubic,
+                              sizeCurve: Curves.easeInOutCubic,
+                              crossFadeState:
+                                  (_expandedNotes[habit.id] ?? false)
+                                  ? CrossFadeState.showFirst
+                                  : CrossFadeState.showSecond,
+                              firstChild: Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 6,
+                                  bottom: 4,
+                                ),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: theme
+                                        .colorScheme
+                                        .surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (habit.type == 'good' &&
+                                          habit.status.isNotEmpty) ...[
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Icon(
+                                              Icons.lightbulb,
+                                              size: 16,
+                                              color: theme.colorScheme.primary,
                                             ),
-                                        softWrap: true,
-                                      ),
-                                  ],
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                habit.status,
+                                                style: theme
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      color: theme
+                                                          .colorScheme
+                                                          .onSurface,
+                                                      height: 1.5,
+                                                    ),
+                                                softWrap: true,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (habit.notes.isNotEmpty)
+                                          const SizedBox(height: 8),
+                                      ],
+                                      if (habit.notes.isNotEmpty)
+                                        Text(
+                                          habit.notes,
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                                color:
+                                                    theme.colorScheme.onSurface,
+                                                height: 1.5,
+                                              ),
+                                          softWrap: true,
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
+                              secondChild: const SizedBox(
+                                width: double.infinity,
+                                height: 0,
+                              ),
                             ),
-                            secondChild: const SizedBox(
-                              width: double.infinity,
-                              height: 0,
-                            ),
-                          ),
-                        _daysRow(habit, theme, context),
-                      ],
+                          _daysRow(habit, theme, context),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

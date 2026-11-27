@@ -556,8 +556,13 @@ class UpdateService {
   static List<String> parseReleaseNotes(String body) {
     final out = <String>[];
     final seen = <String>{};
-    for (var line in body.split('\n')) {
-      line = line.trim();
+    for (final raw in body.split('\n')) {
+      // Отступ до trim(): строка с отступом — не новый пункт, а продолжение
+      // предыдущего (в заметках так лежит абзац с подробностями, «что было не
+      // так и как стало»). Раньше такие строки выбрасывались, и в «Что нового»
+      // доставался только заголовок пункта.
+      final indented = raw.startsWith(' ') || raw.startsWith('\t');
+      var line = raw.trim();
       if (line.isEmpty) continue;
       // Заголовки, таблицы SHA, служебные строки — не пункты.
       if (line.startsWith('#') || line.startsWith('|')) continue;
@@ -565,7 +570,14 @@ class UpdateService {
       if (line.toLowerCase().contains('dependabot')) continue;
       if (line.toLowerCase().startsWith('**full changelog**')) continue;
       final bullet = RegExp(r'^[*-]\s+').firstMatch(line);
-      if (bullet == null) continue;
+      if (bullet == null) {
+        if (!indented || out.isEmpty) continue;
+        final detail = _stripMarkup(line);
+        if (detail.isEmpty) continue;
+        final previous = out.removeLast();
+        out.add(_capitalize('$previous $detail'));
+        continue;
+      }
       var text = line.substring(bullet.end).trim();
       // «… by @user in https://…» → «…»
       text = text.replaceFirst(RegExp(r'\s+by\s+@[\w-]+(\s+in\s+\S+)?$'), '');
@@ -652,6 +664,20 @@ class UpdateService {
     final first = text[0];
     final upper = first.toUpperCase();
     return upper == first ? text : upper + text.substring(1);
+  }
+
+  /// Снимает markdown-разметку с абзаца подробностей: ссылки оставляем
+  /// текстом, звёздочки и обратные кавычки убираем. В списке изменений они
+  /// читаются как мусор, потому что рендерер их и так не рисует.
+  static String _stripMarkup(String text) {
+    return text
+        .replaceAllMapped(
+          RegExp(r'\[([^\]]+)\]\([^)]*\)'),
+          (m) => m.group(1) ?? '',
+        )
+        .replaceAll(RegExp(r'\*\*|__|\*|`'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   /// Служебный ли пункт: релизный бамп, мерж, CI, тесты, сборка, линт,
