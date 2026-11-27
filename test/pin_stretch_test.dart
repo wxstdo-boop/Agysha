@@ -24,13 +24,18 @@ void main() {
     );
     expect(
       block,
-      contains('_in.value / 0.42'),
+      contains('_in.value / 0.46'),
       reason: 'желе идёт почти половину хода нажатия, а не первые 140 мс',
     );
     expect(
       block,
-      contains('Curves.easeOutBack'),
-      reason: 'без мелкого перелёта клавиша останавливается как плитка',
+      isNot(contains('Curves.easeOutBack')),
+      reason: 'перелёт с возвратом читался как дёрганье, а не желе',
+    );
+    expect(
+      block,
+      contains('Curves.easeOutCubic'),
+      reason: 'протяжка должна доезжать до края мягко и без отката',
     );
   });
 
