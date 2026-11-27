@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
@@ -472,8 +473,21 @@ class JsonFile {
           mac: Mac(base64Decode(parsed['mac'] as String)),
         );
         final key = await _encryptionKey();
-        final clear = await _cipher.decrypt(box, secretKey: key);
-        return (utf8.decode(clear), true);
+        final String plain;
+        if (!kIsWeb && raw.length >= _isolateThreshold) {
+          final keyBytes = await key.extractBytes();
+          plain = await Isolate.run(
+            () => _decryptEnvelope(
+              base64Encode(box.cipherText),
+              base64Encode(box.nonce),
+              base64Encode(box.mac.bytes),
+              keyBytes,
+            ),
+          );
+        } else {
+          plain = utf8.decode(await _cipher.decrypt(box, secretKey: key));
+        }
+        return (plain, true);
       } catch (error) {
         throw JsonFileException(
           'Could not decrypt "$key"; original data was left untouched',
@@ -549,17 +563,24 @@ class JsonFile {
     }
   }
 
+  /// С какого размера шифрование уходит в отдельный изолят.
+  ///
+  /// Замер на этом же коде (AOT): 36 КБ AES-GCM — около 2.5 мс, а 1 МБ —
+  /// 77 мс шифрования + 10 мс base64. Запуск изолята стоит меньше
+  /// миллисекунды, поэтому мелкие документы считаем на месте, а крупные
+  /// (история чата растёт до мегабайт) — на своём изоляте: иначе UI-поток
+  /// стоит всё это время и кадр рвётся.
+  static const int _isolateThreshold = 96 * 1024;
+
   static Future<String> _encode(String value) async {
     try {
-      final key = await _encryptionKey();
-      final clear = utf8.encode(value);
-      final box = await _cipher.encrypt(clear, secretKey: key);
-      return jsonEncode({
-        'format': _format,
-        'nonce': base64Encode(box.nonce),
-        'ciphertext': base64Encode(box.cipherText),
-        'mac': base64Encode(box.mac.bytes),
-      });
+      final keyBytes = await (await _encryptionKey()).extractBytes();
+      if (!kIsWeb && value.length >= _isolateThreshold) {
+        return await Isolate.run(
+          () => _encryptEnvelope(value, keyBytes),
+        );
+      }
+      return await _encryptEnvelope(value, keyBytes);
     } catch (error) {
       throw JsonFileException('Could not encrypt JSON data', error);
     }
@@ -774,4 +795,38 @@ class JsonFile {
     }
     return true;
   }
+}
+
+/// Шифрует значение в конверт формата JsonFile. Живёт отдельно от класса,
+/// чтобы его можно было выполнить в изоляте (замыкание не должно трогать
+/// состояние класса — только переданные байты).
+Future<String> _encryptEnvelope(String value, List<int> keyBytes) async {
+  final box = await DartAesGcm.with256bits().encrypt(
+    utf8.encode(value),
+    secretKey: SecretKey(keyBytes),
+  );
+  return jsonEncode({
+    'format': JsonFile._format,
+    'nonce': base64Encode(box.nonce),
+    'ciphertext': base64Encode(box.cipherText),
+    'mac': base64Encode(box.mac.bytes),
+  });
+}
+
+/// Обратная операция для изолята: те же base64-поля конверта → открытый текст.
+Future<String> _decryptEnvelope(
+  String ciphertext,
+  String nonce,
+  String mac,
+  List<int> keyBytes,
+) async {
+  final clear = await DartAesGcm.with256bits().decrypt(
+    SecretBox(
+      base64Decode(ciphertext),
+      nonce: base64Decode(nonce),
+      mac: Mac(base64Decode(mac)),
+    ),
+    secretKey: SecretKey(keyBytes),
+  );
+  return utf8.decode(clear);
 }

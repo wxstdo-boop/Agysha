@@ -15,8 +15,10 @@ import '../services/style_options.dart';
 ///
 /// Видео декодируется потоком из файла (VideoPlayer не читает файл целиком в
 /// память), звук всегда выключен, воспроизведение зациклено. Плеер живёт
-/// только пока слой на экране: `dispose()` освобождает нативный ресурс, а уход
-/// приложения в фон его ставит на паузу, чтобы не жечь батарею за спиной.
+/// только пока слой на экране: `dispose()` освобождает нативный ресурс, уход
+/// приложения в фон и уход страницы под другой маршрут ([TickerMode]) ставят
+/// его на паузу, чтобы не жечь кадры за спиной. Позиция при этом сохраняется,
+/// поэтому на экране видео играет ровно так же, как раньше.
 class StyleWallpaperLayer extends StatefulWidget {
   const StyleWallpaperLayer({
     super.key,
@@ -48,11 +50,31 @@ class _StyleWallpaperLayerState extends State<StyleWallpaperLayer>
   /// процедурный фон стиля, а не пустой чёрный экран с ошибкой.
   bool _videoFailed = false;
 
+  /// Видна ли страница, на которой лежат обои. [TickerMode] выключается, когда
+  /// маршрут ушёл под другой экран или вкладка за краем: кадр видео в этот
+  /// момент никто не видит, а декодер с текстурой всё равно жгут кадры.
+  bool _pageVisible = true;
+
+  /// Приложение на переднем плане.
+  bool _appActive = true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if (widget.choice.isVideo) _openVideo();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Зависимость от TickerMode: Flutter сам пересоберёт нас, когда маршрут
+    // станет/перестанет быть видимым, и мы поставим видео на паузу либо
+    // продолжим с той же позиции.
+    final visible = TickerMode.valuesOf(context).enabled;
+    if (visible == _pageVisible) return;
+    _pageVisible = visible;
+    _syncPlayback();
   }
 
   @override
@@ -94,7 +116,8 @@ class _StyleWallpaperLayerState extends State<StyleWallpaperLayer>
   void _syncPlayback() {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
-    final shouldPlay = widget.active && !_videoFailed;
+    final shouldPlay =
+        widget.active && _pageVisible && _appActive && !_videoFailed;
     if (shouldPlay) {
       if (!controller.value.isPlaying) controller.play();
     } else if (controller.value.isPlaying) {
@@ -113,11 +136,13 @@ class _StyleWallpaperLayerState extends State<StyleWallpaperLayer>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // В фоне кадры видео никто не видит — останавливаем, возвращаемся в
     // приложение — продолжаем с того же места (позиция сохраняется).
-    if (state == AppLifecycleState.resumed) {
-      _syncPlayback();
-    } else if (_controller?.value.isPlaying ?? false) {
-      _controller?.pause();
+    final resumed = state == AppLifecycleState.resumed;
+    if (resumed == _appActive) {
+      if (resumed) _syncPlayback();
+      return;
     }
+    _appActive = resumed;
+    _syncPlayback();
   }
 
   @override
@@ -133,7 +158,10 @@ class _StyleWallpaperLayerState extends State<StyleWallpaperLayer>
     return Stack(
       fit: StackFit.expand,
       children: [
-        content,
+        // Кадр видео меняется сам по себе — держим его в отдельном слое, чтобы
+        // новая текстура перерисовывала только обои, а не стек с затемнением
+        // и всем содержимым экрана поверх них.
+        RepaintBoundary(child: content),
         if (widget.dim > 0)
           IgnorePointer(
             child: ColoredBox(

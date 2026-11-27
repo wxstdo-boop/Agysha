@@ -21,7 +21,6 @@ import '../widgets/press_scale.dart';
 import '../widgets/robot_glyph.dart';
 import '../services/alarm_service.dart';
 import '../services/app_version.dart';
-import '../services/renderer_service.dart';
 import '../services/settings_service.dart';
 import '../theme/cyber_theme.dart';
 import '../theme/itshnik_theme.dart';
