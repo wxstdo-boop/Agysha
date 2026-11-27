@@ -197,7 +197,18 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {});
       return;
     }
-    if (sectionRcLeaving.value) return;
+    if (sectionRcLeaving.value) {
+      // Флаг уже поднят: сервис уведомил повторно (загрузка настроек,
+      // повторный тумблер). Раньше здесь стоял `return` — таймер не
+      // перевзводился, и «Проверки» оставались в карусели и в таблетке
+      // навсегда, отжимая подписи влево. Теперь просто перевзводим страховку.
+      _rcLeaveTimer?.cancel();
+      _rcLeaveTimer = Timer(
+        const Duration(milliseconds: 240),
+        _finishRcLeaving,
+      );
+      return;
+    }
     // Выключили РП, а раздел ещё в карусели. Раньше setState выдёргивал его
     // тем же кадром: PageView клампил страницу 3→2 скачком, подпись
     // «Проверки» пропадала мгновенно, а таблетка прыгала на ширину ячейки.

@@ -96,7 +96,7 @@ class PressScale extends StatefulWidget {
     this.pressedOpacity = 1.0,
     this.enableTilt = true,
     this.tiltDepthOnly = false,
-    this.maxTiltAngle = 0.16,
+    this.maxTiltAngle = 0.18,
     this.pressTint,
     this.pressTintStrength = 0.12,
     this.pressTintRadius,
@@ -185,14 +185,14 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// серединой небольшой кнопки, и наклон там выходил почти нулевым: у
   /// «Сохранить» 3D «не ощущался». Направление по-прежнему задаёт палец,
   /// а амплитуда не проваливается ниже этого значения.
-  static const double _minTilt = 0.62;
+  static const double _minTilt = 0.72;
 
   /// Общий множитель амплитуды. Владелец просил «3D у всего чуть меньше и
   /// плавнее» — вместо правки восемнадцати точечных `maxTiltAngle` углы
   /// сжимаются здесь одним коэффициентом: карточки, кнопки и таблетки
   /// наклоняются на одну и ту же долю мягче, а относительная разница между
   /// мелкими и крупными элементами сохраняется.
-  static const double _globalTilt = 0.72;
+  static const double _globalTilt = 0.88;
 
   /// Наклон для нажатия ровно по центру, где направления от пальца нет
   /// (сдвиг от точки касания нулевой): верх элемента уходит от пальца, низ
@@ -651,7 +651,10 @@ Widget Function(BuildContext context, double progress) pressTintOverlay(
     // Плавный старт (smoothstep): прогресс нажатия идёт по easeOut, то есть
     // первые кадры уже дают треть тона — фон «вспыхивал» под пальцем
     // мгновенно. Квадратичный разгон в начале гасит этот скачок.
-    final t = progress * progress * (3.0 - 2.0 * progress);
+    // Плюс ещё один квадрат: старт получается почти незаметным, и фон
+    // «набегает» мягко, без вспышки под пальцем даже при быстрых тапах.
+    final smooth = progress * progress * (3.0 - 2.0 * progress);
+    final t = smooth * smooth;
     return IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(

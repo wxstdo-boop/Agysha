@@ -1101,9 +1101,15 @@ class _TasksScreenState extends State<TasksScreen>
         pressedScale: 0.985,
         // Та же плавная отдача фона, что у карточек будильников: мягкий
         // smoothstep-тинт под пальцем, а не «вспышка» карточки.
+        // Наклон у карточек задач и привычек включается тем же флагом, что
+        // у будильников: без него 3D-отдача была видна «через раздел» —
+        // на будильниках есть, а здесь карточка читалась плоской.
+        enableTilt: true,
         pressOverlay: pressTintOverlay(
           BorderRadius.circular(20),
-          strength: 0.06,
+          // Полупрозрачнее и мягче: 0.06 на плотной заливке карточки
+          // читалось как «фон залился», а не как отклик под пальцем.
+          strength: 0.045,
         ),
         duration: const Duration(milliseconds: 240),
         releaseDuration: const Duration(milliseconds: 340),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:material_ui/material_ui.dart';
 
@@ -244,8 +246,33 @@ class _SectionPillState extends State<SectionPill>
   }
 
   /// Флаг «раздел проверок уезжает» тоже меняет состав подписей.
+  ///
+  /// Ячейка гаснущего раздела живёт в строке РОВНО столько, сколько длится
+  /// затухание подписи (240 мс), и дальше исчезает независимо от того,
+  /// успел ли владелец экрана снять [sectionRcLeaving]. Раньше её видимость
+  /// зависела только от общего флага: если флаг «застревал» (сервис
+  /// уведомлял повторно, таймер Home не перевзводился), пустая четвёртая
+  /// ячейка оставалась в строке навсегда и отжимала три живые подписи в
+  /// первые три четверти ширины — владелец видел «скукоживание, которое
+  /// мигает и остаётся».
+  bool _rcCellVisible = false;
+  Timer? _rcCellTimer;
+
   void _onRcLeavingChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final leaving = sectionRcLeaving.value && !RealityCheckService().enabled;
+    _rcCellTimer?.cancel();
+    _rcCellTimer = null;
+    if (leaving) {
+      _rcCellVisible = true;
+      _rcCellTimer = Timer(const Duration(milliseconds: 280), () {
+        if (!mounted) return;
+        setState(() => _rcCellVisible = false);
+      });
+    } else {
+      _rcCellVisible = false;
+    }
+    setState(() {});
   }
 
   /// Внутренняя ширина капсулы: 304 минус набивка 4 слева и справа. Ровно
@@ -302,6 +329,18 @@ class _SectionPillState extends State<SectionPill>
   /// пересекает границу раздела.
   int _dragNearest = -1;
 
+  /// Совокупный ход пальца от касания и признак «тяга реально началась».
+  ///
+  /// `onHorizontalDragStart` у Flutter срабатывает уже после ~18 px touch
+  /// slop, но палец при обычном зажатии раздела успевает сместиться на
+  /// десятки пикселей по диагонали — карусель вставала под палец и на
+  /// отпускании «прыгала» на соседний раздел (владелец: «экран дёргает на
+  /// другой раздел»). Теперь до [_dragEngage] px хода карусель не двигается
+  /// вовсе, а короткий жест отпускается как зажатие: раздел остаётся тот же.
+  double _dragTravel = 0;
+  bool _dragEngaged = false;
+  static const double _dragEngage = 20.0;
+
   /// Тяга за край, вынесенная в notifier: у самого края рельса страница уже
   /// упёрлась в предел, [sectionDragPage] перестаёт меняться — и без этого
   /// канала камень НЕ перестраивался бы, хотя [_edgePull] продолжал расти.
@@ -357,6 +396,7 @@ class _SectionPillState extends State<SectionPill>
   void dispose() {
     RealityCheckService().removeListener(_onRcChanged);
     sectionRcLeaving.removeListener(_onRcLeavingChanged);
+    _rcCellTimer?.cancel();
     _edgeSettle.dispose();
     _edgePullNotifier.dispose();
     // Экран мог закрыться прямо во время тяги — не оставляем Home с
@@ -394,6 +434,8 @@ class _SectionPillState extends State<SectionPill>
     // Стартовая точка дедзоны — фактический палец (с учётом захвата).
     _dragFingerX = details.localPosition.dx + _dragGrabOffset;
     _dragNearest = _dragPage.round();
+    _dragTravel = 0;
+    _dragEngaged = false;
     sectionDragPage.value = _dragPage;
     // Отдача ячеек на время тяги выключается (enabled: !_dragging); раньше
     // это приходило из пересборки на каждом тике sectionDragPage.
@@ -403,6 +445,14 @@ class _SectionPillState extends State<SectionPill>
   void _dragUpdate(DragUpdateDetails details, int count) {
     if (!_dragging) return;
     if (count < 2) return;
+    // Ход от касания: пока он меньше порога, жест считается зажатием, а не
+    // тягой — иначе тап с естественным смещением пальца уводил карусель.
+    _dragTravel += details.delta.dx.abs() + details.delta.dy.abs();
+    if (!_dragEngaged) {
+      if (_dragTravel < _dragEngage) return;
+      _dragEngaged = true;
+      sectionDragPage.value = _dragPage;
+    }
     // ПОЗИЦИОННЫЙ скраббер, как выбор приоритета: палец задаёт ЦЕНТР
     // камня, а не долю «от края до края». Камень едет ровно под пальцем.
     //
@@ -478,6 +528,13 @@ class _SectionPillState extends State<SectionPill>
   void _dragEnd(int count) {
     if (!_dragging) return;
     _dragging = false;
+    if (!_dragEngaged) {
+      // Жест так и не стал тягой: экран не двигали, раздел остаётся тем же.
+      if (mounted) setState(() {});
+      _startEdgeSettle();
+      sectionDragPage.value = null;
+      return;
+    }
     if (mounted) setState(() {});
     // Волна НЕ фиксируется: она и так считается из живой позиции карусели,
     // поэтому при отпускании камень продолжает форму плавно, без рывка в
@@ -525,8 +582,14 @@ class _SectionPillState extends State<SectionPill>
   Widget build(BuildContext context) {
     final labels = sectionLabels(context);
     final iconBuilders = sectionIconsFor(context);
-    final count = iconBuilders.length;
+    var count = iconBuilders.length;
     if (count == 0) return const SizedBox.shrink();
+    // «Проверки» занимают ячейку только пока реально гаснут. Если сервис уже
+    // выключен, а общий флаг «уезжает» всё ещё поднят, ячейку не строим:
+    // иначе пустое место справа навсегда отжимает три живые подписи влево.
+    if (!RealityCheckService().enabled && sectionRcLeaving.value) {
+      count = _rcCellVisible ? count : count - 1;
+    }
     final dark = Theme.of(context).brightness == Brightness.dark;
 
     // Таблетка разделов без фонов: полупрозрачные тексты разделов
@@ -568,7 +631,9 @@ class _SectionPillState extends State<SectionPill>
                         dark: dark,
                         count: count,
                         icons: iconBuilders,
-                        labels: labels,
+                        labels: labels.length > count
+                            ? labels.sublist(0, count)
+                            : labels,
                       );
                     },
                   ),
@@ -657,7 +722,7 @@ class _SectionPillState extends State<SectionPill>
                         // (PressScale ведёт её кривой 220 мс) и растворяется
                         // следом за отпусканием. Постоянной подложки нет.
                         pressTint: const Color(0xFFFF453A),
-                        pressTintStrength: dark ? 0.16 : 0.12,
+                        pressTintStrength: dark ? 0.13 : 0.10,
                         pressTintRadius: BorderRadius.circular(18),
                         enableTilt: true,
                         // Наклон ячейки — только в глубину: боковой поворот
@@ -680,8 +745,8 @@ class _SectionPillState extends State<SectionPill>
                         // вдавливания, чтобы подложка растворялась следом,
                         // но короче прежних 1.1 с: при удержании таблетки
                         // она читалась как «фон застрял нажатым».
-                        duration: const Duration(milliseconds: 220),
-                        releaseDuration: const Duration(milliseconds: 620),
+                        duration: const Duration(milliseconds: 280),
+                        releaseDuration: const Duration(milliseconds: 760),
                         releaseCurve: Curves.easeOutQuart,
                         child: Material(
                           type: MaterialType.transparency,

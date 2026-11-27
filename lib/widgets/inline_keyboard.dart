@@ -703,15 +703,21 @@ class InlineKeyboardHandle extends StatelessWidget {
     // арены и всегда, а повторный вызов раскрытия идемпотентен.
     return Listener(
       behavior: HitTestBehavior.opaque,
-      onPointerDown: (_) {
-        Haptics.light();
-        onExpand();
-      },
+      // Раскрываем на ОТПУСКАНИИ, а не на касании: раньше панель уезжала
+      // вверх в тот же кадр, и отдача (уменьшение + 3D-наклон) не успевала
+      // показаться — кнопка казалась «мёртвой» (владелец: «3д отдачи нет
+      // и уменьшения нажатия»). Сырой Listener не участвует в арене
+      // жестов, поэтому pointer-up доходит всегда, даже если первый тап
+      // ушёл в уезжающего ребёнка AnimatedSwitcher.
+      onPointerDown: (_) => Haptics.light(),
+      onPointerUp: (_) => onExpand(),
       // Та же отдача, что у клавиш: свёрнутая панель — тоже кнопка.
       child: PressScale(
-        pressedScale: 0.97,
-        duration: const Duration(milliseconds: 140),
-        releaseDuration: const Duration(milliseconds: 260),
+        pressedScale: 0.95,
+        enableTilt: true,
+        maxTiltAngle: 0.16,
+        duration: const Duration(milliseconds: 160),
+        releaseDuration: const Duration(milliseconds: 280),
         repeatGuard: Duration.zero,
         child: Container(
           height: 38,

@@ -611,7 +611,7 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                   // фон под ним не глотался (0.07, не плотная заливка).
                   pressOverlay: pressTintOverlay(
                     BorderRadius.circular(20),
-                    strength: 0.07,
+                    strength: 0.05,
                   ),
                   child: Card(
                     clipBehavior: Clip.antiAlias,
@@ -875,7 +875,7 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                   // а не только сжимается.
                   pressOverlay: pressTintOverlay(
                     BorderRadius.circular(20),
-                    strength: 0.07,
+                    strength: 0.05,
                   ),
                   child: Card(
                     clipBehavior: Clip.antiAlias,

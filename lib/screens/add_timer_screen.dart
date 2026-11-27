@@ -485,7 +485,7 @@ class _AddTimerScreenState extends State<AddTimerScreen> {
                 // слоем поверх, иначе нажатие читалось «без фона».
                 pressOverlay: pressTintOverlay(
                   BorderRadius.circular(20),
-                  strength: 0.07,
+                  strength: 0.05,
                 ),
                 child: Card(
                   shape: RoundedRectangleBorder(

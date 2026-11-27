@@ -1383,8 +1383,10 @@ class _AiChatBodyState extends State<_AiChatBody>
             // заливка и кромка. Раньше анимировалась ещё и тень с
             // меняющимся blurRadius — она «раздувалась» за границы кружка,
             // и включение/выключение читалось как дёрганье фона вокруг.
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
+            // 340 мс easeInOutCubic: при быстрых тапах туда-обратно
+            // перекраска успевает развернуться в полёте, а не мигает кадром.
+            duration: const Duration(milliseconds: 340),
+            curve: Curves.easeInOutCubic,
             width: 40,
             height: 40,
             decoration: BoxDecoration(
@@ -1410,7 +1412,10 @@ class _AiChatBodyState extends State<_AiChatBody>
                 // Та же отдача фона, что у «Ада видит экран»: при зажатии
                 // кружок заметно заливается — раньше веб-поиск оставался
                 // визуально «мёртвым» до самого отпускания.
-                splashColor: cs.primary.withValues(alpha: 0.22),
+                // Без splash: при быстрых переключениях круги накладывались
+                // друг на друга и слипались во вспышки. Остаётся ровный
+                // highlight под пальцем.
+                splashFactory: NoSplash.splashFactory,
                 highlightColor: cs.primary.withValues(alpha: 0.14),
                 onTap: () {
                   Haptics.light();
@@ -1532,12 +1537,14 @@ class _AiChatBodyState extends State<_AiChatBody>
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               customBorder: const CircleBorder(),
-              splashColor: cs.primary.withValues(alpha: 0.22),
+              // Без splash по той же причине, что у веб-поиска: быстрые
+              // тапы давали наложенные круги-вспышки.
+              splashFactory: NoSplash.splashFactory,
               highlightColor: cs.primary.withValues(alpha: 0.14),
               onTap: () => _toggleScreenAware(context),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
+                duration: const Duration(milliseconds: 340),
+                curve: Curves.easeInOutCubic,
                 // Размер и кромка — ОДИН В ОДИН как у кнопки веб-поиска
                 // (40×40, 1.5/1.0 px, те же альфы): раньше «глаз» был
                 // меньше (34) и с более плотной рамкой, и пара кнопок
