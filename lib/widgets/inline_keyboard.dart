@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../services/haptics.dart';
 import '../utils/design_tokens.dart';
+import '../utils/motion_prefs.dart';
 import 'press_scale.dart';
 
 /// Встроенная клавиатура «под тему приложения».
@@ -91,17 +92,22 @@ class _InlineKeyboardState extends State<InlineKeyboard>
   bool _closing = false;
   double _settleFrom = 0;
   double _settleTarget = 0;
-  late final AnimationController _settleAnim = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 180),
-  )..addListener(() {
-      final t = Curves.easeOutCubic.transform(_settleAnim.value);
-      setState(() => _drag = _settleFrom + (_settleTarget - _settleFrom) * t);
-    })..addStatusListener((status) {
-      if (status != AnimationStatus.completed || !_closing) return;
-      _closing = false;
-      widget.onCollapse?.call();
-    });
+  late final AnimationController _settleAnim =
+      AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 180),
+        )
+        ..addListener(() {
+          final t = Curves.easeOutCubic.transform(_settleAnim.value);
+          setState(
+            () => _drag = _settleFrom + (_settleTarget - _settleFrom) * t,
+          );
+        })
+        ..addStatusListener((status) {
+          if (status != AnimationStatus.completed || !_closing) return;
+          _closing = false;
+          widget.onCollapse?.call();
+        });
 
   @override
   void dispose() {
@@ -613,13 +619,12 @@ class _CollapseHandle extends StatelessWidget {
 
 /// Полка клавиатуры: свёрнутая — узкая ручка, развёрнутая — панель клавиш.
 ///
-/// Раскрытие — один `AnimatedSize` и кросс-фейд. Раньше здесь стояли ещё
-/// `AnimatedSwitcher` + `SizeTransition` поверх того же `AnimatedSize`:
-/// два разных механизма анимировали ОДНУ высоту, и в листе «Добавить друга»
-/// панель подрастала на пару пикселей и складывалась обратно — клавиши так
-/// и не показывались. Теперь высоту ведёт только `AnimatedSize`, а смена
-/// содержимого — чистый фейд: раскрытие всегда доходит до полной панели.
-class InlineKeyboardShelf extends StatelessWidget {
+/// Высоту ведёт ОДИН контроллер: панель клавиш и ручка живут в одной колонке,
+/// и их высоты идут навстречу друг другу (t и 1−t). Раньше здесь стояли
+/// `AnimatedSize` + `AnimatedSwitcher`: свёрнутая ручка рождалась вверху
+/// высокой панели и потом уезжала вниз, а старая панель гасла поверх неё —
+/// на сворачивании это читалось как рывок и мигание внизу листа.
+class InlineKeyboardShelf extends StatefulWidget {
   /// Развёрнута ли панель.
   final bool open;
 
@@ -647,36 +652,83 @@ class InlineKeyboardShelf extends StatelessWidget {
   });
 
   @override
+  State<InlineKeyboardShelf> createState() => _InlineKeyboardShelfState();
+}
+
+class _InlineKeyboardShelfState extends State<InlineKeyboardShelf>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: widget.open ? 1 : 0,
+  );
+
+  @override
+  void didUpdateWidget(covariant InlineKeyboardShelf old) {
+    super.didUpdateWidget(old);
+    if (old.open == widget.open) return;
+    if (MotionPrefs.shouldReduceMotion) {
+      _ctrl.value = widget.open ? 1 : 0;
+    } else if (widget.open) {
+      _ctrl.forward();
+    } else {
+      _ctrl.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeInOutCubic,
-      alignment: Alignment.topCenter,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 180),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        layoutBuilder: (current, previous) => Stack(
-          alignment: Alignment.topCenter,
-          children: [...previous, ?current],
-        ),
-        child: open
-            ? Padding(
-                key: const ValueKey('inline_kb_open'),
-                padding: const EdgeInsets.fromLTRB(4, 2, 4, 12),
-                child: InlineKeyboard(
-                  keyHeight: keyHeight,
-                  onChar: onChar,
-                  onBackspace: onBackspace,
-                  onSpace: onSpace,
-                  onCollapse: onCollapse,
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        final t = Curves.easeInOutCubic.transform(_ctrl.value);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Панель уезжает вниз: высота сжимается, а низ клавиш остаётся
+            // видимым дольше верха — как у настоящей клавиатуры.
+            if (t > 0.001)
+              ClipRect(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  heightFactor: t,
+                  child: Opacity(
+                    opacity: t,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 2, 4, 12),
+                      child: InlineKeyboard(
+                        keyHeight: widget.keyHeight,
+                        onChar: widget.onChar,
+                        onBackspace: widget.onBackspace,
+                        onSpace: widget.onSpace,
+                        onCollapse: widget.onCollapse,
+                      ),
+                    ),
+                  ),
                 ),
-              )
-            : InlineKeyboardHandle(
-                key: const ValueKey('inline_kb_handle'),
-                onExpand: onExpand,
               ),
-      ),
+            // Ручка растёт и проявляется навстречу панели — с той же кривой,
+            // поэтому сумма высот меняется плавно, без щелчка в конце.
+            if (t < 0.999)
+              ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: 1 - t,
+                  child: Opacity(
+                    opacity: 1 - t,
+                    child: InlineKeyboardHandle(onExpand: widget.onExpand),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -696,19 +748,18 @@ class InlineKeyboardHandle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Сырой pointer-down вместо onTap: свёрнутая панель живёт внутри
-    // AnimatedSwitcher/SizeTransition, и после опускания клавиатуры первое
-    // касание иногда уходило в арену жестов уезжающего старого ребёнка —
-    // панель открывалась лишь со второго тапа. Listener срабатывает до
-    // арены и всегда, а повторный вызов раскрытия идемпотентен.
+    // Сырой pointer вместо onTap: после опускания клавиатуры первое касание
+    // иногда уходило в арену жестов ещё уезжавшей панели — ручка открывалась
+    // лишь со второго тапа. Listener срабатывает до арены и всегда, а
+    // повторный вызов раскрытия идемпотентен.
     return Listener(
       behavior: HitTestBehavior.opaque,
       // Раскрываем на ОТПУСКАНИИ, а не на касании: раньше панель уезжала
       // вверх в тот же кадр, и отдача (уменьшение + 3D-наклон) не успевала
       // показаться — кнопка казалась «мёртвой» (владелец: «3д отдачи нет
       // и уменьшения нажатия»). Сырой Listener не участвует в арене
-      // жестов, поэтому pointer-up доходит всегда, даже если первый тап
-      // ушёл в уезжающего ребёнка AnimatedSwitcher.
+      // жестов, поэтому pointer-up доходит всегда, даже если панель в этот
+      // момент ещё доигрывает схлопывание.
       onPointerDown: (_) => Haptics.light(),
       onPointerUp: (_) => onExpand(),
       // Та же отдача, что у клавиш: свёрнутая панель — тоже кнопка.
@@ -1008,54 +1059,56 @@ class _CaseGlyph extends StatelessWidget {
         repeatGuard: Duration.zero,
         maxPressDuration: const Duration(milliseconds: 400),
         child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          Haptics.select();
-          onTap();
-        },
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              theme.colorScheme.onSurface.withValues(alpha: 0.06),
-              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.30),
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            Haptics.select();
+            onTap();
+          },
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                theme.colorScheme.onSurface.withValues(alpha: 0.06),
+                theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.30,
+                ),
+              ),
+              borderRadius: BorderRadius.circular(Radii.md),
+              border: Border.all(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.10),
+              ),
             ),
-            borderRadius: BorderRadius.circular(Radii.md),
-            border: Border.all(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.10),
-            ),
-          ),
-          child: SizedBox(
-            height: height,
-            child: AnimatedBuilder(
-              animation: animation,
-              builder: (context, _) {
-                final t = animation.value;
-                return Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Нижняя буква: уходит вниз и тает по мере включения.
-                    Opacity(
-                      opacity: (1 - t).clamp(0.0, 1.0),
-                      child: Transform.translate(
-                        offset: Offset(0, 5 * t),
-                        child: _glyph(lower),
+            child: SizedBox(
+              height: height,
+              child: AnimatedBuilder(
+                animation: animation,
+                builder: (context, _) {
+                  final t = animation.value;
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Нижняя буква: уходит вниз и тает по мере включения.
+                      Opacity(
+                        opacity: (1 - t).clamp(0.0, 1.0),
+                        child: Transform.translate(
+                          offset: Offset(0, 5 * t),
+                          child: _glyph(lower),
+                        ),
                       ),
-                    ),
-                    // Верхняя буква: поднимается снизу и проявляется.
-                    Opacity(
-                      opacity: t.clamp(0.0, 1.0),
-                      child: Transform.translate(
-                        offset: Offset(0, -5 * (1 - t)),
-                        child: _glyph(upper),
+                      // Верхняя буква: поднимается снизу и проявляется.
+                      Opacity(
+                        opacity: t.clamp(0.0, 1.0),
+                        child: Transform.translate(
+                          offset: Offset(0, -5 * (1 - t)),
+                          child: _glyph(upper),
+                        ),
                       ),
-                    ),
-                  ],
-                );
-              },
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }

@@ -1448,9 +1448,85 @@ class _GiftDetailsSheet extends StatefulWidget {
 }
 
 class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
-  /// Высота страницы карусели: одинаковая у всех артефактов, чтобы окно не
-  /// прыгало при листании (описание длинное — прокручивается внутри).
-  static const double _pageHeight = 356;
+  /// Высота страницы считается по её содержимому: раньше стояла общая
+  /// константа (356), и под коротким описанием оставалась пустая полоса в
+  /// рамке и под ней. Теперь лист ровно по тексту, а высота между соседними
+  /// артефактами перетекает вместе с пальцем, поэтому куб не дёргается.
+  static const double _emblem = 92;
+  static const double _gaps = 12 + 6 + 16;
+  static const double _rarityRow = 24;
+  static const double _panelPad = 14;
+  static const double _panelInner = 8;
+  static const double _buffIcon = 16;
+  static const double _buffGap = 6;
+
+  /// Высота текста на заданной ширине тем же шрифтом, что и в рендере:
+  /// метрики берём из `DefaultTextStyle`, поэтому измерение совпадает с
+  /// фактической раскладкой (включая масштаб текста из настроек системы).
+  static double _textHeight(
+    BuildContext context,
+    String text,
+    double width, {
+    required double fontSize,
+    FontWeight weight = FontWeight.w400,
+    double? lineHeight,
+    int? maxLines,
+  }) {
+    // `lineHeight == null` — как у `Text` без явного `height`: интерлиньяж
+    // берётся из `DefaultTextStyle`, иначе замер разойдётся с раскладкой.
+    final base = DefaultTextStyle.of(context).style;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: base.copyWith(
+          fontSize: fontSize,
+          fontWeight: weight,
+          height: lineHeight,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: maxLines,
+      ellipsis: maxLines == null ? null : '…',
+      locale: Localizations.maybeLocaleOf(context),
+    )..layout(maxWidth: width);
+    final h = painter.height;
+    painter.dispose();
+    return h;
+  }
+
+  /// Высота одной страницы-артефакта при ширине листа [width].
+  double _pageHeightFor(BuildContext context, ProfileGift gift, double width) {
+    final title = _textHeight(
+      context,
+      Translations.t('giftTitle_${gift.id}', context, gift.title),
+      width,
+      fontSize: 20,
+      weight: FontWeight.bold,
+      maxLines: 2,
+    );
+    final panelW = width - _panelPad * 2;
+    final desc = _textHeight(
+      context,
+      Translations.t('giftDesc_${gift.id}', context, gift.description),
+      panelW,
+      fontSize: 13,
+      lineHeight: 1.4,
+    );
+    final buff = _textHeight(
+      context,
+      Translations.t('giftBuff_${gift.id}', context, gift.buffText),
+      panelW - _buffIcon - _buffGap,
+      fontSize: 12,
+      weight: FontWeight.w600,
+    );
+    final panel =
+        _panelPad * 2 +
+        desc +
+        _panelInner +
+        (buff > _buffIcon ? buff : _buffIcon);
+    return _emblem + _gaps + title + _rarityRow + panel + 2;
+  }
 
   late final PageController _pages = PageController(
     initialPage: widget.initialIndex,
@@ -1501,11 +1577,10 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
       animation: _pages,
       builder: (context, _) => AnimatedContainer(
         duration: Duration.zero,
-        // Отступы окна — ровно прежние: убрав точки-индикаторы, я заодно
-        // подрезал вертикаль, и лист «съёжился» относительно привычного
-        // размера. Возвращаем 20 по вертикали, а вместо строки точек держим
-        // её же высоту пустой — карточка стоит там, где стояла.
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        // Отступы окна: сверху воздух под ручку, снизу — ровно под кнопки.
+        // Точки-индикаторы убраны, их высоту держать больше не нужно — от
+        // этого под кнопками и висела лишняя полоса.
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
         decoration: BoxDecoration(
           color: dark ? const Color(0xFF12121C) : Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1516,143 +1591,177 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
         ),
         child: SafeArea(
           top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Верхняя полоска драга
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                height: _pageHeight,
-                child: PageView.builder(
-                  controller: _pages,
-                  itemCount: widget.gifts.length,
-                  physics: _multiple
-                      ? const PageScrollPhysics()
-                      : const NeverScrollableScrollPhysics(),
-                  onPageChanged: _onPageChanged,
-                  itemBuilder: (context, i) => _cube(context, i),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
+          child: LayoutBuilder(
+            builder: (context, box) {
+              // Ширина содержимого листа: по ней меряем текст под каждым
+              // артефактом, чтобы высота страницы была ровно по содержимому.
+              final contentW = box.maxWidth;
+              final heights = [
+                for (final g in widget.gifts)
+                  _pageHeightFor(context, g, contentW),
+              ];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: PressScale(
-                      pressedScale: 0.94,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _toggleFavorite,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 320),
-                          curve: Curves.easeInOutCubic,
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                            horizontal: 16,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _fav
-                                ? BrandColors.red
-                                : theme.colorScheme.primary,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color:
-                                    (_fav
-                                            ? BrandColors.red
-                                            : theme.colorScheme.primary)
-                                        .withValues(alpha: 0.40),
-                                blurRadius: _fav ? 14 : 8,
-                                offset: const Offset(0, 4),
+                  // Верхняя полоска драга
+                  Center(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.22,
+                        ),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Builder(
+                    builder: (context) {
+                      final page =
+                          _pages.hasClients && _pages.position.haveDimensions
+                          ? (_pages.page ?? _index.toDouble())
+                          : _index.toDouble();
+                      final lo = page.floor().clamp(0, heights.length - 1);
+                      final hi = page.ceil().clamp(0, heights.length - 1);
+                      final f = (page - lo).clamp(0.0, 1.0);
+                      final h = heights[lo] + (heights[hi] - heights[lo]) * f;
+                      return SizedBox(
+                        height: h,
+                        child: PageView.builder(
+                          controller: _pages,
+                          itemCount: widget.gifts.length,
+                          physics: _multiple
+                              ? const PageScrollPhysics()
+                              : const NeverScrollableScrollPhysics(),
+                          onPageChanged: _onPageChanged,
+                          itemBuilder: (context, i) => _cube(context, i),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: PressScale(
+                          pressedScale: 0.94,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _toggleFavorite,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 320),
+                              curve: Curves.easeInOutCubic,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                                horizontal: 16,
                               ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 260),
-                                child: Icon(
-                                  _fav
-                                      ? Icons.star_rounded
-                                      : Icons.star_outline_rounded,
-                                  key: ValueKey(_fav),
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
+                              decoration: BoxDecoration(
+                                color: _fav
+                                    ? BrandColors.red
+                                    : theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color:
+                                        (_fav
+                                                ? BrandColors.red
+                                                : theme.colorScheme.primary)
+                                            .withValues(alpha: 0.40),
+                                    blurRadius: _fav ? 14 : 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 260),
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (child, anim) =>
-                                    FadeTransition(
-                                      opacity: anim,
-                                      child: ScaleTransition(
-                                        scale: Tween<double>(
-                                          begin: 0.90,
-                                          end: 1.0,
-                                        ).animate(anim),
-                                        child: child,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 260),
+                                    child: Icon(
+                                      _fav
+                                          ? Icons.star_rounded
+                                          : Icons.star_outline_rounded,
+                                      key: ValueKey(_fav),
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Длинный перевод (французский, крупный
+                                  // системный шрифт) не должен разрывать
+                                  // кнопку — текст ужимается, а не вылезает.
+                                  Flexible(
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 260,
+                                      ),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      transitionBuilder: (child, anim) =>
+                                          FadeTransition(
+                                            opacity: anim,
+                                            child: ScaleTransition(
+                                              scale: Tween<double>(
+                                                begin: 0.90,
+                                                end: 1.0,
+                                              ).animate(anim),
+                                              child: child,
+                                            ),
+                                          ),
+                                      child: Text(
+                                        _fav
+                                            ? Translations.t(
+                                                'giftFavOn',
+                                                context,
+                                                'В избранном (до 5)',
+                                              )
+                                            : Translations.t(
+                                                'giftFavOff',
+                                                context,
+                                                'В избранное (до 5)',
+                                              ),
+                                        key: ValueKey(_fav),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
                                       ),
                                     ),
-                                child: Text(
-                                  _fav
-                                      ? Translations.t(
-                                          'giftFavOn',
-                                          context,
-                                          'В избранном (до 5)',
-                                        )
-                                      : Translations.t(
-                                          'giftFavOff',
-                                          context,
-                                          'В избранное (до 5)',
-                                        ),
-                                  key: ValueKey(_fav),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  PressScale(
-                    pressedScale: 0.92,
-                    child: IconButton.filledTonal(
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                      const SizedBox(width: 10),
+                      PressScale(
+                        pressedScale: 0.92,
+                        child: IconButton.filledTonal(
+                          style: IconButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.all(14),
+                          ),
+                          onPressed: () {
+                            Haptics.light();
+                            Navigator.of(context).pop();
+                          },
+                          icon: const Icon(Icons.close_rounded),
                         ),
-                        padding: const EdgeInsets.all(14),
                       ),
-                      onPressed: () {
-                        Haptics.light();
-                        Navigator.of(context).pop();
-                      },
-                      icon: const Icon(Icons.close_rounded),
-                    ),
+                    ],
                   ),
                 ],
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),
@@ -1773,60 +1882,55 @@ class _GiftDetailsSheetState extends State<_GiftDetailsSheet> {
           ],
         ),
         const SizedBox(height: 16),
-        Expanded(
-          child: SingleChildScrollView(
-            physics: const ClampingScrollPhysics(),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.35,
+        // Рамка описания обнимает текст: раньше здесь стоял `Expanded`, и у
+        // коротких артефактов внутри рамки оставалась пустая полоса.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.35,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: accent.withValues(alpha: 0.18)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                Translations.t(
+                  'giftDesc_${gift.id}',
+                  context,
+                  gift.description,
                 ),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: accent.withValues(alpha: 0.18)),
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.88),
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 8),
+              Row(
                 children: [
-                  Text(
-                    Translations.t(
-                      'giftDesc_${gift.id}',
-                      context,
-                      gift.description,
-                    ),
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.4,
-                      color: theme.colorScheme.onSurface.withValues(
-                        alpha: 0.88,
+                  Icon(Icons.bolt_rounded, size: 16, color: accent),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      Translations.t(
+                        'giftBuff_${gift.id}',
+                        context,
+                        gift.buffText,
+                      ),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: accent,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.bolt_rounded, size: 16, color: accent),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          Translations.t(
-                            'giftBuff_${gift.id}',
-                            context,
-                            gift.buffText,
-                          ),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: accent,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
-            ),
+            ],
           ),
         ),
       ],
