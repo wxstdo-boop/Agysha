@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../utils/motion_prefs.dart';
+import '../utils/perf_prefs.dart';
 import 'swipe_to_delete.dart' show SwipeToDeleteScope;
 
 /// Плавная отдача «вдавливания» и тактильного 3D-наклона для карточек и кнопок:
@@ -529,11 +530,14 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
     // важен: внешним должен остаться масштаб нажатия, иначе матрица наклона
     // перекрывает его и кнопка «не сжимается» для тестов и для глаз.
     final pressed = AnimatedBuilder(
+      // PerfPrefs.enabled — чтобы карточка бросила наклон сразу после
+      // включения «Оптимизации», не дожидаясь пересборки экрана.
       animation: Listenable.merge([
         _ctrl,
         _swipeAnim,
         _tiltNotifier,
         _tiltFade,
+        PerfPrefs.enabled,
       ]),
       builder: (context, child) {
         // В покое и нажатии — плавная кривая, при возврате — своя,
@@ -581,9 +585,14 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
             ? _releaseTilt
             : _tiltNotifier.value;
         final tiltFade = _tiltFadeAnim.value;
+        // В режиме «Оптимизация» карточки не наклоняются: перспективный
+        // Transform поднимает слой и заставляет растеризатор перерисовывать
+        // его каждый кадр драга. Так и записано в описании режима
+        // (lib/utils/perf_prefs.dart) — раньше флаг читался только декором.
         final tiltActive =
             widget.enableTilt &&
             !MotionPrefs.shouldReduceMotion &&
+            !PerfPrefs.active &&
             tiltFade > 0.001 &&
             currentTilt != Offset.zero;
         final tiltMatrix = Matrix4.identity();

@@ -1175,8 +1175,8 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
     vsync: this,
     value: 0,
     // Медленнее и мягче: наклон догоняет палец, а не щёлкает за ним.
-    duration: const Duration(milliseconds: 380),
-    reverseDuration: const Duration(milliseconds: 700),
+    duration: const Duration(milliseconds: 340),
+    reverseDuration: const Duration(milliseconds: 620),
   );
 
   /// Момент прошлого отпускания. Быстрый набор ПИН-кода — это десяток
@@ -1357,14 +1357,14 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
                   Offset.lerp(_tilt.value, _tiltTarget, 0.22) ?? _tiltTarget;
               final matrix = Matrix4.identity();
               if (tilt > 0.001) {
-                matrix.setEntry(3, 2, 0.0017);
+                matrix.setEntry(3, 2, 0.0020);
                 // Вертикальный наклон слабее горизонтального, чтобы клавиша
                 // не «проваливалась» вниз, но общая амплитуда заметно
                 // сочнее: владелец просил «чуть больше» на ПИН-экране.
-                matrix.rotateX(-aim.dy * 0.21 * tilt);
-                matrix.rotateY(aim.dx * 0.44 * tilt);
+                matrix.rotateX(-aim.dy * 0.24 * tilt);
+                matrix.rotateY(aim.dx * 0.50 * tilt);
               }
-              final scale = 1 - 0.155 * press * (1 - lift);
+              final scale = 1 - 0.175 * press * (1 - lift);
               matrix.scaleByDouble(scale, scale, 1.0, 1.0);
               // «Мыльное» растяжение, как на Realme: клавиша тянется В
               // СТОРОНУ пальца, поперёк — чуть поджимается. Матрица
@@ -1379,9 +1379,12 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               // быстрой рампе нажатия и НЕ зависит от наклона, а у центра
               // клавиши направление берётся с полом амплитуды (палец в
               // середине — всё равно лёгкая отдача вниз-в сторону).
+              // Мелкий перелёт в конце рампы (easeOutBack ~+8%) — это и
+              // есть «желейность»: клавиша чуть проскакивает следом за
+              // пальцем и оседает назад, вместо жёсткого стопа на плитке.
               final stretchT =
-                  Curves.easeOutCubic.transform(
-                    (_in.value / 0.20).clamp(0.0, 1.0),
+                  Curves.easeOutBack.transform(
+                    (_in.value / 0.22).clamp(0.0, 1.0),
                   ) *
                   (1 - lift);
               final aimLen = math.max(aim.distance, 0.30);
@@ -1391,9 +1394,12 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
                     ? math.pi / 2
                     : math.atan2(aim.dy, aim.dx);
                 matrix.rotateZ(angle);
+                // Поперечное сжатие держим примерно вдвое слабее
+                // продольного: так клавиша «течёт» в сторону пальца, но
+                // не превращается в сплюснутую каплю.
                 matrix.scaleByDouble(
-                  1 + 0.165 * stretchK,
-                  1 - 0.055 * stretchK,
+                  1 + 0.235 * stretchK,
+                  1 - 0.090 * stretchK,
                   1.0,
                   1.0,
                 );

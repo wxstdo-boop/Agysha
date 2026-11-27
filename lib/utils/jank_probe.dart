@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show FrameTiming;
+import 'dart:math' as math;
+import 'dart:ui' show FramePhase, FrameTiming;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -75,8 +76,28 @@ class JankProbe {
   static bool _started = false;
   static bool _writing = false;
 
-  /// Бюджет кадра при 60 Гц.
-  static const double budgetMs = 16.6;
+  /// Бюджет кадра при 60 Гц — только запасное значение.
+  static const double _fallbackBudgetMs = 16.6;
+
+  /// Бюджет кадра в мс ПОД ЧАСТОТУ ЭКРАНА.
+  ///
+  /// Раньше здесь стояла константа 16.6 мс. На 120-герцовом телефоне кадр
+  /// в 12 мс — это уже пропущенный кадр (бюджет 8.3), но замер считал его
+  /// нормой: доля «тормознутых» кадров выходила низкой, и декоративные
+  /// петли никогда не уступали дорогу ([ambientBackoff] оставался 1).
+  /// Отсюда и «иногда норм, иногда лагает»: телефон сам переключает
+  /// частоту, а бюджет замера был всегда 60-герцовый.
+  static double get budgetMs => _budget;
+  static double _budget = _fallbackBudgetMs;
+  static int _budgetTick = 0;
+
+  /// Сглаженный интервал между кадрами и время предыдущего кадра.
+  ///
+  /// Заявленной частоты экрана мало: телефон пишет 120 Гц, а движок может
+  /// идти ровно на 60. Бюджет поэтому не строже реального темпа кадров —
+  /// иначе счётчик объявил бы «тормозом» каждый нормальный кадр.
+  static double _intervalMs = 0;
+  static int _prevTsUs = 0;
 
   /// Потолок строк файла: за час теста файл не должен разрастись до мегабайт.
   static const int _maxLines = 900;
@@ -114,10 +135,15 @@ class JankProbe {
 
   /// Нагрузка кадра, 0..1: 0 — бюджет свободен, 1 — кадр вдвое дольше бюджета.
   ///
-  /// Ниже 6 мс на кадр считается нулём: это обычная жизнь, и трогать декор
-  /// из-за неё незачем. От 6 до 18 мс растёт линейно.
-  static double get pressure =>
-      _load <= 6 ? 0 : ((_load - 6) / 12).clamp(0.0, 1.0);
+  /// Считается ОТ БЮДЖЕТА ЭКРАНА, а не от константы: на 120 Гц восемь
+  /// миллисекунд уже тесно, на 60 Гц — половина кадра. Порог начинается с
+  /// 62% бюджета (обычная жизнь), единица — на 172% бюджета (кадр не влез).
+  static double get pressure {
+    final b = _budget;
+    final over = _load - b * 0.62;
+    if (over <= 0) return 0;
+    return (over / (b * 1.10)).clamp(0.0, 1.0);
+  }
 
   /// Во сколько раз реже тикать декоративным петлям прямо сейчас.
   ///
@@ -186,6 +212,10 @@ class JankProbe {
     _worstLabel = '';
     _worstRaster = 0;
     _load = 0;
+    _budgetTick = 0;
+    _intervalMs = 0;
+    _prevTsUs = 0;
+    _budget = _computeBudget();
   }
 
   static double get _refreshRate {
@@ -196,6 +226,19 @@ class JankProbe {
     } catch (_) {
       return 60;
     }
+  }
+
+  /// Бюджет кадра: не строже ни заявленной частоты экрана, ни фактического
+  /// темпа приходящих кадров.
+  static double _computeBudget() {
+    final hz = _refreshRate;
+    final byHz = hz > 1
+        ? (1000.0 / hz).clamp(6.0, 20.0).toDouble()
+        : _fallbackBudgetMs;
+    if (_intervalMs > 0.5 && _intervalMs < 20.5) {
+      return math.max(byHz, _intervalMs.clamp(6.0, 20.0).toDouble());
+    }
+    return byHz;
   }
 
   static JankSummary get summary {
@@ -247,7 +290,20 @@ class JankProbe {
   }
 
   static void _onTimings(List<FrameTiming> timings) {
+    // Бюджет пересчитываем раз в ~30 кадров: экран сам меняет частоту
+    // (60 в покое, 120 при касании), а `displays` дёргать каждый кадр незачем.
+    if (_budgetTick++ % 30 == 0) _budget = _computeBudget();
     for (final t in timings) {
+      // Интервал между кадрами — только по подряд идущим кадрам: пауза в
+      // простое (экран не перерисовывается) не должна раздувать бюджет.
+      final ts = t.timestampInMicroseconds(FramePhase.vsyncStart);
+      if (_prevTsUs > 0) {
+        final d = (ts - _prevTsUs) / 1000.0;
+        if (d > 0.5 && d < 100) {
+          _intervalMs = _intervalMs <= 0 ? d : _intervalMs * 0.9 + d * 0.1;
+        }
+      }
+      _prevTsUs = ts;
       final build = t.buildDuration.inMicroseconds / 1000.0;
       final raster = t.rasterDuration.inMicroseconds / 1000.0;
       final overhead = t.vsyncOverhead.inMicroseconds / 1000.0;
