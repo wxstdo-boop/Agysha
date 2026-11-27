@@ -48,13 +48,15 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round">
-        <!-- Skia вместо Impeller: на бюджетных GPU (Adreno 610 у Redmi
-             Note 12) Vulkan-рендерер Impeller подтормаживает и рисует
-             текст (особенно курсив) с артефактами-зазорами между глифами.
-             Вид и анимации НЕ меняются — только движок отрисовки. -->
+        <!-- Impeller включён НАВСЕГДА, без переключателя.
+             Зачем: Agysha упирается в растровку (GPU), а не в Dart, и
+             основной расход — размытия, тени и сохранение слоёв. Impeller
+             считает их дешевле Skia и не компилирует шейдеры прямо в кадре
+             (на Skia это давало «иногда лагает, иногда нет»). Вид и
+             анимации НЕ меняются — только движок отрисовки. -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="false" />
+            android:value="true" />
         <!-- ВАЖНО: здесь НЕТ android:showWhenLocked / android:turnScreenOn.
              Эти флаги на самой активности действуют ВСЕГДА — приложение
              вылезало поверх экрана блокировки при любом запуске, включая

@@ -653,16 +653,15 @@ Play Protect, file an appeal», support.google.com/googleplay/answer/2812853).
   `_DayHeader`: новый раскрывается по высоте, ушедший остаётся «призраком»
   (`_dayGhosts`) и гаснет. Значок закрепа без `easeOutBack` — мягкий разгон.
 
-## Движок отрисовки: Skia ↔ Impeller
+## Движок отрисовки: Impeller
 
-- Манифест держит `io.flutter.embedding.android.EnableImpeller=false` (Skia),
-  но **аргумент движка сильнее манифеста**. `MainActivity.getFlutterShellArgs()`
-  добавляет `--enable-impeller=true|false` по выбору из SharedPreferences
-  (`agysha_render/mode`), поэтому уголок разработчика может переключить
-  бэкенд без пересборки: канал `com.wetcorp.agysha/renderer`
-  (`status`/`set`), обёртка — `lib/services/renderer_service.dart`.
-- Применяется только со следующего запуска движка: у работающего приложения
-  бэкенд не меняется, поэтому в панели две строки — «выбрано» и «работает».
+- Манифест держит `io.flutter.embedding.android.EnableImpeller=true` — Impeller
+  включён **всегда**. Переключателя в уголке разработчика больше нет, как и
+  канала `com.wetcorp.agysha/renderer`: замеры плавности показали, что Agysha
+  упирается в растровку (GPU), а Impeller не компилирует шейдеры в кадре.
+- На Adreno 610 (Redmi Note 12) Impeller мог рисовать курсив с зазорами —
+  это устройство больше не поддерживается как эталон; эталон — Realme 14 5G
+  (Mali-G57, 120 Гц).
 - Зачем: на Skia первый показ экрана с новым шейдером компилирует его в кадре
   — это тот самый «иногда лагает, иногда нормально». Impeller шейдеры не
   компилирует, но на части GPU дороже на размытиях. Выбор — за телефоном.

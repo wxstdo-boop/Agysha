@@ -393,14 +393,9 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
                           SliverToBoxAdapter(child: _footer(context, theme)),
                         ] else ...[
                           SliverToBoxAdapter(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildSettingsCard(context, theme),
-                                ..._buildListChildren(context, theme, checks),
-                              ],
-                            ),
+                            child: _buildSettingsCard(context, theme),
                           ),
+                          ..._buildListSlivers(context, theme, checks),
                           SliverFillRemaining(
                             hasScrollBody: false,
                             child: Align(
@@ -421,201 +416,206 @@ class _RealityChecksScreenState extends State<RealityChecksScreen>
     );
   }
 
-  List<Widget> _buildListChildren(
+  /// Карточки проверок — ЛЕНИВЫЙ sliver, а не `ListView(shrinkWrap: true)`.
+  /// Раньше список лежал внутри общего `SliverToBoxAdapter` и в каждом кадре
+  /// прокрутки раскладывал все элементы сразу (плюс лишний вьюпорт внутри
+  /// вьюпорта). Порядок, отступы (16 по бокам, 8 сверху и снизу) и вид
+  /// карточек при этом не меняются.
+  List<Widget> _buildListSlivers(
     BuildContext context,
     ThemeData theme,
     List<RealityCheck> checks,
   ) {
     return [
-      ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
+      SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: checks.length,
-        itemBuilder: (context, i) {
-          final check = checks[i];
-          return SwipeToDelete(
-            key: ValueKey('item_rc_${check.id}'),
-            dismissKey: ValueKey('dismiss_${check.id}'),
-            // Фон удаления = границы карточки (стандартный margin [Card] 4 px).
-            inset: const EdgeInsets.all(4),
-            confirmDismiss: (_) async {
-              return await showAgyshaConfirm(
-                context,
-                title: Translations.deleteOf(context),
-                body: check.question,
-                icon: Icons.delete_outline_rounded,
-                confirmLabel: Translations.deleteOf(context),
-                destructive: true,
-              );
-            },
-            onDismissed: (_) async {
-              await _service.remove(check.id);
-              _scheduleReminders();
-            },
-            child: PressScale(
-              // Та же отдача, что у карточек привычек и задач: карточка не
-              // только вдавливается, но и живо наклоняется в сторону пальца.
-              // Раньше здесь был SmoothHover — уменьшение без 3D, и проверки
-              // заметно выбивались из остального приложения.
-              pressedScale: 0.965,
-              enableTilt: true,
-              maxTiltAngle: 0.26,
-              pressedOpacity: 0.94,
-              pressOverlay: pressGloss(
-                BorderRadius.circular(20),
-                strength: 0.10,
-              ),
-              child: Card(
-                key: ValueKey(check.id),
-                clipBehavior: Clip.antiAlias,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+        sliver: SliverList.builder(
+          itemCount: checks.length,
+          itemBuilder: (context, i) {
+            final check = checks[i];
+            return SwipeToDelete(
+              key: ValueKey('item_rc_${check.id}'),
+              dismissKey: ValueKey('dismiss_${check.id}'),
+              // Фон удаления = границы карточки (стандартный margin [Card] 4 px).
+              inset: const EdgeInsets.all(4),
+              confirmDismiss: (_) async {
+                return await showAgyshaConfirm(
+                  context,
+                  title: Translations.deleteOf(context),
+                  body: check.question,
+                  icon: Icons.delete_outline_rounded,
+                  confirmLabel: Translations.deleteOf(context),
+                  destructive: true,
+                );
+              },
+              onDismissed: (_) async {
+                await _service.remove(check.id);
+                _scheduleReminders();
+              },
+              child: PressScale(
+                // Та же отдача, что у карточек привычек и задач: карточка не
+                // только вдавливается, но и живо наклоняется в сторону пальца.
+                // Раньше здесь был SmoothHover — уменьшение без 3D, и проверки
+                // заметно выбивались из остального приложения.
+                pressedScale: 0.965,
+                enableTilt: true,
+                maxTiltAngle: 0.26,
+                pressedOpacity: 0.94,
+                pressOverlay: pressGloss(
+                  BorderRadius.circular(20),
+                  strength: 0.10,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
-                  // Долгое зажатие карточки — редактирование (кнопка-
-                  // карандаш справа убрана).
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onLongPress: () => _editCheck(check),
-                    child: Column(
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Кружок-галка: внутри — ВЫБРАННЫЙ значок проверки
-                            // (раньше был «пальчик»), при отметке — галочка.
-                            // сжимается (scale 0.9) — без мигания.
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => _doCheck(check),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 260),
-                                // Ровно как кружок привычки: 32 px, в покое
-                                // ПРОЗРАЧНЫЙ (без цветной заливки-«плашки»),
-                                // только тематическая обводка. Раньше здесь
-                                // была залитая primary-подложка 36 px — она
-                                // читалась как отдельный «бейдж» и выбивалась
-                                // из ряда привычек/задач.
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: check.isDoneToday
-                                      ? theme.colorScheme.primary
-                                      : Colors.transparent,
-                                  border: Border.all(
+                child: Card(
+                  key: ValueKey(check.id),
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+                    // Долгое зажатие карточки — редактирование (кнопка-
+                    // карандаш справа убрана).
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onLongPress: () => _editCheck(check),
+                      child: Column(
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // Кружок-галка: внутри — ВЫБРАННЫЙ значок проверки
+                              // (раньше был «пальчик»), при отметке — галочка.
+                              // сжимается (scale 0.9) — без мигания.
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _doCheck(check),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 260),
+                                  // Ровно как кружок привычки: 32 px, в покое
+                                  // ПРОЗРАЧНЫЙ (без цветной заливки-«плашки»),
+                                  // только тематическая обводка. Раньше здесь
+                                  // была залитая primary-подложка 36 px — она
+                                  // читалась как отдельный «бейдж» и выбивалась
+                                  // из ряда привычек/задач.
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
                                     color: check.isDoneToday
                                         ? theme.colorScheme.primary
-                                        : theme.colorScheme.outline,
-                                    width: 2,
+                                        : Colors.transparent,
+                                    border: Border.all(
+                                      color: check.isDoneToday
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.outline,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  // Плавная смена значка: значок проверки → галка
+                                  // с лёгким «попом» (fade + scale), как в
+                                  // привычках и задачах.
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 280),
+                                    switchInCurve: Curves.easeOutBack,
+                                    switchOutCurve: Curves.easeInCubic,
+                                    transitionBuilder: (child, animation) =>
+                                        ScaleTransition(
+                                          scale: animation,
+                                          child: FadeTransition(
+                                            opacity: animation,
+                                            child: child,
+                                          ),
+                                        ),
+                                    child: check.isDoneToday
+                                        ? const Icon(
+                                            Icons.check,
+                                            key: ValueKey('rc_done_check'),
+                                            size: 23,
+                                            color: Colors.white,
+                                          )
+                                        : Icon(
+                                            check.icon,
+                                            key: const ValueKey('rc_icon'),
+                                            size: 23,
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
                                   ),
                                 ),
-                                // Плавная смена значка: значок проверки → галка
-                                // с лёгким «попом» (fade + scale), как в
-                                // привычках и задачах.
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 280),
-                                  switchInCurve: Curves.easeOutBack,
-                                  switchOutCurve: Curves.easeInCubic,
-                                  transitionBuilder: (child, animation) =>
-                                      ScaleTransition(
-                                        scale: animation,
-                                        child: FadeTransition(
-                                          opacity: animation,
-                                          child: child,
-                                        ),
-                                      ),
-                                  child: check.isDoneToday
-                                      ? const Icon(
-                                          Icons.check,
-                                          key: ValueKey('rc_done_check'),
-                                          size: 23,
-                                          color: Colors.white,
-                                        )
-                                      : Icon(
-                                          check.icon,
-                                          key: const ValueKey('rc_icon'),
-                                          size: 23,
-                                          color: theme
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                        ),
-                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              // Плавное зачёркивание, как в задачах и привычках.
-                              // Здесь его НЕ БЫЛО вовсе: отметка только
-                              // подсвечивала кружок, и фраза оставалась такой
-                              // же яркой — отсюда «зачёркивания не видно».
-                              child: AnimatedStrikeText(
-                                text: sanitizeTextForWrap(check.question),
-                                style: StrikeStyle.textStyle(
-                                  theme,
-                                  fontSize: 19.5,
-                                  height: 1.35,
-                                ),
-                                textScaler: MediaQuery.textScalerOf(context),
-                                struck: check.isDoneToday,
-                                // Полупрозрачный приглушённый текст: раньше
-                                // цвет был непрозрачным, и «выполненная» фраза
-                                // оставалась такой же яркой.
-                                struckColor: StrikeStyle.textColor(theme),
-                                // Линия берётся НЕ `outline`: он светлее
-                                // текста примерно на 15 уровней серого, и на
-                                // телефоне зачёркивание не читалось совсем.
-                                strikeColor: StrikeStyle.lineColor(theme),
-                                maxLines: null,
-                              ),
-                            ),
-                          ],
-                        ),
-                        // Футер "N Сделано" — цифра меняется ПЛАВНО (ролик).
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Счётчик СБРАСЫВАЕТСЯ каждый день: если последняя
-                              // отметка была вчера, сегодня показываем 0.
-                              // (раньше висело вчерашнее значение до первой
-                              // отметки нового дня).
-                              _AnimatedCount(
-                                value:
-                                    check.lastDoneDate ==
-                                        RealityCheck.todayKey()
-                                    ? check.doneToday
-                                    : 0,
-                                style:
-                                    theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.primary,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                    ) ??
-                                    const TextStyle(),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                Translations.t('doneToday', context),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                // Плавное зачёркивание, как в задачах и привычках.
+                                // Здесь его НЕ БЫЛО вовсе: отметка только
+                                // подсвечивала кружок, и фраза оставалась такой
+                                // же яркой — отсюда «зачёркивания не видно».
+                                child: AnimatedStrikeText(
+                                  text: sanitizeTextForWrap(check.question),
+                                  style: StrikeStyle.textStyle(
+                                    theme,
+                                    fontSize: 19.5,
+                                    height: 1.35,
+                                  ),
+                                  textScaler: MediaQuery.textScalerOf(context),
+                                  struck: check.isDoneToday,
+                                  // Полупрозрачный приглушённый текст: раньше
+                                  // цвет был непрозрачным, и «выполненная» фраза
+                                  // оставалась такой же яркой.
+                                  struckColor: StrikeStyle.textColor(theme),
+                                  // Линия берётся НЕ `outline`: он светлее
+                                  // текста примерно на 15 уровней серого, и на
+                                  // телефоне зачёркивание не читалось совсем.
+                                  strikeColor: StrikeStyle.lineColor(theme),
+                                  maxLines: null,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
+                          // Футер "N Сделано" — цифра меняется ПЛАВНО (ролик).
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Счётчик СБРАСЫВАЕТСЯ каждый день: если последняя
+                                // отметка была вчера, сегодня показываем 0.
+                                // (раньше висело вчерашнее значение до первой
+                                // отметки нового дня).
+                                _AnimatedCount(
+                                  value:
+                                      check.lastDoneDate ==
+                                          RealityCheck.todayKey()
+                                      ? check.doneToday
+                                      : 0,
+                                  style:
+                                      theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.primary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                      ) ??
+                                      const TextStyle(),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  Translations.t('doneToday', context),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     ];
   }

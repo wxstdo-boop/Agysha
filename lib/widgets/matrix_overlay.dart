@@ -44,8 +44,16 @@ class _MatrixRainState extends State<MatrixRain>
     // Один медленный цикл на весь дождь: за 17 с колонка проходит экран
     // сверху донизу. Скорость каждой колонки — множитель фазы, поэтому
     // «живые» и «фоновые» нити идут с разной скоростью.
+    // Тик раз в несколько кадров экрана (20 fps на 120 Гц), как у остальных
+    // вечных фонов (AmbientVsync). Скорость при этом не меняется:
+    // `AnimationController` считает значение от абсолютного `elapsed`, а не
+    // суммирует шаги кадра, поэтому 17-секундный виток дождь проходит ровно
+    // за те же 17 с — просто перерисовок вшестеро меньше.
     _ctrl = ambientRepeat(
-      AnimationController(vsync: this, duration: const Duration(seconds: 17)),
+      AnimationController(
+        vsync: MotionPrefs.ambient(this),
+        duration: const Duration(seconds: 17),
+      ),
     );
     _columns = List<_Column>.generate(18, (i) {
       return _Column(
