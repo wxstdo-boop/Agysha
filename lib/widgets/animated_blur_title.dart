@@ -2,11 +2,9 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 
-import '../l10n/translations.dart';
 import '../services/haptics.dart';
 import '../services/prefs.dart';
 import '../services/profile_service.dart';
-import '../utils/motion_prefs.dart';
 import 'online_dot.dart';
 import 'press_scale.dart';
 
@@ -73,194 +71,56 @@ class _AnimatedBlurTitleState extends State<AnimatedBlurTitle>
       fontStyle: FontStyle.italic,
       letterSpacing: -0.8,
     );
-    // Заголовок и подпись авторов стоят одной строкой. Каждому — своя доля
-    // ширины со своим FittedBox: на узком экране оба мягко ужимаются, но
-    // имя не «съедает» подпись и наоборот.
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          flex: 2,
+    return PressScale(
+      pressedScale: 0.95,
+      duration: const Duration(milliseconds: 320),
+      releaseDuration: const Duration(milliseconds: 440),
+      child: GestureDetector(
+        onTap: _toggle,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return _CyberGlitchEffect(
+              progress: _controller.value,
+              visibleChild: child!,
+            );
+          },
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: PressScale(
-              pressedScale: 0.95,
-              duration: const Duration(milliseconds: 320),
-              releaseDuration: const Duration(milliseconds: 440),
-              child: GestureDetector(
-                onTap: _toggle,
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, child) {
-                    return _CyberGlitchEffect(
-                      progress: _controller.value,
-                      visibleChild: child!,
-                    );
-                  },
-                  child: AnimatedBuilder(
-                    // Имя юзера в шапке: как только профиль сохраняет короткое
-                    // имя, заголовок сам меняется на него — без пересборки Home.
-                    animation: ProfileService(),
-                    builder: (context, _) {
-                      // Своё имя вместо «Agysha»: пустое поле оставляем
-                      // брендом, чтобы шапка не оставалась пустой у нового
-                      // пользователя.
-                      final name = ProfileService().displayName;
-                      final title = name.isNotEmpty ? name : 'Agysha';
-                      // Смена имени — плавная: кросс-фейд со лёгким
-                      // «проявлением», а не мгновенная подмена текста. Заметно
-                      // медленнее обычного — читается как мягкое перетекание.
-                      return AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 520),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, anim) => FadeTransition(
-                          opacity: anim,
-                          child: ScaleTransition(
-                            scale: Tween<double>(
-                              begin: 0.94,
-                              end: 1,
-                            ).animate(anim),
-                            child: child,
-                          ),
-                        ),
-                        child: _TitleWithDot(
-                          key: ValueKey(title),
-                          text: title,
-                          style: style,
-                          onDotTap: widget.onOnlineTap ?? () {},
-                        ),
-                      );
-                    },
+            child: AnimatedBuilder(
+              // Имя юзера в шапке: как только профиль сохраняет короткое имя,
+              // заголовок сам меняется на него — без пересборки всего Home.
+              animation: ProfileService(),
+              builder: (context, _) {
+                // Своё имя вместо «Agysha»: пустое поле оставляем брендом,
+                // чтобы шапка не оставалась пустой у нового пользователя.
+                final name = ProfileService().displayName;
+                final title = name.isNotEmpty ? name : 'Agysha';
+                // Смена имени — плавная: кросс-фейд со лёгким «проявлением»,
+                // а не мгновенная подмена текста. Заметно медленнее обычного —
+                // читается как мягкое перетекание.
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 520),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.94, end: 1).animate(anim),
+                      child: child,
+                    ),
                   ),
-                ),
-              ),
+                  child: _TitleWithDot(
+                    key: ValueKey(title),
+                    text: title,
+                    style: style,
+                    onDotTap: widget.onOnlineTap ?? () {},
+                  ),
+                );
+              },
             ),
           ),
-        ),
-        const _TitleDivider(),
-        const Flexible(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: _CreditsTag(),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Волосяная черта между именем и подписью авторов: разводит два разных
-/// смысла в одной строке, не добавляя ещё одной «кнопки».
-class _TitleDivider extends StatelessWidget {
-  const _TitleDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: 1,
-      height: 19,
-      margin: const EdgeInsets.only(left: 8, right: 7),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(1),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            cs.onSurface.withValues(alpha: 0.02),
-            cs.onSurface.withValues(alpha: 0.16),
-            cs.onSurface.withValues(alpha: 0.02),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Подпись тестеров и помощников рядом с именем: две строки полупрозрачным
-/// текстом — крошечный ярлык и имена, под ними тонкая красная искра.
-/// Она не нажимается (IgnorePointer): вся зона рядом с именем остаётся
-/// за приглушением заголовка.
-class _CreditsTag extends StatelessWidget {
-  const _CreditsTag();
-
-  static const String _names = 'Kokos · Laraf';
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return IgnorePointer(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0, end: 1),
-        // Подпись не «выпрыгивает» вместе с шапкой: она медленно проявляется,
-        // пока глаз уже читает имя.
-        duration: MotionPrefs.shouldReduceMotion
-            ? Duration.zero
-            : const Duration(milliseconds: 900),
-        curve: Curves.easeOutCubic,
-        builder: (context, t, child) => Opacity(
-          opacity: t,
-          child: Transform.translate(
-            offset: Offset(-4 * (1 - t), 0),
-            child: child,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              Translations.t(
-                'creditsTesters',
-                context,
-                'тестеры',
-              ).toUpperCase(),
-              maxLines: 1,
-              softWrap: false,
-              style: TextStyle(
-                fontSize: 7.0,
-                height: 1.0,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-                color: cs.onSurfaceVariant.withValues(
-                  alpha: dark ? 0.46 : 0.42,
-                ),
-              ),
-            ),
-            const SizedBox(height: 3.5),
-            Text(
-              _names,
-              maxLines: 1,
-              softWrap: false,
-              style: TextStyle(
-                fontSize: 10.0,
-                height: 1.0,
-                fontWeight: FontWeight.w600,
-                fontStyle: FontStyle.italic,
-                letterSpacing: 0.1,
-                color: cs.onSurface.withValues(alpha: dark ? 0.60 : 0.56),
-              ),
-            ),
-            const SizedBox(height: 3.0),
-            Container(
-              width: 44,
-              height: 1.4,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(1),
-                gradient: LinearGradient(
-                  colors: [
-                    cs.primary.withValues(alpha: 0.50),
-                    cs.primary.withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -338,7 +198,10 @@ class _CyberGlitchEffect extends StatelessWidget {
       alignment: Alignment.centerLeft,
       children: [
         if (hiddenOpacity > 0.001)
-          Opacity(opacity: hiddenOpacity, child: encryptedBadge),
+          Opacity(
+            opacity: hiddenOpacity,
+            child: encryptedBadge,
+          ),
         if (visibleOpacity > 0.001)
           Opacity(
             opacity: visibleOpacity,
@@ -395,7 +258,10 @@ class _ScanlineGlitchPainter extends CustomPainter {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.0;
 
-  const _ScanlineGlitchPainter({required this.glitch, required this.phase});
+  const _ScanlineGlitchPainter({
+    required this.glitch,
+    required this.phase,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -463,10 +329,9 @@ class _TitleWithDot extends StatelessWidget {
     // Левый край кружка ставим в фиксированный зазор от буквы: диаметр кружка
     // может меняться, а воздух до буквы должен оставаться тем же.
     final dotRadius = OnlineDot.dotSize / 2;
-    final dotCx = (lastGlyph?.right ?? painter.width) + _gapLeft + dotRadius;
-    final dotCy =
-        ((lastGlyph?.top ?? 0) + (lastGlyph?.bottom ?? painter.height)) / 2 +
-        _dropY;
+    final dotCx =
+        (lastGlyph?.right ?? painter.width) + _gapLeft + dotRadius;
+    final dotCy = ((lastGlyph?.top ?? 0) + (lastGlyph?.bottom ?? painter.height)) / 2 + _dropY;
 
     // Stack хит-тестит только ВНУТРИ своих границ: кружок, вынесенный за
     // границы, было бы не нажать. Поэтому раздуваем рамку на недостающие поля,

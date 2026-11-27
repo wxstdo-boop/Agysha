@@ -43,6 +43,7 @@ import '../utils/context_menu.dart';
 import '../widgets/volumetric_switch.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/confetti_burst.dart';
+import '../widgets/credits_footer.dart';
 import '../widgets/stagger_in.dart';
 import '../widgets/smooth_keyboard_body.dart';
 import '../widgets/update_pill.dart';
@@ -546,6 +547,9 @@ class _SettingsScreenState extends State<SettingsScreen>
       ..._settingsBehaviorSection(context, appState, theme),
       ..._settingsAdaSection(context, appState, theme),
       ..._settingsDiagnosticsSection(context, appState, theme),
+      // Подпись тестеров — последним элементом: под всеми карточками,
+      // полупрозрачной строкой на красноватой полосе.
+      const CreditsFooter(),
     ];
     // «Чуть крупнее» ТОЛЬКО здесь: глобальная тема при обычном шрифте
     // намеренно уменьшает body/label-стили (плотные списки разделов),
