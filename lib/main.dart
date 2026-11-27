@@ -13,6 +13,7 @@ import 'screens/home_screen.dart';
 import 'screens/wake_task_screen.dart';
 import 'screens/startup_recovery_screen.dart';
 import 'screens/startup_diagnostic_screen.dart';
+import 'screens/settings_screen.dart';
 import 'widgets/mutilated_overlay.dart';
 import 'widgets/metel_overlay.dart';
 import 'widgets/itshnik_overlay.dart';
@@ -36,6 +37,7 @@ import 'l10n/translations.dart';
 import 'services/pin_service.dart';
 import 'services/settings_service.dart';
 import 'services/notification_service.dart';
+import 'services/noise_mask_service.dart';
 import 'services/alarm_black_box.dart';
 import 'services/alarm_scheduler.dart';
 import 'services/haptics.dart';
@@ -530,23 +532,57 @@ final MethodChannel _alarmPayloadChannel = const MethodChannel(
   'com.wetcorp.agysha/alarm_payload',
 );
 
+/// Настройки по кнопке «Обновить» из шторки: ждём навигатор (холодный старт
+/// ещё поднимает дерево) и не выходим поверх экрана PIN.
+Future<void> _openSettingsForUpdate() async {
+  for (var i = 0; i < 30; i++) {
+    final nav = navigatorKey.currentState;
+    if (nav != null && !aiLockScreenVisible.value) {
+      nav.push(slideSideRoute<void>(const SettingsScreen()));
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+  }
+}
+
 Future<void> _handleNotificationTap(String? payload, [String? actionId]) async {
   if (payload == null) return;
   if (payload.startsWith('update:')) {
     // Тап по самому баннеру открывает приложение и плашку с установкой;
     // кнопка «Обновить» в шторке скачивает APK сразу, не уводя человека
     // в экран «Что нового». О версии могли сообщить раньше, поэтому
-    // проверяем её принудительно.
+    // проверяем её принудительно: суточный интервал здесь не указ.
     var info = pendingUpdate.value;
     if (info == null) {
-      // Приложение убили с момента релиза: сначала узнаём версию,
-      // потом всё равно показываем плашку — иначе тап по баннеру
-      // упирался в «о версии уже сообщали» и не делал ничего.
-      await UpdateService.instance.silentDailyCheck();
+      await UpdateService.instance.silentDailyCheck(force: true);
       info = pendingUpdate.value;
     }
-    if (actionId == 'update' && info != null) {
-      await UpdateNotice.instance.installFromNotification(info);
+    if (actionId == 'update') {
+      // Приложение открываем на Настройках — там плашка обновления с
+      // версией и прогрессом, и оттуда человек видит, что происходит.
+      // Поверх экрана PIN не лезем: сначала разблокировка.
+      await _openSettingsForUpdate();
+      if (info != null) {
+        await UpdateNotice.instance.installFromNotification(info);
+      } else {
+        // Сети нет или релиз снят: молча ничего не делать нельзя —
+        // человек уже нажал кнопку.
+        final context = navigatorKey.currentContext;
+        if (context != null && context.mounted) {
+          showBeautifulSnackBar(
+            context,
+            message: Translations.t(
+              'updateCheckFailed',
+              context,
+              'Не удалось проверить обновление. Попробуйте позже.',
+            ),
+            icon: Icons.error_outline,
+            iconColor: Colors.redAccent,
+            groupKey: 'update',
+            duration: const Duration(seconds: 4),
+          );
+        }
+      }
     } else {
       await UpdateNotice.instance.announce(info, force: true);
     }
@@ -1058,16 +1094,12 @@ Future<_StartupState> _loadStartupState() async {
   // «Новый год» разрешён до срока или пока человек сам не вернул его:
   // флаг читаем синхронно, он нужен уже на первом кадре.
   final newYearUnlocked = SettingsService.readNewYearThemeUnlocked();
-  final residentVariant = SettingsService.loadStyleVariant(
-    ResidentPalette.key,
-  );
+  final residentVariant = SettingsService.loadStyleVariant(ResidentPalette.key);
   final cyberVariant = SettingsService.loadStyleVariant(CyberPalette.key);
   final residentWallpaper = SettingsService.loadStyleWallpaper(
     ResidentPalette.key,
   );
-  final cyberWallpaper = SettingsService.loadStyleWallpaper(
-    CyberPalette.key,
-  );
+  final cyberWallpaper = SettingsService.loadStyleWallpaper(CyberPalette.key);
   // Прогреваем живые флаги режимов до первого Home-кадра:
   // кнопка BERSERK и карточки не ждут открытия настроек.
   // Вибрация, звуки и «Оптимизация» тоже читаются ДО первого кадра:
@@ -1280,19 +1312,68 @@ void main() async {
   };
   ui.PlatformDispatcher.instance.onError = (error, stack) {
     debugPrint('Uncaught async error: $error\n$stack');
-    ErrorLog.record(error, stack, context: 'необработанная async-ошибка', critical: true);
+    ErrorLog.record(
+      error,
+      stack,
+      context: 'необработанная async-ошибка',
+      critical: true,
+    );
     return true;
   };
   // Фоновый аудиоплагин и стартовое состояние не зависят друг от друга —
   // раньше они шли ЦЕПОЧКОЙ (init аудио → затем prefs, ключ, плагин
   // уведомлений, часовой пояс), и на Android их сумма платилась до первого
   // кадра: окно Android (аватарка Realme/белый экран) висело секундами.
-  unawaited(_initBackgroundAudio());
+  // Теперь аудио тоже уходит в простой: регистрация медиасервиса не нужна
+  // ни одному пикселю первого экрана, а музыка запускается только из профиля.
+  _inIdle(const Duration(milliseconds: 900), _initBackgroundAudio);
+  // «Шумоподавление»: слушаем наушники, но только когда первый экран уже
+  // нарисован — иначе подписка на аудиоустройства ест кадр у входа.
+  _inIdle(const Duration(milliseconds: 1400), NoiseMaskService.instance.init);
   // Диспетчер фоновых задач регистрируем до первого кадра: если Android
   // поднял процесс ради проверки обновления, WorkManager ждёт именно его.
   unawaited(initializeBackgroundUpdates());
   await _startApp(bootClock);
   unawaited(_wireBubbleLaunch());
+}
+
+/// Работа, которой не место в окне старта: ждёт первый кадр и короткую
+/// паузу, чтобы вход в приложение не делил кадры с сетью и плагинами.
+///
+/// Ничего отсюда не нужно первому экрану: проверка обновлений, чистка APK и
+/// медиасервис — это фон. Ошибку не пробрасываем: старт важнее задачи.
+void _inIdle(Duration delay, Future<void> Function() task) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (_idleStopped) return;
+    late final Timer timer;
+    timer = Timer(delay, () async {
+      _idleTimers.remove(timer);
+      try {
+        await task();
+      } catch (error, stack) {
+        swallow('idle startup task', error, stack);
+      }
+    });
+    _idleTimers.add(timer);
+  });
+}
+
+/// Отложенные стартовые задачи, ещё не начатые.
+///
+/// Дерево может быть снято раньше (выход из приложения, тест): без отмены
+/// таймеры доживали до срабатывания и дёргали плагины в мёртвом процессе.
+final Set<Timer> _idleTimers = <Timer>{};
+
+/// Дерево уже снято: отложенные задачи не нужны и не должны создавать
+/// таймеры (их кадр может прийти уже после `dispose`).
+bool _idleStopped = false;
+
+void _cancelIdleTasks() {
+  _idleStopped = true;
+  for (final timer in _idleTimers) {
+    timer.cancel();
+  }
+  _idleTimers.clear();
 }
 
 /// Тап по пузырю Ады должен вернуть обычный чат — и когда приложение уже
@@ -1446,6 +1527,7 @@ void _armStartupWatchdog() {
 /// старта мог повторить попытку: `onRetry` вызывает эту же функцию, и
 /// успешный запуск просто заменяет диагностический корень рабочим.
 Future<void> _startApp([Stopwatch? bootClock]) async {
+  _idleStopped = false;
   // ПЕРВЫЙ КАДР — ДО загрузки. Раньше `runApp` вызывался только после всей
   // инициализации (SharedPreferences → Keystore-ключ → плагин уведомлений →
   // часовой пояс → intent будильника). На Realme/бюджетном железе каждый
@@ -1696,16 +1778,21 @@ Future<void> _runStartup(Stopwatch? bootClock) async {
   // В сборке для F-Droid самообновление выключено — проверку не запускаем.
   if (kSelfUpdateEnabled) {
     // Плюс плашка «вышла новая версия» — но не поверх запроса PIN.
-    unawaited(_checkUpdates(announce: !ready.hasPin));
+    // Проверка идёт в простое: сеть и разбор ответа GitHub не должны
+    // делить кадры с первым экраном (это была заметная ступенька входа).
+    _inIdle(
+      const Duration(milliseconds: 2500),
+      () => _checkUpdates(announce: !ready.hasPin),
+    );
     // Слушаем итог самообновления: успех показываем «обновлено», а отказ
     // системы (Play Protect и т. п.) — понятной подсказкой. В F-Droid
     // самообновления нет, поэтому и слушатель не нужен.
     _watchInstallOutcome();
     // Удаляем APK, которым уже установлена эта версия: после автообновления
     // он оставался на телефоне и копил мегабайты.
-    unawaited(Installer.cleanupInstalledApk());
-    unawaited(_adoptBackgroundUpdate());
-    unawaited(_prepareBackgroundUpdateCheck());
+    _inIdle(const Duration(milliseconds: 3600), Installer.cleanupInstalledApk);
+    _inIdle(const Duration(milliseconds: 2600), _adoptBackgroundUpdate);
+    _inIdle(const Duration(milliseconds: 3000), _prepareBackgroundUpdateCheck);
   }
   // Повторный edge-to-edge ПОСЛЕ первого кадра — на MIUI/HyperOS вызов  // до runApp не применяется (Flutter сбрасывает системный UI при старте).
   // Без него сверху остаётся чёрная квадратная полоса статус-бара, и
@@ -2249,7 +2336,9 @@ class AgyshaAppState extends State<AgyshaApp>
     setState(() => _newYearUnlocked = value);
     SettingsService.saveNewYearThemeUnlocked(value);
     // Выключили доступ, а тема стоит — сразу возвращаемся в прежнюю.
-    if (!value && !newYearThemeAvailable && _themeKey == NewYearThemeKeys.theme) {
+    if (!value &&
+        !newYearThemeAvailable &&
+        _themeKey == NewYearThemeKeys.theme) {
       _revertFromNewYearTheme();
     }
   }
@@ -2575,6 +2664,7 @@ class AgyshaAppState extends State<AgyshaApp>
 
   @override
   void dispose() {
+    _cancelIdleTasks();
     _newYearDeadlineTimer?.cancel();
     _bootWatchdog?.cancel();
     _stopOverlayCheck();

@@ -570,6 +570,7 @@ extension _SettingsDevTools on _SettingsScreenState {
                   );
                 },
               ),
+              const NoiseMaskTile(),
             ],
           );
         },

@@ -1382,9 +1382,13 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               // Мелкий перелёт в конце рампы (easeOutBack ~+8%) — это и
               // есть «желейность»: клавиша чуть проскакивает следом за
               // пальцем и оседает назад, вместо жёсткого стопа на плитке.
+              // Протяжка идёт почти половину хода нажатия, а не первые
+              // 140 мс: клавиша «течёт» за пальцем и оседает, а не
+              // выстреливает упругой плиткой. Это и просили — желе
+              // медленнее и плавнее.
               final stretchT =
                   Curves.easeOutBack.transform(
-                    (_in.value / 0.22).clamp(0.0, 1.0),
+                    (_in.value / 0.42).clamp(0.0, 1.0),
                   ) *
                   (1 - lift);
               final aimLen = math.max(aim.distance, 0.30);
@@ -1398,8 +1402,8 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
                 // продольного: так клавиша «течёт» в сторону пальца, но
                 // не превращается в сплюснутую каплю.
                 matrix.scaleByDouble(
-                  1 + 0.235 * stretchK,
-                  1 - 0.090 * stretchK,
+                  1 + 0.275 * stretchK,
+                  1 - 0.105 * stretchK,
                   1.0,
                   1.0,
                 );

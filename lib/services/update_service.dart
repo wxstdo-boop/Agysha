@@ -899,11 +899,17 @@ class UpdateService {
   /// Тихая проверка при старте и возврате из фона: БЕЗ диалогов, только
   /// наполняет [pendingUpdate], чтобы таблетка в Настройках сразу знала про
   /// обновление, а [UpdateNotice] показал плашку и баннер в шторке.
-  Future<void> silentDailyCheck() async {
+  ///
+  /// [force] — проверка «по требованию»: человек нажал «Обновить» в шторке,
+  /// и суточный интервал тут не указ. Иначе баннер, нажатый на следующий
+  /// день после тихой проверки, получил бы пустой [pendingUpdate] и не смог
+  /// ничего скачать. Метку всё равно обновляем: за серию тапов по одному
+  /// уведомлению в GitHub не ходим.
+  Future<void> silentDailyCheck({bool force = false}) async {
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
       final last = globalPrefs.getInt(_lastCheckKey) ?? 0;
-      if (now - last < _minInterval.inMilliseconds) return;
+      if (!force && now - last < _minInterval.inMilliseconds) return;
       final info = await Installer.appInfo();
       if (info == null) return;
       final abi = await Installer.supportedAbi();
