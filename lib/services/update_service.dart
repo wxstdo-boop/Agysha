@@ -56,6 +56,35 @@ class UpdateInfo {
   /// Заголовок релиза GitHub (`name`). Обычно совпадает с версией, но иногда
   /// это человеческое название выпуска — его и показываем в баннере.
   final String releaseName;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'versionCode': versionCode,
+    'versionName': versionName,
+    'downloadUrl': downloadUrl,
+    'sha256': sha256,
+    'size': size,
+    'notes': notes,
+    'releaseName': releaseName,
+  };
+
+  /// Разбор сохранённого выпуска. Битые данные — это `null`, а не исключение:
+  /// кэш читается на старте, и падать из-за него приложению незачем.
+  static UpdateInfo? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final name = raw['versionName'];
+    final url = raw['downloadUrl'];
+    if (name is! String || name.isEmpty) return null;
+    if (url is! String || url.isEmpty) return null;
+    return UpdateInfo(
+      versionCode: (raw['versionCode'] as num?)?.toInt() ?? 0,
+      versionName: name,
+      downloadUrl: url,
+      sha256: raw['sha256'] as String? ?? '',
+      size: (raw['size'] as num?)?.toInt() ?? 0,
+      notes: raw['notes'] as String? ?? '',
+      releaseName: raw['releaseName'] as String? ?? '',
+    );
+  }
 }
 
 /// Найденное обновление (или null): таблетка в Настройках слушает реактивно.
@@ -78,6 +107,45 @@ class UpdateService {
   /// это потолок частоты, а не расписание в сети.
   static const Duration _minInterval = Duration(hours: 1);
   static const String _lastCheckKey = 'update_last_check_ms';
+
+  /// Найденный выпуск, переживающий перезапуск процесса.
+  ///
+  /// Проверка ходит в сеть не чаще раза в час, а приложение открывают куда
+  /// чаще. Баннер в шторке ставится по результату проверки, поэтому
+  /// единственная неудачная попытка (плагин уведомлений ещё не готов, канал
+  /// выключен, разрешение выдали позже) откладывала новость до следующей
+  /// проверки — со стороны это выглядело как «уведомление приходит не всегда».
+  /// Кэш позволяет [UpdateNotice] повторить показ при каждом запуске.
+  static const String pendingCacheKey = 'update_pending_json';
+
+  /// Выпуск, о котором проверка уже сообщила, но который ещё не установлен.
+  /// [UpdateNotice] сверяет его с установленной версией: после установки кэш
+  /// устарел и всплывать не должен.
+  static UpdateInfo? cachedPendingUpdate() {
+    final raw = globalPrefs.getString(pendingCacheKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return UpdateInfo.fromJson(jsonDecode(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Запоминает выпуск для повторного показа; `null` — кэш чистится.
+  static Future<void> savePendingCache(UpdateInfo? update) async {
+    try {
+      if (update == null) {
+        await globalPrefs.remove(pendingCacheKey);
+      } else {
+        await globalPrefs.setString(
+          pendingCacheKey,
+          jsonEncode(update.toJson()),
+        );
+      }
+    } catch (_) {
+      // Кэш — ускоритель, а не источник истины: сбой записи ничего не ломает.
+    }
+  }
 
   /// Проверяет последний релиз на GitHub. Возвращает [UpdateInfo], только
   /// если версия в релизе строго новее установленной.
@@ -947,6 +1015,9 @@ class UpdateService {
       // Метку пишем даже при отсутствии обновления — иначе долбим API зря.
       await globalPrefs.setInt(_lastCheckKey, now);
       pendingUpdate.value = update;
+      // Кэш живёт дольше процесса: им пользуется [UpdateNotice], когда показ
+      // баннера не удался. Пустой результат кэш чистит — установились.
+      await savePendingCache(update);
     } catch (_) {
       // Нет сети / лимит API — молча выходим, повторим в следующий запуск.
     }
