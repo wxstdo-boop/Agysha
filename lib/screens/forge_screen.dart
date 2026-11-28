@@ -12,6 +12,7 @@ import '../services/haptics.dart';
 import '../services/settings_service.dart';
 import '../utils/context_menu.dart';
 import '../utils/markdown_text.dart';
+import '../utils/motion_prefs.dart';
 import '../utils/snackbar.dart';
 
 import '../widgets/press_scale.dart';
@@ -2270,7 +2271,9 @@ class _ThinkingLabel extends StatefulWidget {
 class _ThinkingLabelState extends State<_ThinkingLabel>
     with SingleTickerProviderStateMixin {
   late final AnimationController _shine = AnimationController(
-    vsync: this,
+    // Блик по «печатается…» ходит 2600 мс и не останавливается: на полной
+    // частоте он держал движок на каждом vsync. 60 тиков/с читаются так же.
+    vsync: MotionPrefs.capped(this),
     duration: const Duration(milliseconds: 2600),
   )..repeat();
 

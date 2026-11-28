@@ -5,6 +5,7 @@ import '../services/prefs.dart';
 import '../services/settings_service.dart';
 import '../utils/markdown_text.dart';
 import '../utils/date_keys.dart';
+import '../utils/motion_prefs.dart';
 import '../utils/app_sheet_style.dart';
 
 /// Открывает плашку «МАКСИМАЛЬНЫЙ АПГРЕЙД УРОВНЯ BERSERK».
@@ -614,7 +615,10 @@ class _SmallRefreshButton extends StatefulWidget {
 class _SmallRefreshButtonState extends State<_SmallRefreshButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _spin = AnimationController(
-    vsync: this,
+    // Крутилка идёт 900 мс и крутится вечно, пока идёт обновление: 60 тиков
+    // в секунду глаз не отличает от 120, зато кадр не просится на каждом
+    // vsync 120-герцового экрана (см. AmbientVsync/FpsCapVsync).
+    vsync: MotionPrefs.capped(this),
     duration: const Duration(milliseconds: 900),
   );
   bool _pressed = false;
