@@ -28,7 +28,10 @@ def main() -> int:
         prose = []
         for line in first.splitlines():
             line = line.strip()
-            if not line or line.startswith(("#", "|", "```", "---")):
+            if not line or line.startswith(("#", "|", "```", "---", "* ")):
+                continue
+            # «checkpoint: …» — служебная метка рабочей ветки.
+            if line.lower().startswith("checkpoint:"):
                 continue
             prose.append(line)
         text = " ".join(prose).strip()
