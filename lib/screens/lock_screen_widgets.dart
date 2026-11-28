@@ -1329,8 +1329,10 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               final press = Curves.easeOutCubic.transform(
                 (_in.value / 0.30).clamp(0.0, 1.0),
               );
+              // Возврат растяжения — не рывком за 110 мс, а почти весь
+              // ход высыхания: клавиша оседает обратно вместе с пятном.
               final lift = Curves.easeInOutCubic.transform(
-                (_out.value / 0.38).clamp(0.0, 1.0),
+                (_out.value / 0.75).clamp(0.0, 1.0),
               );
               final tilt = Curves.easeInOutCubic.transform(_tiltCtrl.value);
               // Показываемый наклон подтягивается к цели по кадрам: между
@@ -1370,7 +1372,7 @@ class _KeyButtonState extends State<_KeyButton> with TickerProviderStateMixin {
               // медленнее и плавнее.
               final stretchT =
                   Curves.easeOutCubic.transform(
-                    (_in.value / 0.46).clamp(0.0, 1.0),
+                    (_in.value / 0.55).clamp(0.0, 1.0),
                   ) *
                   (1 - lift);
               final aimLen = math.max(aim.distance, 0.30);
