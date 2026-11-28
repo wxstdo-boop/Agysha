@@ -88,7 +88,16 @@ Widget devWavyTile(
                 // Плотная подложка, чтобы градиент кольца не просвечивал
                 // сквозь карточку посередине.
                 color: cs.surface,
-                child: child,
+                // Своя Material на каждой плитке: волна InkWell рисуется на
+                // ближайшей и раньше уходила на Material диалога — то есть
+                // прямоугольником, без скругления 20. Отсюда «фон заезжал за
+                // бока» при зажатии у края. Здесь она клипается по кайме.
+                child: Material(
+                  type: MaterialType.transparency,
+                  borderRadius: BorderRadius.circular(20),
+                  clipBehavior: Clip.antiAlias,
+                  child: child,
+                ),
               ),
             ),
             Positioned.fill(

@@ -277,6 +277,63 @@ extension _SettingsDevTools on _SettingsScreenState {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                leading: const RobotGlyph(size: 24, color: Color(0xFF8D6E63)),
+                title: Text(
+                  Translations.t('forgeTitle', routeContext, 'Кузница'),
+                ),
+                subtitle: Text(
+                  Translations.t('forgeSubtitle', routeContext),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                onTap: () {
+                  // Снимаем фокус с полей ввода перед переходом в Кузницу и при возврате
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  unawaited(
+                    Navigator.of(routeContext)
+                        .push(
+                          PageRouteBuilder<void>(
+                            transitionDuration: const Duration(
+                              milliseconds: 320,
+                            ),
+                            reverseTransitionDuration: const Duration(
+                              milliseconds: 260,
+                            ),
+                            pageBuilder: (_, _, _) => const ForgeScreen(
+                              owner: kUpdateRepoOwner,
+                              repo: kUpdateRepoName,
+                            ),
+                            transitionsBuilder: (context, animation, _, child) {
+                              final curved = CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                                reverseCurve: Curves.easeInCubic,
+                              );
+                              return SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0.08, 0),
+                                  end: Offset.zero,
+                                ).animate(curved),
+                                child: FadeTransition(
+                                  opacity: curved,
+                                  child: RepaintBoundary(child: child),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                        .then((_) {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                        }),
+                  );
+                },
+              ),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
                 leading: const Icon(
                   Icons.auto_awesome_rounded,
                   color: Color(0xFFB39DDB),
@@ -367,63 +424,6 @@ extension _SettingsDevTools on _SettingsScreenState {
                   ),
                 ),
                 onTap: () => saveBerserk(!berserkFlag.value),
-              ),
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                leading: const RobotGlyph(size: 24, color: Color(0xFF8D6E63)),
-                title: Text(
-                  Translations.t('forgeTitle', routeContext, 'Кузница'),
-                ),
-                subtitle: Text(
-                  Translations.t('forgeSubtitle', routeContext),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                onTap: () {
-                  // Снимаем фокус с полей ввода перед переходом в Кузницу и при возврате
-                  FocusManager.instance.primaryFocus?.unfocus();
-                  unawaited(
-                    Navigator.of(routeContext)
-                        .push(
-                          PageRouteBuilder<void>(
-                            transitionDuration: const Duration(
-                              milliseconds: 320,
-                            ),
-                            reverseTransitionDuration: const Duration(
-                              milliseconds: 260,
-                            ),
-                            pageBuilder: (_, _, _) => const ForgeScreen(
-                              owner: kUpdateRepoOwner,
-                              repo: kUpdateRepoName,
-                            ),
-                            transitionsBuilder: (context, animation, _, child) {
-                              final curved = CurvedAnimation(
-                                parent: animation,
-                                curve: Curves.easeOutCubic,
-                                reverseCurve: Curves.easeInCubic,
-                              );
-                              return SlideTransition(
-                                position: Tween<Offset>(
-                                  begin: const Offset(0.08, 0),
-                                  end: Offset.zero,
-                                ).animate(curved),
-                                child: FadeTransition(
-                                  opacity: curved,
-                                  child: RepaintBoundary(child: child),
-                                ),
-                              );
-                            },
-                          ),
-                        )
-                        .then((_) {
-                          FocusManager.instance.primaryFocus?.unfocus();
-                        }),
-                  );
-                },
               ),
               // Подробный журнал изменений: всё, что пришло из релизов, без
               // выжимки для обычного человека (см. ChangelogScreen.detailed).

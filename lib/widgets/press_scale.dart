@@ -193,7 +193,7 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
   /// сжимаются здесь одним коэффициентом: карточки, кнопки и таблетки
   /// наклоняются на одну и ту же долю мягче, а относительная разница между
   /// мелкими и крупными элементами сохраняется.
-  static const double _globalTilt = 0.88;
+  static const double _globalTilt = 0.98;
 
   /// Наклон для нажатия ровно по центру, где направления от пальца нет
   /// (сдвиг от точки касания нулевой): верх элемента уходит от пальца, низ
@@ -343,6 +343,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       final dl = dir.distance;
       floored = dl > 1e-6 ? dir * (_minTilt / dl) : _centerTilt * _minTilt;
     }
+    // Мёртвая зона: дрожание руки в 1–2 px больше не дёргает карточку —
+    // от этого «плясали» тексты под пальцем.
+    if (smooth && (floored - _tiltTarget).distance < 0.012) return;
     _tiltTarget = floored;
     if (!smooth) {
       _tiltTicker.stop();
@@ -365,9 +368,9 @@ class _PressScaleState extends State<PressScale> with TickerProviderStateMixin {
       0.05,
     );
     _lastTiltTick = elapsed;
-    // 120 мс — время «догона» пальца: наклон теперь едет заметно мягче и
-    // не успевает рывком среагировать на дрожание руки.
-    final k = 1.0 - math.exp(-dt / 0.120);
+    // 160 мс — время «догона» пальца: наклон едет мягче и не успевает
+    // рывком среагировать на дрожание руки; текст на карточке не «пляшет».
+    final k = 1.0 - math.exp(-dt / 0.160);
     _tilt = _tilt + (_tiltTarget - _tilt) * k;
     if ((_tiltTarget - _tilt).distance < 0.002) {
       _tilt = _tiltTarget;
