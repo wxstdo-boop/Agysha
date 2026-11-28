@@ -1902,34 +1902,50 @@ class _MedallionMotionPainter extends CustomPainter {
     if (frost) _sparks(canvas, s, c, tau);
   }
 
+  /// Кеш шейдера ореола: геометрия (радиус) одна и та же каждый кадр, а
+  /// меняется только прозрачность. Создавать `RadialGradient.createShader`
+  /// 60 раз в секунду незачем — квантуем прозрачность до 1/48 и держим
+  /// шейдер в кеше. Квант не виден: ореол — мягкое полупрозрачное свечение.
+  /// Скин «Метель» меняет ещё и оттенок по циклу, поэтому там шейдер
+  /// по-прежнему собирается на кадр (он редкий и уже дешёвый).
+  static final Map<String, Shader> _haloShaders = <String, Shader>{};
+
+  Shader _haloShader(double s, double k, double colorT) {
+    final rect = Rect.fromCircle(center: Offset(s / 2, s / 2), radius: s * 0.5);
+    if (frost) {
+      return RadialGradient(
+        colors: [
+          _tone(colorT).withValues(alpha: 0.0),
+          _tone(colorT).withValues(alpha: (isDark ? 0.46 : 0.38) * k),
+          _tone(colorT + 0.33).withValues(alpha: (isDark ? 0.34 : 0.28) * k),
+          _tone(colorT + 0.33).withValues(alpha: 0.0),
+        ],
+        stops: const [0.86, 0.945, 0.975, 1.0],
+      ).createShader(rect);
+    }
+    final key = '${(s * 10).round()}|${(k * 48).round()}';
+    final cached = _haloShaders[key];
+    if (cached != null) return cached;
+    if (_haloShaders.length > 64) _haloShaders.clear();
+    return _haloShaders[key] = RadialGradient(
+      colors: [
+        accent.withValues(alpha: 0.0),
+        accent.withValues(alpha: (isDark ? 0.34 : 0.34) * k),
+        accent.withValues(alpha: 0.0),
+      ],
+      stops: const [0.86, 0.945, 1.0],
+    ).createShader(rect);
+  }
+
   /// Свечение — кольцо ВОКРУГ плашки, тем же тоном и без оттенков.
   void _halo(Canvas canvas, double s, Offset c, double k) {
-    final rect = Rect.fromCircle(center: c, radius: s * 0.5);
+    final kq = (k * 48).round() / 48;
     canvas.drawCircle(
       c,
       s * 0.5,
-      frost
-          ? (Paint()
-              ..isAntiAlias = true
-              ..shader = RadialGradient(
-                colors: [
-                  _tone(t).withValues(alpha: 0.0),
-                  _tone(t).withValues(alpha: (isDark ? 0.46 : 0.38) * k),
-                  _tone(t + 0.33).withValues(alpha: (isDark ? 0.34 : 0.28) * k),
-                  _tone(t + 0.33).withValues(alpha: 0.0),
-                ],
-                stops: const [0.86, 0.945, 0.975, 1.0],
-              ).createShader(rect))
-          : (Paint()
-              ..isAntiAlias = true
-              ..shader = RadialGradient(
-                colors: [
-                  accent.withValues(alpha: 0.0),
-                  accent.withValues(alpha: (isDark ? 0.34 : 0.34) * k),
-                  accent.withValues(alpha: 0.0),
-                ],
-                stops: const [0.86, 0.945, 1.0],
-              ).createShader(rect)),
+      Paint()
+        ..isAntiAlias = true
+        ..shader = _haloShader(s, kq, t),
     );
   }
 
