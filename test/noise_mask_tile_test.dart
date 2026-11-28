@@ -47,17 +47,24 @@ void main() {
     expect(find.textContaining('дождь играет'), findsOneWidget);
   });
 
-  test('в Уголке разработчика плитка есть и стоит последней', () {
+  test('в Уголке разработчика плитка первая и идёт до переключателей', () {
     final source = File(
       'lib/screens/settings_dev_tools.dart',
     ).readAsStringSync();
     final tile = source.indexOf('const NoiseMaskTile(),');
     expect(tile, isNonNegative, reason: 'без плитки в уголке её и не видно');
-    // Плитка — последний пункт списка управления: ниже только закрытие
-    // уголка, поэтому тумблер не теряется между старыми настройками.
-    expect(
-      source.substring(tile),
-      startsWith('const NoiseMaskTile(),\n            ],'),
+    // «Шумоподавление» — первая плашка уголка: единственный пункт, которым
+    // пользуются вне отладки, и искать его в конце списка было неудобно.
+    final listStart = source.lastIndexOf('children: [', tile);
+    expect(listStart, isNonNegative);
+    expect(tile, greaterThan(listStart));
+    // Между началом списка и плиткой — только комментарий, ни одного
+    // другого пункта: она действительно первая.
+    final between = source.substring(
+      listStart + 'children: ['.length,
+      tile,
     );
+    expect(between, contains('Шумоподавление'));
+    expect(between, isNot(contains('ListTile(')));
   });
 }

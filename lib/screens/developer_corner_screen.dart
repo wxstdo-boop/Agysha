@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import '../l10n/translations.dart';
 import '../utils/context_menu.dart';
 import '../utils/design_tokens.dart';
 import '../widgets/canary_icon.dart';
@@ -11,8 +10,6 @@ import '../widgets/smooth_char_counter.dart';
 import '../widgets/smooth_typing.dart';
 import '../widgets/stagger_in.dart';
 import '../widgets/smooth_tooltip.dart' show BackButtonTooltip;
-import '../utils/wide_dash_formatter.dart';
-import '../widgets/smooth_caret.dart';
 
 /// Единая «карточная» пластика экрана — в стиле карточек питания:
 /// тёплый градиент от поверхности к насыщенной, тонкая цветная кайма
@@ -541,8 +538,6 @@ class DeveloperCornerScreen extends StatefulWidget {
   final String subtitle;
   final String disableLabel;
   final Future<void> Function() onDisable;
-  final String developerPrompt;
-  final Future<void> Function(String value) onSaveDeveloperPrompt;
   final List<Widget> children;
   final Color accent;
 
@@ -553,8 +548,6 @@ class DeveloperCornerScreen extends StatefulWidget {
     required this.subtitle,
     required this.disableLabel,
     required this.onDisable,
-    required this.developerPrompt,
-    required this.onSaveDeveloperPrompt,
     required this.children,
     required this.accent,
   });
@@ -673,13 +666,7 @@ class _DeveloperCornerScreenState extends State<DeveloperCornerScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    DeveloperPromptEditor(
-                      initialValue: widget.developerPrompt,
-                      accent: widget.accent,
-                      onSave: widget.onSaveDeveloperPrompt,
-                    ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 10),
                     for (var i = 0; i < widget.children.length; i++)
                       StaggerIn(
                         index: i,
@@ -722,342 +709,6 @@ class _DeveloperCornerScreenState extends State<DeveloperCornerScreen> {
                 ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class DeveloperPromptEditor extends StatefulWidget {
-  final String initialValue;
-  final Color accent;
-  final Future<void> Function(String value) onSave;
-
-  const DeveloperPromptEditor({
-    super.key,
-    required this.initialValue,
-    required this.accent,
-    required this.onSave,
-  });
-
-  @override
-  State<DeveloperPromptEditor> createState() => _DeveloperPromptEditorState();
-}
-
-class _DeveloperPromptEditorState extends State<DeveloperPromptEditor> {
-  static const _maxLength = 10000;
-  static const _saveDelay = Duration(milliseconds: 700);
-
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialValue,
-  );
-  late final FocusNode _focusNode = FocusNode();
-  Timer? _saveTimer;
-  late String _draft = widget.initialValue;
-  late String _savedValue = widget.initialValue;
-  bool _saving = false;
-  bool _saveQueued = false;
-  bool _saveFailed = false;
-
-  @override
-  void dispose() {
-    _saveTimer?.cancel();
-    if (_draft != _savedValue) unawaited(_save());
-    _focusNode.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onChanged(String value) {
-    _draft = value;
-    if (_saveFailed) {
-      setState(() => _saveFailed = false);
-    }
-    _saveTimer?.cancel();
-    _saveTimer = Timer(_saveDelay, () => unawaited(_save()));
-  }
-
-  Future<void> _save() async {
-    _saveTimer?.cancel();
-    _saveTimer = null;
-    final value = _draft;
-    if (value == _savedValue) return;
-    if (_saving) {
-      _saveQueued = true;
-      return;
-    }
-
-    _saving = true;
-    _saveQueued = false;
-    if (mounted) setState(() => _saveFailed = false);
-    var succeeded = false;
-    try {
-      await widget.onSave(value);
-      _savedValue = value;
-      succeeded = true;
-    } catch (_) {
-      if (mounted) setState(() => _saveFailed = true);
-    } finally {
-      _saving = false;
-      if (mounted) setState(() {});
-    }
-
-    final changedWhileSaving = _saveQueued || _draft != _savedValue;
-    _saveQueued = false;
-    if (succeeded && changedWhileSaving) await _save();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final accent = widget.accent;
-
-    return RepaintBoundary(
-      child: PressScale(
-        pressedScale: 0.99,
-        enableTilt: true,
-        duration: const Duration(milliseconds: 140),
-        releaseDuration: const Duration(milliseconds: 220),
-        child: Container(
-          decoration: devCardDecoration(theme, accent),
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.edit_note_rounded, color: accent, size: 24),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      Translations.t('devPromptTitle', context),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                Translations.t('devPromptDescription', context),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  height: 1.45,
-                ),
-              ),
-              const SizedBox(height: 14),
-              // Поле — в том же обёрточном стиле, что и остальные поля ввода
-              // приложения (питание, PIN-диалог): SmoothTyping плавно
-              // проявляет каждую букву, курсор анимированный, лупа и выделение отключены.
-              SmoothTyping(
-                controller: _controller,
-                builder: (typingStyle) => SmoothCaret(
-                  builder: (context, caret) => TextField(
-                    scrollController: caret,
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    style: typingStyle,
-                    onChanged: _onChanged,
-                    minLines: 4,
-                    maxLines: 8,
-                    maxLength: _maxLength,
-                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                    buildCounter:
-                        (
-                          context, {
-                          required currentLength,
-                          required isFocused,
-                          required maxLength,
-                        }) => null,
-                    textCapitalization: TextCapitalization.sentences,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    cursorOpacityAnimates: true,
-                    magnifierConfiguration: TextMagnifierConfiguration.disabled,
-                    enableInteractiveSelection: false,
-                    contextMenuBuilder: (context, _) => const SizedBox.shrink(),
-                    inputFormatters: [WideDashFormatter()],
-                    decoration: InputDecoration(
-                      hintText: Translations.t('devPromptHint', context),
-                      alignLabelWithHint: true,
-                      filled: true,
-                      fillColor: colors.surfaceContainerHighest.withValues(
-                        alpha: 0.45,
-                      ),
-                      contentPadding: const EdgeInsets.all(16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(
-                          color: colors.outlineVariant.withValues(alpha: 0.65),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(
-                          color: colors.outlineVariant.withValues(alpha: 0.65),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: accent, width: 1.6),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _controller,
-                builder: (context, textVal, _) {
-                  final currentText = textVal.text;
-                  final isDirty = currentText != _savedValue;
-                  final isBlank = currentText.trim().isEmpty;
-                  final status = _saving
-                      ? Translations.t('devPromptSaving', context)
-                      : _saveFailed
-                      ? Translations.t('devPromptSaveError', context)
-                      : isDirty
-                      ? Translations.t('devPromptUnsaved', context)
-                      : Translations.t('devPromptSaved', context);
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 180),
-                        child: Text(
-                          status,
-                          key: ValueKey(status),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: _saveFailed
-                                ? colors.error
-                                : colors.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: PressScale(
-                          pressedScale: 0.94,
-                          enableTilt: true,
-                          duration: const Duration(milliseconds: 140),
-                          releaseDuration: const Duration(milliseconds: 220),
-                          child: AnimatedOpacity(
-                            opacity: isBlank ? 0.48 : 1.0,
-                            duration: const Duration(milliseconds: 240),
-                            curve: Curves.easeOutCubic,
-                            child: Material(
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(16),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(16),
-                                splashColor: Colors.white.withValues(
-                                  alpha: 0.22,
-                                ),
-                                highlightColor: Colors.white.withValues(
-                                  alpha: 0.12,
-                                ),
-                                onTap: !_saving && !isBlank
-                                    ? () => unawaited(_save())
-                                    : null,
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeOutCubic,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    // Полупрозрачная красная «таблетка»:
-                                    // ровная заливка без градиента и свечения,
-                                    // чтобы кнопка читалась как удаление/
-                                    // сохранение, но не перекрывала текст поля.
-                                    color: colors.error.withValues(alpha: 0.16),
-                                    border: Border.all(
-                                      color: colors.error.withValues(
-                                        alpha: 0.42,
-                                      ),
-                                      width: 1.2,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      AnimatedSwitcher(
-                                        duration: const Duration(
-                                          milliseconds: 320,
-                                        ),
-                                        switchInCurve: Curves.easeInOutCubic,
-                                        switchOutCurve: Curves.easeInOutCubic,
-                                        transitionBuilder: (child, anim) =>
-                                            ScaleTransition(
-                                              scale: Tween<double>(
-                                                begin: 0.75,
-                                                end: 1.0,
-                                              ).animate(anim),
-                                              child: FadeTransition(
-                                                opacity: anim,
-                                                child: child,
-                                              ),
-                                            ),
-                                        child: _saving
-                                            ? SizedBox.square(
-                                                key: const ValueKey(
-                                                  'save_spin',
-                                                ),
-                                                dimension: 18,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2.2,
-                                                      color: colors.error,
-                                                    ),
-                                              )
-                                            : Icon(
-                                                isDirty
-                                                    ? Icons
-                                                          .bookmark_added_rounded
-                                                    : Icons
-                                                          .check_circle_rounded,
-                                                key: ValueKey(
-                                                  isDirty
-                                                      ? 'save_dirty'
-                                                      : 'save_ok',
-                                                ),
-                                                size: 19,
-                                                color: colors.error,
-                                              ),
-                                      ),
-                                      const SizedBox(width: 9),
-                                      Text(
-                                        Translations.t(
-                                          'devPromptSave',
-                                          context,
-                                        ),
-                                        style: theme.textTheme.labelLarge
-                                            ?.copyWith(
-                                              color: colors.error,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: 0.3,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
           ),
         ),
       ),

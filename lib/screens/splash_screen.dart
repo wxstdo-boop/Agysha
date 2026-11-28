@@ -227,6 +227,15 @@ class _SplashScreenState extends State<SplashScreen>
                         // габаритом) не подрезается.
                         Stack(
                           children: [
+                            // Ореол вокруг кольца — СТАТИЧНЫЙ радиальный
+                            // градиент, а не `boxShadow`. Размытие тени GPU
+                            // пересчитывал на каждом кадре проявки и блика:
+                            // на тёмной теме, где кровавое кольцо стоит на
+                            // почти чёрном фоне, эта кромка «кипела» —
+                            // ровно то «дёрганое кольцо», что бросалось в
+                            // глаза. Градиент рисуется один раз, кладётся в
+                            // слой и больше не пересчитывается.
+                            IgnorePointer(child: _LogoHalo(isDark: isDark)),
                             RepaintBoundary(
                               // Обводка = КРОВАНОЕ КОЛЬЦО, а не волосяная
                               // рамка с бликом: толстая градиентная кайма
@@ -241,36 +250,26 @@ class _SplashScreenState extends State<SplashScreen>
                                 // человечка и текста «powered by».
                                 width: 90,
                                 height: 90,
-                                // Кайма тоньше (3.2 → 2.3): кольцо читается
-                                // оправой, а не толстым ободом.
-                                padding: const EdgeInsets.all(2.3),
+                                // Кайма тоньше (3.2 → 2.6): кольцо читается
+                                // оправой, а не толстым ободом, но ровно
+                                // по толщине кромки — мат не наезжает на
+                                // неё ни на пиксель.
+                                padding: const EdgeInsets.all(2.6),
                                 decoration: BoxDecoration(
                                   // «Скруглый» (squircle) — круглее квадрата, но
                                   // НЕ круг: нижняя подпись на логотипе не
                                   // обрезается кружком и остаётся читаемой.
                                   borderRadius: BorderRadius.circular(_kRadius),
-                                  // Кольцо — ПЛОСКОЕ, один тон на всю кайму:
-                                  // любой градиент на 3.5 px читается как
-                                  // «перелив» и неровность, а не как металл.
-                                  // Один мягкий ореол вместо трёх теней —
-                                  // карточка не обрастает грязной каймой.
-                                  color: BrandColors.blood,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: BrandColors.blood.withValues(
-                                        alpha: isDark ? 0.34 : 0.24,
-                                      ),
-                                      blurRadius: 26,
-                                      spreadRadius: 1,
-                                    ),
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: isDark ? 0.24 : 0.06,
-                                      ),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
+                                  // Кольцо — КРОМКА (Border.all), а не
+                                  // залитый цветной бокс с тенью: кромка
+                                  // рисуется одной чистой линией, её не
+                                  // надо размывать, и на тёмном фоне она
+                                  // не даёт грязного ореола.
+                                  color: Colors.transparent,
+                                  border: Border.all(
+                                    color: BrandColors.blood,
+                                    width: 2.6,
+                                  ),
                                 ),
                                 child: Container(
                                   padding: const EdgeInsets.all(3),
@@ -426,6 +425,85 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
+}
+
+/// Статичный ореол вокруг кровавого кольца авы на сплэше.
+///
+/// Раньше это была `BoxShadow` с `blurRadius: 26`: размытие пересчитывалось
+/// на каждом кадре проявки и блика, и на тёмной теме — где алое на почти
+/// чёрном контрастнее всего — кромка кольца «кипела». Радиальный градиент
+/// рисуется один раз в свой слой (`RepaintBoundary` родителя) и больше не
+/// пересчитывается: кольцо стоит ровно, а мягкое свечение вокруг остаётся.
+class _LogoHalo extends StatelessWidget {
+  final bool isDark;
+
+  const _LogoHalo({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 90,
+      height: 90,
+      // CustomPaint не клипует по своим границам — ореол выходит за плиту,
+      // как и прежняя тень.
+      child: CustomPaint(painter: _LogoHaloPainter(isDark: isDark)),
+    );
+  }
+}
+
+class _LogoHaloPainter extends CustomPainter {
+  final bool isDark;
+
+  const _LogoHaloPainter({required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    // Свечение — только КОЛЬЦОМ снаружи плиты, а не пятном под ней.
+    // Раньше градиент начинался в центре: мат под логотипом на тёмной
+    // теме почти прозрачный (белый 10%), и алое пятно просвечивало через
+    // него — ава выглядела «грязной», с рыжим налётом внутри. Теперь
+    // внутри радиуса плиты (45 px) альфа ровно ноль, свечение живёт в
+    // узкой полосе 0.72…0.94 и мягко гаснет к краю.
+    final glow = BrandColors.blood;
+    final rect = Rect.fromCircle(center: center, radius: 66);
+    canvas.drawCircle(
+      center,
+      66,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            glow.withValues(alpha: 0),
+            glow.withValues(alpha: 0),
+            glow.withValues(alpha: isDark ? 0.30 : 0.22),
+            glow.withValues(alpha: isDark ? 0.10 : 0.07),
+            glow.withValues(alpha: 0),
+          ],
+          stops: const [0.0, 0.62, 0.80, 0.90, 1.0],
+        ).createShader(rect),
+    );
+    // Мягкая тень под плитой — тоже градиентом, а не размытием.
+    final shadow = Rect.fromCenter(
+      center: Offset(center.dx, center.dy + 34),
+      width: 66,
+      height: 22,
+    );
+    canvas.drawOval(
+      shadow,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            Colors.black.withValues(alpha: isDark ? 0.28 : 0.10),
+            Colors.black.withValues(alpha: 0),
+          ],
+          stops: const [0.0, 1.0],
+        ).createShader(shadow),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LogoHaloPainter oldDelegate) =>
+      oldDelegate.isDark != isDark;
 }
 
 /// Подпись, по которой катится та же полоса, что по «стеклу» авы, но

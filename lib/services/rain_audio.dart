@@ -7,10 +7,16 @@ import 'dart:typed_data';
 /// лицензий, и «дождь» не повторяет одну и ту же петлю слышимым щелчком —
 /// хвост записи перекрёстно вплавляется в её начало ([fadeSeconds]).
 ///
-/// Три слоя, как в настоящем дожде за окном:
+/// Пять слоёв, как в настоящем дожде за окном:
 ///  * шипение — белый шум, срезанный сверху (мягкость, без «песка»);
-///  * гул — тот же шум, срезанный почти в ноль (дальний фон, «стена»);
+///  * тело — шум со срезом ~900 Гц: плотная «стена» ливня, её не хватало
+///    прежнему варианту, который читался как тихое радиошипение;
+///  * гул — тот же шум, срезанный почти в ноль (дальний фон);
+///  * капли — редкие короткие затухающие удары по жести с панорамой;
 ///  * порывы — медленная случайная огибающая, чтобы ливень дышал.
+///
+/// Громкость нормируется с малым запасом (0.90 от пика): «дикий объём» —
+/// это в первую очередь плотность и низ, а не клиппинг.
 ///
 /// Функция чистая и параметризуемая: тест рендерит секунду и проверяет
 /// заголовок и звучание, приложение — полную петлю в изоляте.
@@ -34,12 +40,14 @@ Uint8List renderRainWav({
   final randL = math.Random(seed);
   final randR = math.Random(seed ^ 0x5DEECE66D);
 
-  // Фильтры нижних частот: две скорости — «шипение» и «гул».
+  // Фильтры нижних частот: три среза — «шипение», «тело» и «гул».
   double hissL = 0, hissR = 0;
+  double bodyL = 0, bodyR = 0;
   double rumbleL = 0, rumbleR = 0;
   // Константы среза посчитаны от 44.1 кГц и пересчитаны на частоту рендера:
   // one-pole a = 1 - exp(-2π·fc/fs).
   final aHiss = 1 - math.exp(-2 * math.pi * 3200 / sampleRate);
+  final aBody = 1 - math.exp(-2 * math.pi * 900 / sampleRate);
   final aRumble = 1 - math.exp(-2 * math.pi * 260 / sampleRate);
 
   // Порывы: три несинхронные синусоиды с разными периодами дают
@@ -51,12 +59,13 @@ Uint8List renderRainWav({
   final ph2 = randL.nextDouble() * math.pi * 2;
   final ph3 = randL.nextDouble() * math.pi * 2;
 
-  var peak = 0.0;
   for (var i = 0; i < total; i++) {
     final whiteL = randL.nextDouble() * 2 - 1;
     final whiteR = randR.nextDouble() * 2 - 1;
     hissL += (whiteL - hissL) * aHiss;
     hissR += (whiteR - hissR) * aHiss;
+    bodyL += (whiteL - bodyL) * aBody;
+    bodyR += (whiteR - bodyR) * aBody;
     rumbleL += (whiteL - rumbleL) * aRumble;
     rumbleR += (whiteR - rumbleR) * aRumble;
 
@@ -67,17 +76,66 @@ Uint8List renderRainWav({
         0.07 * math.sin(lfo2 * t + ph2) +
         0.05 * math.sin(lfo3 * t + ph3);
 
-    final l = gust * (hissL * 0.55 + rumbleL * 1.9);
-    final r = gust * (hissR * 0.55 + rumbleR * 1.9);
+    final l = gust * (hissL * 0.42 + bodyL * 1.05 + rumbleL * 2.15);
+    final r = gust * (hissR * 0.42 + bodyR * 1.05 + rumbleR * 2.15);
     left[i] = l;
     right[i] = r;
-    final a = l.abs() > r.abs() ? l.abs() : r.abs();
-    if (a > peak) peak = a;
   }
 
-  // Нормируем по пику, но с запасом: дождь должен быть тихим фоном,
-  // а не «на всю громкость» при первом включении.
-  final gain = peak <= 0 ? 1.0 : 0.55 / peak;
+  // Капли: редкие короткие удары с панорамой — без них ливень звучит как
+  // ровный шум вентилятора. Мелкие «тики» по жести и редкие крупные капли.
+  final randDrop = math.Random(seed ^ 0x9E3779B9);
+  void addDrop({
+    required double startSeconds,
+    required double freq,
+    required double decaySeconds,
+    required double amplitude,
+    required double pan, // -1 слева … 1 справа
+  }) {
+    final start = (startSeconds * sampleRate).round();
+    final length = (decaySeconds * sampleRate).round();
+    final gainL = amplitude * (1 - (pan + 1) / 2);
+    final gainR = amplitude * ((pan + 1) / 2);
+    for (var k = 0; k < length; k++) {
+      final idx = start + k;
+      if (idx >= total) break;
+      final env = math.exp(-k / (decaySeconds * sampleRate / 5));
+      final phase = 2 * math.pi * freq * k / sampleRate;
+      final s = env * (math.sin(phase) * 0.8 + randDrop.nextDouble() * 0.2);
+      left[idx] += s * gainL;
+      right[idx] += s * gainR;
+    }
+  }
+
+  final smallDrops = (seconds * 3.5).round();
+  for (var d = 0; d < smallDrops; d++) {
+    addDrop(
+      startSeconds: randDrop.nextDouble() * seconds,
+      freq: 2200 + randDrop.nextDouble() * 1500,
+      decaySeconds: 0.008 + randDrop.nextDouble() * 0.008,
+      amplitude: 0.05 + randDrop.nextDouble() * 0.06,
+      pan: randDrop.nextDouble() * 2 - 1,
+    );
+  }
+  final bigDrops = math.max(1, (seconds * 0.9).round());
+  for (var d = 0; d < bigDrops; d++) {
+    addDrop(
+      startSeconds: randDrop.nextDouble() * seconds,
+      freq: 620 + randDrop.nextDouble() * 420,
+      decaySeconds: 0.03 + randDrop.nextDouble() * 0.03,
+      amplitude: 0.10 + randDrop.nextDouble() * 0.09,
+      pan: randDrop.nextDouble() * 2 - 1,
+    );
+  }
+
+  // Нормируем по пику с малым запасом (0.90): «дикий объём» дают плотность
+  // и низ, а не клиппинг — но и прежние 0.55 глушили дождь до шёпота.
+  var peak2 = 0.0;
+  for (var i = 0; i < total; i++) {
+    final a = math.max(left[i].abs(), right[i].abs());
+    if (a > peak2) peak2 = a;
+  }
+  final gain = peak2 <= 0 ? 1.0 : 0.90 / peak2;
 
   // Хвост вплавляем в начало: конец петли и её старт становятся одним и тем
   // же звуком, поэтому повтор не щёлкает.
