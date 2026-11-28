@@ -103,6 +103,9 @@ Future<bool> runBackgroundUpdateCheck({
       return false;
     }
     if (info == null) return false;
+    // Выпуск запоминаем раньше баннера: если он не встанет (плагин в фоне
+    // не поднялся), приложение повторит показ при следующем запуске.
+    await UpdateService.savePendingCache(info);
     if (globalPrefs.getString(kNotifiedVersionKey) == info.versionName) {
       return false;
     }

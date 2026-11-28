@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../l10n/translations.dart';
 import '../main.dart' show navigatorKey;
 import '../utils/snackbar.dart';
+import 'app_version.dart';
 import 'notification_service.dart';
 import 'prefs.dart';
 import 'settings_service.dart';
@@ -99,25 +100,26 @@ class UpdateNotice {
     BuildContext? context,
     bool force = false,
   }) async {
-    if (info == null || !kSelfUpdateEnabled) return false;
+    final pending = _resolve(info);
+    if (pending == null || !kSelfUpdateEnabled) return false;
     // Выключенные уведомления гасят и шторку, и плашку в приложении.
     // Таблетка «доступно обновление» в настройках остаётся: это статус,
     // а не всплывающее сообщение.
     if (!SettingsService.readUpdateNotificationsEnabled()) return false;
-    _notifyShade(info);
+    _notifyShade(pending);
     if (force) {
       final now = DateTime.now();
       final last = _lastForceAt;
-      if (_lastForceVersion == info.versionName &&
+      if (_lastForceVersion == pending.versionName &&
           last != null &&
           now.difference(last) < _forceDedupeWindow) {
         return false;
       }
-      _lastForceVersion = info.versionName;
+      _lastForceVersion = pending.versionName;
       _lastForceAt = now;
     }
     if (_announcing) return false;
-    if (!force && !shouldAnnounce(info.versionName)) return false;
+    if (!force && !shouldAnnounce(pending.versionName)) return false;
     // Старт приложения: проверка обновлений стартует сразу после runApp, и
     // первый кадр ещё может не дать контекста для оверлея. Ждём его
     // ограниченно, а не бросаем уведомление.
@@ -125,25 +127,47 @@ class UpdateNotice {
     if (target == null || !target.mounted) return false;
     _announcing = true;
     try {
-      await globalPrefs.setString(shownVersionKey, info.versionName);
+      await globalPrefs.setString(shownVersionKey, pending.versionName);
       // Строка выше — await: контекст мог размонтироваться за это время.
       if (!target.mounted) return false;
       showBeautifulSnackBar(
         target,
         message:
             '${Translations.t('updateAvailable', target, 'Доступна свежая версия')}'
-            ' · v${info.versionName}',
+            ' · v${pending.versionName}',
         icon: Icons.system_update_rounded,
         groupKey: 'update',
         // Дольше обычного: это не «готово», а предложение действия.
         duration: const Duration(seconds: 8),
         actionLabel: Translations.t('updateNoticeAction', target, 'Обновить'),
-        onAction: () => unawaited(_install(info)),
+        onAction: () => unawaited(_install(pending)),
       );
       return true;
     } finally {
       _announcing = false;
     }
+  }
+
+  /// Что объявлять: свежий результат проверки, а если его нет — выпуск,
+  /// найденный раньше и переживший перезапуск процесса.
+  ///
+  /// Проверка ходит в сеть не чаще раза в час, а приложение открывают куда
+  /// чаще, и в новом процессе [pendingUpdate] пуст. Без этого запаса
+  /// единственная неудачная попытка показа (плагин ещё не готов, канал
+  /// заблокирован в системе, разрешение выдали позже) откладывала новость до
+  /// следующей сетевой проверки — со стороны «уведомление приходит не всегда».
+  ///
+  /// Сохранённый выпуск сверяем с установленной версией по имени: после
+  /// установки он устарел и всплывать не должен.
+  UpdateInfo? _resolve(UpdateInfo? info) {
+    if (info != null) return info;
+    final cached = UpdateService.cachedPendingUpdate();
+    if (cached == null) return null;
+    final cmp = UpdateService.compareVersionNames(
+      cached.versionName,
+      AppVersion.current,
+    );
+    return cmp > 0 ? cached : null;
   }
 
   /// Кнопка «Обновить» в шторке: скачивание стартует сразу, без плашки.

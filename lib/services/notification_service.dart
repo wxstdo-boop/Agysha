@@ -13,6 +13,7 @@ import '../utils/time_format.dart';
 import 'alarm_black_box.dart';
 import 'alarm_scheduler.dart';
 import 'prefs.dart';
+import 'settings_service.dart';
 import 'update_note_text.dart';
 
 class NotificationService extends ChangeNotifier {
@@ -152,8 +153,24 @@ class NotificationService extends ChangeNotifier {
   // где зарегистрирован обработчик getTimeZone.
   static const _tzChannel = MethodChannel('com.wetcorp.agysha/alarm_payload');
 
-  Future<void> init() async {
-    if (_initialized) return;
+  Future<void>? _initInFlight;
+
+  /// Инициализация ровно одна на процесс.
+  ///
+  /// Вызовов было два (старт приложения и первый показ баннера об
+  /// обновлении), и `_plugin.initialize` уходил дважды. Проигравший вызов
+  /// в фоновом изоляте мог не ответить, `_initialized` оставался false — и
+  /// баннер молча не ставился. Теперь второй вызов ждёт тот же Future.
+  Future<void> init() {
+    if (_initialized) return Future<void>.value();
+    final inFlight = _initInFlight;
+    if (inFlight != null) return inFlight;
+    final future = _initOnce();
+    _initInFlight = future;
+    return future.whenComplete(() => _initInFlight = null);
+  }
+
+  Future<void> _initOnce() async {
     tz.initializeTimeZones();
     // Устанавливаем часовой пояс устройства через нативный Android API,
     // чтобы tz.local не оставался UTC. Иначе zonedSchedule будет
@@ -384,6 +401,39 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
+  /// Снимает ручную блокировку канала обновлений в системных настройках.
+  ///
+  /// Android не даёт включить канал программно, но при удалении и повторном
+  /// создании канала с тем же id сбрасывает пользовательские правки — в том
+  /// числе importance = none. Без этого баннер «тихо» не появлялся, а выпуск
+  /// помечался как сообщённый. Канал пересоздаём один раз на показ и только
+  /// если он действительно выключен.
+  Future<void> _unblockUpdateChannel() async {
+    if (!_isAndroid) return;
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (android == null) return;
+    try {
+      final channels = await android.getNotificationChannels();
+      if (channels == null) return;
+      var blocked = false;
+      for (final channel in channels) {
+        if (channel.id == _updateChannelId) {
+          blocked = channel.importance == Importance.none;
+          break;
+        }
+      }
+      if (!blocked) return;
+      await android.deleteNotificationChannel(channelId: _updateChannelId);
+      await _createChannels();
+    } catch (_) {
+      // Фоновый изолят без Activity: плагин может не ответить. Показ ниже
+      // всё равно пробуем, а не отказываемся заранее.
+    }
+  }
+
   Future<void> _createChannels() async {
     final lang = globalPrefs.getString('setting_locale') ?? 'ru';
     final channels = [
@@ -408,7 +458,7 @@ class NotificationService extends ChangeNotifier {
         importance: Importance.high,
       ),
       AndroidNotificationChannel(
-        'agysha_updates',
+        _updateChannelId,
         Translations.tFor(lang, 'notifUpdateChannel', 'Обновления Agysha'),
         description: Translations.tFor(
           lang,
@@ -699,6 +749,9 @@ class NotificationService extends ChangeNotifier {
   /// id действия «Позже»: закрывает баннер и ничего не открывает.
   static const String _laterActionId = 'dismiss';
 
+  /// Канал баннеров об обновлении. Один id на создание и на показ.
+  static const String _updateChannelId = 'agysha_updates';
+
   /// Баннер в шторке о новой версии.
   ///
   /// Тап по баннеру открывает приложение с payload `update:<версия>`, а
@@ -719,15 +772,24 @@ class NotificationService extends ChangeNotifier {
     String notes = '',
     String releaseName = '',
   }) async {
-    if (!_enabled) return false;
+    if (!_supported) return false;
     if (!_initialized) {
       try {
         await init();
       } catch (_) {}
     }
-    if (!_enabled || !_initialized || !_supported) return false;
-    // Тумблер в приложении — это НАМЕРЕНИЕ, а разрешение ОС могло слететь
-    // (переустановка APK, отзыв в системных настройках). Без этой проверки
+    // Тумблеры: общий и отдельный для обновлений. В фоновом изоляте
+    // `_enabled` до init() равен значению по умолчанию, поэтому сохранённый
+    // выбор читаем из prefs напрямую.
+    if (!_enabled) return false;
+    if (!SettingsService.readUpdateNotificationsEnabled()) return false;
+    if (!_initialized) return false;
+    // Канал могли выключить в системных настройках: `areNotificationsEnabled()`
+    // про отдельный канал молчит, show() проходит без ошибки, а строки в
+    // шторке нет — и выпуск помечался как «сообщённый», то есть терялся.
+    await _unblockUpdateChannel();
+    // Разрешение ОС могло слететь (переустановка APK, отзыв в системных
+    // настройках). Без этой проверки
     // show() тихо ничего не покажет, а вызывающий пометит выпуск как
     // «сообщённый» — и новость больше не вернётся. Кэш сбрасываем: право
     // могли выдать/отозвать уже после init().
@@ -756,7 +818,7 @@ class NotificationService extends ChangeNotifier {
     );
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
-        'agysha_updates',
+        _updateChannelId,
         Translations.tFor(lang, 'notifUpdateChannel', 'Обновления Agysha'),
         channelDescription: Translations.tFor(
           lang,
