@@ -30,11 +30,18 @@ class NoiseMaskService {
   /// Ключ в `SharedPreferences`: тумблер живёт отдельно от JSON настроек,
   /// потому что его читает и фоновый старт, и сам сервис.
   static const String prefKey = 'noise_mask_enabled';
-  static const String _cacheName = 'agysha_rain_loop.wav';
+  // Версия в имени: старый отрендеренный WAV лежит в кэше с тем же числом
+  // байт (длина петли не менялась), и проверка размера его бы не отличила —
+  // человек слушал бы прежний тихий дождь после обновления. Новое имя
+  // заставляет отрендерить звук заново; старый файл удаляем рядом.
+  static const String _cacheName = 'agysha_rain_loop_v2.wav';
+  static const String _legacyCacheName = 'agysha_rain_loop.wav';
 
-  /// Громкость дождя: фон, поверх которого слышно будильник, а не «море
-  /// на полную». 0.7 от нормализованного пика.
-  static const double volume = 0.7;
+  /// Громкость дождя. 0.95 от нормализованного пика (пик WAV — 0.90 от
+  /// полной шкалы): ливень должен накрывать общежитие, а не шелестеть
+  /// фоном. Будильник идёт через отдельный поток (AudioSession «alarm»),
+  /// поэтому его перекрывает не громкость, а микшер системы.
+  static const double volume = 0.95;
 
   static const Set<AudioDeviceType> headphonesTypes = {
     AudioDeviceType.wiredHeadphones,
@@ -164,6 +171,15 @@ class NoiseMaskService {
     if (cached != null && File(cached).existsSync()) return cached;
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/$_cacheName');
+    // Прежний рендер (тихий, из трёх слоёв) больше не нужен.
+    final legacy = File('${dir.path}/$_legacyCacheName');
+    if (legacy.existsSync()) {
+      try {
+        await legacy.delete();
+      } catch (_) {
+        // Права/занят — не беда: файл просто останется до чистки кэша.
+      }
+    }
     // Кэш системы может подчистить файл между запусками: проверяем размер,
     // а не только существование, иначе плеер получит обрезанный WAV.
     if (!await file.exists() || await file.length() < 200000) {

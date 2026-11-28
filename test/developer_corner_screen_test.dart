@@ -108,8 +108,6 @@ void main() {
             controlsLabel: 'ЭКСПЕРИМЕНТАЛЬНЫЕ НАСТРОЙКИ',
             subtitle: 'Скрытые настройки',
             disableLabel: 'Выключить режим разработчика',
-            developerPrompt: '',
-            onSaveDeveloperPrompt: (_) async {},
             accent: Colors.deepPurple,
             onDisable: () async {},
             children: const [
@@ -135,42 +133,4 @@ void main() {
     expect(find.text('Первая настройка'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
-
-  testWidgets(
-    'developer prompt is limited to 10,000 characters and autosaves',
-    (tester) async {
-      String? saved;
-      await tester.pumpWidget(
-        LocaleProvider(
-          locale: const Locale('ru'),
-          child: MaterialApp(
-            home: Scaffold(
-              body: DeveloperPromptEditor(
-                initialValue: '',
-                accent: Colors.deepPurple,
-                onSave: (value) async => saved = value,
-              ),
-            ),
-          ),
-        ),
-      );
-
-      final input = 'а' * 10005;
-      await tester.enterText(find.byType(TextField), input);
-      await tester.pump();
-      expect(
-        tester
-            .widget<TextField>(find.byType(TextField))
-            .controller!
-            .text
-            .length,
-        10000,
-      );
-      await tester.pump(const Duration(milliseconds: 750));
-      await tester.pump();
-
-      expect(saved, hasLength(10000));
-      expect(find.textContaining('/ 10 000'), findsNothing);
-    },
-  );
 }

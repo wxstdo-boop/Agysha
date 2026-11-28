@@ -63,7 +63,6 @@ import '../widgets/agysha_confirm_dialog.dart';
 import '../widgets/exclusive_theme_tiles.dart';
 import '../theme/matrix_theme.dart';
 import '../theme/resident_theme.dart';
-import '../theme/new_year_theme.dart';
 import '../services/style_options.dart';
 import '../widgets/style_wallpaper.dart';
 

@@ -28,6 +28,13 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
                 color: theme.colorScheme.surfaceContainerHighest.withValues(
                   alpha: theme.brightness == Brightness.dark ? 0.22 : 0.32,
                 ),
+              ),
+              // Обводка — ПОВЕРХ содержимого: волна InkWell при зажатии у
+              // края рисовалась под ней и на скруглениях вылезала за
+              // контур — «края заходили внутрь фона». Теперь заливка
+              // клипается, а рамка всегда сверху.
+              foregroundDecoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: theme.colorScheme.outlineVariant.withValues(
                     alpha: theme.brightness == Brightness.dark ? 0.16 : 0.24,
