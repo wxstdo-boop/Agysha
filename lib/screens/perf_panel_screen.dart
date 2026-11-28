@@ -134,9 +134,7 @@ class _PerfPanelScreenState extends State<PerfPanelScreen> {
             ),
             _Line(
               'Декор',
-              'каждый ${PerfPrefs.ambientEveryFrames}-й кадр'
-                  '${JankProbe.ambientBackoff > 1 ? ' · торможение '
-                      '×${JankProbe.ambientBackoff} под нагрузкой' : ''}',
+              'ровный шаг ~60 fps',
               cs: cs,
             ),
             const SizedBox(height: 20),
