@@ -24,7 +24,7 @@ void main() {
     );
     expect(
       block,
-      contains('_in.value / 0.46'),
+      contains('_in.value / 0.55'),
       reason: 'желе идёт почти половину хода нажатия, а не первые 140 мс',
     );
     expect(
