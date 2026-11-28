@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:agysha/utils/motion_prefs.dart';
 import 'package:agysha/widgets/music_pulse_ring.dart';
 import 'package:agysha/widgets/squirrel_wheel.dart';
+import 'ticker_liveness.dart';
 
 /// Поведенческие тесты виджетов, которые раньше проверялись ТОЛЬКО по тексту
 /// исходников (`src.contains('...')` в `polish_round_*`).
@@ -36,6 +37,8 @@ void main() {
 
       // Живое вращение: пока значок на экране, движок запрашивает кадры.
       // Раньше это «крутится» доказывалось словом `ambientRepeat` в коде.
+      // Здесь у колеса свой тикер на каждый кадр (значок живёт секунды,
+      // пока идёт обновление), поэтому счётчик декора не растёт.
       expect(tester.binding.transientCallbackCount, greaterThan(0));
       await tester.pump(const Duration(milliseconds: 300));
       expect(tester.takeException(), isNull);
@@ -69,14 +72,14 @@ void main() {
 
       expect(find.byType(MusicPulseRing), findsOneWidget);
       // Тикер идёт: значит CustomPaint перерисовывается и волны движутся.
-      expect(tester.binding.transientCallbackCount, greaterThan(0));
+      await expectAnimating(tester);
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('на паузе пульс гаснет и тикер встаёт', (tester) async {
       await tester.pumpWidget(ring(true));
       await tester.pump(const Duration(milliseconds: 200));
-      expect(tester.binding.transientCallbackCount, greaterThan(0));
+      await expectAnimating(tester);
 
       await tester.pumpWidget(ring(false));
       // Фейд угасания (420 мс) + запас. Если таймер остановки потерян, кольцо

@@ -8,6 +8,7 @@ import 'package:agysha/theme/cyber_theme.dart';
 import 'package:agysha/utils/motion_prefs.dart';
 import 'package:agysha/widgets/cyber_overlay.dart';
 import 'package:agysha/widgets/cyber_tap_effects.dart';
+import 'ticker_liveness.dart';
 
 void main() {
   setUp(() {
@@ -93,7 +94,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('контент'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      expect(tester.binding.transientCallbackCount, greaterThan(0));
+      await expectAnimating(tester);
 
       // Снимаем фон — активных тикеров и таймеров остаться не должно.
       await tester.pumpWidget(const SizedBox.shrink());
