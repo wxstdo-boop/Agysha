@@ -9,6 +9,7 @@ import '../models/changelog_entry.dart';
 import '../services/update_service.dart';
 import '../services/changelog_digest.dart';
 import '../utils/design_tokens.dart';
+import '../utils/motion_prefs.dart';
 
 /// Набор значков для пунктов «Что нового». Значок у каждого пункта СВОЙ и
 /// смещается от карточки к карточке (см. [ChangelogScreen._buildCard]):
@@ -538,7 +539,9 @@ class _ChangelogSkeleton extends StatefulWidget {
 class _ChangelogSkeletonState extends State<_ChangelogSkeleton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
-    vsync: this,
+    // Скелетон-пульс: плавность не важна (это дыхание заглушки), поэтому
+    // ему хватает 30 тиков/с — вдвое дешевле на 120-герцовом экране.
+    vsync: MotionPrefs.capped(this, fps: 30),
     duration: Motion.ambient,
   )..repeat(reverse: true);
 

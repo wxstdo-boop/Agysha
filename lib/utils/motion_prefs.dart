@@ -44,6 +44,12 @@ abstract final class MotionPrefs {
   static TickerProvider ambient(TickerProvider inner) =>
       AmbientVsync(inner, everyFramesOf: () => PerfPrefs.ambientEveryFrames);
 
+  /// Vsync для декоративной петли, которой нужна плавность, но не полная
+  /// частота экрана: не чаще 60 тиков в секунду. На 60 Гц экране это ровно
+  /// полная частота, на 120 Гц — каждый второй кадр.
+  static TickerProvider capped(TickerProvider inner, {int fps = 60}) =>
+      FpsCapVsync(inner, fps: fps);
+
   static bool _installed = false;
 
   /// Подписывается на системный флаг. Вызывается один раз из `main` до

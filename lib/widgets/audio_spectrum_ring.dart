@@ -37,7 +37,9 @@ class _AudioSpectrumRingState extends State<AudioSpectrumRing>
     super.initState();
     // Вечный гармонический фазовый цикл без резких срывов и скачков
     _phaseController = AnimationController(
-      vsync: this,
+      // Фазовый цикл спектра: 60 тиков/с на 120-герцовом экране читаются
+      // так же плавно, но кадр вдвое дешевле по бюджету.
+      vsync: MotionPrefs.capped(this),
       duration: const Duration(milliseconds: 5600),
     );
 

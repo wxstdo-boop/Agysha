@@ -37,7 +37,9 @@ class _MusicPulseRingState extends State<MusicPulseRing>
   /// Один «удар» — 2.4 с. Три волны внутри цикла дают шаг 0.8 с: ровный,
   /// спокойный пульс.
   late final AnimationController _ctrl = AnimationController(
-    vsync: this,
+    // Пульс волн 2.4 с: 60 тиков/с достаточно, а на 120 Гц экране это вдвое
+    // меньше кадров с перерисовкой кольца.
+    vsync: MotionPrefs.capped(this),
     duration: const Duration(milliseconds: 2400),
   );
 

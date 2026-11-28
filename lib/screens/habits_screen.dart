@@ -2077,7 +2077,10 @@ class _PerfBirdFlock extends StatefulWidget {
 class _PerfBirdFlockState extends State<_PerfBirdFlock>
     with SingleTickerProviderStateMixin, MotionAwareRepeat {
   late final AnimationController _ctrl = AnimationController(
-    vsync: this,
+    // Стая птиц — декор на 11 с; 60 тиков в секунду на 120-герцовом экране
+    // дают тот же глазом плавный полёт за половину кадрового бюджета
+    // (растр кадра на Mali упирается в 8–11 мс при бюджете 8.3 мс).
+    vsync: MotionPrefs.capped(this),
     duration: const Duration(milliseconds: 11000),
   );
 

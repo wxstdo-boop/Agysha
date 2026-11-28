@@ -32,6 +32,7 @@ import '../widgets/smooth_tooltip.dart';
 import '../widgets/smooth_typing.dart';
 import 'agysha_confirm_dialog.dart';
 import '../utils/design_tokens.dart';
+import '../utils/motion_prefs.dart';
 import '../widgets/smooth_caret.dart';
 import '../widgets/inline_keyboard.dart';
 import '../utils/app_sheet_style.dart';
@@ -749,7 +750,10 @@ class _AiChatBodyState extends State<_AiChatBody>
   // вечный repeat() гонял кадры даже когда индикатор не виден — на
   // слабых устройствах это постоянный расход CPU/батареи.
   late final AnimationController _dotsCtrl = AnimationController(
-    vsync: this,
+    // Троеточие — три точки с периодом 900 мс: 60 тиков/с читаются так же,
+    // а на 120-герцовом экране кадров вдвое меньше (лист Ады открыт долго,
+    // и каждый кадр — перерисовка шторки поверх всей страницы).
+    vsync: MotionPrefs.capped(this),
     duration: const Duration(milliseconds: 900),
   );
   // Плавное выделение поля ввода при фокусе: обводка мягко разгорается

@@ -965,7 +965,7 @@ class _SendButtonState extends State<_SendButton>
     with SingleTickerProviderStateMixin {
   // Пока идёт ответ — сплеш-спиннер плавно вращается.
   late final AnimationController _spin = AnimationController(
-    vsync: this,
+    vsync: MotionPrefs.capped(this),
     duration: const Duration(milliseconds: 900),
   );
 
