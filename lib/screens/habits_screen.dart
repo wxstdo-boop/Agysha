@@ -1816,6 +1816,8 @@ class _HabitsScreenState extends State<HabitsScreen>
       padding: const EdgeInsets.only(left: 2),
       child: PressScale(
         pressedScale: 0.90,
+        enableTilt: true,
+        maxTiltAngle: 0.30,
         duration: const Duration(milliseconds: 200),
         releaseDuration: const Duration(milliseconds: 280),
         child: GestureDetector(
