@@ -1,7 +1,77 @@
+import 'dart:async';
+
 import 'package:flutter/scheduler.dart';
 
 import 'jank_probe.dart';
 import 'perf_prefs.dart';
+
+/// Сколько раз декоративные циклы проснулись за всё время работы.
+///
+/// Нужен тестам и разбору «жива ли ещё анимация»: между тиками тикер спит,
+/// никакого активного кадра в движке нет, поэтому снаружи цикл иначе не
+/// увидеть. В рабочей сборке это одно сложение на тик.
+int debugThrottledTicks = 0;
+
+/// Тикер, который «спит» между тиками.
+///
+/// Зачем: активный `Ticker` просит кадр на КАЖДОМ vsync экрана — даже когда
+/// перерисовывать нечего. На 120-герцовом телефоне это 120 кадров в секунду
+/// в простое, и каждый такой кадр стоит свода всех слоёв сцены. Замер с
+/// ПИН-экрана: растр ~9 мс на кадр при бюджете 8.3 мс, 1387 тормознувших
+/// кадров из 1612 за весь замер — при неподвижном экране.
+///
+/// Здесь после отрисовки тикер глушится (`muted`), и следующий кадр просит
+/// уже таймер. Между тиками движок не производит НИ ОДНОГО кадра, а значение
+/// анимации по-прежнему берётся из абсолютного `elapsed` — поэтому ни
+/// длительность, ни кривая, ни вид не меняются.
+class _SleepyTicker extends Ticker {
+  _SleepyTicker(this._periodOf, TickerCallback onTick) : super(onTick);
+
+  final Duration Function() _periodOf;
+  Timer? _timer;
+
+  /// Погасить до следующего периода. Вызывается из своего же тика.
+  void sleep() {
+    if (!isActive) return;
+    muted = true;
+    _timer?.cancel();
+    _timer = Timer(_periodOf(), () {
+      _timer = null;
+      muted = false;
+    });
+  }
+
+  @override
+  void stop({bool canceled = false}) {
+    _timer?.cancel();
+    _timer = null;
+    super.stop(canceled: canceled);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _timer = null;
+    super.dispose();
+  }
+}
+
+Ticker _throttledTicker(
+  TickerProvider inner,
+  TickerCallback onTick,
+  Duration Function() periodOf,
+) {
+  late final _SleepyTicker ticker;
+  ticker = _SleepyTicker(periodOf, (Duration elapsed) {
+    onTick(elapsed);
+    debugThrottledTicks++;
+    ticker.sleep();
+  });
+  // Тикер делаем свой, а не из [inner]: только у своего есть [Ticker.dispose],
+  // где гасится таймер. Взамен `TickerMode` его больше не глушит — поэтому
+  // декоративные петли сами решают, когда стоять (см. [MotionAwareRepeat]).
+  return ticker;
+}
 
 /// Провайдер тикеров для ВЕЧНЫХ декоративных циклов (дыхание свечения,
 /// пульсация активного таймера). Он передаёт тик не каждый кадр, а раз в
@@ -35,15 +105,15 @@ class AmbientVsync implements TickerProvider {
       _inner is! AmbientVsync,
       'AmbientVsync нельзя оборачивать AmbientVsync — фильтр кадра отработает дважды.',
     );
-    var tick = 0;
-    return _inner.createTicker((Duration elapsed) {
+    return _throttledTicker(_inner, onTick, () {
       // Частота из режима/экрана плюс торможение под нагрузкой: когда кадры
       // уже не укладываются в бюджет, декор уступает им дорогу сам, без
       // тумблеров (см. [JankProbe.ambientBackoff]).
       final base = everyFramesOf?.call() ?? everyFrames;
       final every = base * JankProbe.ambientBackoff;
-      if (every <= 0) return;
-      if (every == 1 || ++tick % every == 1) onTick(elapsed);
+      final hz = PerfPrefs.refreshRate;
+      final ms = (1000.0 / (hz > 1 ? hz : 60.0)) * (every <= 0 ? 8 : every);
+      return Duration(microseconds: (ms * 1000).round().clamp(4000, 500000));
     });
   }
 }
@@ -73,11 +143,11 @@ class FpsCapVsync implements TickerProvider {
       _inner is! FpsCapVsync && _inner is! AmbientVsync,
       'FpsCapVsync нельзя оборачивать другим фильтром кадров.',
     );
-    var tick = 0;
-    return _inner.createTicker((Duration elapsed) {
-      final hz = PerfPrefs.refreshRate;
-      final every = (hz / fps).round().clamp(1, 24);
-      if (every == 1 || ++tick % every == 1) onTick(elapsed);
-    });
+    final safeFps = fps.clamp(1, 240);
+    return _throttledTicker(
+      _inner,
+      onTick,
+      () => Duration(microseconds: (1000000 / safeFps).round()),
+    );
   }
 }

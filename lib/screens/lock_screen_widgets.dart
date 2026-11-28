@@ -1624,7 +1624,7 @@ class _PinMedallionState extends State<_PinMedallion>
     if (!mounted) return;
     if (lockBackgroundFrozen.value) {
       _pulse.stop();
-    } else if (!MotionPrefs.shouldReduceMotion && !_pulse.isAnimating) {
+    } else if (!motionPaused && !_pulse.isAnimating) {
       _pulse.repeat();
     }
   }
