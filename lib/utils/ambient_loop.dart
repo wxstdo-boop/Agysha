@@ -47,3 +47,37 @@ class AmbientVsync implements TickerProvider {
     });
   }
 }
+
+/// Vsync для декоративных циклов, которым мало ~20 fps, но не нужны все
+/// 120 Гц экрана: тик идёт не чаще [fps] раз в секунду.
+///
+/// Зачем: на 120-герцовом телефоне бюджет кадра — 8.3 мс, а растр кадра с
+/// анимацией на Mali упирается в 8–11 мс. Полная частота означала «каждый
+/// второй-третий кадр не успел» и вечный джанк при неподвижном экране
+/// (замер: ПИН-экран, 3950 тормознувших кадров из 9089). На 60 fps бюджет
+/// вдвое больше, и те же 8–11 мс укладываются; глаз разницы между 60 и 120
+/// на медленном повороте медальона не видит.
+///
+/// Значение анимации по-прежнему берётся из симуляции по абсолютному
+/// `elapsed`, поэтому пропущенные тики не сбивают ни длительность, ни кривую
+/// (см. [AmbientVsync]).
+class FpsCapVsync implements TickerProvider {
+  FpsCapVsync(this._inner, {this.fps = 60});
+
+  final TickerProvider _inner;
+  final int fps;
+
+  @override
+  Ticker createTicker(TickerCallback onTick) {
+    assert(
+      _inner is! FpsCapVsync && _inner is! AmbientVsync,
+      'FpsCapVsync нельзя оборачивать другим фильтром кадров.',
+    );
+    var tick = 0;
+    return _inner.createTicker((Duration elapsed) {
+      final hz = PerfPrefs.refreshRate;
+      final every = (hz / fps).round().clamp(1, 24);
+      if (every == 1 || ++tick % every == 1) onTick(elapsed);
+    });
+  }
+}

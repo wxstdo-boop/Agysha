@@ -67,7 +67,7 @@ class _AiFloatingBubbleState extends State<AiFloatingBubble>
   );
   // Троеточие «Ада печатает…» в мини-окошке (repeat пока busy).
   late final AnimationController _dotsCtrlMini = AnimationController(
-    vsync: this,
+    vsync: MotionPrefs.capped(this),
     duration: const Duration(milliseconds: 900),
   );
 
