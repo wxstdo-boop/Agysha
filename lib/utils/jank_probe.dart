@@ -109,6 +109,17 @@ class JankProbe {
 
   static int _frames = 0;
   static int _janky = 0;
+  static int _jankBuild = 0;
+  static int _jankRaster = 0;
+
+  /// Последние тормознувшие кадры — построчно, для копирования в буфер.
+  ///
+  /// Сводки мало: по ней видно «растровка 10 мс», но не видно, ЧТО именно
+  /// растеризуется и с каким темпом идут кадры. Этот хвост уезжает в
+  /// [report] вместе с темпом и бюджетом, чтобы разбор шёл по цифрам, а не
+  /// по догадкам.
+  static final List<String> _recent = <String>[];
+  static const int _recentMax = 30;
   static double _buildSum = 0;
   static double _rasterSum = 0;
   static double _buildMax = 0;
@@ -204,6 +215,9 @@ class JankProbe {
   static void reset() {
     _frames = 0;
     _janky = 0;
+    _jankBuild = 0;
+    _jankRaster = 0;
+    _recent.clear();
     _buildSum = 0;
     _rasterSum = 0;
     _buildMax = 0;
@@ -282,11 +296,19 @@ class JankProbe {
           'p90 ${s.rasterP90.toStringAsFixed(1)} · '
           'макс ${s.rasterMax.toStringAsFixed(1)} мс',
       'вердикт: ${s.rasterBound ? 'GPU (растровка)' : 'Dart (сборка)'}',
+      'темп: ${_intervalMs < 0.5 ? '—' : '${_intervalMs.toStringAsFixed(1)} мс '
+          '(≈${(1000 / _intervalMs).round()} fps)'} · '
+          'бюджет ${budgetMs.toStringAsFixed(1)} мс',
+      'тормоз из-за: сборка $_jankBuild · растровка $_jankRaster',
       if (s.worstLabel.isNotEmpty)
         'худший кадр: ${s.worstLabel} '
             '${s.worstRaster.toStringAsFixed(1)} мс',
       if (top.isNotEmpty)
         'где тормозит: ${top.take(4).map((e) => '${e.key}×${e.value}').join(', ')}',
+      if (_recent.isNotEmpty) ...<String>[
+        'последние тормознувшие кадры:',
+        ..._recent,
+      ],
     ];
     return lines.join('\n');
   }
@@ -320,6 +342,16 @@ class JankProbe {
       _push(_rasterWindow, raster);
       if (build < budgetMs && raster < budgetMs) continue;
       _janky++;
+      if (build >= budgetMs) {
+        _jankBuild++;
+      } else {
+        _jankRaster++;
+      }
+      _recent.add(
+        '$_label build=${build.toStringAsFixed(1)} '
+        'raster=${raster.toStringAsFixed(1)}',
+      );
+      if (_recent.length > _recentMax) _recent.removeAt(0);
       _jankByLabel[_label] = (_jankByLabel[_label] ?? 0) + 1;
       if (raster > _worstRaster) {
         _worstRaster = raster;
