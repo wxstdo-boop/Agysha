@@ -2088,12 +2088,14 @@ class _PerfBirdFlockState extends State<_PerfBirdFlock>
   void initState() {
     super.initState();
     watchMotion();
-    if (widget.active && !MotionPrefs.shouldReduceMotion) _ctrl.repeat();
+    // motionPaused учитывает и модалку поверх экрана ([MotionAwareRepeat]):
+    // под открытым листом/диалогом стая стоит, а не жжёт кадр впустую.
+    if (widget.active && !motionPaused) _ctrl.repeat();
   }
 
   @override
   void onMotionChanged() {
-    if (widget.active && !MotionPrefs.shouldReduceMotion) {
+    if (widget.active && !motionPaused) {
       if (!_ctrl.isAnimating) _ctrl.repeat();
     } else if (_ctrl.isAnimating) {
       _ctrl.stop();
@@ -2105,7 +2107,7 @@ class _PerfBirdFlockState extends State<_PerfBirdFlock>
     super.didUpdateWidget(oldWidget);
     if (widget.active == oldWidget.active) return;
     if (widget.active) {
-      if (!MotionPrefs.shouldReduceMotion) _ctrl.repeat();
+      if (!motionPaused) _ctrl.repeat();
     } else {
       _ctrl.stop();
     }

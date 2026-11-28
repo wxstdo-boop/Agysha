@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'ambient_loop.dart';
+import 'decor_pause.dart';
 import 'perf_prefs.dart';
 
 /// Уважение к СИСТЕМНОЙ настройке «убрать анимации» (Android: «Удалить
@@ -93,9 +94,17 @@ mixin MotionAwareRepeat<T extends StatefulWidget> on State<T> {
   final List<bool> _motionReverse = [];
   bool _motionListenerAttached = false;
 
+  /// Движение сейчас не нужно никому: системный «убрать анимации» ИЛИ экран
+  /// накрыт модалкой (см. [decorCoveredByModal]). Наследники с условным
+  /// повтором сверяются с этим вместо одного [MotionPrefs.shouldReduceMotion].
+  @protected
+  bool get motionPaused =>
+      MotionPrefs.shouldReduceMotion || decorCoveredByModal.value;
+
   void _ensureMotionListener() {
     if (_motionListenerAttached) return;
     MotionPrefs.enabled.addListener(_applyMotion);
+    decorCoveredByModal.addListener(_applyMotion);
     _motionListenerAttached = true;
   }
 
@@ -108,7 +117,7 @@ mixin MotionAwareRepeat<T extends StatefulWidget> on State<T> {
     _motionCtrls.add(controller);
     _motionReverse.add(reverse);
     _ensureMotionListener();
-    if (!MotionPrefs.shouldReduceMotion) {
+    if (!motionPaused) {
       controller.repeat(reverse: reverse);
     }
     return controller;
@@ -126,7 +135,7 @@ mixin MotionAwareRepeat<T extends StatefulWidget> on State<T> {
 
   void _applyMotion() {
     if (!mounted) return;
-    final frozen = MotionPrefs.shouldReduceMotion;
+    final frozen = motionPaused;
     for (var i = 0; i < _motionCtrls.length; i++) {
       final c = _motionCtrls[i];
       if (frozen) {
@@ -142,6 +151,7 @@ mixin MotionAwareRepeat<T extends StatefulWidget> on State<T> {
   void dispose() {
     if (_motionListenerAttached) {
       MotionPrefs.enabled.removeListener(_applyMotion);
+      decorCoveredByModal.removeListener(_applyMotion);
     }
     super.dispose();
   }

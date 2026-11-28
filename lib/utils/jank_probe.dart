@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'decor_pause.dart';
+
 /// Сводка замера кадров: по ней видно, ЧТО тормозит — Dart или растровка.
 ///
 /// `build` — работа Dart: пересборка виджетов, layout. `raster` — работа
@@ -399,7 +401,9 @@ class JankProbe {
 /// Наблюдатель за роутами: подписывает каждый кадр именем текущего экрана,
 /// чтобы по логу было видно, ГДЕ именно летят кадры.
 class JankRouteObserver extends NavigatorObserver {
-  final List<String> _stack = <String>['app'];
+  /// Держим САМИ роуты, а не только имена: по верхнему роуту решается, надо ли
+  /// ставить декоративные циклы на паузу (см. [decorCoveredByModal]).
+  final List<Route<dynamic>?> _stack = <Route<dynamic>?>[null];
 
   static String _name(Route<dynamic>? r) =>
       r?.settings.name ?? r?.runtimeType.toString() ?? 'app';
@@ -411,13 +415,18 @@ class JankRouteObserver extends NavigatorObserver {
   /// а не оставляем в стеке мусор — иначе после закрытия диалога кадры
   /// главного экрана были бы подписаны именем уже несуществующего диалога.
   void _sync() {
-    final top = _stack.last;
+    final route = _stack.last;
+    final top = _name(route);
     JankProbe.setLabel(top == '/' || top.isEmpty ? JankProbe.baseLabel : top);
+    // `PopupRoute` — это нижние листы, диалоги, меню. Они не считаются
+    // непрозрачными, поэтому Flutter не гасит тикеры под ними и декоративные
+    // циклы продолжают перерисовывать невидимый экран. Ставим их на паузу.
+    decorCoveredByModal.value = route is PopupRoute;
   }
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _stack.add(_name(route));
+    _stack.add(route);
     _sync();
   }
 
@@ -436,7 +445,7 @@ class JankRouteObserver extends NavigatorObserver {
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     if (_stack.length > 1) _stack.removeLast();
-    _stack.add(_name(newRoute));
+    _stack.add(newRoute);
     _sync();
   }
 }
