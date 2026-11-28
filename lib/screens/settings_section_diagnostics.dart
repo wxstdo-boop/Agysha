@@ -18,31 +18,31 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: PressScale(
-            pressedScale: 0.98,
+            pressedScale: 0.985,
             enableTilt: true,
-            duration: const Duration(milliseconds: 140),
-            releaseDuration: const Duration(milliseconds: 220),
-            // Подкраска нажатия — своим слоем внутри скругления: у InkWell
-            // полупрозрачный highlight рисовался прямоугольником и у краёв
-            // вылезал за кайму — «фон заезжал за бока».
+            // Широкая строка: боковой наклон уводил её края влево-вправо, и
+            // на полупрозрачной заливке это читалось как «фоны заезжают за
+            // бока кнопки». Оставляем только наклон по глубине: строка
+            // мягко вдавливается под палец, но края стоят на месте.
+            tiltDepthOnly: true,
+            maxTiltAngle: 0.08,
+            duration: const Duration(milliseconds: 150),
+            releaseDuration: const Duration(milliseconds: 260),
+            // Подкраска нажатия — своим слоем внутри того же скругления.
             pressOverlay: pressTintOverlay(
               BorderRadius.circular(16),
               color: theme.colorScheme.primary,
               strength: 0.10,
             ),
             child: Container(
+              // Заливка и кайма — ОДНИМ BoxDecoration. Раньше рамка рисовалась
+              // отдельным слоем поверх заливки: при нажатии две отрисовки
+              // расходились по скруглению, и по бокам проступал фон.
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 color: theme.colorScheme.surfaceContainerHighest.withValues(
                   alpha: theme.brightness == Brightness.dark ? 0.22 : 0.32,
                 ),
-              ),
-              // Обводка — ПОВЕРХ содержимого: волна InkWell при зажатии у
-              // края рисовалась под ней и на скруглениях вылезала за
-              // контур — «края заходили внутрь фона». Теперь заливка
-              // клипается, а рамка всегда сверху.
-              foregroundDecoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: theme.colorScheme.outlineVariant.withValues(
                     alpha: theme.brightness == Brightness.dark ? 0.16 : 0.24,
