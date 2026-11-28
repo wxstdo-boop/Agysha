@@ -38,7 +38,13 @@ void main() {
 
   });
 
-  testWidgets('редкий декоративный цикл идёт медленнее частого', (tester) async {
+  testWidgets('декор идёт ровным шагом ~60 fps, а не реже', (tester) async {
+    // Раньше здесь стояло обратное: декоративный цикл обязан был идти
+    // РЕЖЕ частого (раз в 3–6 кадров). Замер показал, что это лечило не то:
+    // кадры всё равно запрашивались каждый vsync, а когда кадры пошли редко
+    // и неравномерно, бюджет замера откатился к 8.3 мс, GPU сбросил частоту,
+    // и каждый кадр стал дороже (ср 7.7 → 10.0 мс). Теперь шаг ровный и
+    // общий: два тика подряд — два заметных приращения.
     final loop = AnimationController(
       vsync: AmbientVsync(const _Vsync()),
       duration: const Duration(milliseconds: 1000),
@@ -51,10 +57,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     expect(
       loop.value,
-      v1,
-      reason: 'AmbientVsync ходит раз в несколько кадров, а не каждый',
+      isNot(v1),
+      reason: 'декор тикает каждый шаг часов, а не раз в несколько кадров',
     );
-    await tester.pump(const Duration(milliseconds: 60));
-    expect(loop.value, isNot(v1), reason: 'свой период он всё же отрабатывает');
   });
 }

@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/scheduler.dart';
 
-import 'jank_probe.dart';
-import 'perf_prefs.dart';
 
 /// Сколько раз декоративные циклы проснулись за всё время работы.
 ///
@@ -12,92 +10,125 @@ import 'perf_prefs.dart';
 /// увидеть. В рабочей сборке это одно сложение на тик.
 int debugThrottledTicks = 0;
 
-/// Тикер, который «спит» между тиками.
+/// Шаг общих часов декора: ~64 Гц, то есть ровно один кадр на 60-герцовом
+/// экране и один кадр на два vsync на 120-герцовом.
+const Duration _decorStep = Duration(microseconds: 15600);
+
+/// Общие часы декора: ОДИН таймер на все спящие тикеры.
+///
+/// Почему не свой таймер у каждого: они просыпались бы вразнобой, и кадры
+/// приходили бы то через 8 мс, то через 16. Замер (`JankProbe`) считает
+/// бюджет кадра по фактическому темпу — рваный темп загоняет его в 8.3 мс
+/// (частота экрана), и кадр в 10 мс, который на ровных 60 Гц был бы нормой,
+/// объявляется тормозом. Общие часы дают ровный шаг: все спящие просыпаются
+/// одним залпом, движок делает ровно один кадр.
+///
+/// Второй довод — сам GPU: когда кадры идут редко и неравномерно, он
+/// сбрасывает частоту, и каждый следующий кадр растеризуется ДОЛЬШЕ
+/// (замер: ср 7.7 мс на ровных кадрах против 10.0 мс на рваных).
+class _DecorClock {
+  static final Set<_SleepyTicker> _sleepers = <_SleepyTicker>{};
+  static Timer? _timer;
+
+  static void sleep(_SleepyTicker ticker) {
+    _sleepers.add(ticker);
+    _timer ??= Timer.periodic(_decorStep, (_) => _wakeAll());
+  }
+
+  static void forget(_SleepyTicker ticker) {
+    _sleepers.remove(ticker);
+    if (_sleepers.isEmpty) {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  static void _wakeAll() {
+    for (final t in List<_SleepyTicker>.of(_sleepers)) {
+      if (t.muted) t.muted = false;
+    }
+  }
+}
+
+/// Тикер, который «спит» между шагами общих часов.
 ///
 /// Зачем: активный `Ticker` просит кадр на КАЖДОМ vsync экрана — даже когда
 /// перерисовывать нечего. На 120-герцовом телефоне это 120 кадров в секунду
-/// в простое, и каждый такой кадр стоит свода всех слоёв сцены. Замер с
-/// ПИН-экрана: растр ~9 мс на кадр при бюджете 8.3 мс, 1387 тормознувших
-/// кадров из 1612 за весь замер — при неподвижном экране.
+/// в простое, и каждый такой кадр стоит свода всех слоёв сцены при бюджете
+/// 8.3 мс (замер: растр ср 7.7 · p90 10.7 мс): половина кадров впустую.
 ///
-/// Здесь после отрисовки тикер глушится (`muted`), и следующий кадр просит
-/// уже таймер. Между тиками движок не производит НИ ОДНОГО кадра, а значение
-/// анимации по-прежнему берётся из абсолютного `elapsed` — поэтому ни
-/// длительность, ни кривая, ни вид не меняются.
+/// Здесь после отрисовки тикер глушится (`muted`), а будит его [_DecorClock].
+/// Значение анимации по-прежнему берётся из симуляции по абсолютному
+/// `elapsed`, поэтому ни длительность, ни кривая, ни вид не меняются.
 class _SleepyTicker extends Ticker {
-  _SleepyTicker(this._periodOf, TickerCallback onTick) : super(onTick);
+  _SleepyTicker(super.onTick);
 
-  final Duration Function() _periodOf;
-  Timer? _timer;
-
-  /// Погасить до следующего периода. Вызывается из своего же тика.
+  /// Погасить до следующего шага часов. Вызывается из своего же тика.
   void sleep() {
     if (!isActive) return;
     muted = true;
-    _timer?.cancel();
-    _timer = Timer(_periodOf(), () {
-      _timer = null;
-      muted = false;
-    });
+    _DecorClock.sleep(this);
   }
 
   @override
   void stop({bool canceled = false}) {
-    _timer?.cancel();
-    _timer = null;
+    _DecorClock.forget(this);
     super.stop(canceled: canceled);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    _timer = null;
+    _DecorClock.forget(this);
     super.dispose();
   }
 }
 
 Ticker _throttledTicker(
   TickerProvider inner,
-  TickerCallback onTick,
-  Duration Function() periodOf,
-) {
+  TickerCallback onTick, {
+  int skip = 1,
+}) {
   late final _SleepyTicker ticker;
-  ticker = _SleepyTicker(periodOf, (Duration elapsed) {
+  int seen = 0;
+  ticker = _SleepyTicker((Duration elapsed) {
+    // [skip] > 1 — циклу нужна частота ниже шага часов: часть пробуждений
+    // проходит вхолостую (без кадра содержимого), шаг при этом остаётся ровным.
+    if (skip > 1 && seen++ % skip != 0) {
+      ticker.sleep();
+      return;
+    }
     onTick(elapsed);
     debugThrottledTicks++;
     ticker.sleep();
   });
   // Тикер делаем свой, а не из [inner]: только у своего есть [Ticker.dispose],
-  // где гасится таймер. Взамен `TickerMode` его больше не глушит — поэтому
-  // декоративные петли сами решают, когда стоять (см. [MotionAwareRepeat]).
+  // где тикер снимается с общих часов. Взамен `TickerMode` его больше не
+  // глушит — поэтому декоративные петли сами решают, когда стоять
+  // (см. [MotionAwareRepeat]).
   return ticker;
 }
 
 /// Провайдер тикеров для ВЕЧНЫХ декоративных циклов (дыхание свечения,
-/// пульсация активного таймера). Он передаёт тик не каждый кадр, а раз в
-/// [everyFrames] кадров: на 60 Гц при `everyFrames: 3` цикл идёт ~20 fps.
+/// пульсация активного таймера).
 ///
-/// Почему это безопасно для эффекта: `AnimationController` выбирает значение
+/// Идёт ровным шагом [_decorStep] (~60 fps) — как и [FpsCapVsync]. Раньше
+/// декор шёл раз в 3–6 кадров экрана (~20 fps): экономия была мнимой, потому
+/// что кадры всё равно запрашивались каждый vsync, а на 120 Гц это 120
+/// кадров в секунду растра при бюджете 8.3 мс. Теперь кадров ровно 60 в
+/// секунду, бюджет 16.6 мс, и движение читается даже плавнее прежнего.
+///
+/// Реже 60 fps намеренно НЕ опускаем: замер (`JankProbe`) считает бюджет по
+/// фактическому темпу кадров, и темп ниже ~50 fps откатывает его к 8.3 мс —
+/// тогда нормальный кадр в 10 мс выглядит тормозом, а GPU между редкими
+/// кадрами сбрасывает частоту и растеризует каждый дороже.
+///
+/// Частота эффекта при этом не меняется: `AnimationController` берёт значение
 /// из симуляции по абсолютному `elapsed` (`animation_controller.dart:939`), а
-/// не суммирует приращения кадра. Пропущенные тики поэтому не сбивают ни
-/// длительность, ни форму кривой — просто те же 2600 мс дыхания доезжают до
-/// экрана 20 раз, а не 60.
-///
-/// Зачем это нужно на слабом GPU (Adreno 610): каждый тик — это перерисовка
-/// слоя и растеризация. Замер с телефона (lib/utils/jank_probe.dart) дал на
-/// ПИН-экране rAvg 31 мс КАЖДЫМ кадром, то есть экран в простое сжигал ~2 кадра
-/// бюджета из 16,6 мс непрерывно. Медленные decorative-циклы глазом не
-/// отличаются по частоте, а бюджет кадра освобождают втрое.
+/// не суммирует приращения кадра.
 class AmbientVsync implements TickerProvider {
-  AmbientVsync(this._inner, {this.everyFrames = 3, this.everyFramesOf});
+  AmbientVsync(this._inner);
 
   final TickerProvider _inner;
-  final int everyFrames;
-
-  /// Живой источник частоты (см. [PerfPrefs.ambientEveryFrames]) читается на
-  /// каждом тике, поэтому смена режима и частоты экрана действуют сразу, без
-  /// пересоздания контроллера. Имеет приоритет над [everyFrames].
-  final int Function()? everyFramesOf;
 
   @override
   Ticker createTicker(TickerCallback onTick) {
@@ -105,16 +136,7 @@ class AmbientVsync implements TickerProvider {
       _inner is! AmbientVsync,
       'AmbientVsync нельзя оборачивать AmbientVsync — фильтр кадра отработает дважды.',
     );
-    return _throttledTicker(_inner, onTick, () {
-      // Частота из режима/экрана плюс торможение под нагрузкой: когда кадры
-      // уже не укладываются в бюджет, декор уступает им дорогу сам, без
-      // тумблеров (см. [JankProbe.ambientBackoff]).
-      final base = everyFramesOf?.call() ?? everyFrames;
-      final every = base * JankProbe.ambientBackoff;
-      final hz = PerfPrefs.refreshRate;
-      final ms = (1000.0 / (hz > 1 ? hz : 60.0)) * (every <= 0 ? 8 : every);
-      return Duration(microseconds: (ms * 1000).round().clamp(4000, 500000));
-    });
+    return _throttledTicker(_inner, onTick);
   }
 }
 
@@ -143,11 +165,10 @@ class FpsCapVsync implements TickerProvider {
       _inner is! FpsCapVsync && _inner is! AmbientVsync,
       'FpsCapVsync нельзя оборачивать другим фильтром кадров.',
     );
-    final safeFps = fps.clamp(1, 240);
-    return _throttledTicker(
-      _inner,
-      onTick,
-      () => Duration(microseconds: (1000000 / safeFps).round()),
-    );
+    final safeFps = fps.clamp(1, 240).toDouble();
+    // Во сколько шагов часов укладывается один тик этого fps. 60 fps на
+    // 120-герцовом экране — каждый шаг; 30 fps — каждый второй.
+    final skip = (15600 / (1000000 / safeFps)).round().clamp(1, 64);
+    return _throttledTicker(_inner, onTick, skip: skip);
   }
 }

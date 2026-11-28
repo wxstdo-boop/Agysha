@@ -39,11 +39,10 @@ abstract final class MotionPrefs {
   /// Итог для мест без контекста.
   static bool get shouldReduceMotion => systemReduceMotion || enabled.value;
 
-  /// Vsync для вечного декоративного цикла: тик раз в
-  /// [PerfPrefs.ambientEveryFrames] кадров (частота считается от частоты
-  /// экрана, под нагрузкой декор тикает ещё реже).
-  static TickerProvider ambient(TickerProvider inner) =>
-      AmbientVsync(inner, everyFramesOf: () => PerfPrefs.ambientEveryFrames);
+  /// Vsync для вечного декоративного цикла: ровный шаг ~60 fps, общий на все
+  /// такие циклы (см. [AmbientVsync]). Реже не опускаем сознательно — от
+  /// редких кадров дороже каждый кадр и ломается бюджет замера.
+  static TickerProvider ambient(TickerProvider inner) => AmbientVsync(inner);
 
   /// Vsync для декоративной петли, которой нужна плавность, но не полная
   /// частота экрана: не чаще 60 тиков в секунду. На 60 Гц экране это ровно
