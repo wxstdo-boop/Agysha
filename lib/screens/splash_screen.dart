@@ -266,9 +266,17 @@ class _SplashScreenState extends State<SplashScreen>
                                   // надо размывать, и на тёмном фоне она
                                   // не даёт грязного ореола.
                                   color: Colors.transparent,
+                                  // На тёмной теме кромка не бьёт по глазам:
+                                  // винная кайма там читалась как кричащий
+                                  // контур вокруг авы. Светлая остаётся
+                                  // полной — на ней кольцо и просили.
                                   border: Border.all(
-                                    color: BrandColors.blood,
-                                    width: 2.6,
+                                    color: isDark
+                                        ? BrandColors.blood.withValues(
+                                            alpha: 0.52,
+                                          )
+                                        : BrandColors.blood,
+                                    width: isDark ? 2.2 : 2.6,
                                   ),
                                 ),
                                 child: Container(

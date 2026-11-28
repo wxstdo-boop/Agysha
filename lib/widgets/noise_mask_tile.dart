@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../l10n/locale_provider.dart';
 import '../services/noise_mask_service.dart';
+import 'press_scale.dart';
 import 'volumetric_switch.dart';
 
 /// «Шумоподавление»: тихий дождь в наушниках.
@@ -77,104 +78,171 @@ class NoiseMaskTile extends StatelessWidget {
             final icon = waiting
                 ? Icons.headphones_outlined
                 : Icons.water_drop_outlined;
-            return ListTile(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+            return PressScale(
+              pressedScale: 0.975,
+              enableTilt: true,
+              duration: const Duration(milliseconds: 150),
+              releaseDuration: const Duration(milliseconds: 260),
+              // Подкраска нажатия живёт внутри скругления самой плитки:
+              // волна InkWell шла прямоугольником поверх каймы уголка.
+              pressOverlay: pressTintOverlay(
+                BorderRadius.circular(20),
+                color: _accent,
+                strength: 0.10,
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-              leading: AnimatedContainer(
-                duration: const Duration(milliseconds: 260),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 280),
                 curve: Curves.easeOutCubic,
-                width: 40,
-                height: 40,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(20),
+                  // Включённая плитка мягко «загорается» подложкой: переход
+                  // включения читается целиком, а не только тумблером.
                   color: _accent.withValues(
-                    alpha: playing ? 0.22 : (enabled ? 0.12 : 0.06),
+                    alpha: enabled ? (playing ? 0.10 : 0.07) : 0.0,
                   ),
                 ),
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 240),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) => ScaleTransition(
-                      scale: Tween<double>(
-                        begin: 0.82,
-                        end: 1,
-                      ).animate(animation),
-                      child: FadeTransition(opacity: animation, child: child),
-                    ),
-                    child: Icon(
-                      icon,
-                      key: ValueKey(icon),
-                      size: 21,
-                      color: enabled ? _accent : _accent.withValues(alpha: 0.7),
-                    ),
+                // Волна и подсветка InkWell выключены: отклик даёт
+                // PressScale внутри скругления, а ink рисовался
+                // прямоугольником поверх каймы.
+                child: Theme(
+                  data: Theme.of(context).copyWith(
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
                   ),
-                ),
-              ),
-              title: Text(title),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(hint, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  // Строка состояния перетекает: «ждёт наушников» →
-                  // «готовится» → «играет» раньше щёлкала текстом.
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 280),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 0.22),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    borderRadius: BorderRadius.circular(20),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    ),
-                    child: Row(
-                      key: ValueKey(state),
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (preparing) ...[
-                          SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.6,
-                              color: _accent.withValues(alpha: 0.9),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                      ),
+                      leading: AnimatedContainer(
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeOutCubic,
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _accent.withValues(
+                            alpha: playing ? 0.22 : (enabled ? 0.12 : 0.06),
+                          ),
+                        ),
+                        child: Center(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 240),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, animation) =>
+                                ScaleTransition(
+                                  scale: Tween<double>(
+                                    begin: 0.82,
+                                    end: 1,
+                                  ).animate(animation),
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  ),
+                                ),
+                            child: Icon(
+                              icon,
+                              key: ValueKey(icon),
+                              size: 21,
+                              color: enabled
+                                  ? _accent
+                                  : _accent.withValues(alpha: 0.7),
                             ),
                           ),
-                          const SizedBox(width: 6),
-                        ],
-                        Flexible(
-                          child: Text(
-                            state,
+                        ),
+                      ),
+                      title: Text(title),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            hint,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          const SizedBox(height: 2),
+                          // Строка состояния перетекает: «ждёт наушников» →
+                          // «готовится» → «играет» раньше щёлкала текстом.
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 280),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            // Дети держатся левого края: по центру «Выключено»
+                            // без спиннера прыгало влево.
+                            layoutBuilder: (current, previous) => Stack(
+                              alignment: Alignment.centerLeft,
+                              children: <Widget>[...previous, ?current],
+                            ),
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: const Offset(0, 0.22),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
+                                ),
+                            child: Row(
+                              key: ValueKey(state),
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Слот спиннера зарезервирован всегда: без него
+                                // текст «Выключено» сдвигался влево на 18 px,
+                                // когда дождь гас.
+                                SizedBox(
+                                  width: 18,
+                                  height: 12,
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 220),
+                                    child: preparing
+                                        ? CircularProgressIndicator(
+                                            key: const ValueKey('wait'),
+                                            strokeWidth: 1.6,
+                                            color: _accent.withValues(
+                                              alpha: 0.9,
+                                            ),
+                                          )
+                                        : const SizedBox.shrink(),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    state,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      isThreeLine: true,
+                      trailing: RepaintBoundary(
+                        child: VolumetricSwitch(
+                          value: enabled,
+                          onChanged: service.setEnabled,
+                          activeColor: _accent,
+                          semanticLabel: title,
+                          scale: 1.28,
                         ),
-                      ],
+                      ),
+                      onTap: () => service.setEnabled(!enabled),
                     ),
                   ),
-                ],
-              ),
-              isThreeLine: true,
-              trailing: RepaintBoundary(
-                child: VolumetricSwitch(
-                  value: enabled,
-                  onChanged: service.setEnabled,
-                  activeColor: _accent,
-                  semanticLabel: title,
-                  scale: 1.28,
                 ),
               ),
-              onTap: () => service.setEnabled(!enabled),
             );
           },
         ),

@@ -22,6 +22,14 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
             enableTilt: true,
             duration: const Duration(milliseconds: 140),
             releaseDuration: const Duration(milliseconds: 220),
+            // Подкраска нажатия — своим слоем внутри скругления: у InkWell
+            // полупрозрачный highlight рисовался прямоугольником и у краёв
+            // вылезал за кайму — «фон заезжал за бока».
+            pressOverlay: pressTintOverlay(
+              BorderRadius.circular(16),
+              color: theme.colorScheme.primary,
+              strength: 0.10,
+            ),
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
@@ -48,12 +56,12 @@ extension _SettingsSectionDiagnostics on _SettingsScreenState {
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  splashColor: theme.colorScheme.primary.withValues(
-                    alpha: 0.18,
-                  ),
-                  highlightColor: theme.colorScheme.primary.withValues(
-                    alpha: 0.12,
-                  ),
+                  // Отклик — только слой PressScale: ink-волна и highlight
+                  // рисовались прямоугольной подложкой поверх каймы.
+                  splashFactory: NoSplash.splashFactory,
+                  highlightColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  focusColor: Colors.transparent,
                   onTap: _devOpening ? null : _showDevToolsScreen,
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14),

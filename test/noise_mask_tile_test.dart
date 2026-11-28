@@ -67,4 +67,28 @@ void main() {
     expect(between, contains('Шумоподавление'));
     expect(between, isNot(contains('ListTile(')));
   });
+
+  test('Кузница идёт сразу после шумоподавления', () {
+    final source = File(
+      'lib/screens/settings_dev_tools.dart',
+    ).readAsStringSync();
+    final tile = source.indexOf('const NoiseMaskTile(),');
+    final forge = source.indexOf('forgeTitle');
+    expect(tile, isNonNegative);
+    expect(forge, isNonNegative);
+    expect(
+      forge,
+      greaterThan(tile),
+      reason: 'Кузница должна быть ниже шумоподавления',
+    );
+    // Первый пункт после плитки — именно Кузница: между ними ни одного
+    // другого ListTile.
+    final between = source.substring(tile, forge);
+    expect(between, contains('ListTile('));
+    expect(
+      RegExp('ListTile\\(').allMatches(between).length,
+      1,
+      reason: 'между шумоподавлением и Кузницей не должно быть пунктов',
+    );
+  });
 }
